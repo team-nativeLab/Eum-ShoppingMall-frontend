@@ -64,3 +64,17 @@ test('검색 자동완성은 화살표와 Enter로 상품을 엽니다', async (
 
   await expect(page).toHaveURL(/\/products\/prd-1001$/);
 });
+
+test('검색 결과 화면은 서버 렌더 HTML부터 헤더 검색창에 검색어가 들어 있습니다', async ({
+  page,
+  request,
+}) => {
+  const searchHtml = await (await request.get('/search?q=%EC%95%88%EC%A0%84%EB%AA%A8')).text();
+  expect(searchHtml).toMatch(/<input[^>]*value="안전모"/);
+
+  await page.goto('/search?q=%EC%95%88%EC%A0%84%EB%AA%A8');
+  const searchInput = page.getByRole('combobox', { name: '상품 검색' });
+  if (!(await searchInput.isVisible()))
+    await page.getByRole('button', { name: '검색 열기' }).click();
+  await expect(searchInput).toHaveValue('안전모');
+});

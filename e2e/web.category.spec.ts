@@ -52,6 +52,8 @@ test('카테고리 칩은 하위 카테고리, 필터에는 개수, 결과가 �
     'aria-current',
     'page',
   );
+  // 새 페이지를 받는 동안에도 페이지 이동이 사라지지 않아 포커스가 그 안에 남습니다.
+  await expect(pagination.getByRole('button', { name: '2페이지' })).toBeFocused();
 
   const brandCheckbox = page.getByRole('checkbox', { name: /^세이프가드 \d+개$/ });
   if (await brandCheckbox.isVisible()) {
@@ -60,4 +62,25 @@ test('카테고리 칩은 하위 카테고리, 필터에는 개수, 결과가 �
     await expect(page.getByRole('button', { name: '세이프가드 삭제' })).toBeVisible();
     await expect(page.getByRole('button', { name: '전체 해제' })).toBeVisible();
   }
+});
+
+test('다른 카테고리로 이동하면 정렬·필터·페이지 상태가 처음으로 돌아갑니다', async ({ page }) => {
+  await page.goto('/category/personal-protective-equipment');
+  const sortSelect = page.getByRole('combobox', { name: '정렬' });
+  await sortSelect.selectOption('newest');
+  const pagination = page.getByRole('navigation', { name: '페이지 이동' });
+  await pagination.getByRole('button', { name: '2페이지' }).click();
+  await expect(pagination.getByRole('button', { name: '2페이지' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+
+  await page
+    .getByRole('navigation', { name: '하위 카테고리' })
+    .getByRole('link', { name: '안전화' })
+    .click();
+  await expect(page).toHaveURL(/\/category\/foot-protection$/);
+  await expect(page.getByRole('heading', { level: 1, name: '안전화' })).toBeVisible();
+  await expect(sortSelect).toHaveValue('recommended');
+  await expect(page.getByRole('button', { name: '전체 해제' })).toHaveCount(0);
 });

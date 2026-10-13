@@ -99,3 +99,89 @@ test('함께 구매하면 좋은 제품은 페이지 하단 캐러셀로 보여 
     page.getByRole('complementary', { name: '구매 요약' }).getByTestId('product-carousel'),
   ).toHaveCount(0);
 });
+
+test('리뷰 2페이지로 이동하면 이전 목록을 유지한 채 바꾸고 리뷰 제목으로 포커스를 옮깁니다', async ({
+  page,
+}) => {
+  await page.goto('/products/prd-1002');
+  const reviewSection = page.locator('#product-tab-reviews');
+  await expect(reviewSection.getByRole('heading', { name: '리뷰 (6)' })).toBeVisible();
+  const reviewList = reviewSection.getByRole('list', { name: '리뷰 목록' });
+  await expect(reviewList.getByRole('listitem')).toHaveCount(5);
+
+  const reviewPagination = reviewSection.getByRole('navigation', { name: '페이지 이동' });
+  await reviewPagination.getByRole('button', { name: '2페이지' }).click();
+  await expect(reviewSection.getByRole('heading', { name: '리뷰 (6)' })).toBeFocused();
+  await expect(reviewList.getByRole('listitem')).toHaveCount(1);
+  await expect(reviewPagination.getByRole('button', { name: '2페이지' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+});
+
+test('필수+선택 옵션 상품은 선택 옵션을 먼저 골라도 필수 옵션을 채우는 순간 한 줄로 합칩니다', async ({
+  page,
+}) => {
+  await page.goto('/products/prd-1008');
+  const selectedLines = page.getByRole('list', { name: '선택한 옵션' });
+  await expect(selectedLines).toHaveCount(0);
+
+  await page.getByRole('combobox', { name: '손목 토시' }).selectOption('add');
+  await expect(selectedLines).toHaveCount(0);
+  await page.getByRole('combobox', { name: '사이즈' }).selectOption('l');
+  await expect(selectedLines.getByRole('listitem')).toHaveCount(1);
+  await expect(selectedLines.getByText('사이즈: L / 손목 토시: 손목 토시 추가')).toBeVisible();
+  await expect(page.getByText('₩15,000').first()).toBeVisible();
+});
+
+test('선택 옵션만 있는 상품은 "선택한 구성 추가"로 줄을 확정합니다', async ({ page }) => {
+  await page.goto('/products/prd-1007');
+  const selectedLines = page.getByRole('list', { name: '선택한 옵션' });
+  await expect(selectedLines).toHaveCount(0);
+
+  const addButton = page.getByRole('button', { name: '선택한 구성 추가' });
+  await addButton.click();
+  await expect(selectedLines.getByText('충전식 헤드 랜턴', { exact: true })).toBeVisible();
+
+  await page.getByRole('combobox', { name: '추가 구성' }).selectOption('battery');
+  await expect(selectedLines.getByRole('listitem')).toHaveCount(1);
+  await addButton.click();
+  await expect(selectedLines.getByRole('listitem')).toHaveCount(2);
+  await expect(selectedLines.getByText('추가 구성: 예비 배터리')).toBeVisible();
+});
+
+test('모바일 하단 바에서 필수 옵션 없이 담으면 알림이 화면 안에 뜨고 옵션으로 포커스가 갑니다', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'web-mobile', '모바일 하단 구매 바 확인');
+  await page.goto('/products/prd-1001');
+  await page.mouse.wheel(0, 2000);
+  await page.getByRole('button', { name: '장바구니 담기', exact: true }).click();
+
+  const optionNotice = page.getByRole('status').filter({ hasText: '필수 옵션을 선택해 주세요.' });
+  await expect(optionNotice).toBeVisible();
+  await expect(optionNotice).toBeInViewport();
+  const colorSelect = page.getByRole('combobox', { name: '색상' });
+  await expect(colorSelect).toBeFocused();
+  await expect(colorSelect).toBeInViewport();
+});
+
+test('데스크톱 탭은 스크롤 위치를 따라 현재 탭을 표시합니다', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'web-desktop', '데스크톱 탭 확인');
+  await page.goto('/products/prd-1001');
+  const detailTabs = page.getByRole('navigation', { name: '상품 상세 탭' });
+  await page.locator('#product-tab-questions').scrollIntoViewIfNeeded();
+  await page.evaluate(() => {
+    const questionSection = document.getElementById('product-tab-questions');
+    if (questionSection) window.scrollTo(0, questionSection.offsetTop);
+  });
+  await expect(detailTabs.getByRole('link', { name: '상품 문의' })).toHaveAttribute(
+    'aria-current',
+    'location',
+  );
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(detailTabs.getByRole('link', { name: '제품 정보' })).toHaveAttribute(
+    'aria-current',
+    'location',
+  );
+});
