@@ -5,6 +5,7 @@ on:
     branches: [dev, main]
   push:
     branches: [dev, main]
+  workflow_dispatch:
 
 # 같은 브랜치·PR에 새 실행이 오면 이전 실행을 취소합니다.
 concurrency:
@@ -65,3 +66,69 @@ jobs:
 
       - name: 빌드 (web · admin)
         run: npm run build
+
+  real-web-build:
+    name: Web real-mode build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_API_MODE: real
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: 의존성 설치
+        run: npm ci
+
+      - name: Web real 모드 빌드
+        run: npm run build:web
+
+  web-e2e:
+    name: Web desktop and mobile E2E
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_API_MODE: mock
+      NEXT_PUBLIC_ALLOW_MOCK_IN_PRODUCTION: 'true'
+      VITE_API_MODE: mock
+      VITE_ALLOW_MOCK_IN_PRODUCTION: 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: 의존성 설치
+        run: npm ci
+
+      - name: Chromium 설치
+        run: npx playwright install --with-deps chromium
+
+      - name: Web 데스크톱·모바일 E2E와 캡처 실행
+        run: npm run test:e2e -- --project=web-desktop --project=web-mobile
+
+      - name: Playwright 보고서와 화면 캡처 보관
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-e2e-${{ github.run_id }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: warn
+          retention-days: 14
