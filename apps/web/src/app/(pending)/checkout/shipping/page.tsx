@@ -1,8 +1,8 @@
-import { ComingSoon, createComingSoonMetadata } from '@/components/coming-soon';
+import type { Metadata } from 'next';
+import { ShippingPageView } from '@/features/checkout/shipping-page';
 
-// 준비 중 화면. 실제 화면을 만들 때 이 파일을 교체합니다.
-export const metadata = createComingSoonMetadata('주문 · 배송지');
+export const metadata: Metadata = { title: '주문 · 배송지' };
 
 export default function CheckoutShippingPage() {
-  return <ComingSoon screenTitle="주문 · 배송지" />;
+  return <ShippingPageView />;
 }

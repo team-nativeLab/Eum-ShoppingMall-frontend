@@ -1,9 +1,16 @@
+'use client';
+
+import { usePathname } from 'next/navigation';
+
 /**
  * 목 데이터로 동작하는 데모 배포임을 알리는 얇은 안내 띠.
  * 레이아웃이 NEXT_PUBLIC_API_MODE !== 'real'일 때만 그리므로 real 빌드에서는 산출물에서 빠집니다.
  * 상호·연락처처럼 실제처럼 보이는 자리표시 값이 진짜로 오해되지 않게 하는 용도입니다(보안 검토 M1).
  */
 export function DemoModeBanner() {
+  const pathname = usePathname();
+  if (pathname === '/login' || pathname === '/signup') return null;
+
   return (
     <aside
       aria-label="데모 안내"

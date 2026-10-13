@@ -33,6 +33,12 @@ describe('sanitizeRedirectPath', () => {
     expect(sanitizeRedirectPath(undefined)).toBe('/');
   });
 
+  it('중복 redirect 배열과 다른 비문자열은 fallback입니다', () => {
+    expect(sanitizeRedirectPath(['/checkout/payment', '/admin'], '/login')).toBe('/login');
+    expect(sanitizeRedirectPath(42, '/login')).toBe('/login');
+    expect(sanitizeRedirectPath({ toString: () => '/checkout/payment' }, '/login')).toBe('/login');
+  });
+
   it('점이 들어간 정상 경로와 인코딩된 문자는 그대로 둡니다', () => {
     expect(sanitizeRedirectPath('/products/v1.2/item')).toBe('/products/v1.2/item');
     expect(sanitizeRedirectPath('/search?q=%2e%2e')).toBe('/search?q=%2e%2e');

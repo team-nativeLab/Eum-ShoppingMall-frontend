@@ -5,7 +5,17 @@ import { Button } from '@eum/ui/components/Button';
 import { Icon } from '@eum/ui/components/Icon';
 import { Toast } from '@eum/ui/components/Toast';
 import { cx } from '@eum/ui/lib/cx';
-import { ChevronLeft, CircleX, Heart, Menu, Search, Share2, UserRound, X } from 'lucide-react';
+import {
+  Check,
+  ChevronLeft,
+  CircleX,
+  Heart,
+  Menu,
+  Search,
+  Share2,
+  UserRound,
+  X,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -171,7 +181,15 @@ export function SiteHeader() {
   const navigationItems = getNavigationItems(categoryList);
   // 상품 상세는 모바일에서만 상세 전용 헤더(뒤로·공유·장바구니)를 씁니다. 데스크톱 GNB는 항상 그립니다.
   const isProductDetail = pathname.startsWith('/products/');
-
+  const checkoutStep = pathname.startsWith('/checkout/')
+    ? pathname === '/checkout/shipping'
+      ? 1
+      : pathname === '/checkout/payment'
+        ? 2
+        : pathname === '/checkout/complete'
+          ? 3
+          : 0
+    : 0;
   const searchKeyword = (keyword: string) => {
     setIsMobileSearchOpen(false);
     router.push('/search?q=' + encodeURIComponent(keyword));
@@ -181,6 +199,65 @@ export function SiteHeader() {
     setIsMobileSearchOpen(false);
     router.push('/products/' + encodeURIComponent(productId));
   };
+
+  if (checkoutStep > 0) {
+    const checkoutSteps = ['배송지', '결제', '완료'];
+    return (
+      <header className="border-b border-line bg-bg">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-16 focus:left-16 focus:z-50 focus:rounded-8 focus:bg-text-1 focus:px-16 focus:py-8 focus:text-label-m focus:text-inverse"
+        >
+          본문 바로가기
+        </a>
+        <PageContainer className="flex min-h-64 flex-col items-stretch gap-8 py-8 sm:flex-row sm:items-center sm:justify-between sm:gap-24 sm:py-0">
+          <Link
+            href="/"
+            className="self-start rounded-4 text-h3 whitespace-nowrap focus-ring sm:self-auto"
+          >
+            이음산업건설
+          </Link>
+          <ol
+            aria-label="주문 진행 단계"
+            className="flex w-full items-center justify-between gap-4 sm:w-auto sm:gap-12"
+          >
+            {checkoutSteps.map((stepLabel, stepIndex) => {
+              const stepNumber = stepIndex + 1;
+              const isComplete = stepNumber < checkoutStep;
+              const isCurrent = stepNumber === checkoutStep;
+              return (
+                <li key={stepLabel} className="flex items-center gap-4 sm:gap-12">
+                  {stepIndex > 0 ? (
+                    <span aria-hidden="true" className="h-1 w-12 bg-line-strong sm:w-32" />
+                  ) : null}
+                  <span
+                    aria-current={isCurrent ? 'step' : undefined}
+                    className={cx(
+                      'inline-flex items-center gap-8 text-label-m whitespace-nowrap',
+                      isCurrent || isComplete ? 'text-text-1' : 'text-text-3',
+                    )}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cx(
+                        'inline-flex size-24 items-center justify-center rounded-capsule border text-caption',
+                        isCurrent || isComplete
+                          ? 'border-text-1 bg-text-1 text-inverse'
+                          : 'border-line-strong bg-bg text-text-3',
+                      )}
+                    >
+                      {isComplete ? <Check size={14} /> : stepNumber}
+                    </span>
+                    {stepLabel}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </PageContainer>
+      </header>
+    );
+  }
 
   return (
     <>

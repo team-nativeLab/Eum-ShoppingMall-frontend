@@ -13,6 +13,7 @@ import { buildMockConfig } from './test-fixtures';
 const sampleMember = mockMembers[0]!;
 const sampleAdmin = mockAdminUsers[0]!;
 const mockConfig = buildMockConfig();
+let signupTestSequence = 0;
 
 describe('일반 회원 목 인증', () => {
   it('로그인하면 현재 회원을 돌려주고, 로그아웃하면 null입니다', async () => {
@@ -53,6 +54,53 @@ describe('일반 회원 목 인증', () => {
     sessionStore.setItem(MEMBER_SESSION_KEY, '{not-json');
     expect(await createMemberMockAuth(mockConfig, sessionStore).getCurrentUser()).toBeNull();
     expect(sessionStore.getItem(MEMBER_SESSION_KEY)).toBeNull();
+  });
+
+  it('가입은 목 회원을 만들고 저장소에는 mock userId만 남깁니다', async () => {
+    const sessionStore = createMemoryStore();
+    const memberAuth = createMemberMockAuth(mockConfig, sessionStore);
+    const email = `signup-${++signupTestSequence}@example.test`;
+    const signupMember = await memberAuth.signup({
+      email,
+      password: 'password-value-123',
+      name: '데모 가입자',
+      phone: '010-1234-5678',
+      accountType: 'business',
+    });
+
+    expect(signupMember.email).toBe(email);
+    expect(signupMember.accountType).toBe('business');
+    expect(await memberAuth.isEmailAvailable(email)).toBe(false);
+    const currentMember = await memberAuth.getCurrentUser();
+    expect(currentMember?.id).toBe(signupMember.id);
+    expect(currentMember).toMatchObject({ accountType: 'business' });
+    const rawSession = sessionStore.getItem(MEMBER_SESSION_KEY) ?? '';
+    expect(JSON.parse(rawSession)).toEqual({ version: 1, userId: signupMember.id });
+    expect(rawSession).not.toContain('password-value-123');
+    expect(rawSession).not.toContain(email);
+    expect(rawSession).not.toContain('010-1234-5678');
+  });
+
+  it('가입에서 중복 이메일과 빈 비밀번호를 거부합니다', async () => {
+    const memberAuth = createMemberMockAuth(mockConfig, createMemoryStore());
+    await expect(
+      memberAuth.signup({
+        email: sampleMember.email,
+        password: 'password123',
+        name: '중복 가입자',
+        phone: '010-1234-5678',
+        accountType: 'personal',
+      }),
+    ).rejects.toMatchObject({ code: 'VALIDATION' });
+    await expect(
+      memberAuth.signup({
+        email: 'empty-password@example.test',
+        password: ' ',
+        name: '가입자',
+        phone: '010-1234-5678',
+        accountType: 'personal',
+      }),
+    ).rejects.toMatchObject({ code: 'VALIDATION' });
   });
 });
 

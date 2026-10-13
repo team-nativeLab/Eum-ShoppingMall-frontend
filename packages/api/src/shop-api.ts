@@ -4,12 +4,15 @@ import type {
   Claim,
   CompanyInfo,
   Coupon,
+  CheckoutOptions,
+  CreateOrderInput,
   Faq,
   HomeContent,
   Inquiry,
   Member,
   Notice,
   Order,
+  OrderReceipt,
   PagedResult,
   Point,
   Product,
@@ -83,6 +86,8 @@ export interface ShopApi {
   };
   /** 검색 결과가 없을 때 보여 줄 추천 검색어 */
   search: { recommendedKeywords(options?: RequestOptions): Promise<string[]> };
+  /** 주문서의 mock 배송·결제 선택지. real API 미연결 상태에서는 NOT_IMPLEMENTED입니다. */
+  checkout: { getOptions(options?: RequestOptions): Promise<CheckoutOptions> };
   categories: { list(options?: RequestOptions): Promise<Category[]> };
   home: { getContent(options?: RequestOptions): Promise<HomeContent> };
   /** 푸터 사업자·고객센터 정보 */
@@ -90,6 +95,7 @@ export interface ShopApi {
   orders: {
     listByMember(memberId: string, options?: RequestOptions): Promise<Order[]>;
     getById(orderId: string, options?: RequestOptions): Promise<Order>;
+    create(input: CreateOrderInput, options?: RequestOptions): Promise<OrderReceipt>;
   };
   claims: { listByMember(memberId: string, options?: RequestOptions): Promise<Claim[]> };
   coupons: { list(options?: RequestOptions): Promise<Coupon[]> };

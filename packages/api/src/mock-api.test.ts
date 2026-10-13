@@ -3,6 +3,7 @@ import { ApiConfigError } from './errors';
 import { createMockApi } from './mock-api';
 import { mockProducts } from './mock/products';
 import { mockReviews } from './mock/reviews';
+import { mockAddresses } from './mock/addresses';
 import { buildMockConfig } from './test-fixtures';
 
 const testConfig = buildMockConfig();
@@ -210,6 +211,46 @@ describe('목 API 시나리오', () => {
     await expect(createMockApi(testConfig).products.getById('none')).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
+  });
+
+  it('₩0의 표시 가격 상품은 주문할 수 있고 숨김 가격·품절 상품은 거절합니다', async () => {
+    const mockApi = createMockApi(testConfig);
+    const address = mockAddresses[0]!;
+    const zeroPriceReceipt = await mockApi.orders.create({
+      lines: [{ productId: 'prd-1004', quantity: 1, optionId: null }],
+      shippingAddress: address,
+      deliveryRequest: '',
+      paymentMethod: 'creditCard',
+      couponId: null,
+      pointsToUse: 0,
+    });
+    expect(zeroPriceReceipt.productTotal).toBe(0);
+    expect(zeroPriceReceipt.shippingFee).toBe(0);
+    expect(zeroPriceReceipt.paymentTotal).toBe(0);
+
+    const hiddenPriceProduct = mockProducts.find((product) => !product.priceVisible);
+    expect(hiddenPriceProduct).toBeDefined();
+    await expect(
+      mockApi.orders.create({
+        lines: [{ productId: hiddenPriceProduct!.id, quantity: 1, optionId: null }],
+        shippingAddress: address,
+        deliveryRequest: '',
+        paymentMethod: 'creditCard',
+        couponId: null,
+        pointsToUse: 0,
+      }),
+    ).rejects.toMatchObject({ code: 'VALIDATION' });
+
+    await expect(
+      mockApi.orders.create({
+        lines: [{ productId: 'prd-1005', quantity: 1, optionId: 'mount:wall' }],
+        shippingAddress: address,
+        deliveryRequest: '',
+        paymentMethod: 'creditCard',
+        couponId: null,
+        pointsToUse: 0,
+      }),
+    ).rejects.toMatchObject({ code: 'VALIDATION' });
   });
 
   it('AbortSignal로 취소하면 AbortError로 끝납니다', async () => {

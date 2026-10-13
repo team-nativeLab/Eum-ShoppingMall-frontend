@@ -266,6 +266,39 @@ export interface Address {
   isDefault: boolean;
 }
 
+/** 주문서에서 선택할 수 있는 mock 결제 수단. 실제 결제 연동은 포함하지 않습니다. */
+export type PaymentMethod =
+  'creditCard' | 'bankTransfer' | 'virtualAccount' | 'simpleA' | 'simpleB' | 'mobile';
+
+/** 배송·결제 화면에 필요한 정책 선택지. 실제 API 연결 전까지 mock 응답만 제공합니다. */
+export interface CheckoutOptions {
+  freeShippingThreshold: number;
+  shippingFee: number;
+  deliveryRequests: { id: string; label: string }[];
+  shippingMethods: { id: string; label: string; description: string }[];
+  paymentMethods: { id: PaymentMethod; label: string }[];
+}
+
+/** 목 주문 생성 요청. real API에서는 서버가 상품·쿠폰·배송비·합계를 다시 계산해야 합니다. */
+export interface CreateOrderInput {
+  lines: { productId: string; quantity: number; optionId: string | null }[];
+  shippingAddress: Address;
+  deliveryRequest: string;
+  paymentMethod: PaymentMethod;
+  couponId: string | null;
+  pointsToUse: number;
+}
+
+/** 목 주문 응답은 배송/결제 상세나 결제 자격 정보를 저장하지 않습니다. */
+export interface OrderReceipt {
+  orderNumber: string;
+  productTotal: number;
+  discountTotal: number;
+  shippingFee: number;
+  pointsUsed: number;
+  paymentTotal: number;
+}
+
 /** 주문 상태 */
 export type OrderStatus =
   'paymentPending' | 'paid' | 'preparing' | 'shipping' | 'delivered' | 'canceled';

@@ -45,6 +45,18 @@ export interface MemberLoginInput {
   password: string;
 }
 
+/** 회원가입 입력은 호출 중에만 전달하며 목 인증도 비밀번호를 보관하지 않습니다. */
+export interface MemberSignupInput extends MemberLoginInput {
+  name: string;
+  phone: string;
+  accountType: 'personal' | 'business';
+}
+
+/** 목 가입 결과에만 회원 유형을 되돌려 보여 주는 좁은 결과 타입입니다. */
+export type MemberSignupResult = Member & {
+  accountType: MemberSignupInput['accountType'];
+};
+
 /** 관리자 로그인 입력 */
 export interface AdminLoginInput {
   loginId: string;
@@ -61,6 +73,12 @@ export interface AuthClient<TUser, TLoginInput> {
 export type MemberAuthClient = AuthClient<Member, MemberLoginInput>;
 export type AdminAuthClient = AuthClient<AdminUser, AdminLoginInput>;
 
+/** 이메일 중복 확인과 회원가입을 포함한 일반 회원 인증 클라이언트. */
+export interface MemberAuthClientWithSignup extends MemberAuthClient {
+  isEmailAvailable(email: string): Promise<boolean>;
+  signup(input: MemberSignupInput): Promise<MemberSignupResult>;
+}
+
 // 아직 연결되지 않은 인증 엔드포인트를 부르면 바로 실패시키는 함수
 function notImplemented(endpointName: string): () => Promise<never> {
   return () =>
@@ -70,11 +88,13 @@ function notImplemented(endpointName: string): () => Promise<never> {
 }
 
 /** real 모드 일반 회원 인증 스텁. 서버 스펙이 정해지면 HttpOnly 세션 기반으로 채웁니다. */
-export function createRealMemberAuth(_config: ApiConfig): MemberAuthClient {
+export function createRealMemberAuth(_config: ApiConfig): MemberAuthClientWithSignup {
   return {
     login: notImplemented('member.login'),
     logout: notImplemented('member.logout'),
     getCurrentUser: notImplemented('member.getCurrentUser'),
+    isEmailAvailable: notImplemented('member.isEmailAvailable'),
+    signup: notImplemented('member.signup'),
   };
 }
 

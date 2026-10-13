@@ -1,8 +1,8 @@
-import { ComingSoon, createComingSoonMetadata } from '@/components/coming-soon';
+import type { Metadata } from 'next';
+import { CartPageView } from '@/features/checkout/cart-page';
 
-// 준비 중 화면. 실제 화면을 만들 때 이 파일을 교체합니다.
-export const metadata = createComingSoonMetadata('장바구니');
+export const metadata: Metadata = { title: '장바구니' };
 
 export default function CartPage() {
-  return <ComingSoon screenTitle="장바구니" />;
+  return <CartPageView />;
 }
