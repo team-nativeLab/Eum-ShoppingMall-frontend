@@ -3,14 +3,46 @@ import { ApiError } from './errors';
 import { mockAddresses } from './mock/addresses';
 import { mockCoupons, mockPoints } from './mock/benefits';
 import { mockCategories } from './mock/categories';
+import { mockCompanyInfo } from './mock/company';
+import { mockHeroSlides, mockPromoBanners, mockServiceBenefits } from './mock/home';
 import { mockMembers } from './mock/members';
 import { mockClaims, mockOrders } from './mock/orders';
 import { mockProducts } from './mock/products';
 import { mockFaqs, mockInquiries, mockNotices, mockQuotes } from './mock/support';
 import type { RequestOptions, ShopApi } from './shop-api';
-import type { PagedResult, Product } from './types';
+import type { AdminProduct, HomeContent, PagedResult, Product } from './types';
 
 const DEFAULT_PAGE_SIZE = 20;
+
+/** 관리자 목 원본에서 실제 가격을 구매자 응답으로 복사하지 않는 변환 함수 */
+function toBuyerProduct(product: AdminProduct): Product {
+  return {
+    ...product,
+    price: product.priceVisible ? product.price : null,
+    listPrice: product.priceVisible ? product.listPrice : null,
+  };
+}
+
+/** 상위 카테고리를 조회할 때 그 하위 카테고리까지 포함합니다. */
+function getCategoryIds(categoryId: string | undefined): Set<string> | null {
+  if (categoryId === undefined) return null;
+  const descendantIds = new Set([categoryId]);
+  let hasAddedDescendant = true;
+  while (hasAddedDescendant) {
+    hasAddedDescendant = false;
+    for (const category of mockCategories) {
+      if (
+        category.parentId &&
+        descendantIds.has(category.parentId) &&
+        !descendantIds.has(category.id)
+      ) {
+        descendantIds.add(category.id);
+        hasAddedDescendant = true;
+      }
+    }
+  }
+  return descendantIds;
+}
 
 // 취소 신호를 fetch와 같은 AbortError로 바꾸는 함수
 function createAbortError(): DOMException {
@@ -76,29 +108,102 @@ export function createMockApi(config: ApiConfig): ShopApi {
     products: {
       async list(params = {}, options): Promise<PagedResult<Product>> {
         const keyword = params.keyword?.trim().toLowerCase() ?? '';
-        const filteredProducts = mockProducts.filter(
-          (product) =>
-            (params.categoryId === undefined || product.categoryId === params.categoryId) &&
-            (keyword === '' || product.name.toLowerCase().includes(keyword)),
-        );
+        const categoryIds = getCategoryIds(params.categoryId);
+        const brandFilters = new Set(params.brand ?? []);
+        const certificationFilters = new Set(params.certification ?? []);
+        const filteredProducts = mockProducts.filter((product) => {
+          const matchesCategory = categoryIds === null || categoryIds.has(product.categoryId);
+          const matchesKeyword =
+            keyword === '' || `${product.name} ${product.brand}`.toLowerCase().includes(keyword);
+          const matchesBrand = brandFilters.size === 0 || brandFilters.has(product.brand);
+          const matchesCertification =
+            certificationFilters.size === 0 ||
+            [...certificationFilters].some((certification) =>
+              product.certifications.includes(certification),
+            );
+          const matchesPrice =
+            params.minPrice === undefined && params.maxPrice === undefined
+              ? true
+              : product.priceVisible &&
+                (params.minPrice === undefined || product.price >= params.minPrice) &&
+                (params.maxPrice === undefined || product.price <= params.maxPrice);
+          const matchesStock = !params.excludeSoldOut || product.stockStatus !== 'soldOut';
+          return (
+            matchesCategory &&
+            matchesKeyword &&
+            matchesBrand &&
+            matchesCertification &&
+            matchesPrice &&
+            matchesStock
+          );
+        });
         const page = Math.max(1, params.page ?? 1);
         const pageSize = Math.max(1, params.pageSize ?? DEFAULT_PAGE_SIZE);
         const allItems = await respondList(filteredProducts, options);
+        const sortedItems = [...allItems];
+        if (params.sortBy === 'priceAsc' || params.sortBy === 'priceDesc') {
+          const direction = params.sortBy === 'priceAsc' ? 1 : -1;
+          sortedItems.sort((left, right) => {
+            const leftPrice = left.priceVisible ? left.price : null;
+            const rightPrice = right.priceVisible ? right.price : null;
+            if (leftPrice === null) return rightPrice === null ? 0 : 1;
+            if (rightPrice === null) return -1;
+            return (leftPrice - rightPrice) * direction;
+          });
+        } else if (params.sortBy === 'newest') {
+          sortedItems.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+        }
         return {
-          items: allItems.slice((page - 1) * pageSize, page * pageSize),
+          items: sortedItems.slice((page - 1) * pageSize, page * pageSize).map(toBuyerProduct),
           page,
           pageSize,
-          totalCount: allItems.length,
+          totalCount: sortedItems.length,
         };
       },
-      getById: (productId, options) =>
-        respondOne(
-          mockProducts.find((product) => product.id === productId),
-          '상품',
-          options,
-        ),
+      async getById(productId, options) {
+        return toBuyerProduct(
+          await respondOne(
+            mockProducts.find((product) => product.id === productId),
+            '상품',
+            options,
+          ),
+        );
+      },
+      async suggest(keyword, options) {
+        const normalizedKeyword = keyword.trim().toLowerCase();
+        if (normalizedKeyword === '') return [];
+        const matches = mockProducts
+          .filter((product) =>
+            `${product.name} ${product.brand}`.toLowerCase().includes(normalizedKeyword),
+          )
+          .slice(0, 5)
+          .map(({ id, name, brand }) => ({ productId: id, name, brand }));
+        return respondList(matches, options);
+      },
     },
     categories: { list: (options) => respondList(mockCategories, options) },
+    home: {
+      async getContent(options): Promise<HomeContent> {
+        await wait(config.mockLatencyMs, options?.signal);
+        if (config.mockScenario === 'error') {
+          throw new ApiError('NETWORK', '목 API 오류 시나리오입니다.');
+        }
+        if (config.mockScenario === 'empty') {
+          return { heroSlides: [], promoBanners: [], serviceBenefits: [], featuredProducts: [] };
+        }
+        return structuredClone({
+          heroSlides: mockHeroSlides,
+          promoBanners: mockPromoBanners,
+          serviceBenefits: mockServiceBenefits,
+          featuredProducts: mockProducts
+            .filter((product) => product.isFeatured)
+            .map(toBuyerProduct),
+        });
+      },
+    },
+    company: {
+      getInfo: (options) => respondOne(mockCompanyInfo, '사업자 정보', options),
+    },
     orders: {
       listByMember: (memberId, options) =>
         respondList(

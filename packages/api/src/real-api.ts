@@ -19,8 +19,11 @@ export function createRealApi(_config: ApiConfig): ShopApi {
     products: {
       list: notImplemented('products.list'),
       getById: notImplemented('products.getById'),
+      suggest: notImplemented('products.suggest'),
     },
     categories: { list: notImplemented('categories.list') },
+    home: { getContent: notImplemented('home.getContent') },
+    company: { getInfo: notImplemented('company.getInfo') },
     orders: {
       listByMember: notImplemented('orders.listByMember'),
       getById: notImplemented('orders.getById'),

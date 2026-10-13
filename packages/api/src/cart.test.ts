@@ -74,10 +74,27 @@ describe('수량 변경', () => {
 
   it('같은 상품을 다시 담으면 수량을 더합니다', () => {
     const createId = () => 'new-id';
-    const onceAdded = addProductToCart([], orderableProduct, 1, createId);
-    const twiceAdded = addProductToCart(onceAdded, orderableProduct, 2, createId);
+    const onceAdded = addProductToCart([], orderableProduct, 1, null, null, createId);
+    const twiceAdded = addProductToCart(onceAdded, orderableProduct, 2, null, null, createId);
     expect(twiceAdded).toHaveLength(1);
     expect(twiceAdded[0]?.quantity).toBe(3);
+  });
+
+  it('같은 상품이라도 선택 옵션이 다르면 별도 줄로 보관합니다', () => {
+    const createId = () => 'new-id';
+    const whiteItem = addProductToCart([], orderableProduct, 1, 'white', '백색', createId);
+    const yellowItem = addProductToCart(
+      whiteItem,
+      orderableProduct,
+      2,
+      'yellow',
+      '노란색',
+      () => 'yellow-id',
+    );
+    expect(yellowItem.map(({ optionId, quantity }) => [optionId, quantity])).toEqual([
+      ['white', 1],
+      ['yellow', 2],
+    ]);
   });
 
   it('원본 배열을 바꾸지 않습니다', () => {

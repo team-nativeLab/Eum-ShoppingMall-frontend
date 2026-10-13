@@ -1,10 +1,10 @@
-import type { Product } from '../types';
+import type { AdminProduct } from '../types';
 
 /**
  * 목 상품. 금액 표시/미표시, ₩0, 할인, 품절 상태를 골고루 담아 화면 상태를 재현합니다.
- * 이미지가 아직 없으므로 thumbnailUrl은 null(플레이스홀더)입니다.
+ * 구매자 응답으로 변환하기 전의 관리자 편집용 가격도 보관합니다.
  */
-export const mockProducts: Product[] = [
+export const mockProducts: AdminProduct[] = [
   {
     id: 'prd-1001',
     name: 'ABS 안전모 (내관 조절형)',
@@ -16,6 +16,35 @@ export const mockProducts: Product[] = [
     stockStatus: 'inStock',
     thumbnailUrl: null,
     summary: 'KCS 인증 ABS 소재, 땀받이 교체형 내관',
+    images: [],
+    options: [
+      {
+        id: 'color',
+        label: '색상',
+        required: true,
+        choices: [
+          { id: 'white', label: '백색', priceDelta: 0 },
+          { id: 'yellow', label: '노란색', priceDelta: 0 },
+        ],
+      },
+    ],
+    specifications: [
+      { label: '인증', value: 'KCS 안전인증' },
+      { label: '재질', value: 'ABS' },
+      { label: '조절 방식', value: '내관 조절형' },
+      { label: '원산지', value: '대한민국' },
+    ],
+    certifications: ['KCS 안전인증'],
+    shipping: {
+      method: '일반 배송 (2~3일)',
+      estimate: '평일 기준 2~3일 이내 출고',
+      fee: 0,
+      countryOfOrigin: '대한민국',
+    },
+    rating: 4.8,
+    reviewCount: 12,
+    createdAt: '2026-09-12T09:00:00.000Z',
+    isFeatured: true,
   },
   {
     id: 'prd-1002',
@@ -28,6 +57,36 @@ export const mockProducts: Product[] = [
     stockStatus: 'inStock',
     thumbnailUrl: null,
     summary: '강철 선심, 미끄럼 방지 밑창',
+    images: [],
+    options: [
+      {
+        id: 'size',
+        label: '사이즈',
+        required: true,
+        choices: [
+          { id: '250', label: '250mm', priceDelta: 0 },
+          { id: '260', label: '260mm', priceDelta: 0 },
+          { id: '270', label: '270mm', priceDelta: 0 },
+        ],
+      },
+    ],
+    specifications: [
+      { label: '종류', value: '4인치 안전화' },
+      { label: '소재', value: '천연가죽' },
+      { label: '선심', value: '강철 선심' },
+      { label: '원산지', value: '대한민국' },
+    ],
+    certifications: ['KCs 안전인증'],
+    shipping: {
+      method: '일반 배송 (2~3일)',
+      estimate: '평일 기준 2~3일 이내 출고',
+      fee: 0,
+      countryOfOrigin: '대한민국',
+    },
+    rating: 4.6,
+    reviewCount: 8,
+    createdAt: '2026-09-20T09:00:00.000Z',
+    isFeatured: true,
   },
   {
     id: 'prd-1003',
@@ -40,6 +99,25 @@ export const mockProducts: Product[] = [
     stockStatus: 'inStock',
     thumbnailUrl: null,
     summary: '현장 규격에 따라 견적 후 공급합니다',
+    images: [],
+    options: [],
+    specifications: [
+      { label: '종류', value: '그네식 안전벨트' },
+      { label: '인증', value: 'KCs 안전인증' },
+      { label: '사이즈', value: 'Free' },
+      { label: '원산지', value: '대한민국' },
+    ],
+    certifications: ['KCs 안전인증'],
+    shipping: {
+      method: '견적 후 안내',
+      estimate: '견적 문의 후 별도 안내',
+      fee: 0,
+      countryOfOrigin: '대한민국',
+    },
+    rating: null,
+    reviewCount: 0,
+    createdAt: '2026-09-18T09:00:00.000Z',
+    isFeatured: true,
   },
   {
     id: 'prd-1004',
@@ -52,6 +130,24 @@ export const mockProducts: Product[] = [
     stockStatus: 'inStock',
     thumbnailUrl: null,
     summary: '이벤트 증정 상품',
+    images: [],
+    options: [],
+    specifications: [
+      { label: '종류', value: '코팅 장갑' },
+      { label: '구성', value: '10켤레' },
+      { label: '원산지', value: '대한민국' },
+    ],
+    certifications: [],
+    shipping: {
+      method: '일반 배송 (2~3일)',
+      estimate: '평일 기준 2~3일 이내 출고',
+      fee: 0,
+      countryOfOrigin: '대한민국',
+    },
+    rating: 4.3,
+    reviewCount: 4,
+    createdAt: '2026-09-10T09:00:00.000Z',
+    isFeatured: true,
   },
   {
     id: 'prd-1005',
@@ -64,6 +160,35 @@ export const mockProducts: Product[] = [
     stockStatus: 'soldOut',
     thumbnailUrl: null,
     summary: '형식승인 제품, 벽걸이 브래킷 포함',
+    images: [],
+    options: [
+      {
+        id: 'mount',
+        label: '설치 옵션',
+        required: true,
+        choices: [
+          { id: 'wall', label: '벽걸이형', priceDelta: 0 },
+          { id: 'stand', label: '스탠드형', priceDelta: 3000 },
+        ],
+      },
+    ],
+    specifications: [
+      { label: '용량', value: '3.3kg' },
+      { label: '종류', value: '분말 소화기' },
+      { label: '인증', value: '형식승인' },
+      { label: '원산지', value: '대한민국' },
+    ],
+    certifications: ['형식승인'],
+    shipping: {
+      method: '일반 배송 (2~3일)',
+      estimate: '평일 기준 2~3일 이내 출고',
+      fee: 0,
+      countryOfOrigin: '대한민국',
+    },
+    rating: 4.5,
+    reviewCount: 2,
+    createdAt: '2026-08-18T09:00:00.000Z',
+    isFeatured: true,
   },
   {
     id: 'prd-1006',
@@ -76,5 +201,23 @@ export const mockProducts: Product[] = [
     stockStatus: 'soldOut',
     thumbnailUrl: null,
     summary: '알루미늄 복합판 300×400',
+    images: [],
+    options: [],
+    specifications: [
+      { label: '재질', value: '알루미늄 복합판' },
+      { label: '크기', value: '300 × 400mm' },
+      { label: '원산지', value: '대한민국' },
+    ],
+    certifications: [],
+    shipping: {
+      method: '견적 후 안내',
+      estimate: '견적 문의 후 별도 안내',
+      fee: 0,
+      countryOfOrigin: '대한민국',
+    },
+    rating: null,
+    reviewCount: 0,
+    createdAt: '2026-08-20T09:00:00.000Z',
+    isFeatured: true,
   },
 ];

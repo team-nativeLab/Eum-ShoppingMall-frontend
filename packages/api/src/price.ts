@@ -23,7 +23,7 @@ type PricedProduct = Pick<Product, 'price' | 'listPrice' | 'priceVisible'>;
  * priceVisible과 price는 독립입니다. price가 0이어도 표시 상태면 "₩0"을 보여 줍니다.
  */
 export function getPriceDisplay(product: PricedProduct): PriceDisplay {
-  if (!product.priceVisible) {
+  if (!product.priceVisible || product.price === null) {
     return { isPriceVisible: false, text: PRICE_HIDDEN_LABEL, listPriceText: null };
   }
   const hasDiscount = product.listPrice !== null && product.listPrice > product.price;
@@ -34,11 +34,11 @@ export function getPriceDisplay(product: PricedProduct): PriceDisplay {
   };
 }
 
-type PurchasableProduct = Pick<Product, 'priceVisible' | 'stockStatus'>;
+type PurchasableProduct = Pick<Product, 'price' | 'priceVisible' | 'stockStatus'>;
 
 /** 바로 구매·주문이 가능한지. 금액 미표시이거나 품절이면 불가 */
 export function canBuyNow(product: PurchasableProduct): boolean {
-  return product.priceVisible && product.stockStatus === 'inStock';
+  return product.priceVisible && product.price !== null && product.stockStatus === 'inStock';
 }
 
 /** 장바구니에 담을 수 있는지. 금액 미표시 상품도 담을 수 있고, 품절만 막습니다. */

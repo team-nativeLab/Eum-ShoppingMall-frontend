@@ -2,8 +2,10 @@ import type {
   Address,
   Category,
   Claim,
+  CompanyInfo,
   Coupon,
   Faq,
+  HomeContent,
   Inquiry,
   Member,
   Notice,
@@ -11,6 +13,7 @@ import type {
   PagedResult,
   Point,
   Product,
+  ProductSuggestion,
   Quote,
 } from './types';
 
@@ -18,6 +21,12 @@ import type {
 export interface ProductListParams {
   categoryId?: string;
   keyword?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  brand?: string[];
+  certification?: string[];
+  excludeSoldOut?: boolean;
+  sortBy?: 'recommended' | 'priceAsc' | 'priceDesc' | 'newest';
   page?: number;
   pageSize?: number;
 }
@@ -37,8 +46,12 @@ export interface ShopApi {
   products: {
     list(params?: ProductListParams, options?: RequestOptions): Promise<PagedResult<Product>>;
     getById(productId: string, options?: RequestOptions): Promise<Product>;
+    suggest(keyword: string, options?: RequestOptions): Promise<ProductSuggestion[]>;
   };
   categories: { list(options?: RequestOptions): Promise<Category[]> };
+  home: { getContent(options?: RequestOptions): Promise<HomeContent> };
+  /** 푸터 사업자·고객센터 정보 */
+  company: { getInfo(options?: RequestOptions): Promise<CompanyInfo> };
   orders: {
     listByMember(memberId: string, options?: RequestOptions): Promise<Order[]>;
     getById(orderId: string, options?: RequestOptions): Promise<Order>;

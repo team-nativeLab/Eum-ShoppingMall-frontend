@@ -81,7 +81,7 @@ export function calculateCartTotals(
   for (const cartItem of orderableItems) {
     if (selectedItemIds && !selectedItemIds.has(cartItem.id)) continue;
     selectedOrderableCount += 1;
-    productTotal += cartItem.product.price * cartItem.quantity;
+    productTotal += (cartItem.product.price ?? 0) * cartItem.quantity;
   }
   return {
     orderableCount: orderableItems.length,
@@ -99,9 +99,13 @@ export function addProductToCart(
   cartItems: readonly CartItem[],
   product: Product,
   quantity: number,
+  optionId: string | null,
+  optionLabel: string | null,
   createCartItemId: () => string,
 ): CartItem[] {
-  const existingItem = cartItems.find((cartItem) => cartItem.productId === product.id);
+  const existingItem = cartItems.find(
+    (cartItem) => cartItem.productId === product.id && cartItem.optionId === optionId,
+  );
   if (existingItem) {
     return cartItems.map((cartItem) =>
       cartItem.id === existingItem.id
@@ -115,6 +119,8 @@ export function addProductToCart(
       id: createCartItemId(),
       productId: product.id,
       quantity: clampCartQuantity(quantity),
+      optionId,
+      optionLabel,
       product,
     },
   ];
