@@ -1,0 +1,38 @@
+import { cx } from '@eum/ui/lib/cx';
+import { Star } from 'lucide-react';
+
+const STAR_COUNT = 5;
+
+/**
+ * 별점 5개(Figma 16px, 모바일 14px · 간격 2). 평점을 반올림한 개수만큼 채웁니다.
+ * 화면낭독기에는 "평점 4.8점" 또는 "평점 없음"을 읽어 줍니다.
+ */
+export function ProductRatingStars({
+  rating,
+  className,
+}: {
+  rating: number | null;
+  className?: string;
+}) {
+  const filledCount = rating === null ? 0 : Math.round(rating);
+  return (
+    <span
+      role="img"
+      aria-label={rating === null ? '평점 없음' : `평점 ${rating}점`}
+      className={cx('inline-flex items-center gap-2', className)}
+    >
+      {Array.from({ length: STAR_COUNT }, (_, starIndex) => {
+        const isFilled = starIndex < filledCount;
+        return (
+          <Star
+            key={starIndex}
+            aria-hidden="true"
+            strokeWidth={1.5}
+            fill={isFilled ? 'currentColor' : 'none'}
+            className={cx('size-14 lg:size-16', isFilled ? 'text-text-1' : 'text-line-control')}
+          />
+        );
+      })}
+    </span>
+  );
+}

@@ -1,47 +1,78 @@
 'use client';
 
 import { createCartOptionId, formatCartOptionLabel } from '@eum/api/cart';
-import { canAddToCart, canBuyNow, getPriceDisplay, formatKrw } from '@eum/api/price';
+import { getApiFailureKind } from '@eum/api/errors';
+import { canAddToCart, canBuyNow, formatKrw, getPriceDisplay } from '@eum/api/price';
 import { sanitizeRedirectPath } from '@eum/api/redirect';
-import type { Product, ProductOption } from '@eum/api/types';
+import type { Category, Product, ProductOption } from '@eum/api/types';
+import { Badge } from '@eum/ui/components/Badge';
 import { Breadcrumb } from '@eum/ui/components/Breadcrumb';
 import { Button } from '@eum/ui/components/Button';
-import { Badge } from '@eum/ui/components/Badge';
 import { EmptyState } from '@eum/ui/components/EmptyState';
-import { Icon } from '@eum/ui/components/Icon';
+import { Icon, type IconSize } from '@eum/ui/components/Icon';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { QuantityStepper } from '@eum/ui/components/QuantityStepper';
 import { SelectField } from '@eum/ui/components/TextField';
-import { getApiFailureKind } from '@eum/api/errors';
-import { Heart, PackageOpen, SearchX } from 'lucide-react';
+import { cx } from '@eum/ui/lib/cx';
+import { Heart, PackageOpen, SearchX, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState, type UIEvent } from 'react';
 import { PageContainer } from '@/components/page-container';
 import { useCart } from '@/features/cart/cart-context';
 import { getMemberAuth } from '@/lib/member-auth';
 import { useLocalCollections } from './local-collections-context';
-import { ProductCard } from './product-card';
+import { ProductCarouselSection } from './product-carousel';
 import { ProductImage } from './product-image';
+import { ProductRatingStars } from './product-rating-stars';
+import { ProductReviewsSection } from './product-reviews-section';
 import { useCategoriesQuery } from './use-categories-query';
 import { useProductQuery } from './use-product-query';
 import { useProductsQuery } from './use-products-query';
 
 const QUANTITY_LIMIT = 999;
+/** 함께 구매하면 좋은 제품 최대 수(5열 × 2페이지) */
+const RELATED_PRODUCT_LIMIT = 10;
+/** 견적 문의 경로(대량 구매 안내 링크) */
+const QUOTE_INQUIRY_PATH = '/solutions';
+
 type DetailTab = 'description' | 'shipping' | 'reviews' | 'questions';
 
-const DETAIL_TABS: { id: DetailTab; label: string }[] = [
-  { id: 'description', label: '상품 정보' },
-  { id: 'shipping', label: '배송/반품' },
-  { id: 'reviews', label: '리뷰' },
-  { id: 'questions', label: '상품 문의' },
+const DETAIL_TABS: { id: DetailTab; label: string; mobileLabel: string }[] = [
+  { id: 'description', label: '제품 정보', mobileLabel: '제품 정보' },
+  { id: 'shipping', label: '배송/교환/반품', mobileLabel: '배송/반품' },
+  { id: 'reviews', label: '리뷰', mobileLabel: '리뷰' },
+  { id: 'questions', label: '상품 문의', mobileLabel: '상품 문의' },
 ];
 
-/** W-03 상세·가격 미표시 상태. 데이터 조회 후 최근 본 상품 ID를 저장합니다. */
+/** 상세 갤러리 이미지 한 장(서버 이미지가 없으면 대표 이미지로 대체) */
+interface GalleryImage {
+  id: string;
+  url: string;
+  alt: string;
+}
+
+/**
+ * 구매 영역에 쌓이는 선택 줄 하나. 옵션 없는 상품은 기본 줄(optionId=null) 하나로 시작합니다.
+ * lineId는 장바구니 옵션 식별자와 같은 규칙(@eum/api/cart)으로 만들어 같은 옵션을 다시 고르면 수량만 늘립니다.
+ */
+interface PurchaseLine {
+  lineId: string;
+  optionId: string | null;
+  optionLabel: string | null;
+  /** 줄에 표시할 옵션 문구(옵션이 없으면 상품명) */
+  displayLabel: string;
+  priceDelta: number;
+  quantity: number;
+}
+
+const BASE_LINE_ID = 'base';
+
+/** W-03 상세·금액 미표시 상태. 데이터 조회 후 최근 본 상품 ID를 저장합니다. */
 export function ProductDetailView({ productId }: { productId: string }) {
   const productQuery = useProductQuery(productId);
   const categoriesQuery = useCategoriesQuery();
-  const relatedQuery = useProductsQuery({ pageSize: 5 });
+  const relatedQuery = useProductsQuery({ pageSize: RELATED_PRODUCT_LIMIT + 1 });
   const { recordRecent } = useLocalCollections();
 
   useEffect(() => {
@@ -54,7 +85,7 @@ export function ProductDetailView({ productId }: { productId: string }) {
         <div className="aspect-square animate-pulse rounded-12 bg-surface" />
         <div aria-busy="true" className="space-y-16">
           <div className="h-24 w-160 animate-pulse rounded-8 bg-surface" />
-          <div className="h-40 w-320 animate-pulse rounded-8 bg-surface" />
+          <div className="h-40 max-w-320 animate-pulse rounded-8 bg-surface" />
           <div className="h-180 animate-pulse rounded-12 bg-surface" />
         </div>
       </PageContainer>
@@ -83,14 +114,32 @@ export function ProductDetailView({ productId }: { productId: string }) {
   }
 
   return (
+    // 상품이 바뀌면 옵션·수량 선택을 처음 상태로 되돌립니다.
     <ProductDetailContent
+      key={productQuery.data.id}
       product={productQuery.data}
       categories={categoriesQuery.data ?? []}
-      relatedProducts={
-        relatedQuery.data?.items.filter((item) => item.id !== productQuery.data.id) ?? []
-      }
+      relatedProducts={(relatedQuery.data?.items ?? [])
+        .filter((relatedProduct) => relatedProduct.id !== productQuery.data.id)
+        .slice(0, RELATED_PRODUCT_LIMIT)}
     />
   );
+}
+
+/** 옵션 없는(또는 필수 옵션 없는) 상품의 기본 선택 줄을 만드는 함수 */
+function createInitialLines(product: Product): PurchaseLine[] {
+  const hasRequiredOption = product.options.some((productOption) => productOption.required);
+  if (hasRequiredOption) return [];
+  return [
+    {
+      lineId: BASE_LINE_ID,
+      optionId: null,
+      optionLabel: null,
+      displayLabel: product.name,
+      priceDelta: 0,
+      quantity: 1,
+    },
+  ];
 }
 
 function ProductDetailContent({
@@ -99,81 +148,137 @@ function ProductDetailContent({
   relatedProducts,
 }: {
   product: Product;
-  categories: { id: string; slug: string; name: string; parentId: string | null }[];
+  categories: Category[];
   relatedProducts: Product[];
 }) {
   const router = useRouter();
   const { addToCart } = useCart();
   const { wishlistIds, toggleWishlist } = useLocalCollections();
-  const [quantity, setQuantity] = useState(1);
-  const [selectedChoices, setSelectedChoices] = useState<Record<string, string>>({});
-  const [notice, setNotice] = useState('');
+  const [purchaseLines, setPurchaseLines] = useState<PurchaseLine[]>(() =>
+    createInitialLines(product),
+  );
+  // 옵션 그룹이 여러 개일 때 모두 고를 때까지 모아 두는 선택값(옵션 ID → 선택지 ID)
+  const [pendingChoices, setPendingChoices] = useState<Record<string, string>>({});
+  const [notice, setNotice] = useState<{ tone: 'success' | 'danger'; message: string } | null>(
+    null,
+  );
   const [activeTab, setActiveTab] = useState<DetailTab>('description');
   const priceDisplay = getPriceDisplay(product);
-  const selectedOptions = useMemo(
-    () =>
-      product.options.flatMap((productOption) => {
-        const choiceId = selectedChoices[productOption.id];
-        const choice = productOption.choices.find((productChoice) => productChoice.id === choiceId);
-        return choice ? [{ productOption, choice }] : [];
-      }),
-    [product.options, selectedChoices],
-  );
-  const missingRequiredOption = product.options.some(
-    (productOption) => productOption.required && !selectedChoices[productOption.id],
-  );
-  // 장바구니 줄 식별자·문구 형식은 @eum/api/cart가 정하며, 복원 시 같은 규칙으로 다시 해석합니다.
-  const optionIdentity = createCartOptionId(
-    selectedOptions.map(({ productOption, choice }) => ({
-      optionId: productOption.id,
-      choiceId: choice.id,
-    })),
-  );
-  const optionLabel = formatCartOptionLabel(
-    selectedOptions.map(({ productOption, choice }) => ({
-      optionLabel: productOption.label,
-      choiceLabel: choice.label,
-    })),
-  );
-  const category = categories.find((item) => item.id === product.categoryId);
+  const isPriceVisible = priceDisplay.isPriceVisible && product.price !== null;
+  const category = categories.find((categoryItem) => categoryItem.id === product.categoryId);
   const isWishlisted = wishlistIds.includes(product.id);
+  const isSoldOut = product.stockStatus === 'soldOut';
   const isPurchasable = canBuyNow(product);
-  const isAddable = canAddToCart(product) && !missingRequiredOption;
-  const imageUrls =
+  const isAddable = canAddToCart(product);
+  const totalQuantity = purchaseLines.reduce((quantitySum, line) => quantitySum + line.quantity, 0);
+  const galleryImages: GalleryImage[] =
     product.images.length > 0
       ? product.images
       : product.thumbnailUrl
         ? [{ id: 'thumbnail', url: product.thumbnailUrl, alt: product.name }]
         : [];
-  const [activeImageId, setActiveImageId] = useState<string | null>(imageUrls[0]?.id ?? null);
-  const activeImage = imageUrls.find((image) => image.id === activeImageId) ?? imageUrls[0];
-  const selectedPriceDelta = priceDisplay.isPriceVisible
-    ? selectedOptions.reduce(
-        (priceSum, selectedOption) => priceSum + selectedOption.choice.priceDelta,
-        0,
-      )
-    : 0;
-  const selectedProductPrice =
-    product.priceVisible && product.price !== null
-      ? formatKrw(product.price + selectedPriceDelta)
-      : priceDisplay.text;
 
-  const handleAddToCart = () => {
-    if (!canAddToCart(product)) return;
-    if (missingRequiredOption) {
-      setNotice('필수 옵션을 선택해 주세요.');
+  // 선택 줄 금액(단가 + 옵션 추가금) × 수량. 금액 미표시 상품은 계산하지 않습니다.
+  const getLineAmount = (line: PurchaseLine): number | null =>
+    isPriceVisible && product.price !== null
+      ? (product.price + line.priceDelta) * line.quantity
+      : null;
+  const totalAmount = isPriceVisible
+    ? purchaseLines.reduce((amountSum, line) => amountSum + (getLineAmount(line) ?? 0), 0)
+    : null;
+  const totalAmountText = totalAmount === null ? priceDisplay.text : formatKrw(totalAmount);
+  const selectionSummary =
+    purchaseLines.length === 0
+      ? '옵션을 선택해 주세요'
+      : purchaseLines.length === 1 && purchaseLines[0]?.optionLabel
+        ? `${purchaseLines[0].optionLabel} · ${totalQuantity}개`
+        : `${totalQuantity}개`;
+
+  // 옵션 선택값을 받아 모든 필수 옵션이 채워지면 선택 줄로 추가하는 함수
+  const handleChoiceChange = (productOption: ProductOption, choiceId: string) => {
+    setNotice(null);
+    const nextChoices = { ...pendingChoices, [productOption.id]: choiceId };
+    const isEveryRequiredChosen = product.options.every(
+      (optionItem) => !optionItem.required || nextChoices[optionItem.id],
+    );
+    if (!isEveryRequiredChosen) {
+      setPendingChoices(nextChoices);
       return;
     }
-    addToCart(product, quantity, optionIdentity, optionLabel);
-    setNotice('장바구니에 담았습니다.');
+    const chosenOptions = product.options.flatMap((optionItem) => {
+      const choice = optionItem.choices.find(
+        (choiceItem) => choiceItem.id === nextChoices[optionItem.id],
+      );
+      return choice ? [{ optionItem, choice }] : [];
+    });
+    const optionId = createCartOptionId(
+      chosenOptions.map(({ optionItem, choice }) => ({
+        optionId: optionItem.id,
+        choiceId: choice.id,
+      })),
+    );
+    const optionLabel = formatCartOptionLabel(
+      chosenOptions.map(({ optionItem, choice }) => ({
+        optionLabel: optionItem.label,
+        choiceLabel: choice.label,
+      })),
+    );
+    const lineId = optionId ?? BASE_LINE_ID;
+    setPendingChoices({});
+    setPurchaseLines((currentLines) => {
+      if (currentLines.some((line) => line.lineId === lineId)) {
+        return currentLines.map((line) =>
+          line.lineId === lineId
+            ? { ...line, quantity: Math.min(QUANTITY_LIMIT, line.quantity + 1) }
+            : line,
+        );
+      }
+      return [
+        ...currentLines,
+        {
+          lineId,
+          optionId,
+          optionLabel,
+          displayLabel: optionLabel ?? product.name,
+          priceDelta: chosenOptions.reduce(
+            (deltaSum, { choice }) => deltaSum + choice.priceDelta,
+            0,
+          ),
+          quantity: 1,
+        },
+      ];
+    });
+  };
+
+  const changeLineQuantity = (lineId: string, quantity: number) => {
+    setPurchaseLines((currentLines) =>
+      currentLines.map((line) => (line.lineId === lineId ? { ...line, quantity } : line)),
+    );
+  };
+
+  const removeLine = (lineId: string) => {
+    setPurchaseLines((currentLines) => currentLines.filter((line) => line.lineId !== lineId));
+  };
+
+  // 선택 줄을 모두 장바구니에 담는 함수. 담을 줄이 없으면 옵션 선택을 안내합니다.
+  const addLinesToCart = (): boolean => {
+    if (purchaseLines.length === 0) {
+      setNotice({ tone: 'danger', message: '필수 옵션을 선택해 주세요.' });
+      return false;
+    }
+    for (const line of purchaseLines) {
+      addToCart(product, line.quantity, line.optionId, line.optionLabel);
+    }
+    return true;
+  };
+
+  const handleAddToCart = () => {
+    if (!isAddable) return;
+    if (addLinesToCart()) setNotice({ tone: 'success', message: '장바구니에 담았습니다.' });
   };
 
   const handleBuyNow = async () => {
-    if (!isPurchasable || missingRequiredOption) {
-      if (missingRequiredOption) setNotice('필수 옵션을 선택해 주세요.');
-      return;
-    }
-    addToCart(product, quantity, optionIdentity, optionLabel);
+    if (!isPurchasable || !addLinesToCart()) return;
     const returnPath = sanitizeRedirectPath('/checkout/shipping');
     try {
       const currentMember = await (await getMemberAuth()).getCurrentUser();
@@ -191,9 +296,18 @@ function ProductDetailContent({
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  const wishButtonLabel = isWishlisted ? '찜 취소' : '찜하기';
+  const shippingSummary =
+    product.shipping.method +
+    ' · ' +
+    (product.shipping.fee === 0 ? '무료' : formatKrw(product.shipping.fee));
+  const certificationText = product.certifications.length
+    ? product.certifications.join(', ')
+    : '인증 정보 없음';
+
   return (
     <>
-      <PageContainer className="pt-20 pb-80 lg:pt-24 lg:pb-64">
+      <PageContainer className="pb-56 lg:pt-24 lg:pb-56">
         <div className="hidden lg:block">
           <Breadcrumb
             items={[
@@ -210,365 +324,355 @@ function ProductDetailContent({
           />
         </div>
 
-        <div className="grid gap-24 lg:mt-32 lg:grid-cols-[minmax(0,1.1fr)_minmax(400px,0.9fr)] lg:gap-48">
-          <ProductGallery
-            images={imageUrls}
-            activeImage={activeImage}
-            onSelect={setActiveImageId}
-            productName={product.name}
-          />
-          <section aria-labelledby="product-title" className="min-w-0 px-16 lg:px-0">
-            <p className="text-caption text-text-3">{product.brand}</p>
-            <div className="mt-4 flex flex-wrap items-center gap-8">
-              <h1 id="product-title" className="text-h2">
+        <div className="grid lg:mt-24 lg:grid-cols-[minmax(0,636fr)_minmax(0,612fr)] lg:gap-48">
+          <ProductGallery images={galleryImages} productName={product.name} />
+
+          <div className="min-w-0">
+            <section aria-labelledby="product-title" className="py-24 lg:py-0">
+              <div className="flex items-center gap-6">
+                <p className="text-caption-medium text-text-3">{product.brand}</p>
+                {!priceDisplay.isPriceVisible ? <Badge tone="outline">금액 미표시</Badge> : null}
+                {isSoldOut ? <Badge tone="soldout">품절</Badge> : null}
+              </div>
+              <h1 id="product-title" className="mt-6 text-h2 lg:mt-8 lg:text-web-h2">
                 {product.name}
               </h1>
-              {!priceDisplay.isPriceVisible ? <Badge tone="outline">금액 미표시</Badge> : null}
-              {product.stockStatus === 'soldOut' ? <Badge tone="soldout">품절</Badge> : null}
-            </div>
-            <div className="mt-8 flex items-center gap-8 text-body-s text-text-3">
-              <span
-                aria-label={product.rating === null ? '평점 없음' : '평점 ' + product.rating + '점'}
-                className="text-line-control"
-              >
-                {product.rating === null ? '☆☆☆☆☆' : '★★★★★'}
-              </span>
-              <span>({product.reviewCount.toLocaleString('ko-KR')})</span>
-            </div>
-            <div className="mt-12 border-b border-line pb-20">
-              <p
-                className={
-                  priceDisplay.isPriceVisible ? 'text-web-price-xl' : 'text-h2 text-text-2'
-                }
-              >
-                {selectedProductPrice}
-              </p>
-              {priceDisplay.listPriceText ? (
-                <p className="mt-4 text-body-s text-text-3 line-through">
-                  {priceDisplay.listPriceText}
+              <div className="mt-8 flex items-center gap-8 lg:mt-12 lg:gap-4">
+                <ProductRatingStars rating={product.rating} />
+                <span className="text-caption text-text-3">
+                  ({product.reviewCount.toLocaleString('ko-KR')})
+                </span>
+              </div>
+              <div className="mt-12 lg:mt-20">
+                <p
+                  className={cx(
+                    'text-price-l lg:text-web-price-xl',
+                    !priceDisplay.isPriceVisible && 'text-text-2',
+                  )}
+                >
+                  {priceDisplay.listPriceText ? <span className="sr-only">판매가 </span> : null}
+                  {priceDisplay.text}
                 </p>
-              ) : null}
-            </div>
+                {priceDisplay.listPriceText ? (
+                  <p className="mt-4 text-body-s text-text-3 line-through">
+                    <span className="sr-only">정가 </span>
+                    {priceDisplay.listPriceText}
+                  </p>
+                ) : null}
+              </div>
 
-            <dl className="grid grid-cols-[88px_1fr] gap-x-16 gap-y-8 border-b border-line py-20 text-body-s">
-              <dt className="text-text-3">배송</dt>
-              <dd>{product.shipping.method}</dd>
-              <dt className="text-text-3">안전인증</dt>
-              <dd>
-                {product.certifications.length
-                  ? product.certifications.join(', ')
-                  : '인증 정보 없음'}
-              </dd>
-              <dt className="text-text-3">원산지</dt>
-              <dd>{product.shipping.countryOfOrigin}</dd>
-            </dl>
+              {/* 모바일(W-03m): 배송·인증·원산지 요약 박스 */}
+              <dl className="mt-20 flex flex-col gap-8 rounded-12 border border-line bg-bg-subtle p-16 text-body-s lg:hidden">
+                <InfoRow label="배송" labelClassName="w-72" value={shippingSummary} />
+                <InfoRow label="안전인증" labelClassName="w-72" value={certificationText} />
+                <InfoRow
+                  label="원산지"
+                  labelClassName="w-72"
+                  value={product.shipping.countryOfOrigin}
+                />
+              </dl>
 
-            {product.options.map((productOption) => (
-              <OptionSelect
-                key={productOption.id}
-                option={productOption}
-                value={selectedChoices[productOption.id] ?? ''}
-                priceVisible={priceDisplay.isPriceVisible}
-                onChange={(choiceId) => {
-                  setSelectedChoices((currentChoices) => ({
-                    ...currentChoices,
-                    [productOption.id]: choiceId,
-                  }));
-                  setNotice('');
-                }}
-              />
-            ))}
+              {/* 데스크톱(W-03): 구분선 아래 정보 표 */}
+              <div className="mt-24 hidden border-t border-line pt-24 lg:block">
+                <dl className="flex flex-col gap-12 text-body-s">
+                  {product.modelName ? (
+                    <InfoRow label="모델명" labelClassName="w-96" value={product.modelName} />
+                  ) : null}
+                  <InfoRow label="안전인증" labelClassName="w-96" value={certificationText} />
+                  <InfoRow
+                    label="원산지"
+                    labelClassName="w-96"
+                    value={product.shipping.countryOfOrigin}
+                  />
+                  <InfoRow label="배송" labelClassName="w-96" value={shippingSummary} />
+                </dl>
+              </div>
 
-            {selectedOptions.length > 0 ? (
-              <div className="mt-16 space-y-8">
-                {selectedOptions.map(({ productOption, choice }) => (
-                  <div
+              <div className="mt-24 flex flex-col gap-12">
+                {product.options.map((productOption) => (
+                  <OptionSelect
                     key={productOption.id}
-                    className="flex items-center justify-between rounded-8 bg-surface px-12 py-8 text-body-s"
-                  >
-                    <span>
-                      {productOption.label}: {choice.label}
-                      {priceDisplay.isPriceVisible && choice.priceDelta !== 0
-                        ? ' (' +
-                          (choice.priceDelta > 0 ? '+' : '') +
-                          formatKrw(choice.priceDelta) +
-                          ')'
-                        : ''}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label={productOption.label + ' 선택 취소'}
-                      onClick={() =>
-                        setSelectedChoices((currentChoices) => {
-                          const nextChoices = { ...currentChoices };
-                          delete nextChoices[productOption.id];
-                          return nextChoices;
-                        })
-                      }
-                      className="rounded-4 px-8 text-text-3 focus-ring hover:text-text-1"
-                    >
-                      ×
-                    </button>
+                    option={productOption}
+                    value={pendingChoices[productOption.id] ?? ''}
+                    isPriceVisible={isPriceVisible}
+                    onChange={(choiceId) => handleChoiceChange(productOption, choiceId)}
+                  />
+                ))}
+
+                {purchaseLines.length > 0 ? (
+                  <ul aria-label="선택한 옵션" className="flex flex-col gap-8">
+                    {purchaseLines.map((line) => {
+                      const lineAmount = getLineAmount(line);
+                      const canRemoveLine = line.lineId !== BASE_LINE_ID;
+                      return (
+                        <li
+                          key={line.lineId}
+                          className="flex flex-wrap items-center gap-x-16 gap-y-8 rounded-8 border border-line bg-bg-subtle p-16"
+                        >
+                          <span className="min-w-0 flex-1 text-body-s">{line.displayLabel}</span>
+                          <div className="flex items-center gap-16">
+                            <QuantityStepper
+                              value={line.quantity}
+                              onValueChange={(quantity) =>
+                                changeLineQuantity(line.lineId, quantity)
+                              }
+                              max={QUANTITY_LIMIT}
+                              label={line.displayLabel + ' 수량'}
+                              isDisabled={!isAddable}
+                              className="self-center"
+                            />
+                            {lineAmount !== null ? (
+                              <span className="min-w-72 text-right text-price-m">
+                                {formatKrw(lineAmount)}
+                              </span>
+                            ) : null}
+                            {canRemoveLine ? (
+                              <button
+                                type="button"
+                                aria-label={line.displayLabel + ' 선택 취소'}
+                                onClick={() => removeLine(line.lineId)}
+                                className="inline-flex size-28 items-center justify-center rounded-4 text-text-2 focus-ring hover:text-text-1"
+                              >
+                                <Icon icon={X} size={20} />
+                              </button>
+                            ) : null}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
+              </div>
+
+              {isPriceVisible && purchaseLines.length > 0 ? (
+                <div className="mt-24 flex items-center justify-between gap-12">
+                  <span className="text-title">총 금액 ({totalQuantity}개)</span>
+                  <span className="text-price-l">{totalAmountText}</span>
+                </div>
+              ) : null}
+
+              <div className="mt-20 hidden grid-cols-[56px_minmax(0,1fr)_minmax(0,1fr)] gap-8 lg:grid">
+                <WishButton
+                  isWishlisted={isWishlisted}
+                  label={wishButtonLabel}
+                  onToggle={() => toggleWishlist(product.id)}
+                  className="size-56"
+                />
+                <Button variant="primary" size="l" disabled={!isAddable} onClick={handleAddToCart}>
+                  장바구니 담기
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="l"
+                  disabled={!isPurchasable}
+                  onClick={() => void handleBuyNow()}
+                >
+                  바로 구매
+                </Button>
+              </div>
+              {!priceDisplay.isPriceVisible ? (
+                <NoticeInline tone="neutral" className="mt-12 hidden lg:flex">
+                  금액이 공개되지 않은 상품이라 바로 구매할 수 없습니다. 장바구니에 담거나 견적을
+                  문의해 주세요.
+                </NoticeInline>
+              ) : null}
+              {isSoldOut ? (
+                <NoticeInline tone="neutral" className="mt-12">
+                  현재 품절된 상품입니다.
+                </NoticeInline>
+              ) : null}
+              <p
+                role="status"
+                className={cx(
+                  'text-body-s empty:hidden',
+                  notice?.tone === 'danger' ? 'text-danger' : 'text-success',
+                  notice ? 'mt-8' : '',
+                )}
+              >
+                {notice?.message}
+              </p>
+              <Link
+                href={QUOTE_INQUIRY_PATH}
+                className="mt-16 inline-flex rounded-4 text-label-m underline underline-offset-2 focus-ring hover:text-text-2"
+              >
+                대량 구매는 견적 문의 →
+              </Link>
+            </section>
+
+            {product.purchaseNotices.length > 0 ? (
+              <dl
+                aria-label="구매 전 안내"
+                className="mt-20 hidden flex-col gap-12 rounded-12 border border-line bg-bg-subtle p-20 lg:flex"
+              >
+                {product.purchaseNotices.map((purchaseNotice) => (
+                  <div key={purchaseNotice.label} className="flex items-center gap-16">
+                    <dt className="w-72 shrink-0 text-body-s-medium">{purchaseNotice.label}</dt>
+                    <dd className="min-w-0 text-caption text-text-3">
+                      {purchaseNotice.description}
+                    </dd>
                   </div>
                 ))}
-              </div>
-            ) : null}
-
-            <div className="mt-16 flex items-center justify-between gap-12">
-              <span className="text-body-s text-text-2">수량</span>
-              <QuantityStepper
-                value={quantity}
-                onValueChange={setQuantity}
-                max={QUANTITY_LIMIT}
-                label={product.name + ' 수량'}
-              />
-            </div>
-
-            <div className="mt-16 flex flex-wrap items-center justify-between gap-12 rounded-8 border border-line px-12 py-8">
-              <span className="text-body-s">총 상품 금액 ({quantity}개)</span>
-              <span className="text-price-m">
-                {product.priceVisible && product.price !== null
-                  ? formatKrw((product.price + selectedPriceDelta) * quantity)
-                  : priceDisplay.text}
-              </span>
-            </div>
-
-            <div className="mt-16 hidden gap-8 lg:flex">
-              <button
-                type="button"
-                onClick={() => toggleWishlist(product.id)}
-                aria-label={isWishlisted ? '찜 취소' : '찜하기'}
-                aria-pressed={isWishlisted}
-                className="inline-flex size-48 shrink-0 items-center justify-center rounded-8 border border-line-strong focus-ring hover:bg-surface"
-              >
-                <Icon icon={Heart} size={20} fill={isWishlisted ? 'currentColor' : 'none'} />
-              </button>
-              <Button
-                variant="primary"
-                size="m"
-                isFullWidth
-                disabled={!isAddable}
-                onClick={handleAddToCart}
-              >
-                장바구니 담기
-              </Button>
-              <Button
-                variant="secondary"
-                size="m"
-                isFullWidth
-                disabled={!isPurchasable || missingRequiredOption}
-                onClick={() => void handleBuyNow()}
-              >
-                바로 구매
-              </Button>
-            </div>
-            {!priceDisplay.isPriceVisible ? (
-              <NoticeInline tone="neutral" className="mt-12 hidden lg:flex">
-                금액이 표시되지 않아 온라인 바로 구매가 불가능합니다. 견적 문의를 이용해 주세요.
-              </NoticeInline>
-            ) : null}
-            {product.stockStatus === 'soldOut' ? (
-              <NoticeInline tone="neutral" className="mt-12 hidden lg:flex">
-                현재 품절된 상품입니다.
-              </NoticeInline>
-            ) : null}
-            {notice ? (
-              <p role="status" className="mt-8 text-body-s text-success">
-                {notice}
-              </p>
-            ) : null}
-
-            <div className="mt-20 rounded-12 bg-surface px-16 py-16 text-body-s">
-              <p className="text-label-m">함께 구매 전 확인해 주세요</p>
-              <dl className="mt-12 grid grid-cols-[80px_1fr] gap-x-12 gap-y-8">
-                <dt className="text-text-3">출고</dt>
-                <dd>{product.shipping.estimate}</dd>
-                <dt className="text-text-3">결제</dt>
-                <dd>결제 후 주문 상태에서 확인할 수 있습니다.</dd>
-                <dt className="text-text-3">교환·반품</dt>
-                <dd>상품 상태와 배송 기준에 따라 안내됩니다.</dd>
               </dl>
-            </div>
-          </section>
+            ) : null}
+          </div>
         </div>
 
-        <nav
-          aria-label="상품 상세 탭"
-          className="sticky top-48 z-20 mt-32 flex overflow-x-auto border-b border-line bg-bg lg:top-72"
-        >
-          {DETAIL_TABS.map((detailTab) => (
-            <button
-              key={detailTab.id}
-              type="button"
-              aria-current={activeTab === detailTab.id ? 'page' : undefined}
-              onClick={() => selectTab(detailTab.id)}
-              className={
-                activeTab === detailTab.id
-                  ? 'h-48 shrink-0 border-b-2 border-text-1 px-16 text-label-m focus-ring lg:px-24'
-                  : 'h-48 shrink-0 px-16 text-body-s text-text-2 focus-ring lg:px-24'
-              }
-            >
-              {detailTab.label}
-              {detailTab.id === 'reviews' ? ' (' + product.reviewCount + ')' : ''}
-            </button>
-          ))}
-        </nav>
-
-        <div className="grid gap-32 pt-24 lg:grid-cols-[minmax(0,2fr)_minmax(280px,0.8fr)] lg:gap-48">
+        <div className="mt-40 grid gap-24 lg:mt-96 lg:grid-cols-[minmax(0,856fr)_minmax(0,416fr)]">
           <div className="min-w-0">
-            <section
-              id="product-tab-description"
-              aria-labelledby="product-description-heading"
-              className="scroll-mt-80"
+            <nav
+              aria-label="상품 상세 탭"
+              className="sticky top-56 z-20 -mx-20 grid grid-cols-4 border-b border-line bg-bg lg:top-72 lg:mx-0"
             >
-              <h2 id="product-description-heading" className="text-title">
-                상품 정보
-              </h2>
-              <p className="mt-12 text-body-s whitespace-pre-line text-text-2">{product.summary}</p>
-              <div className="mt-20 overflow-hidden rounded-12 bg-surface">
-                {activeImage ? (
+              {DETAIL_TABS.map((detailTab) => {
+                const isActive = activeTab === detailTab.id;
+                const reviewSuffix = detailTab.id === 'reviews' ? ` (${product.reviewCount})` : '';
+                return (
+                  <a
+                    key={detailTab.id}
+                    href={'#product-tab-' + detailTab.id}
+                    aria-current={isActive ? 'location' : undefined}
+                    onClick={(clickEvent) => {
+                      clickEvent.preventDefault();
+                      selectTab(detailTab.id);
+                    }}
+                    className={cx(
+                      'inline-flex h-56 min-w-0 items-center justify-center px-4 text-label-l whitespace-nowrap focus-ring lg:px-24',
+                      isActive
+                        ? 'border-b-2 border-text-1 text-text-1'
+                        : 'text-text-3 hover:text-text-1',
+                    )}
+                  >
+                    <span className="truncate lg:hidden">
+                      {detailTab.mobileLabel + reviewSuffix}
+                    </span>
+                    <span className="hidden truncate lg:inline">
+                      {detailTab.label + reviewSuffix}
+                    </span>
+                  </a>
+                );
+              })}
+            </nav>
+
+            <div className="mt-24 flex flex-col gap-48 lg:mt-40 lg:gap-64">
+              <section
+                id="product-tab-description"
+                aria-labelledby="product-description-heading"
+                className="scroll-mt-120"
+              >
+                <h2 id="product-description-heading" className="sr-only">
+                  제품 정보
+                </h2>
+                {product.summary ? (
+                  <p className="mb-20 text-body-m whitespace-pre-line text-text-2">
+                    {product.summary}
+                  </p>
+                ) : null}
+                <div className="aspect-[856/1200] max-h-[1200px] overflow-hidden rounded-12 bg-surface">
                   <ProductImage
-                    src={activeImage.url}
-                    alt={activeImage.alt}
-                    className="max-h-640 min-h-320 object-contain lg:min-h-560"
+                    src={galleryImages[0]?.url ?? null}
+                    alt={galleryImages[0]?.alt ?? product.name + ' 상세 이미지'}
                   />
-                ) : (
-                  <ProductImage
-                    src={null}
-                    alt={product.name + ' 상품 이미지'}
-                    className="h-320 lg:h-560"
-                  />
-                )}
-              </div>
+                </div>
+              </section>
+
               {product.specifications.length > 0 ? (
-                <div className="mt-24">
-                  <h3 className="text-body-s-medium">제품 사양</h3>
-                  <dl className="mt-12 border-t border-text-2">
+                <section aria-labelledby="product-spec-heading" className="flex flex-col gap-16">
+                  <h2 id="product-spec-heading" className="text-h3">
+                    제품 사양
+                  </h2>
+                  <dl className="border-t-2 border-text-1">
                     {product.specifications.map((specification) => (
                       <div
                         key={specification.label}
-                        className="grid grid-cols-[120px_1fr] border-b border-line text-body-s"
+                        className="grid grid-cols-[120px_minmax(0,1fr)] border-b border-line text-body-s lg:grid-cols-[196px_minmax(0,1fr)]"
                       >
-                        <dt className="bg-surface px-12 py-10 text-text-2">
+                        <dt className="flex min-h-52 items-center bg-surface px-16 text-body-s-medium text-text-2">
                           {specification.label}
                         </dt>
-                        <dd className="px-12 py-10">{specification.value}</dd>
+                        <dd className="flex items-center px-16 py-12">{specification.value}</dd>
                       </div>
                     ))}
                   </dl>
-                </div>
+                </section>
               ) : null}
-            </section>
 
-            <section
-              id="product-tab-shipping"
-              aria-labelledby="shipping-heading"
-              className="mt-40 scroll-mt-80"
-            >
-              <h2 id="shipping-heading" className="text-title">
-                배송/반품 안내
-              </h2>
-              <p className="mt-12 text-body-s text-text-2">{product.shipping.estimate}</p>
-              <dl className="mt-12 grid grid-cols-[120px_1fr] border-t border-line text-body-s">
-                <dt className="border-b border-line bg-surface px-12 py-10 text-text-2">
-                  배송 방법
-                </dt>
-                <dd className="border-b border-line px-12 py-10">{product.shipping.method}</dd>
-                <dt className="border-b border-line bg-surface px-12 py-10 text-text-2">배송비</dt>
-                <dd className="border-b border-line px-12 py-10">
-                  {product.shipping.fee === 0 ? '무료' : formatKrw(product.shipping.fee)}
-                </dd>
-                <dt className="border-b border-line bg-surface px-12 py-10 text-text-2">원산지</dt>
-                <dd className="border-b border-line px-12 py-10">
-                  {product.shipping.countryOfOrigin}
-                </dd>
-              </dl>
-            </section>
-
-            <section
-              id="product-tab-reviews"
-              aria-labelledby="reviews-heading"
-              className="mt-40 scroll-mt-80"
-            >
-              <h2 id="reviews-heading" className="text-title">
-                리뷰 ({product.reviewCount})
-              </h2>
-              <EmptyState
-                icon={PackageOpen}
-                title={
-                  product.reviewCount > 0
-                    ? '리뷰를 불러오는 중입니다'
-                    : '아직 작성된 리뷰가 없습니다'
-                }
-                description={
-                  product.reviewCount > 0 ? undefined : '구매 후 상품 리뷰를 남겨 주세요.'
-                }
-                headingLevel="h3"
-                className="py-32"
-              />
-            </section>
-
-            <section
-              id="product-tab-questions"
-              aria-labelledby="questions-heading"
-              className="mt-40 scroll-mt-80"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-12">
-                <h2 id="questions-heading" className="text-title">
-                  상품 문의
+              <section
+                id="product-tab-shipping"
+                aria-labelledby="shipping-heading"
+                className="flex scroll-mt-120 flex-col gap-16"
+              >
+                <h2 id="shipping-heading" className="text-h3">
+                  배송/교환/반품 안내
                 </h2>
-                <Link
-                  href="/login?redirect=%2Fproducts%2F"
-                  className="rounded-4 text-label-s underline focus-ring"
-                >
-                  문의하기
-                </Link>
-              </div>
-              <EmptyState
-                icon={PackageOpen}
-                title="등록된 상품 문의가 없습니다"
-                headingLevel="h3"
-                className="py-32"
+                <p className="text-body-m whitespace-pre-line text-text-2">
+                  {product.shipping.policy || product.shipping.estimate}
+                </p>
+              </section>
+
+              <ProductReviewsSection
+                productId={product.id}
+                reviewCount={product.reviewCount}
+                sectionId="product-tab-reviews"
               />
-            </section>
+
+              <section
+                id="product-tab-questions"
+                aria-labelledby="questions-heading"
+                className="scroll-mt-120"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-12">
+                  <h2 id="questions-heading" className="text-h3">
+                    상품 문의
+                  </h2>
+                  <Link
+                    href={
+                      '/login?redirect=' +
+                      encodeURIComponent('/products/' + encodeURIComponent(product.id))
+                    }
+                    className="rounded-4 text-label-s underline focus-ring"
+                  >
+                    문의하기
+                  </Link>
+                </div>
+                <EmptyState
+                  icon={PackageOpen}
+                  title="등록된 상품 문의가 없습니다"
+                  headingLevel="h3"
+                  className="pt-48"
+                />
+              </section>
+            </div>
           </div>
 
-          <aside className="hidden lg:block" aria-label="구매 요약">
-            <div className="sticky top-96 rounded-12 border border-line p-20">
-              <p className="text-body-s-medium">{product.name}</p>
-              <p className="mt-4 text-caption text-text-3">{product.brand}</p>
-              <div className="mt-12 flex items-center justify-between gap-8">
-                <span className="text-caption text-text-3">총 금액</span>
-                <span className="text-price-m">
-                  {product.priceVisible && product.price !== null
-                    ? formatKrw((product.price + selectedPriceDelta) * quantity)
-                    : priceDisplay.text}
+          <aside className="hidden lg:block lg:pt-80" aria-label="구매 요약">
+            <div className="sticky top-96 rounded-12 border border-line bg-bg p-24">
+              <p className="text-title">{product.name}</p>
+              <p className="mt-4 text-body-s text-text-3">{selectionSummary}</p>
+              <div className="mt-16 flex items-center justify-between gap-8">
+                <span className="text-body-s text-text-2">총 금액</span>
+                <span
+                  className={cx(
+                    isPriceVisible ? 'text-price-l' : 'text-price-m text-text-2',
+                    'text-right',
+                  )}
+                >
+                  {totalAmountText}
                 </span>
               </div>
-              <div className="mt-12 flex gap-8">
-                <button
-                  type="button"
-                  onClick={() => toggleWishlist(product.id)}
-                  aria-label={isWishlisted ? '찜 취소' : '찜하기'}
-                  aria-pressed={isWishlisted}
-                  className="inline-flex size-40 items-center justify-center rounded-8 border border-line-strong focus-ring hover:bg-surface"
-                >
-                  <Icon icon={Heart} size={20} fill={isWishlisted ? 'currentColor' : 'none'} />
-                </button>
-                <Button
-                  variant="primary"
-                  size="s"
-                  isFullWidth
-                  disabled={!isAddable}
-                  onClick={handleAddToCart}
-                >
+              <div className="mt-16 grid grid-cols-[48px_minmax(0,1fr)_minmax(0,1fr)] gap-8">
+                <WishButton
+                  isWishlisted={isWishlisted}
+                  label={wishButtonLabel}
+                  onToggle={() => toggleWishlist(product.id)}
+                  className="size-48"
+                />
+                <Button variant="primary" size="m" disabled={!isAddable} onClick={handleAddToCart}>
                   장바구니
                 </Button>
                 <Button
                   variant="secondary"
-                  size="s"
-                  isFullWidth
-                  disabled={!isPurchasable || missingRequiredOption}
+                  size="m"
+                  disabled={!isPurchasable}
                   onClick={() => void handleBuyNow()}
                 >
                   바로 구매
@@ -576,78 +680,43 @@ function ProductDetailContent({
               </div>
               {!priceDisplay.isPriceVisible ? (
                 <NoticeInline tone="neutral" className="mt-12">
-                  온라인 구매가 불가한 상품입니다. 견적 문의를 이용해 주세요.
+                  금액 미공개 상품은 장바구니 담기·견적 문의만 가능합니다.
                 </NoticeInline>
               ) : null}
             </div>
-            {relatedProducts.length > 0 ? (
-              <section className="mt-24" aria-labelledby="related-heading">
-                <h2 id="related-heading" className="text-body-s-medium">
-                  함께 구매하면 좋은 제품
-                </h2>
-                <ul className="mt-12 space-y-12">
-                  {relatedProducts.slice(0, 2).map((relatedProduct) => (
-                    <li key={relatedProduct.id}>
-                      <ProductCard product={relatedProduct} />
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
           </aside>
         </div>
 
-        {relatedProducts.length > 0 ? (
-          <section className="mt-48 lg:hidden" aria-labelledby="related-mobile-heading">
-            <div className="flex items-center justify-between">
-              <h2 id="related-mobile-heading" className="text-title">
-                함께 구매하면 좋은 제품
-              </h2>
-              <Link href="/search" className="text-caption underline focus-ring">
-                전체 보기
-              </Link>
-            </div>
-            <ul className="mt-16 grid grid-cols-2 gap-12">
-              {relatedProducts.slice(0, 4).map((relatedProduct) => (
-                <li key={relatedProduct.id} className="min-w-0">
-                  <ProductCard product={relatedProduct} />
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
+        <ProductCarouselSection
+          headingId="related-products-heading"
+          title="함께 구매하면 좋은 제품"
+          itemLabel="함께 구매하면 좋은 제품"
+          products={relatedProducts}
+          viewAllHref={category ? '/category/' + encodeURIComponent(category.slug) : '/search'}
+          className="mt-80 lg:mt-120"
+        />
       </PageContainer>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg lg:hidden">
+      {/* W-03m 하단 구매 바. 본문 끝에서는 푸터 위에 멈추도록 sticky로 둡니다. */}
+      <div className="sticky bottom-0 z-30 bg-bg lg:hidden">
         {!priceDisplay.isPriceVisible ? (
-          <NoticeInline isFullBleed className="text-caption">
-            온라인 구매가 불가한 상품입니다.
-          </NoticeInline>
+          <NoticeInline isFullBleed>온라인 구매가 불가한 상품입니다</NoticeInline>
         ) : null}
-        <div className="flex items-center gap-8 px-16 py-8 pb-[max(env(safe-area-inset-bottom),8px)]">
-          <button
-            type="button"
-            onClick={() => toggleWishlist(product.id)}
-            aria-label={isWishlisted ? '찜 취소' : '찜하기'}
-            aria-pressed={isWishlisted}
-            className="inline-flex size-48 shrink-0 items-center justify-center rounded-8 border border-line-strong focus-ring"
-          >
-            <Icon icon={Heart} size={24} fill={isWishlisted ? 'currentColor' : 'none'} />
-          </button>
-          <Button
-            variant="primary"
-            size="m"
-            isFullWidth
-            disabled={!isAddable}
-            onClick={handleAddToCart}
-          >
+        <div className="grid grid-cols-[56px_minmax(0,1fr)_minmax(0,1fr)] gap-8 border-t border-line px-20 py-12 pb-[max(env(safe-area-inset-bottom),12px)]">
+          <WishButton
+            isWishlisted={isWishlisted}
+            label={wishButtonLabel}
+            onToggle={() => toggleWishlist(product.id)}
+            className="size-56"
+            iconSize={24}
+          />
+          <Button variant="primary" size="l" disabled={!isAddable} onClick={handleAddToCart}>
             장바구니 담기
           </Button>
           <Button
             variant="secondary"
-            size="m"
-            isFullWidth
-            disabled={!isPurchasable || missingRequiredOption}
+            size="l"
+            disabled={!isPurchasable}
             onClick={() => void handleBuyNow()}
           >
             바로 구매
@@ -658,86 +727,166 @@ function ProductDetailContent({
   );
 }
 
-function ProductGallery({
-  images,
-  activeImage,
-  onSelect,
-  productName,
+/** 라벨 + 값 한 줄(구매 영역 정보 표) */
+function InfoRow({
+  label,
+  value,
+  labelClassName,
 }: {
-  images: Product['images'] | { id: string; url: string; alt: string }[];
-  activeImage: { id: string; url: string; alt: string } | undefined;
-  onSelect: (imageId: string) => void;
-  productName: string;
+  label: string;
+  value: string;
+  labelClassName: string;
 }) {
   return (
-    <div className="min-w-0">
-      <div className="relative aspect-square max-h-640 overflow-hidden bg-surface lg:rounded-12">
-        {activeImage ? (
-          <ProductImage src={activeImage.url} alt={activeImage.alt} />
-        ) : (
-          <ProductImage src={null} alt={productName + ' 상품 이미지'} />
-        )}
-        <span className="absolute right-16 bottom-16 rounded-capsule bg-text-1/60 px-12 py-4 text-caption text-inverse lg:hidden">
-          {activeImage
-            ? images.findIndex((image) => image.id === activeImage.id) + 1 + ' / ' + images.length
-            : '1 / 1'}
-        </span>
-      </div>
-      {images.length > 1 ? (
-        <ul className="mt-12 hidden grid-cols-5 gap-8 lg:grid">
-          {images.map((image) => (
-            <li key={image.id}>
-              <button
-                type="button"
-                aria-label={image.alt + ' 이미지 보기'}
-                aria-pressed={image.id === activeImage?.id}
-                onClick={() => onSelect(image.id)}
-                className={
-                  image.id === activeImage?.id
-                    ? 'aspect-square w-full overflow-hidden rounded-8 border border-text-1 focus-ring'
-                    : 'aspect-square w-full overflow-hidden rounded-8 border border-line focus-ring'
-                }
-              >
-                <ProductImage src={image.url} alt="" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+    <div className="flex items-start">
+      <dt className={cx('shrink-0 text-text-3', labelClassName)}>{label}</dt>
+      <dd className="min-w-0 text-text-1">{value}</dd>
     </div>
   );
 }
 
+/** 찜 토글 버튼(테두리 정사각형) */
+function WishButton({
+  isWishlisted,
+  label,
+  onToggle,
+  className,
+  iconSize = 24,
+}: {
+  isWishlisted: boolean;
+  label: string;
+  onToggle: () => void;
+  className: string;
+  iconSize?: IconSize;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={label}
+      aria-pressed={isWishlisted}
+      className={cx(
+        'inline-flex shrink-0 items-center justify-center rounded-8 border border-line-strong bg-bg focus-ring hover:bg-surface',
+        className,
+      )}
+    >
+      <Icon icon={Heart} size={iconSize} fill={isWishlisted ? 'currentColor' : 'none'} />
+    </button>
+  );
+}
+
+/**
+ * 상품 갤러리.
+ * - 데스크톱: 큰 이미지 + 썸네일 5개(선택한 썸네일은 2px 테두리, aria-pressed).
+ * - 모바일(W-03m): 화면 폭 정사각형을 가로로 스와이프(scroll-snap)하고 "현재 / 전체"를 보여 줍니다.
+ */
+function ProductGallery({ images, productName }: { images: GalleryImage[]; productName: string }) {
+  const [activeImageId, setActiveImageId] = useState<string | null>(images[0]?.id ?? null);
+  const [mobileImageIndex, setMobileImageIndex] = useState(0);
+  const activeImage = images.find((image) => image.id === activeImageId) ?? images[0];
+  const placeholderAlt = productName + ' 상품 이미지';
+
+  // 스와이프 위치로 현재 이미지 번호를 계산합니다.
+  const handleMobileScroll = (scrollEvent: UIEvent<HTMLDivElement>) => {
+    const scrollElement = scrollEvent.currentTarget;
+    if (scrollElement.clientWidth === 0) return;
+    setMobileImageIndex(Math.round(scrollElement.scrollLeft / scrollElement.clientWidth));
+  };
+
+  return (
+    <div className="min-w-0">
+      <div className="relative -mx-20 lg:hidden">
+        <div
+          onScroll={handleMobileScroll}
+          className="flex aspect-square snap-x snap-mandatory [scrollbar-width:none] overflow-x-auto bg-surface"
+        >
+          {images.length > 0 ? (
+            images.map((image) => (
+              <div key={image.id} className="aspect-square w-full shrink-0 snap-start">
+                <ProductImage src={image.url} alt={image.alt} />
+              </div>
+            ))
+          ) : (
+            <div className="aspect-square w-full shrink-0">
+              <ProductImage src={null} alt={placeholderAlt} />
+            </div>
+          )}
+        </div>
+        <span className="absolute right-16 bottom-16 inline-flex h-24 items-center rounded-12 bg-dim px-10 text-caption text-inverse">
+          <span className="sr-only">이미지 </span>
+          {Math.min(mobileImageIndex + 1, Math.max(images.length, 1))} /{' '}
+          {Math.max(images.length, 1)}
+        </span>
+      </div>
+
+      <div className="hidden lg:block">
+        <div className="aspect-square overflow-hidden rounded-12 bg-surface">
+          <ProductImage src={activeImage?.url ?? null} alt={activeImage?.alt ?? placeholderAlt} />
+        </div>
+        {images.length > 1 ? (
+          <ul
+            aria-label="상품 이미지 선택"
+            className="mt-16 grid grid-cols-[repeat(5,minmax(0,96px))] gap-12"
+          >
+            {images.map((image, imageIndex) => {
+              const isSelected = image.id === activeImage?.id;
+              return (
+                <li key={image.id}>
+                  <button
+                    type="button"
+                    aria-label={`${imageIndex + 1}번째 이미지 보기`}
+                    aria-pressed={isSelected}
+                    onClick={() => setActiveImageId(image.id)}
+                    className={cx(
+                      'block aspect-square w-full overflow-hidden rounded-8 focus-ring',
+                      isSelected
+                        ? 'border-2 border-text-1'
+                        : 'border border-line hover:border-line-strong',
+                    )}
+                  >
+                    <ProductImage src={image.url} alt="" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** 옵션 선택(HF/TextField Select). 고르면 선택 줄로 추가되고 다시 비워집니다. */
 function OptionSelect({
   option,
   value,
-  priceVisible,
+  isPriceVisible,
   onChange,
 }: {
   option: ProductOption;
   value: string;
-  priceVisible: boolean;
+  isPriceVisible: boolean;
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="mt-16">
-      <SelectField
-        label={option.label}
-        value={value}
-        onChange={(changeEvent) => onChange(changeEvent.target.value)}
-        placeholder={option.required ? option.label + '을(를) 선택해 주세요' : '선택 사항'}
-        options={option.choices.map((choice) => ({
-          value: choice.id,
-          label:
-            priceVisible && choice.priceDelta !== 0
-              ? choice.label +
-                ' (' +
-                (choice.priceDelta > 0 ? '+' : '') +
-                formatKrw(choice.priceDelta) +
-                ')'
-              : choice.label,
-        }))}
-      />
-    </div>
+    <SelectField
+      label={option.label}
+      value={value}
+      onChange={(changeEvent) => {
+        if (changeEvent.target.value) onChange(changeEvent.target.value);
+      }}
+      placeholder={option.required ? option.label + '을(를) 선택해 주세요' : '선택 사항'}
+      options={option.choices.map((choice) => ({
+        value: choice.id,
+        label:
+          isPriceVisible && choice.priceDelta !== 0
+            ? choice.label +
+              ' (' +
+              (choice.priceDelta > 0 ? '+' : '') +
+              formatKrw(choice.priceDelta) +
+              ')'
+            : choice.label,
+      }))}
+    />
   );
 }
