@@ -18,11 +18,17 @@ import {
   Play,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState, useSyncExternalStore, type FocusEvent, type PointerEvent } from 'react';
+import { useEffect, useMemo, useState, type FocusEvent, type PointerEvent } from 'react';
 import { PageContainer } from '@/components/page-container';
+import { usePrefersReducedMotion } from '@/lib/use-media-query';
 import { filterProductsByCategoryTree } from './best-seller-filter';
 import { CategoryBar, MobileCategoryGrid } from './category-bar';
-import { ProductCard } from './product-card';
+import {
+  DESKTOP_CAROUSEL_PAGE_SIZE,
+  ProductCarouselTrack,
+  useCarouselPaging,
+  type CarouselDirection,
+} from './product-carousel';
 import { useCategoriesQuery } from './use-categories-query';
 import { useHomeQuery } from './use-home-query';
 
@@ -32,29 +38,6 @@ const HOME_ERROR_COPY: Record<string, string> = {
   notFound: '홈 콘텐츠를 찾을 수 없습니다.',
   temporary: '홈 콘텐츠를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
 };
-
-/** 데스크톱 베스트 셀러 한 화면에 보이는 카드 수(Figma 5열) */
-const BEST_SELLER_PAGE_SIZE = 5;
-/** 모바일 베스트 셀러에 보여 줄 카드 수(Figma W-01m 2×2) */
-const MOBILE_BEST_SELLER_COUNT = 4;
-
-const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
-
-// prefers-reduced-motion 변경을 구독하는 함수(useSyncExternalStore용)
-function subscribeReducedMotion(onChange: () => void): () => void {
-  const mediaQueryList = window.matchMedia(REDUCED_MOTION_QUERY);
-  mediaQueryList.addEventListener('change', onChange);
-  return () => mediaQueryList.removeEventListener('change', onChange);
-}
-
-/** 사용자가 감속 모드를 켰는지 돌려주는 훅. 서버 렌더에서는 false로 시작합니다. */
-function usePrefersReducedMotion(): boolean {
-  return useSyncExternalStore(
-    subscribeReducedMotion,
-    () => window.matchMedia(REDUCED_MOTION_QUERY).matches,
-    () => false,
-  );
-}
 
 /** 슬라이드 번호를 Figma 인디케이터처럼 두 자리(01, 02…)로 바꿉니다. */
 function formatSlideNumber(slideIndex: number): string {
@@ -147,19 +130,44 @@ function HomeContentView({ content }: { content: HomeContent }) {
   );
 }
 
+/** 슬라이드 전환 시간(ms). globals.css의 --slide-duration과 같게 둡니다. */
+const SLIDE_TRANSITION_MS = 550;
+
+/** 히어로 슬라이드 레이어 상태: 보이는 중 / 들어오는 중 / 나가는 중 / 숨김 */
+type SlideLayerState = 'active' | 'entering' | 'leaving' | 'hidden';
+
 /**
  * HF/Web/HeroSlider. 6초마다 다음 배너로 넘어가고, 마우스를 올리거나 포커스가 들어오면 멈춥니다.
- * 진행 막대 애니메이션이 끝날 때 다음 배너로 넘기므로, 감속 모드(prefers-reduced-motion)에서는
- * 자동 재생하지 않고 진행 막대와 일시정지 버튼도 숨깁니다.
+ * 다음(자동 넘김 포함)이면 현재 배너는 왼쪽으로 나가고 새 배너가 오른쪽에서 들어오며, 이전은 반대입니다.
+ * 이미지는 함께 미끄러지고 문구는 짧게 페이드+슬라이드합니다. 이동 중에 들어온 요청은 무시합니다.
+ * 감속 모드(prefers-reduced-motion)에서는 즉시 바꾸고, 자동 재생·진행 막대·일시정지 버튼도 숨깁니다.
  */
 function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [slideState, setSlideState] = useState<{
+    activeIndex: number;
+    leavingIndex: number | null;
+    direction: CarouselDirection;
+  }>({ activeIndex: 0, leavingIndex: null, direction: 'none' });
   const [isPausedByUser, setIsPausedByUser] = useState(false);
   const [isInteracting, setIsInteracting] = useState(false);
   const prefersReducedMotion = usePrefersReducedMotion();
   // 응답이 바뀌어 슬라이드 수가 줄어도 범위를 벗어나지 않게 보정합니다.
-  const safeActiveIndex = slides.length > 0 ? Math.min(activeIndex, slides.length - 1) : 0;
+  const lastSlideIndex = Math.max(0, slides.length - 1);
+  const safeActiveIndex = Math.min(slideState.activeIndex, lastSlideIndex);
+  const leavingIndex =
+    slideState.leavingIndex !== null && slideState.leavingIndex <= lastSlideIndex
+      ? slideState.leavingIndex
+      : null;
   const activeSlide = slides[safeActiveIndex];
+
+  // 나가는 배너는 전환 시간이 지나면 숨깁니다(애니메이션 종료 이벤트에 기대지 않아 탭 전환 중에도 끝납니다).
+  useEffect(() => {
+    if (slideState.leavingIndex === null) return;
+    const finishTimer = window.setTimeout(() => {
+      setSlideState((currentState) => ({ ...currentState, leavingIndex: null }));
+    }, SLIDE_TRANSITION_MS);
+    return () => window.clearTimeout(finishTimer);
+  }, [slideState.leavingIndex, slideState.activeIndex]);
 
   if (!activeSlide) {
     return (
@@ -172,13 +180,35 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
   const hasMultipleSlides = slides.length > 1;
   const canAutoplay = hasMultipleSlides && !prefersReducedMotion;
   const isAutoplayPaused = isPausedByUser || isInteracting || !canAutoplay;
-  const [firstDescriptionLine, ...restDescriptionLines] = activeSlide.description.split('\n');
 
-  const changeSlide = (direction: -1 | 1) => {
-    setActiveIndex((currentIndex) => {
-      const boundedIndex = Math.min(currentIndex, slides.length - 1);
-      return (boundedIndex + direction + slides.length) % slides.length;
+  // 지정한 배너로 이동하는 함수. 방향을 주지 않으면 인덱스 차이로 정합니다.
+  const showSlide = (
+    targetIndex: number,
+    requestedDirection?: Exclude<CarouselDirection, 'none'>,
+  ) => {
+    setSlideState((currentState) => {
+      const currentIndex = Math.min(currentState.activeIndex, lastSlideIndex);
+      // 이동 중 연타는 무시해 레이어가 겹치거나 튀지 않게 합니다.
+      if (currentState.leavingIndex !== null || targetIndex === currentIndex) return currentState;
+      return {
+        activeIndex: targetIndex,
+        leavingIndex: prefersReducedMotion ? null : currentIndex,
+        direction: requestedDirection ?? (targetIndex > currentIndex ? 'next' : 'previous'),
+      };
     });
+  };
+
+  const showAdjacentSlide = (step: -1 | 1) => {
+    showSlide(
+      (safeActiveIndex + step + slides.length) % slides.length,
+      step === 1 ? 'next' : 'previous',
+    );
+  };
+
+  // 레이어별 상태: 이동 중이면 새 배너는 entering, 이전 배너는 leaving입니다.
+  const getLayerState = (slideIndex: number): SlideLayerState => {
+    if (slideIndex === safeActiveIndex) return leavingIndex === null ? 'active' : 'entering';
+    return slideIndex === leavingIndex ? 'leaving' : 'hidden';
   };
 
   // 포커스가 히어로 밖으로 나갈 때만 자동 재생을 다시 시작합니다.
@@ -198,71 +228,99 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
     <section
       aria-label="주요 프로모션"
       aria-roledescription="carousel"
+      data-testid="home-hero"
+      data-direction={slideState.direction}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
       onFocus={() => setIsInteracting(true)}
       onBlur={handleBlur}
       className="relative isolate overflow-hidden bg-surface lg:h-480"
     >
-      {activeSlide.imageUrl ? (
-        // CMS가 제공한 배너 이미지는 Next 이미지 도메인 설정 없이 표시합니다.
-        // 첫 배너는 LCP 후보라 우선 내려받고, 나머지는 넘길 때 불러옵니다.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={activeSlide.id}
-          src={activeSlide.imageUrl}
-          alt=""
-          aria-hidden="true"
-          fetchPriority={safeActiveIndex === 0 ? 'high' : 'auto'}
-          loading={safeActiveIndex === 0 ? 'eager' : 'lazy'}
-          decoding="async"
-          className="absolute inset-0 -z-10 size-full object-cover object-center"
-        />
-      ) : null}
+      {slides.map((slide, slideIndex) => {
+        const layerState = getLayerState(slideIndex);
+        return slide.imageUrl ? (
+          <div
+            key={slide.id}
+            aria-hidden="true"
+            data-slide-layer="image"
+            data-state={layerState}
+            data-direction={slideState.direction}
+            className={cx('absolute inset-0 -z-20', layerState === 'hidden' && 'invisible')}
+          >
+            {/* CMS가 제공한 배너 이미지는 Next 이미지 도메인 설정 없이 표시합니다.
+                첫 배너는 LCP 후보라 우선 내려받고, 나머지는 지연 로드합니다. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={slide.imageUrl}
+              alt=""
+              fetchPriority={slideIndex === 0 ? 'high' : 'auto'}
+              loading={slideIndex === 0 ? 'eager' : 'lazy'}
+              decoding="async"
+              className="size-full object-cover object-center"
+            />
+          </div>
+        ) : null;
+      })}
       <div className="absolute inset-0 -z-10 bg-linear-to-r from-bg/92 to-bg/30 lg:from-bg/82 lg:to-bg/0 lg:to-50%" />
       <div className="absolute inset-0 -z-10 hidden bg-linear-to-r from-text-1/0 from-72% to-text-1/38 lg:block" />
 
       <PageContainer className="relative pt-48 pb-32 lg:h-full lg:pt-64 lg:pb-0">
-        <div
-          aria-roledescription="slide"
-          aria-label={`${slides.length}개 중 ${safeActiveIndex + 1}번째 배너`}
-          aria-live={isAutoplayPaused ? 'polite' : 'off'}
-          className="max-w-560"
-        >
-          <p className="text-overline text-text-2">{activeSlide.eyebrow}</p>
-          <h2 className="mt-12 text-display lg:text-web-display-l">
-            {activeSlide.title.map((titleLine, lineIndex) => (
-              <span
-                key={titleLine + lineIndex}
-                className={cx('block', lineIndex > 0 && 'text-text-2')}
+        {/* 모든 배너 문구를 같은 칸에 겹쳐 두어, 높이가 가장 긴 문구에 맞춰 고정되고 전환 중 레이아웃이 튀지 않습니다. */}
+        <div aria-live={isAutoplayPaused ? 'polite' : 'off'} className="grid max-w-560">
+          {slides.map((slide, slideIndex) => {
+            const layerState = getLayerState(slideIndex);
+            const isCurrentSlide = slideIndex === safeActiveIndex;
+            const [firstDescriptionLine, ...restDescriptionLines] = slide.description.split('\n');
+            return (
+              <div
+                key={slide.id}
+                role="group"
+                aria-roledescription="slide"
+                aria-label={`${slides.length}개 중 ${slideIndex + 1}번째 배너`}
+                aria-hidden={!isCurrentSlide}
+                inert={!isCurrentSlide}
+                data-slide-layer="text"
+                data-state={layerState}
+                data-direction={slideState.direction}
+                className={cx('col-start-1 row-start-1', layerState === 'hidden' && 'invisible')}
               >
-                {titleLine}
-              </span>
-            ))}
-          </h2>
-          <p className="mt-12 text-body-m text-text-2 lg:mt-16 lg:text-web-body-xl">
-            <span className="block">{firstDescriptionLine}</span>
-            {restDescriptionLines.map((descriptionLine, lineIndex) => (
-              <span key={descriptionLine + lineIndex} className="hidden lg:block">
-                {descriptionLine}
-              </span>
-            ))}
-          </p>
-          <div className="mt-24 flex items-center gap-24">
-            <Link href={activeSlide.destination} className={capsuleButtonClassName}>
-              {activeSlide.ctaLabel}
-              <Icon icon={ArrowRight} size={16} />
-            </Link>
-            {activeSlide.secondaryCta ? (
-              <Link
-                href={activeSlide.secondaryCta.destination}
-                className="hidden items-center gap-6 rounded-4 text-label-l focus-ring hover:text-text-2 lg:inline-flex"
-              >
-                {activeSlide.secondaryCta.label}
-                <Icon icon={CirclePlus} size={20} />
-              </Link>
-            ) : null}
-          </div>
+                <p className="text-overline text-text-2">{slide.eyebrow}</p>
+                <h2 className="mt-12 text-display lg:text-web-display-l">
+                  {slide.title.map((titleLine, lineIndex) => (
+                    <span
+                      key={titleLine + lineIndex}
+                      className={cx('block', lineIndex > 0 && 'text-text-2')}
+                    >
+                      {titleLine}
+                    </span>
+                  ))}
+                </h2>
+                <p className="mt-12 text-body-m text-text-2 lg:mt-16 lg:text-web-body-xl">
+                  <span className="block">{firstDescriptionLine}</span>
+                  {restDescriptionLines.map((descriptionLine, lineIndex) => (
+                    <span key={descriptionLine + lineIndex} className="hidden lg:block">
+                      {descriptionLine}
+                    </span>
+                  ))}
+                </p>
+                <div className="mt-24 flex items-center gap-24">
+                  <Link href={slide.destination} className={capsuleButtonClassName}>
+                    {slide.ctaLabel}
+                    <Icon icon={ArrowRight} size={16} />
+                  </Link>
+                  {slide.secondaryCta ? (
+                    <Link
+                      href={slide.secondaryCta.destination}
+                      className="hidden items-center gap-6 rounded-4 text-label-l focus-ring hover:text-text-2 lg:inline-flex"
+                    >
+                      {slide.secondaryCta.label}
+                      <Icon icon={CirclePlus} size={20} />
+                    </Link>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         <div
@@ -278,7 +336,7 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
                   type="button"
                   aria-label={`${slideIndex + 1}번째 배너 보기`}
                   aria-current={isActive ? 'true' : undefined}
-                  onClick={() => setActiveIndex(slideIndex)}
+                  onClick={() => showSlide(slideIndex)}
                   className={cx(
                     'rounded-4 text-label-s focus-ring',
                     isActive ? 'text-text-1' : 'text-text-3 hover:text-text-1',
@@ -293,7 +351,7 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
                   >
                     <span
                       key={safeActiveIndex}
-                      onAnimationEnd={() => changeSlide(1)}
+                      onAnimationEnd={() => showAdjacentSlide(1)}
                       style={{ animationPlayState: isAutoplayPaused ? 'paused' : 'running' }}
                       className="animate-hero-progress absolute inset-y-0 left-0 w-1/2 bg-text-1 motion-reduce:animate-none"
                     />
@@ -332,7 +390,7 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
           <div className="absolute right-20 bottom-80 hidden gap-8 lg:flex">
             <button
               type="button"
-              onClick={() => changeSlide(-1)}
+              onClick={() => showAdjacentSlide(-1)}
               aria-label="이전 배너"
               className="inline-flex size-44 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring hover:bg-surface"
             >
@@ -340,7 +398,7 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
             </button>
             <button
               type="button"
-              onClick={() => changeSlide(1)}
+              onClick={() => showAdjacentSlide(1)}
               aria-label="다음 배너"
               className="inline-flex size-44 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring hover:bg-surface"
             >
@@ -379,7 +437,7 @@ function PromoBannerSection({ banners }: { banners: HomeContent['promoBanners'] 
   if (banners.length === 0) return null;
   return (
     <section aria-label="안전 솔루션 프로모션" className="mt-48 lg:mt-24">
-      <PageContainer className="flex snap-x snap-mandatory [scrollbar-width:none] gap-12 overflow-x-auto lg:grid lg:grid-cols-3 lg:gap-24 lg:overflow-visible">
+      <PageContainer className="flex snap-x snap-mandatory scroll-px-20 [scrollbar-width:none] gap-12 overflow-x-auto motion-safe:scroll-smooth lg:grid lg:grid-cols-3 lg:gap-24 lg:overflow-visible">
         {banners.map((banner) => {
           const isLight = banner.tone === 'light';
           return (
@@ -439,8 +497,8 @@ function PromoBannerSection({ banners }: { banners: HomeContent['promoBanners'] 
 }
 
 /**
- * 베스트 셀러. 데스크톱은 카테고리 탭 + 5열 페이지(이전/다음 버튼),
- * 모바일은 칩 + 2×2 카드 + 하단 "전체 보기" 버튼입니다(W-01m).
+ * 베스트 셀러. 데스크톱은 카테고리 탭 + 5열 캐러셀(이전/다음 버튼으로 가로 슬라이드),
+ * 모바일은 칩 + 2×2 카드 페이지를 스와이프로 넘기고 하단 "전체 보기" 버튼을 둡니다(W-01m).
  * 카테고리를 불러오지 못하면 "전체" 탭만 보여 줍니다.
  */
 function BestSellerSection({
@@ -451,7 +509,6 @@ function BestSellerSection({
   categories: Category[];
 }) {
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
-  const [pageIndex, setPageIndex] = useState(0);
   const topLevelCategories = useMemo(
     () => categories.filter((category) => category.parentId === null),
     [categories],
@@ -460,12 +517,8 @@ function BestSellerSection({
     () => filterProductsByCategoryTree(products, categories, activeCategoryId),
     [activeCategoryId, categories, products],
   );
-  const pageCount = Math.max(1, Math.ceil(filteredProducts.length / BEST_SELLER_PAGE_SIZE));
-  // 상품 수가 줄어 현재 페이지가 사라져도 마지막 페이지를 보여 줍니다.
-  const safePageIndex = Math.min(pageIndex, pageCount - 1);
-  const visibleProducts = filteredProducts.slice(
-    safePageIndex * BEST_SELLER_PAGE_SIZE,
-    (safePageIndex + 1) * BEST_SELLER_PAGE_SIZE,
+  const carouselPaging = useCarouselPaging(
+    Math.ceil(filteredProducts.length / DESKTOP_CAROUSEL_PAGE_SIZE),
   );
   const categoryOptions = [
     { id: null, name: '전체' },
@@ -475,7 +528,7 @@ function BestSellerSection({
   // 카테고리를 바꾸면 첫 페이지부터 다시 보여 줍니다.
   const selectCategory = (categoryId: string | null) => {
     setActiveCategoryId(categoryId);
-    setPageIndex(0);
+    carouselPaging.resetPaging();
   };
 
   return (
@@ -535,27 +588,22 @@ function BestSellerSection({
           ))}
         </div>
 
-        {visibleProducts.length > 0 ? (
+        {filteredProducts.length > 0 ? (
           <div className="relative mt-16 lg:mt-48">
-            <ul className="grid grid-cols-2 gap-x-12 gap-y-16 lg:grid-cols-5 lg:gap-24">
-              {visibleProducts.map((product, productIndex) => (
-                <li
-                  key={product.id}
-                  className={cx(
-                    'min-w-0',
-                    productIndex >= MOBILE_BEST_SELLER_COUNT && 'hidden lg:block',
-                  )}
-                >
-                  <ProductCard product={product} mobileVariant="compact" className="h-full" />
-                </li>
-              ))}
-            </ul>
-            {pageCount > 1 ? (
+            <ProductCarouselTrack
+              key={activeCategoryId ?? 'all'}
+              products={filteredProducts}
+              pageIndex={carouselPaging.pageIndex}
+              direction={carouselPaging.direction}
+              mobileLayout="grid"
+              label="베스트 상품"
+            />
+            {carouselPaging.pageCount > 1 ? (
               <>
                 <button
                   type="button"
-                  onClick={() => setPageIndex(Math.max(0, safePageIndex - 1))}
-                  disabled={safePageIndex === 0}
+                  onClick={carouselPaging.goToPrevious}
+                  disabled={!carouselPaging.canGoPrevious}
                   aria-label="이전 베스트 상품"
                   className="absolute top-1/2 -left-20 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
                 >
@@ -563,13 +611,18 @@ function BestSellerSection({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPageIndex(Math.min(pageCount - 1, safePageIndex + 1))}
-                  disabled={safePageIndex >= pageCount - 1}
+                  onClick={carouselPaging.goToNext}
+                  disabled={!carouselPaging.canGoNext}
                   aria-label="다음 베스트 상품"
                   className="absolute top-1/2 -right-20 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
                 >
                   <Icon icon={ChevronRight} size={20} />
                 </button>
+                <p aria-live="polite" className="sr-only">
+                  {carouselPaging.direction === 'none'
+                    ? ''
+                    : `${carouselPaging.pageCount}페이지 중 ${carouselPaging.pageIndex + 1}페이지`}
+                </p>
               </>
             ) : null}
           </div>

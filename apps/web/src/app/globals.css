@@ -17,3 +17,63 @@
     }
   }
 }
+
+/*
+ * 홈 히어로 슬라이드 전환. data-direction(next/previous)과 data-state(entering/leaving)로 방향을 정합니다.
+ * 이미지 레이어는 화면 폭만큼, 문구 레이어는 48px만 움직이며 페이드합니다.
+ * 시간(550ms)은 home-view.tsx의 SLIDE_TRANSITION_MS와 같게 둡니다. 감속 모드에서는 애니메이션을 끕니다.
+ */
+@layer components {
+  [data-slide-layer] {
+    --slide-distance: 100%;
+    --slide-faded-opacity: 1;
+    --slide-from: var(--slide-distance);
+    --slide-to: calc(var(--slide-distance) * -1);
+  }
+
+  [data-slide-layer='text'] {
+    --slide-distance: 48px;
+    --slide-faded-opacity: 0;
+  }
+
+  [data-slide-layer][data-direction='previous'] {
+    --slide-from: calc(var(--slide-distance) * -1);
+    --slide-to: var(--slide-distance);
+  }
+
+  [data-slide-layer][data-state='entering'] {
+    animation: slide-enter 550ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  [data-slide-layer][data-state='leaving'] {
+    animation: slide-leave 550ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-slide-layer][data-state] {
+      animation: none;
+    }
+  }
+}
+
+@keyframes slide-enter {
+  from {
+    translate: var(--slide-from) 0;
+    opacity: var(--slide-faded-opacity);
+  }
+  to {
+    translate: 0 0;
+    opacity: 1;
+  }
+}
+
+@keyframes slide-leave {
+  from {
+    translate: 0 0;
+    opacity: 1;
+  }
+  to {
+    translate: var(--slide-to) 0;
+    opacity: var(--slide-faded-opacity);
+  }
+}
