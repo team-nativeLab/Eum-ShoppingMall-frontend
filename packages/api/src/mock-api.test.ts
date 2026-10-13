@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ApiConfigError } from './errors';
 import { createMockApi } from './mock-api';
 import { mockProducts } from './mock/products';
+import { mockReviews } from './mock/reviews';
 import { buildMockConfig } from './test-fixtures';
 
 const testConfig = buildMockConfig();
@@ -109,6 +110,65 @@ describe('목 API 시나리오', () => {
 
     const searchFacets = await mockApi.products.facets({ keyword: '안전모' });
     expect(searchFacets.categories).toEqual([{ value: 'cat-ppe', count: searchFacets.totalCount }]);
+  });
+
+  it('카테고리를 넘겨도 categories와 keywordTotalCount는 검색어 범위 전체 기준 그대로입니다', async () => {
+    const mockApi = createMockApi(testConfig);
+    const keywordFacets = await mockApi.products.facets({ keyword: '안전' });
+    const narrowedFacets = await mockApi.products.facets({
+      keyword: '안전',
+      categoryId: 'cat-ppe',
+    });
+    expect(narrowedFacets.categories).toEqual(keywordFacets.categories);
+    expect(narrowedFacets.categories.length).toBeGreaterThan(1);
+    expect(narrowedFacets.keywordTotalCount).toBe(keywordFacets.keywordTotalCount);
+    // totalCount만 카테고리 범위로 좁혀집니다.
+    expect(narrowedFacets.totalCount).toBeLessThan(narrowedFacets.keywordTotalCount);
+
+    const keywordPage = await mockApi.products.list({ keyword: '안전', pageSize: 100 });
+    expect(keywordFacets.keywordTotalCount).toBe(keywordPage.totalCount);
+    const allFacets = await mockApi.products.facets();
+    expect(allFacets.keywordTotalCount).toBe(mockProducts.length);
+  });
+
+  it('관련 상품은 기준 상품을 빼고 같은 상위 카테고리를 먼저, 개수 제한을 지켜 돌려줍니다', async () => {
+    const mockApi = createMockApi(testConfig);
+    const relatedProducts = await mockApi.products.listRelated('prd-1001', { limit: 4 });
+    expect(relatedProducts).toHaveLength(4);
+    expect(relatedProducts.map((product) => product.id)).not.toContain('prd-1001');
+    expect(relatedProducts[0]?.categoryId).toMatch(/^cat-(head|eye|foot|mask|ear|fall|hand)$/);
+    expect(relatedProducts.every((product) => product.priceVisible || product.price === null)).toBe(
+      true,
+    );
+    expect(await mockApi.products.listRelated('none')).toEqual([]);
+  });
+
+  it('추천 상품은 개수 제한을 지키고 금액 비공개 상품의 가격을 숨깁니다', async () => {
+    const recommendedProducts = await createMockApi(testConfig).products.listRecommended({
+      limit: 10,
+    });
+    expect(recommendedProducts).toHaveLength(10);
+    expect(
+      recommendedProducts.every((product) => product.priceVisible || product.price === null),
+    ).toBe(true);
+    await expect(
+      createMockApi({ ...testConfig, mockScenario: 'error' }).products.listRecommended(),
+    ).rejects.toMatchObject({ code: 'NETWORK' });
+  });
+
+  it('목 상품의 평점·리뷰 수는 목 리뷰와 일치합니다(소수 첫째 자리 반올림)', () => {
+    for (const product of mockProducts) {
+      const productReviews = mockReviews.filter((review) => review.productId === product.id);
+      expect(product.reviewCount, product.id).toBe(productReviews.length);
+      if (productReviews.length === 0) {
+        expect(product.rating, product.id).toBeNull();
+        continue;
+      }
+      const ratingSum = productReviews.reduce((sum, review) => sum + review.rating, 0);
+      expect(product.rating, product.id).toBe(
+        Math.round((ratingSum / productReviews.length) * 10) / 10,
+      );
+    }
   });
 
   it('리뷰는 상품별 최신순으로 페이지를 나눠 돌려줍니다', async () => {

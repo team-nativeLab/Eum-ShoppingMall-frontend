@@ -7,8 +7,8 @@ import { SearchX } from 'lucide-react';
 import Link from 'next/link';
 import { PageContainer } from '@/components/page-container';
 import { ProductCarouselSection } from './product-carousel';
-import { useProductsQuery } from './use-products-query';
 import { useRecommendedKeywordsQuery } from './use-recommended-keywords-query';
+import { useRecommendedProductsQuery } from './use-recommended-products-query';
 
 /** 추천 상품 최대 수(5열 × 2페이지) */
 const RECOMMENDED_PRODUCT_LIMIT = 10;
@@ -19,9 +19,8 @@ const RECOMMENDED_PRODUCT_LIMIT = 10;
  */
 export function SearchNoResults({ keyword }: { keyword: string }) {
   const recommendedKeywordsQuery = useRecommendedKeywordsQuery();
-  const recommendedProductsQuery = useProductsQuery({
-    sortBy: 'recommended',
-    pageSize: RECOMMENDED_PRODUCT_LIMIT,
+  const recommendedProductsQuery = useRecommendedProductsQuery({
+    limit: RECOMMENDED_PRODUCT_LIMIT,
   });
   const recommendedKeywords = recommendedKeywordsQuery.data ?? [];
 
@@ -71,7 +70,7 @@ export function SearchNoResults({ keyword }: { keyword: string }) {
         headingId="recommended-products-heading"
         title="추천 상품"
         itemLabel="추천 상품"
-        products={recommendedProductsQuery.data?.items ?? []}
+        products={recommendedProductsQuery.data ?? []}
         viewAllHref="/search"
         className="mt-64 lg:mt-96"
       />

@@ -29,6 +29,8 @@ import type {
 } from './types';
 
 const DEFAULT_PAGE_SIZE = 20;
+/** 관련·추천 상품 기본 개수 */
+const DEFAULT_COLLECTION_LIMIT = 10;
 
 /** 관리자 목 원본에서 실제 가격을 구매자 응답으로 복사하지 않는 변환 함수 */
 function toBuyerProduct(product: AdminProduct): Product {
@@ -98,6 +100,7 @@ function buildFacets(params: ProductFacetParams): ProductFacets {
   const topLevelIdByCategoryId = buildTopLevelCategoryMap();
   return {
     totalCount: scopedProducts.length,
+    keywordTotalCount: keywordProducts.length,
     // 카테고리 칩은 현재 카테고리 선택과 무관하게 검색어 범위 전체에서 셉니다.
     categories: countValues(
       keywordProducts.map(
@@ -107,6 +110,39 @@ function buildFacets(params: ProductFacetParams): ProductFacets {
     brands: countValues(scopedProducts.map((product) => product.brand)),
     certifications: countValues(scopedProducts.flatMap((product) => product.certifications)),
   };
+}
+
+/**
+ * 관련 상품 목 규칙: 같은 상위 카테고리 상품을 먼저, 모자라면 베스트(isFeatured) 상품으로 채웁니다.
+ * 기준 상품은 빼고, 기준 상품이 없으면 빈 목록입니다.
+ */
+function selectRelatedProducts(productId: string, limit: number): AdminProduct[] {
+  const baseProduct = mockProducts.find((product) => product.id === productId);
+  if (!baseProduct) return [];
+  const topLevelIdByCategoryId = buildTopLevelCategoryMap();
+  const baseTopLevelId = topLevelIdByCategoryId.get(baseProduct.categoryId);
+  const otherProducts = mockProducts.filter((product) => product.id !== productId);
+  const sameCategoryProducts = otherProducts.filter(
+    (product) => topLevelIdByCategoryId.get(product.categoryId) === baseTopLevelId,
+  );
+  const fillerProducts = otherProducts.filter(
+    (product) => product.isFeatured && !sameCategoryProducts.includes(product),
+  );
+  return [...sameCategoryProducts, ...fillerProducts].slice(0, limit);
+}
+
+/** 추천 상품 목 규칙: 베스트(isFeatured) 상품을 먼저, 모자라면 최신 상품으로 채웁니다. */
+function selectRecommendedProducts(limit: number): AdminProduct[] {
+  const featuredProducts = mockProducts.filter((product) => product.isFeatured);
+  const newestProducts = mockProducts
+    .filter((product) => !product.isFeatured)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  return [...featuredProducts, ...newestProducts].slice(0, limit);
+}
+
+/** 개수 조건을 1 이상의 정수로 맞추는 함수 */
+function normalizeLimit(limit: number | undefined): number {
+  return Math.max(1, Math.floor(limit ?? DEFAULT_COLLECTION_LIMIT));
 }
 
 // 취소 신호를 fetch와 같은 AbortError로 바꾸는 함수
@@ -247,9 +283,29 @@ export function createMockApi(config: ApiConfig): ShopApi {
           throw new ApiError('NETWORK', '목 API 오류 시나리오입니다.');
         }
         if (config.mockScenario === 'empty') {
-          return { totalCount: 0, categories: [], brands: [], certifications: [] };
+          return {
+            totalCount: 0,
+            keywordTotalCount: 0,
+            categories: [],
+            brands: [],
+            certifications: [],
+          };
         }
         return buildFacets(params);
+      },
+      async listRelated(productId, params = {}, options): Promise<Product[]> {
+        const relatedProducts = await respondList(
+          selectRelatedProducts(productId, normalizeLimit(params.limit)),
+          options,
+        );
+        return relatedProducts.map(toBuyerProduct);
+      },
+      async listRecommended(params = {}, options): Promise<Product[]> {
+        const recommendedProducts = await respondList(
+          selectRecommendedProducts(normalizeLimit(params.limit)),
+          options,
+        );
+        return recommendedProducts.map(toBuyerProduct);
       },
       async listReviews(productId, params = {}, options): Promise<PagedResult<ProductReview>> {
         const page = Math.max(1, params.page ?? 1);
