@@ -1,117 +1,111 @@
 import { clampCartQuantity } from '@eum/api/cart';
-import type { CartItem, Product } from '@eum/api/types';
 
-/** 장바구니 localStorage 키. 저장 형식을 바꾸면 버전을 올립니다. */
-export const CART_STORAGE_KEY = 'eum.cart.v1';
+/** 장바구니는 상품 스냅샷 대신 최신 조회에 필요한 최소 정보만 저장합니다. */
+export const CART_STORAGE_KEY = 'eum.cart.v2';
+export const LEGACY_CART_STORAGE_KEY = 'eum.cart.v1';
 
-/*
- * TODO(2단계): 상품 조회 API가 생기면 저장 구조를 { productId, quantity }만으로 줄이고,
- * 상품 정보(가격·금액 표시 여부·재고)는 화면에서 서버 최신값으로 다시 받습니다.
- * 지금은 목 단계라 담을 때의 상품 스냅샷을 함께 저장합니다.
- */
+export interface StoredCartLine {
+  productId: string;
+  quantity: number;
+  optionId: string | null;
+  optionLabel: string | null;
+}
+
 interface StoredCart {
-  version: 1;
-  cartItems: CartItem[];
+  version: 2;
+  cartItems: StoredCartLine[];
 }
 
-// 저장된 상품 스냅샷이 화면 계산에 필요한 필드를 갖췄는지 확인하는 함수
-function isProductShape(candidate: unknown): candidate is Product {
-  if (typeof candidate !== 'object' || candidate === null) return false;
-  const record = candidate as Record<string, unknown>;
-  return (
-    typeof record.id === 'string' &&
-    typeof record.name === 'string' &&
-    typeof record.price === 'number' &&
-    Number.isFinite(record.price) &&
-    record.price >= 0 &&
-    typeof record.priceVisible === 'boolean' &&
-    (record.stockStatus === 'inStock' || record.stockStatus === 'soldOut')
-  );
-}
-
-// 저장된 항목 하나를 검증·정리하는 함수. 쓸 수 없으면 null
-function toCartItem(candidate: unknown): CartItem | null {
+/** v1 상품 스냅샷 또는 v2 최소 항목에서 복원 가능한 줄만 읽습니다. */
+function toStoredCartLine(candidate: unknown): StoredCartLine | null {
   if (typeof candidate !== 'object' || candidate === null) return null;
   const record = candidate as Record<string, unknown>;
-  if (
-    typeof record.id !== 'string' ||
-    typeof record.productId !== 'string' ||
-    typeof record.quantity !== 'number' ||
-    !isProductShape(record.product) ||
-    record.product.id !== record.productId
-  ) {
+  const productId =
+    typeof record.productId === 'string'
+      ? record.productId
+      : typeof record.product === 'object' &&
+          record.product !== null &&
+          'id' in record.product &&
+          typeof record.product.id === 'string'
+        ? record.product.id
+        : null;
+  if (productId === null || productId.trim() === '' || typeof record.quantity !== 'number') {
     return null;
   }
   return {
-    id: record.id,
-    productId: record.productId,
+    productId,
     quantity: clampCartQuantity(record.quantity),
-    product: record.product,
+    optionId: typeof record.optionId === 'string' ? record.optionId : null,
+    optionLabel: typeof record.optionLabel === 'string' ? record.optionLabel : null,
   };
 }
 
-// 같은 id 또는 같은 상품이 두 번 저장돼 있으면 처음 항목만 남기는 함수(한 상품은 장바구니에 한 줄)
-function dedupeCartItems(cartItems: CartItem[]): CartItem[] {
-  const seenItemIds = new Set<string>();
-  const seenProductIds = new Set<string>();
-  return cartItems.filter((cartItem) => {
-    if (seenItemIds.has(cartItem.id) || seenProductIds.has(cartItem.productId)) return false;
-    seenItemIds.add(cartItem.id);
-    seenProductIds.add(cartItem.productId);
-    return true;
-  });
+/** 중복 상품·옵션 줄은 수량을 합치고 최대 허용치를 적용합니다. */
+function normalizeCartLines(cartLines: StoredCartLine[]): StoredCartLine[] {
+  const uniqueLines = new Map<string, StoredCartLine>();
+  for (const cartLine of cartLines) {
+    const identity = `${cartLine.productId}\u0000${cartLine.optionId ?? ''}`;
+    const existingLine = uniqueLines.get(identity);
+    if (existingLine) {
+      existingLine.quantity = clampCartQuantity(existingLine.quantity + cartLine.quantity);
+    } else {
+      uniqueLines.set(identity, { ...cartLine });
+    }
+  }
+  return [...uniqueLines.values()];
 }
 
-/** 저장 문자열을 장바구니 항목으로 바꾸는 함수. 형식이 다르면 빈 배열, 잘못된 항목은 버립니다. */
-export function parseStoredCart(rawCart: string | null): CartItem[] {
+/** v1/v2 저장 문자열을 최소 상품 항목 배열로 정리합니다. */
+export function parseStoredCart(rawCart: string | null): StoredCartLine[] {
   if (rawCart === null) return [];
   try {
     const parsedCart: unknown = JSON.parse(rawCart);
+    if (typeof parsedCart !== 'object' || parsedCart === null || !('version' in parsedCart)) {
+      return [];
+    }
     if (
-      typeof parsedCart === 'object' &&
-      parsedCart !== null &&
-      'version' in parsedCart &&
-      parsedCart.version === 1 &&
+      (parsedCart.version === 1 || parsedCart.version === 2) &&
       'cartItems' in parsedCart &&
       Array.isArray(parsedCart.cartItems)
     ) {
-      return dedupeCartItems(
+      return normalizeCartLines(
         parsedCart.cartItems
-          .map(toCartItem)
-          .filter((cartItem): cartItem is CartItem => cartItem !== null),
+          .map(toStoredCartLine)
+          .filter((cartLine): cartLine is StoredCartLine => cartLine !== null),
       );
     }
   } catch {
-    // 깨진 값은 빈 장바구니로 취급합니다.
+    // 잘못된 저장 문자열은 빈 장바구니로 처리합니다.
   }
   return [];
 }
 
-/** 장바구니 항목을 저장 문자열로 바꾸는 함수 */
-export function serializeCart(cartItems: CartItem[]): string {
-  const storedCart: StoredCart = { version: 1, cartItems };
+/** 최소 상품 항목만 포함한 v2 저장 문자열을 만듭니다. */
+export function serializeCart(cartLines: StoredCartLine[]): string {
+  const storedCart: StoredCart = { version: 2, cartItems: normalizeCartLines(cartLines) };
   return JSON.stringify(storedCart);
 }
 
-/**
- * localStorage에서 장바구니를 읽는 함수.
- * 저장소 접근이 막힌 환경(사생활 보호 모드, 저장소 비활성)에서는 빈 장바구니로 시작합니다.
- */
-export function readStoredCart(): CartItem[] {
+/** localStorage에서 v2를 우선 읽고, 없으면 v1 스냅샷을 마이그레이션 대상으로 읽습니다. */
+export function readStoredCart(): StoredCartLine[] {
   try {
-    return parseStoredCart(window.localStorage.getItem(CART_STORAGE_KEY));
+    const storedCart = window.localStorage.getItem(CART_STORAGE_KEY);
+    if (storedCart !== null) return parseStoredCart(storedCart);
+    return parseStoredCart(window.localStorage.getItem(LEGACY_CART_STORAGE_KEY));
   } catch {
     return [];
   }
 }
 
-/**
- * localStorage에 장바구니를 쓰는 함수. 용량 초과·접근 차단이면 저장을 건너뛰고 메모리 상태로만 동작합니다.
- * @returns 저장에 성공했는지
- */
-export function writeStoredCart(cartItems: CartItem[]): boolean {
+/** 최소 상품 항목만 localStorage에 저장합니다. 저장 실패 시 메모리 상태는 유지합니다. */
+export function writeStoredCart(cartLines: StoredCartLine[]): boolean {
   try {
-    window.localStorage.setItem(CART_STORAGE_KEY, serializeCart(cartItems));
+    window.localStorage.setItem(CART_STORAGE_KEY, serializeCart(cartLines));
+    try {
+      window.localStorage.removeItem(LEGACY_CART_STORAGE_KEY);
+    } catch {
+      // v2 저장은 성공했으므로 오래된 키 정리 실패로 현재 저장 결과를 되돌리지는 않습니다.
+    }
     return true;
   } catch {
     return false;

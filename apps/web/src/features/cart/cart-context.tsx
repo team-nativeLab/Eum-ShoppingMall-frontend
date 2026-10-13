@@ -9,26 +9,56 @@ import {
   type CartGroups,
   type CartTotals,
 } from '@eum/api/cart';
+import { ApiError } from '@eum/api/errors';
+import { queryKeys } from '@eum/api/query-keys';
 import type { CartItem, Product } from '@eum/api/types';
-import { createContext, use, useEffect, useMemo, useReducer, type ReactNode } from 'react';
-import { CART_STORAGE_KEY, parseStoredCart, readStoredCart, writeStoredCart } from './cart-storage';
+import {
+  createContext,
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  type ReactNode,
+} from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { getShopApi } from '@/lib/shop-api';
+import {
+  CART_STORAGE_KEY,
+  LEGACY_CART_STORAGE_KEY,
+  parseStoredCart,
+  readStoredCart,
+  writeStoredCart,
+  type StoredCartLine,
+} from './cart-storage';
 
 type CartAction =
-  | { type: 'add'; product: Product; quantity: number }
+  | {
+      type: 'add';
+      product: Product;
+      quantity: number;
+      optionId: string | null;
+      optionLabel: string | null;
+    }
   | { type: 'updateQuantity'; cartItemId: string; quantity: number }
   | { type: 'remove'; cartItemIds: ReadonlySet<string> }
+  | { type: 'restoreFailed' }
   | { type: 'replace'; cartItems: CartItem[] };
 
 interface CartState {
   cartItems: CartItem[];
-  /** localStorage 복원이 끝났는지. 끝나기 전에는 저장하지 않아 기존 값을 빈 배열로 덮지 않습니다. */
+  /** localStorage 복원이 끝나기 전에는 저장하지 않아 기존 값을 빈 배열로 덮지 않습니다. */
   hasRestored: boolean;
+  /** 상품 조회에 실패해 기존 저장값을 보존하고 있는 상태입니다. */
+  restoreError: boolean;
 }
 
-// 한 상품은 장바구니에 한 줄이므로 상품 id로 항목 id를 만듭니다.
-const createCartItemIdFor = (product: Product) => () => `cart-${product.id}`;
+function createCartItemId(productId: string, optionId: string | null): string {
+  return `cart-${productId}-${optionId ?? 'default'}`;
+}
 
-// 장바구니 상태 변경을 한곳에서 처리하는 reducer. 계산은 @eum/api/cart 순수 함수에 맡깁니다.
+/** 장바구니 상태 변경을 한곳에서 처리합니다. */
 function cartReducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
     case 'add':
@@ -38,7 +68,9 @@ function cartReducer(state: CartState, action: CartAction): CartState {
           state.cartItems,
           action.product,
           action.quantity,
-          createCartItemIdFor(action.product),
+          action.optionId,
+          action.optionLabel,
+          () => createCartItemId(action.product.id, action.optionId),
         ),
       };
     case 'updateQuantity':
@@ -48,84 +80,149 @@ function cartReducer(state: CartState, action: CartAction): CartState {
       };
     case 'remove':
       return { ...state, cartItems: removeCartItems(state.cartItems, action.cartItemIds) };
+    case 'restoreFailed':
+      return { ...state, restoreError: true };
     case 'replace':
-      return { cartItems: action.cartItems, hasRestored: true };
+      return { cartItems: action.cartItems, hasRestored: true, restoreError: false };
   }
 }
 
-/**
- * 장바구니 컨텍스트 값.
- * 가격·금액 표시 여부는 담을 때의 클라이언트 스냅샷입니다. 화면 표시용일 뿐이며,
- * 주문 금액은 주문 시점에 서버가 최신 상품 정보로 다시 계산한다는 전제입니다(클라이언트 합계를 신뢰하지 않음).
- */
+/** 장바구니 컨텍스트 값 */
 export interface CartContextValue {
   cartItems: CartItem[];
-  /** 저장된 장바구니 복원이 끝났는지. false인 동안은 빈 장바구니 안내 대신 로딩을 보여 줍니다. */
   hasRestored: boolean;
-  /** 주문 가능 / '주문할 수 없는 상품' 그룹(파생값) */
+  restoreError: boolean;
   cartGroups: CartGroups;
-  /** 주문 가능 항목 전체 기준 합계(파생값). 선택 합계는 화면에서 calculateCartTotals로 구합니다. */
   cartTotals: CartTotals;
   totalQuantity: number;
-  addToCart: (product: Product, quantity?: number) => void;
+  addToCart: (
+    product: Product,
+    quantity?: number,
+    optionId?: string | null,
+    optionLabel?: string | null,
+  ) => void;
   changeQuantity: (cartItemId: string, quantity: number) => void;
   removeFromCart: (cartItemIds: ReadonlySet<string>) => void;
+  retryRestore: () => void;
 }
 
 const CartContext = createContext<CartContextValue | null>(null);
 
-/**
- * 장바구니 상태 provider(목 단계: 브라우저 localStorage에 보관).
- * - 서버 렌더링과 첫 클라이언트 렌더링은 빈 장바구니로 같게 그리고, 마운트 후 effect에서 복원합니다(hydration 불일치 방지).
- * - 다른 탭에서 바뀌면 storage 이벤트로 맞춥니다.
- */
+/** 저장된 상품 ID와 옵션으로 최신 상품을 병렬 조회해 장바구니를 복원합니다. */
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [cartState, dispatch] = useReducer(cartReducer, { cartItems: [], hasRestored: false });
+  const [cartState, dispatch] = useReducer(cartReducer, {
+    cartItems: [],
+    hasRestored: false,
+    restoreError: false,
+  });
+  const queryClient = useQueryClient();
+  const restoreSequence = useRef(0);
 
-  // 마운트 후 저장된 장바구니를 복원하고, 다른 탭의 변경을 구독합니다.
+  const restoreCart = useCallback(
+    async (storedLines: StoredCartLine[]) => {
+      const sequence = ++restoreSequence.current;
+      const restoredResults = await Promise.all(
+        storedLines.map(async (storedLine) => {
+          try {
+            const product = await queryClient.fetchQuery({
+              queryKey: queryKeys.products.detail(storedLine.productId),
+              queryFn: async ({ signal }) =>
+                (await getShopApi()).products.getById(storedLine.productId, { signal }),
+              staleTime: 0,
+            });
+            return {
+              status: 'restored' as const,
+              cartItem: {
+                ...storedLine,
+                id: createCartItemId(storedLine.productId, storedLine.optionId),
+                product,
+              } satisfies CartItem,
+            };
+          } catch (restoreFailure: unknown) {
+            if (restoreFailure instanceof ApiError && restoreFailure.code === 'NOT_FOUND') {
+              return { status: 'missing' as const };
+            }
+            return { status: 'failed' as const };
+          }
+        }),
+      );
+      if (sequence !== restoreSequence.current) return;
+      if (restoredResults.some((result) => result.status === 'failed')) {
+        dispatch({ type: 'restoreFailed' });
+        return;
+      }
+      dispatch({
+        type: 'replace',
+        cartItems: restoredResults.flatMap((result) =>
+          result.status === 'restored' ? [result.cartItem] : [],
+        ),
+      });
+    },
+    [queryClient],
+  );
+
+  const retryRestore = useCallback(() => {
+    void restoreCart(readStoredCart());
+  }, [restoreCart]);
+
   useEffect(() => {
-    dispatch({ type: 'replace', cartItems: readStoredCart() });
+    void restoreCart(readStoredCart());
     const handleStorage = (storageEvent: StorageEvent) => {
-      // key가 null이면 다른 탭에서 localStorage.clear()를 부른 것이라 장바구니도 비웁니다.
-      if (storageEvent.key !== null && storageEvent.key !== CART_STORAGE_KEY) return;
-      dispatch({ type: 'replace', cartItems: parseStoredCart(storageEvent.newValue) });
+      if (
+        storageEvent.key !== null &&
+        storageEvent.key !== CART_STORAGE_KEY &&
+        storageEvent.key !== LEGACY_CART_STORAGE_KEY
+      ) {
+        return;
+      }
+      void restoreCart(parseStoredCart(storageEvent.newValue));
     };
     window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, []);
+    return () => {
+      restoreSequence.current += 1;
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [restoreCart]);
 
-  // 복원이 끝난 뒤의 변경만 저장합니다.
   useEffect(() => {
     if (!cartState.hasRestored) return;
-    writeStoredCart(cartState.cartItems);
-  }, [cartState]);
+    writeStoredCart(
+      cartState.cartItems.map(({ productId, quantity, optionId, optionLabel }) => ({
+        productId,
+        quantity,
+        optionId,
+        optionLabel,
+      })),
+    );
+  }, [cartState.cartItems, cartState.hasRestored]);
 
   const contextValue = useMemo<CartContextValue>(() => {
-    const { cartItems, hasRestored } = cartState;
+    const { cartItems, hasRestored, restoreError } = cartState;
     return {
       cartItems,
       hasRestored,
+      restoreError,
       cartGroups: groupCartItems(cartItems),
       cartTotals: calculateCartTotals(cartItems),
       totalQuantity: cartItems.reduce(
         (quantitySum, cartItem) => quantitySum + cartItem.quantity,
         0,
       ),
-      addToCart: (product, quantity = 1) => dispatch({ type: 'add', product, quantity }),
+      addToCart: (product, quantity = 1, optionId = null, optionLabel = null) =>
+        dispatch({ type: 'add', product, quantity, optionId, optionLabel }),
       changeQuantity: (cartItemId, quantity) =>
         dispatch({ type: 'updateQuantity', cartItemId, quantity }),
       removeFromCart: (cartItemIds) => dispatch({ type: 'remove', cartItemIds }),
+      retryRestore,
     };
-  }, [cartState]);
+  }, [cartState, retryRestore]);
 
   return <CartContext value={contextValue}>{children}</CartContext>;
 }
 
-/** 장바구니 컨텍스트를 읽는 훅. CartProvider 밖에서 부르면 오류입니다. */
+/** CartProvider 안에서 현재 장바구니 값과 변경 함수를 가져옵니다. */
 export function useCart(): CartContextValue {
   const cartContext = use(CartContext);
-  if (!cartContext) {
-    throw new Error('useCart는 CartProvider 안에서만 쓸 수 있습니다.');
-  }
+  if (!cartContext) throw new Error('useCart는 CartProvider 안에서만 쓸 수 있습니다.');
   return cartContext;
 }

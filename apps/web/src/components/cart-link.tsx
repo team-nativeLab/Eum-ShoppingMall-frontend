@@ -19,7 +19,7 @@ export function CartLink() {
       <CountBadge
         count={totalQuantity}
         label={`상품 ${totalQuantity}개`}
-        className="absolute top-4 right-4"
+        className="absolute top-6 right-2"
       />
     </Link>
   );
