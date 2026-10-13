@@ -1,10 +1,10 @@
 'use client';
 
-import { createCartOptionId, formatCartOptionLabel } from '@eum/api/cart';
 import { getApiFailureKind } from '@eum/api/errors';
 import { canAddToCart, canBuyNow, formatKrw, getPriceDisplay } from '@eum/api/price';
 import { sanitizeRedirectPath } from '@eum/api/redirect';
 import type { Category, Product, ProductOption } from '@eum/api/types';
+import { CART_MAX_QUANTITY } from '@eum/api/cart';
 import { Badge } from '@eum/ui/components/Badge';
 import { Breadcrumb } from '@eum/ui/components/Breadcrumb';
 import { Button } from '@eum/ui/components/Button';
@@ -17,10 +17,16 @@ import { cx } from '@eum/ui/lib/cx';
 import { Heart, PackageOpen, SearchX, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, type UIEvent } from 'react';
+import { useEffect, useRef, useState, type UIEvent } from 'react';
 import { PageContainer } from '@/components/page-container';
 import { useCart } from '@/features/cart/cart-context';
 import { getMemberAuth } from '@/lib/member-auth';
+import {
+  DESKTOP_QUERY,
+  getScrollBehavior,
+  useMediaQuery,
+  usePrefersReducedMotion,
+} from '@/lib/use-media-query';
 import { useLocalCollections } from './local-collections-context';
 import { ProductCarouselSection } from './product-carousel';
 import { ProductImage } from './product-image';
@@ -28,15 +34,29 @@ import { ProductRatingStars } from './product-rating-stars';
 import { ProductReviewsSection } from './product-reviews-section';
 import { useCategoriesQuery } from './use-categories-query';
 import { useProductQuery } from './use-product-query';
-import { useProductsQuery } from './use-products-query';
+import {
+  addPurchaseLine,
+  BASE_LINE_ID,
+  buildPurchaseLine,
+  createInitialPurchaseLines,
+  getMissingRequiredOptions,
+  getOptionCommitMode,
+  type OptionChoices,
+  type PurchaseLine,
+} from './purchase-lines';
+import { useRelatedProductsQuery } from './use-related-products-query';
 
-const QUANTITY_LIMIT = 999;
 /** 함께 구매하면 좋은 제품 최대 수(5열 × 2페이지) */
 const RELATED_PRODUCT_LIMIT = 10;
 /** 견적 문의 경로(대량 구매 안내 링크) */
 const QUOTE_INQUIRY_PATH = '/solutions';
+/** 금액 미표시 상품 안내(데스크톱 구매 영역·요약 박스·모바일 하단 바 공통) */
+const PRICE_HIDDEN_NOTICE =
+  '금액 미공개 상품이라 바로 구매할 수 없습니다. 장바구니 담기·견적 문의만 가능합니다.';
+/** 상세 탭 순서(스크롤 위치에 따라 현재 탭을 고를 때도 이 순서를 씁니다) */
+const DETAIL_TAB_IDS = ['description', 'shipping', 'reviews', 'questions'] as const;
 
-type DetailTab = 'description' | 'shipping' | 'reviews' | 'questions';
+type DetailTab = (typeof DETAIL_TAB_IDS)[number];
 
 const DETAIL_TABS: { id: DetailTab; label: string; mobileLabel: string }[] = [
   { id: 'description', label: '제품 정보', mobileLabel: '제품 정보' },
@@ -52,27 +72,11 @@ interface GalleryImage {
   alt: string;
 }
 
-/**
- * 구매 영역에 쌓이는 선택 줄 하나. 옵션 없는 상품은 기본 줄(optionId=null) 하나로 시작합니다.
- * lineId는 장바구니 옵션 식별자와 같은 규칙(@eum/api/cart)으로 만들어 같은 옵션을 다시 고르면 수량만 늘립니다.
- */
-interface PurchaseLine {
-  lineId: string;
-  optionId: string | null;
-  optionLabel: string | null;
-  /** 줄에 표시할 옵션 문구(옵션이 없으면 상품명) */
-  displayLabel: string;
-  priceDelta: number;
-  quantity: number;
-}
-
-const BASE_LINE_ID = 'base';
-
 /** W-03 상세·금액 미표시 상태. 데이터 조회 후 최근 본 상품 ID를 저장합니다. */
 export function ProductDetailView({ productId }: { productId: string }) {
   const productQuery = useProductQuery(productId);
   const categoriesQuery = useCategoriesQuery();
-  const relatedQuery = useProductsQuery({ pageSize: RELATED_PRODUCT_LIMIT + 1 });
+  const relatedQuery = useRelatedProductsQuery(productId, { limit: RELATED_PRODUCT_LIMIT });
   const { recordRecent } = useLocalCollections();
 
   useEffect(() => {
@@ -119,28 +123,48 @@ export function ProductDetailView({ productId }: { productId: string }) {
       key={productQuery.data.id}
       product={productQuery.data}
       categories={categoriesQuery.data ?? []}
-      relatedProducts={(relatedQuery.data?.items ?? [])
-        .filter((relatedProduct) => relatedProduct.id !== productQuery.data.id)
-        .slice(0, RELATED_PRODUCT_LIMIT)}
+      relatedProducts={relatedQuery.data ?? []}
     />
   );
 }
 
-/** 옵션 없는(또는 필수 옵션 없는) 상품의 기본 선택 줄을 만드는 함수 */
-function createInitialLines(product: Product): PurchaseLine[] {
-  const hasRequiredOption = product.options.some((productOption) => productOption.required);
-  if (hasRequiredOption) return [];
-  return [
-    {
-      lineId: BASE_LINE_ID,
-      optionId: null,
-      optionLabel: null,
-      displayLabel: product.name,
-      priceDelta: 0,
-      quantity: 1,
-    },
-  ];
+/**
+ * 스크롤 위치에 맞춰 현재 상세 탭을 고르는 훅.
+ * sticky 헤더+탭 아래 기준선(topOffsetPx)을 지난 마지막 섹션을 현재 탭으로 봅니다.
+ * IntersectionObserver가 섹션 경계를 지날 때만 다시 계산하므로 스크롤마다 상태를 바꾸지 않습니다.
+ */
+function useActiveDetailTab(topOffsetPx: number) {
+  const [activeTab, setActiveTab] = useState<DetailTab>('description');
+
+  useEffect(() => {
+    const sectionElements = DETAIL_TAB_IDS.flatMap((tabId) => {
+      const sectionElement = document.getElementById('product-tab-' + tabId);
+      return sectionElement ? [{ tabId, sectionElement }] : [];
+    });
+    if (sectionElements.length === 0) return;
+    // 기준선을 지난(위쪽 경계가 기준선보다 위인) 섹션 중 마지막을 현재 탭으로 고르는 함수
+    const updateActiveTab = () => {
+      let nextTab: DetailTab = DETAIL_TAB_IDS[0];
+      for (const { tabId, sectionElement } of sectionElements) {
+        if (sectionElement.getBoundingClientRect().top <= topOffsetPx + 1) nextTab = tabId;
+      }
+      setActiveTab(nextTab);
+    };
+    const sectionObserver = new IntersectionObserver(updateActiveTab, {
+      // 기준선 바로 아래 1px 띠만 관찰해 섹션 경계가 기준선을 지날 때 알림을 받습니다.
+      rootMargin: `-${topOffsetPx}px 0px -${Math.max(0, window.innerHeight - topOffsetPx - 1)}px 0px`,
+    });
+    for (const { sectionElement } of sectionElements) sectionObserver.observe(sectionElement);
+    updateActiveTab();
+    return () => sectionObserver.disconnect();
+  }, [topOffsetPx]);
+
+  return [activeTab, setActiveTab] as const;
 }
+
+/** sticky 헤더(모바일 56, 데스크톱 72+경계선 1)와 탭(56) 높이 합 */
+const MOBILE_STICKY_OFFSET_PX = 112;
+const DESKTOP_STICKY_OFFSET_PX = 129;
 
 function ProductDetailContent({
   product,
@@ -155,14 +179,23 @@ function ProductDetailContent({
   const { addToCart } = useCart();
   const { wishlistIds, toggleWishlist } = useLocalCollections();
   const [purchaseLines, setPurchaseLines] = useState<PurchaseLine[]>(() =>
-    createInitialLines(product),
+    createInitialPurchaseLines(product),
   );
-  // 옵션 그룹이 여러 개일 때 모두 고를 때까지 모아 두는 선택값(옵션 ID → 선택지 ID)
-  const [pendingChoices, setPendingChoices] = useState<Record<string, string>>({});
+  // 줄로 확정하기 전까지 모아 두는 선택값(옵션 ID → 선택지 ID). 선택 옵션도 여기 모였다가 함께 줄이 됩니다.
+  const [pendingChoices, setPendingChoices] = useState<OptionChoices>({});
   const [notice, setNotice] = useState<{ tone: 'success' | 'danger'; message: string } | null>(
     null,
   );
-  const [activeTab, setActiveTab] = useState<DetailTab>('description');
+  // 바로 구매 처리 중(로그인 확인·이동) 연타 방지. ref는 같은 틱 안의 중복 클릭까지 막습니다.
+  const [isBuyingNow, setIsBuyingNow] = useState(false);
+  const isBuyingNowRef = useRef(false);
+  const optionsContainerRef = useRef<HTMLDivElement>(null);
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const [activeTab, setActiveTab] = useActiveDetailTab(
+    isDesktop ? DESKTOP_STICKY_OFFSET_PX : MOBILE_STICKY_OFFSET_PX,
+  );
+  const optionCommitMode = getOptionCommitMode(product);
   const priceDisplay = getPriceDisplay(product);
   const isPriceVisible = priceDisplay.isPriceVisible && product.price !== null;
   const category = categories.find((categoryItem) => categoryItem.id === product.categoryId);
@@ -186,7 +219,13 @@ function ProductDetailContent({
   const totalAmount = isPriceVisible
     ? purchaseLines.reduce((amountSum, line) => amountSum + (getLineAmount(line) ?? 0), 0)
     : null;
-  const totalAmountText = totalAmount === null ? priceDisplay.text : formatKrw(totalAmount);
+  // 금액 공개 상품에서 아직 고른 줄이 없으면 합계 대신 "–"를 보여 줍니다(₩0으로 오해하지 않게).
+  const totalAmountText =
+    totalAmount === null
+      ? priceDisplay.text
+      : purchaseLines.length === 0
+        ? '–'
+        : formatKrw(totalAmount);
   const selectionSummary =
     purchaseLines.length === 0
       ? '옵션을 선택해 주세요'
@@ -194,60 +233,46 @@ function ProductDetailContent({
         ? `${purchaseLines[0].optionLabel} · ${totalQuantity}개`
         : `${totalQuantity}개`;
 
-  // 옵션 선택값을 받아 모든 필수 옵션이 채워지면 선택 줄로 추가하는 함수
+  // 옵션 선택값을 모으고, 필수 옵션이 모두 채워지면(auto) 모은 선택 옵션과 함께 한 줄로 확정하는 함수
   const handleChoiceChange = (productOption: ProductOption, choiceId: string) => {
     setNotice(null);
     const nextChoices = { ...pendingChoices, [productOption.id]: choiceId };
-    const isEveryRequiredChosen = product.options.every(
-      (optionItem) => !optionItem.required || nextChoices[optionItem.id],
-    );
-    if (!isEveryRequiredChosen) {
+    if (optionCommitMode !== 'auto') {
       setPendingChoices(nextChoices);
       return;
     }
-    const chosenOptions = product.options.flatMap((optionItem) => {
-      const choice = optionItem.choices.find(
-        (choiceItem) => choiceItem.id === nextChoices[optionItem.id],
-      );
-      return choice ? [{ optionItem, choice }] : [];
-    });
-    const optionId = createCartOptionId(
-      chosenOptions.map(({ optionItem, choice }) => ({
-        optionId: optionItem.id,
-        choiceId: choice.id,
-      })),
-    );
-    const optionLabel = formatCartOptionLabel(
-      chosenOptions.map(({ optionItem, choice }) => ({
-        optionLabel: optionItem.label,
-        choiceLabel: choice.label,
-      })),
-    );
-    const lineId = optionId ?? BASE_LINE_ID;
+    const lineDraft = buildPurchaseLine(product, nextChoices);
+    if (!lineDraft) {
+      setPendingChoices(nextChoices);
+      return;
+    }
     setPendingChoices({});
-    setPurchaseLines((currentLines) => {
-      if (currentLines.some((line) => line.lineId === lineId)) {
-        return currentLines.map((line) =>
-          line.lineId === lineId
-            ? { ...line, quantity: Math.min(QUANTITY_LIMIT, line.quantity + 1) }
-            : line,
-        );
-      }
-      return [
-        ...currentLines,
-        {
-          lineId,
-          optionId,
-          optionLabel,
-          displayLabel: optionLabel ?? product.name,
-          priceDelta: chosenOptions.reduce(
-            (deltaSum, { choice }) => deltaSum + choice.priceDelta,
-            0,
-          ),
-          quantity: 1,
-        },
-      ];
+    setPurchaseLines((currentLines) => addPurchaseLine(currentLines, lineDraft));
+  };
+
+  // 선택 옵션만 있는 상품(manual)에서 "추가" 버튼으로 지금 고른 구성을 줄로 확정하는 함수
+  const commitPendingChoices = () => {
+    const lineDraft = buildPurchaseLine(product, pendingChoices);
+    if (!lineDraft) return;
+    setNotice(null);
+    setPendingChoices({});
+    setPurchaseLines((currentLines) => addPurchaseLine(currentLines, lineDraft));
+  };
+
+  // 비어 있는 필수 옵션(없으면 첫 옵션) 셀렉트로 스크롤하고 포커스를 주는 함수
+  const focusFirstMissingOption = () => {
+    const missingOption = getMissingRequiredOptions(product, pendingChoices)[0];
+    const selectElements = [
+      ...(optionsContainerRef.current?.querySelectorAll<HTMLSelectElement>('select') ?? []),
+    ];
+    const targetIndex = missingOption ? product.options.indexOf(missingOption) : 0;
+    const targetSelect = selectElements[Math.max(0, targetIndex)];
+    if (!targetSelect) return;
+    targetSelect.scrollIntoView({
+      behavior: getScrollBehavior(prefersReducedMotion),
+      block: 'center',
     });
+    targetSelect.focus({ preventScroll: true });
   };
 
   const changeLineQuantity = (lineId: string, quantity: number) => {
@@ -260,10 +285,17 @@ function ProductDetailContent({
     setPurchaseLines((currentLines) => currentLines.filter((line) => line.lineId !== lineId));
   };
 
-  // 선택 줄을 모두 장바구니에 담는 함수. 담을 줄이 없으면 옵션 선택을 안내합니다.
+  // 선택 줄을 모두 장바구니에 담는 함수. 담을 줄이 없으면 옵션 선택을 안내하고 옵션 셀렉트로 이동합니다.
   const addLinesToCart = (): boolean => {
     if (purchaseLines.length === 0) {
-      setNotice({ tone: 'danger', message: '필수 옵션을 선택해 주세요.' });
+      setNotice({
+        tone: 'danger',
+        message:
+          optionCommitMode === 'manual'
+            ? '옵션을 고른 뒤 추가 버튼을 눌러 주세요.'
+            : '필수 옵션을 선택해 주세요.',
+      });
+      focusFirstMissingOption();
       return false;
     }
     for (const line of purchaseLines) {
@@ -277,8 +309,11 @@ function ProductDetailContent({
     if (addLinesToCart()) setNotice({ tone: 'success', message: '장바구니에 담았습니다.' });
   };
 
+  // 바로 구매: 처리 중이면 무시하고, 담은 뒤 로그인 여부에 따라 주문서 또는 로그인으로 보냅니다.
   const handleBuyNow = async () => {
-    if (!isPurchasable || !addLinesToCart()) return;
+    if (!isPurchasable || isBuyingNowRef.current || !addLinesToCart()) return;
+    isBuyingNowRef.current = true;
+    setIsBuyingNow(true);
     const returnPath = sanitizeRedirectPath('/checkout/shipping');
     try {
       const currentMember = await (await getMemberAuth()).getCurrentUser();
@@ -286,6 +321,10 @@ function ProductDetailContent({
     } catch {
       // real 인증 연동 전에는 로그인으로 보내고, 실제 주문 권한은 서버가 확인합니다.
       router.push('/login?redirect=' + encodeURIComponent(returnPath));
+    } finally {
+      // 이동이 끝나면 화면이 바뀌지만, 이동이 막혀 머무는 경우를 위해 다시 누를 수 있게 풉니다.
+      isBuyingNowRef.current = false;
+      setIsBuyingNow(false);
     }
   };
 
@@ -293,8 +332,13 @@ function ProductDetailContent({
     setActiveTab(tabId);
     document
       .getElementById('product-tab-' + tabId)
-      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      ?.scrollIntoView({ behavior: getScrollBehavior(prefersReducedMotion), block: 'start' });
   };
+  const isBuyNowDisabled = !isPurchasable || isBuyingNow;
+  const noticeClassName = cx(
+    'text-body-s',
+    notice?.tone === 'danger' ? 'text-danger' : 'text-success',
+  );
 
   const wishButtonLabel = isWishlisted ? '찜 취소' : '찜하기';
   const shippingSummary =
@@ -388,7 +432,7 @@ function ProductDetailContent({
                 </dl>
               </div>
 
-              <div className="mt-24 flex flex-col gap-12">
+              <div ref={optionsContainerRef} className="mt-24 flex flex-col gap-12">
                 {product.options.map((productOption) => (
                   <OptionSelect
                     key={productOption.id}
@@ -398,6 +442,18 @@ function ProductDetailContent({
                     onChange={(choiceId) => handleChoiceChange(productOption, choiceId)}
                   />
                 ))}
+
+                {optionCommitMode === 'manual' ? (
+                  <Button
+                    variant="secondary"
+                    size="m"
+                    disabled={!isAddable}
+                    onClick={commitPendingChoices}
+                    className="self-start"
+                  >
+                    선택한 구성 추가
+                  </Button>
+                ) : null}
 
                 {purchaseLines.length > 0 ? (
                   <ul aria-label="선택한 옵션" className="flex flex-col gap-8">
@@ -416,7 +472,7 @@ function ProductDetailContent({
                               onValueChange={(quantity) =>
                                 changeLineQuantity(line.lineId, quantity)
                               }
-                              max={QUANTITY_LIMIT}
+                              max={CART_MAX_QUANTITY}
                               label={line.displayLabel + ' 수량'}
                               isDisabled={!isAddable}
                               className="self-center"
@@ -464,7 +520,7 @@ function ProductDetailContent({
                 <Button
                   variant="secondary"
                   size="l"
-                  disabled={!isPurchasable}
+                  disabled={isBuyNowDisabled}
                   onClick={() => void handleBuyNow()}
                 >
                   바로 구매
@@ -472,8 +528,7 @@ function ProductDetailContent({
               </div>
               {!priceDisplay.isPriceVisible ? (
                 <NoticeInline tone="neutral" className="mt-12 hidden lg:flex">
-                  금액이 공개되지 않은 상품이라 바로 구매할 수 없습니다. 장바구니에 담거나 견적을
-                  문의해 주세요.
+                  {PRICE_HIDDEN_NOTICE}
                 </NoticeInline>
               ) : null}
               {isSoldOut ? (
@@ -481,14 +536,8 @@ function ProductDetailContent({
                   현재 품절된 상품입니다.
                 </NoticeInline>
               ) : null}
-              <p
-                role="status"
-                className={cx(
-                  'text-body-s empty:hidden',
-                  notice?.tone === 'danger' ? 'text-danger' : 'text-success',
-                  notice ? 'mt-8' : '',
-                )}
-              >
+              {/* 데스크톱 알림. 모바일은 하단 바 위에 같은 알림을 띄웁니다(숨긴 쪽은 읽히지 않음). */}
+              <p role="status" className={cx(noticeClassName, 'hidden lg:block', notice && 'mt-8')}>
                 {notice?.message}
               </p>
               <Link
@@ -557,7 +606,7 @@ function ProductDetailContent({
               <section
                 id="product-tab-description"
                 aria-labelledby="product-description-heading"
-                className="scroll-mt-120"
+                className="scroll-mt-120 lg:scroll-mt-136"
               >
                 <h2 id="product-description-heading" className="sr-only">
                   제품 정보
@@ -599,7 +648,7 @@ function ProductDetailContent({
               <section
                 id="product-tab-shipping"
                 aria-labelledby="shipping-heading"
-                className="flex scroll-mt-120 flex-col gap-16"
+                className="flex scroll-mt-120 flex-col gap-16 lg:scroll-mt-136"
               >
                 <h2 id="shipping-heading" className="text-h3">
                   배송/교환/반품 안내
@@ -618,7 +667,7 @@ function ProductDetailContent({
               <section
                 id="product-tab-questions"
                 aria-labelledby="questions-heading"
-                className="scroll-mt-120"
+                className="scroll-mt-120 lg:scroll-mt-136"
               >
                 <div className="flex flex-wrap items-center justify-between gap-12">
                   <h2 id="questions-heading" className="text-h3">
@@ -666,21 +715,28 @@ function ProductDetailContent({
                   onToggle={() => toggleWishlist(product.id)}
                   className="size-48"
                 />
-                <Button variant="primary" size="m" disabled={!isAddable} onClick={handleAddToCart}>
+                <Button
+                  variant="primary"
+                  size="m"
+                  disabled={!isAddable}
+                  onClick={handleAddToCart}
+                  aria-label="요약에서 장바구니 담기"
+                >
                   장바구니
                 </Button>
                 <Button
                   variant="secondary"
                   size="m"
-                  disabled={!isPurchasable}
+                  disabled={isBuyNowDisabled}
                   onClick={() => void handleBuyNow()}
+                  aria-label="요약에서 바로 구매"
                 >
                   바로 구매
                 </Button>
               </div>
               {!priceDisplay.isPriceVisible ? (
                 <NoticeInline tone="neutral" className="mt-12">
-                  금액 미공개 상품은 장바구니 담기·견적 문의만 가능합니다.
+                  {PRICE_HIDDEN_NOTICE}
                 </NoticeInline>
               ) : null}
             </div>
@@ -699,10 +755,17 @@ function ProductDetailContent({
 
       {/* W-03m 하단 구매 바. 본문 끝에서는 푸터 위에 멈추도록 sticky로 둡니다. */}
       <div className="sticky bottom-0 z-30 bg-bg lg:hidden">
+        {/* 모바일 알림: 하단 바 바로 위에 띄워 버튼을 누른 결과가 화면 안에 보이게 합니다. */}
+        <p
+          role="status"
+          className={cx(noticeClassName, notice && 'border-t border-line px-20 py-10')}
+        >
+          {notice?.message}
+        </p>
         {!priceDisplay.isPriceVisible ? (
-          <NoticeInline isFullBleed>온라인 구매가 불가한 상품입니다</NoticeInline>
+          <NoticeInline isFullBleed>{PRICE_HIDDEN_NOTICE}</NoticeInline>
         ) : null}
-        <div className="grid grid-cols-[56px_minmax(0,1fr)_minmax(0,1fr)] gap-8 border-t border-line px-20 py-12 pb-[max(env(safe-area-inset-bottom),12px)]">
+        <div className="grid grid-cols-[56px_minmax(0,1fr)_minmax(0,1fr)] gap-8 border-t border-line px-20 py-12 pb-[max(env(safe-area-inset-bottom),12px)] max-mweb:gap-6 max-mweb:px-16">
           <WishButton
             isWishlisted={isWishlisted}
             label={wishButtonLabel}
@@ -710,16 +773,26 @@ function ProductDetailContent({
             className="size-56"
             iconSize={24}
           />
-          <Button variant="primary" size="l" disabled={!isAddable} onClick={handleAddToCart}>
-            장바구니 담기
+          {/* 360px 같은 좁은 폭에서도 글자가 버튼 밖으로 나가지 않게 좌우 여백을 줄이고 줄임표로 자릅니다. */}
+          <Button
+            variant="primary"
+            size="l"
+            isFullWidth
+            disabled={!isAddable}
+            onClick={handleAddToCart}
+            className="px-8"
+          >
+            <span className="min-w-0 truncate">장바구니 담기</span>
           </Button>
           <Button
             variant="secondary"
             size="l"
-            disabled={!isPurchasable}
+            isFullWidth
+            disabled={isBuyNowDisabled}
             onClick={() => void handleBuyNow()}
+            className="px-8"
           >
-            바로 구매
+            <span className="min-w-0 truncate">바로 구매</span>
           </Button>
         </div>
       </div>
