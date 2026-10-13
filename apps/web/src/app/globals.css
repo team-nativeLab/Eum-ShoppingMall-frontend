@@ -3,3 +3,17 @@
 
 /* packages/ui 컴포넌트의 클래스도 생성 대상에 넣습니다(이 파일 기준 상대 경로). */
 @source '../../../../packages/ui/src';
+
+/* 홈 히어로 자동 넘김 진행 막대(HF/Web/HeroSlider 자동재생 6초). 애니메이션이 끝나면 다음 배너로 넘어갑니다. */
+@theme {
+  --animate-hero-progress: hero-progress 6s linear forwards;
+
+  @keyframes hero-progress {
+    from {
+      width: 0%;
+    }
+    to {
+      width: 100%;
+    }
+  }
+}
