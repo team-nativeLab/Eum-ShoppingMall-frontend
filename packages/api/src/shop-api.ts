@@ -2,8 +2,10 @@ import type {
   Address,
   Category,
   Claim,
+  CompanyInfo,
   Coupon,
   Faq,
+  HomeContent,
   Inquiry,
   Member,
   Notice,
@@ -11,6 +13,9 @@ import type {
   PagedResult,
   Point,
   Product,
+  ProductFacets,
+  ProductReview,
+  ProductSuggestion,
   Quote,
 } from './types';
 
@@ -18,6 +23,27 @@ import type {
 export interface ProductListParams {
   categoryId?: string;
   keyword?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  brand?: string[];
+  certification?: string[];
+  excludeSoldOut?: boolean;
+  sortBy?: 'recommended' | 'priceAsc' | 'priceDesc' | 'newest';
+  page?: number;
+  pageSize?: number;
+}
+
+/** 필터 개수 조회 조건. 개수는 브랜드·인증·가격 선택과 무관하게 카테고리·검색어 범위에서 셉니다. */
+export type ProductFacetParams = Pick<ProductListParams, 'categoryId' | 'keyword'>;
+
+/** 개수만 정하는 목록 조회 조건(관련·추천 상품) */
+export interface ProductLimitParams {
+  /** 최대 개수. 없으면 서버 기본값 */
+  limit?: number;
+}
+
+/** 페이지 조회 조건 */
+export interface PageParams {
   page?: number;
   pageSize?: number;
 }
@@ -37,8 +63,30 @@ export interface ShopApi {
   products: {
     list(params?: ProductListParams, options?: RequestOptions): Promise<PagedResult<Product>>;
     getById(productId: string, options?: RequestOptions): Promise<Product>;
+    suggest(keyword: string, options?: RequestOptions): Promise<ProductSuggestion[]>;
+    /** 목록 필터에 표시할 카테고리·브랜드·인증별 상품 수 */
+    facets(params?: ProductFacetParams, options?: RequestOptions): Promise<ProductFacets>;
+    /** 상세 화면 "함께 구매하면 좋은 제품". 기준 상품은 결과에서 빠지며, 고르는 규칙은 서버가 정합니다. */
+    listRelated(
+      productId: string,
+      params?: ProductLimitParams,
+      options?: RequestOptions,
+    ): Promise<Product[]>;
+    /** 검색 결과 없음 화면의 "추천 상품". 고르는 규칙은 서버가 정합니다. */
+    listRecommended(params?: ProductLimitParams, options?: RequestOptions): Promise<Product[]>;
+    /** 상품 리뷰(최신순) */
+    listReviews(
+      productId: string,
+      params?: PageParams,
+      options?: RequestOptions,
+    ): Promise<PagedResult<ProductReview>>;
   };
+  /** 검색 결과가 없을 때 보여 줄 추천 검색어 */
+  search: { recommendedKeywords(options?: RequestOptions): Promise<string[]> };
   categories: { list(options?: RequestOptions): Promise<Category[]> };
+  home: { getContent(options?: RequestOptions): Promise<HomeContent> };
+  /** 푸터 사업자·고객센터 정보 */
+  company: { getInfo(options?: RequestOptions): Promise<CompanyInfo> };
   orders: {
     listByMember(memberId: string, options?: RequestOptions): Promise<Order[]>;
     getById(orderId: string, options?: RequestOptions): Promise<Order>;

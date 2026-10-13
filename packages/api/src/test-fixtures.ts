@@ -14,13 +14,37 @@ export function buildProduct(overrides: Partial<Product> = {}): Product {
     stockStatus: 'inStock',
     thumbnailUrl: null,
     summary: '',
+    modelName: null,
+    images: [],
+    options: [],
+    specifications: [],
+    certifications: [],
+    shipping: {
+      method: '일반 배송',
+      estimate: '2~3일 이내 출고',
+      fee: 0,
+      countryOfOrigin: '대한민국',
+      policy: '',
+    },
+    purchaseNotices: [],
+    rating: null,
+    reviewCount: 0,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    isFeatured: false,
     ...overrides,
   };
 }
 
 /** 테스트용 장바구니 항목을 만드는 함수 */
 export function buildCartItem(product: Product, quantity = 1): CartItem {
-  return { id: `cart-${product.id}`, productId: product.id, quantity, product };
+  return {
+    id: `cart-${product.id}`,
+    productId: product.id,
+    quantity,
+    optionId: null,
+    optionLabel: null,
+    product,
+  };
 }
 
 /** 테스트용 목 모드 ApiConfig(지연 0) */

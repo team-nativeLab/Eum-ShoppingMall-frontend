@@ -48,6 +48,8 @@ export interface ButtonStyleOptions {
 /**
  * 버튼 모양 className을 만드는 함수.
  * 링크(Next Link, react-router Link)를 버튼처럼 보이게 할 때 이 함수를 씁니다.
+ * 기본 버튼은 줄어들지 않고(shrink-0), isFullWidth 버튼은 부모 폭을 따르므로
+ * flex·grid 안에서 글자 폭 때문에 부모를 밀어내지 않도록 min-w-0으로 둡니다.
  */
 export function buttonClassName({
   variant = 'primary',
@@ -55,10 +57,10 @@ export function buttonClassName({
   isFullWidth = false,
 }: ButtonStyleOptions = {}): string {
   return cx(
-    'inline-flex shrink-0 items-center justify-center gap-6 rounded-8 whitespace-nowrap transition-colors disabled:cursor-not-allowed aria-disabled:pointer-events-none',
+    'inline-flex items-center justify-center gap-6 rounded-8 whitespace-nowrap transition-colors disabled:cursor-not-allowed aria-disabled:pointer-events-none',
+    isFullWidth ? 'w-full min-w-0' : 'shrink-0',
     SIZE_CLASS[size],
     VARIANT_CLASS[variant],
-    isFullWidth && 'w-full',
   );
 }
 

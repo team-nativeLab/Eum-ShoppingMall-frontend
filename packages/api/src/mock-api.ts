@@ -1,16 +1,149 @@
+import { collectCategoryIdsWithDescendants } from './category-tree';
 import { assertMockAllowed, type ApiConfig } from './config';
 import { ApiError } from './errors';
 import { mockAddresses } from './mock/addresses';
 import { mockCoupons, mockPoints } from './mock/benefits';
 import { mockCategories } from './mock/categories';
+import { mockCompanyInfo } from './mock/company';
+import {
+  mockHeroSlides,
+  mockHomeCtaBand,
+  mockPromoBanners,
+  mockServiceBenefits,
+} from './mock/home';
 import { mockMembers } from './mock/members';
 import { mockClaims, mockOrders } from './mock/orders';
 import { mockProducts } from './mock/products';
+import { mockReviews } from './mock/reviews';
+import { mockRecommendedKeywords } from './mock/search';
 import { mockFaqs, mockInquiries, mockNotices, mockQuotes } from './mock/support';
-import type { RequestOptions, ShopApi } from './shop-api';
-import type { PagedResult, Product } from './types';
+import type { ProductFacetParams, RequestOptions, ShopApi } from './shop-api';
+import type {
+  AdminProduct,
+  FacetCount,
+  HomeContent,
+  PagedResult,
+  Product,
+  ProductFacets,
+  ProductReview,
+} from './types';
 
 const DEFAULT_PAGE_SIZE = 20;
+/** 관련·추천 상품 기본 개수 */
+const DEFAULT_COLLECTION_LIMIT = 10;
+
+/** 관리자 목 원본에서 실제 가격을 구매자 응답으로 복사하지 않는 변환 함수 */
+function toBuyerProduct(product: AdminProduct): Product {
+  return {
+    ...product,
+    price: product.priceVisible ? product.price : null,
+    listPrice: product.priceVisible ? product.listPrice : null,
+  };
+}
+
+/** 상위 카테고리를 조회할 때 그 하위 카테고리까지 포함합니다. */
+function getCategoryIds(categoryId: string | undefined): Set<string> | null {
+  if (categoryId === undefined) return null;
+  return collectCategoryIdsWithDescendants(mockCategories, categoryId);
+}
+
+/** 검색어가 상품명·브랜드에 들어 있는지 확인하는 함수(대소문자 무시) */
+function matchesKeyword(product: AdminProduct, normalizedKeyword: string): boolean {
+  return (
+    normalizedKeyword === '' ||
+    `${product.name} ${product.brand}`.toLowerCase().includes(normalizedKeyword)
+  );
+}
+
+/** 카테고리 ID → 최상위 카테고리 ID 표. 검색 결과의 카테고리별 개수를 셀 때 씁니다. */
+function buildTopLevelCategoryMap(): Map<string, string> {
+  const parentIdByCategoryId = new Map(
+    mockCategories.map((category) => [category.id, category.parentId]),
+  );
+  const topLevelIdByCategoryId = new Map<string, string>();
+  for (const category of mockCategories) {
+    let currentId = category.id;
+    const visitedIds = new Set<string>();
+    // 순환 참조가 있어도 끝나도록 방문한 ID를 기록합니다.
+    while (!visitedIds.has(currentId)) {
+      visitedIds.add(currentId);
+      const parentId = parentIdByCategoryId.get(currentId);
+      if (parentId === null || parentId === undefined) break;
+      currentId = parentId;
+    }
+    topLevelIdByCategoryId.set(category.id, currentId);
+  }
+  return topLevelIdByCategoryId;
+}
+
+/** 값 목록을 개수와 함께 모으는 함수. 많은 순, 같으면 이름순으로 정렬합니다. */
+function countValues(values: readonly string[]): FacetCount[] {
+  const countByValue = new Map<string, number>();
+  for (const facetValue of values) {
+    countByValue.set(facetValue, (countByValue.get(facetValue) ?? 0) + 1);
+  }
+  return [...countByValue.entries()]
+    .map(([facetValue, count]) => ({ value: facetValue, count }))
+    .sort((left, right) => right.count - left.count || left.value.localeCompare(right.value, 'ko'));
+}
+
+/** 카테고리·검색어 범위의 필터 개수를 계산하는 함수 */
+function buildFacets(params: ProductFacetParams): ProductFacets {
+  const normalizedKeyword = params.keyword?.trim().toLowerCase() ?? '';
+  const keywordProducts = mockProducts.filter((product) =>
+    matchesKeyword(product, normalizedKeyword),
+  );
+  const categoryIds = getCategoryIds(params.categoryId);
+  const scopedProducts = keywordProducts.filter(
+    (product) => categoryIds === null || categoryIds.has(product.categoryId),
+  );
+  const topLevelIdByCategoryId = buildTopLevelCategoryMap();
+  return {
+    totalCount: scopedProducts.length,
+    keywordTotalCount: keywordProducts.length,
+    // 카테고리 칩은 현재 카테고리 선택과 무관하게 검색어 범위 전체에서 셉니다.
+    categories: countValues(
+      keywordProducts.map(
+        (product) => topLevelIdByCategoryId.get(product.categoryId) ?? product.categoryId,
+      ),
+    ),
+    brands: countValues(scopedProducts.map((product) => product.brand)),
+    certifications: countValues(scopedProducts.flatMap((product) => product.certifications)),
+  };
+}
+
+/**
+ * 관련 상품 목 규칙: 같은 상위 카테고리 상품을 먼저, 모자라면 베스트(isFeatured) 상품으로 채웁니다.
+ * 기준 상품은 빼고, 기준 상품이 없으면 빈 목록입니다.
+ */
+function selectRelatedProducts(productId: string, limit: number): AdminProduct[] {
+  const baseProduct = mockProducts.find((product) => product.id === productId);
+  if (!baseProduct) return [];
+  const topLevelIdByCategoryId = buildTopLevelCategoryMap();
+  const baseTopLevelId = topLevelIdByCategoryId.get(baseProduct.categoryId);
+  const otherProducts = mockProducts.filter((product) => product.id !== productId);
+  const sameCategoryProducts = otherProducts.filter(
+    (product) => topLevelIdByCategoryId.get(product.categoryId) === baseTopLevelId,
+  );
+  const fillerProducts = otherProducts.filter(
+    (product) => product.isFeatured && !sameCategoryProducts.includes(product),
+  );
+  return [...sameCategoryProducts, ...fillerProducts].slice(0, limit);
+}
+
+/** 추천 상품 목 규칙: 베스트(isFeatured) 상품을 먼저, 모자라면 최신 상품으로 채웁니다. */
+function selectRecommendedProducts(limit: number): AdminProduct[] {
+  const featuredProducts = mockProducts.filter((product) => product.isFeatured);
+  const newestProducts = mockProducts
+    .filter((product) => !product.isFeatured)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  return [...featuredProducts, ...newestProducts].slice(0, limit);
+}
+
+/** 개수 조건을 1 이상의 정수로 맞추는 함수 */
+function normalizeLimit(limit: number | undefined): number {
+  return Math.max(1, Math.floor(limit ?? DEFAULT_COLLECTION_LIMIT));
+}
 
 // 취소 신호를 fetch와 같은 AbortError로 바꾸는 함수
 function createAbortError(): DOMException {
@@ -76,29 +209,154 @@ export function createMockApi(config: ApiConfig): ShopApi {
     products: {
       async list(params = {}, options): Promise<PagedResult<Product>> {
         const keyword = params.keyword?.trim().toLowerCase() ?? '';
-        const filteredProducts = mockProducts.filter(
-          (product) =>
-            (params.categoryId === undefined || product.categoryId === params.categoryId) &&
-            (keyword === '' || product.name.toLowerCase().includes(keyword)),
-        );
+        const categoryIds = getCategoryIds(params.categoryId);
+        const brandFilters = new Set(params.brand ?? []);
+        const certificationFilters = new Set(params.certification ?? []);
+        const filteredProducts = mockProducts.filter((product) => {
+          const matchesCategory = categoryIds === null || categoryIds.has(product.categoryId);
+          const matchesBrand = brandFilters.size === 0 || brandFilters.has(product.brand);
+          const matchesCertification =
+            certificationFilters.size === 0 ||
+            [...certificationFilters].some((certification) =>
+              product.certifications.includes(certification),
+            );
+          const matchesPrice =
+            params.minPrice === undefined && params.maxPrice === undefined
+              ? true
+              : product.priceVisible &&
+                (params.minPrice === undefined || product.price >= params.minPrice) &&
+                (params.maxPrice === undefined || product.price <= params.maxPrice);
+          const matchesStock = !params.excludeSoldOut || product.stockStatus !== 'soldOut';
+          return (
+            matchesCategory &&
+            matchesKeyword(product, keyword) &&
+            matchesBrand &&
+            matchesCertification &&
+            matchesPrice &&
+            matchesStock
+          );
+        });
         const page = Math.max(1, params.page ?? 1);
         const pageSize = Math.max(1, params.pageSize ?? DEFAULT_PAGE_SIZE);
         const allItems = await respondList(filteredProducts, options);
+        const sortedItems = [...allItems];
+        if (params.sortBy === 'priceAsc' || params.sortBy === 'priceDesc') {
+          const direction = params.sortBy === 'priceAsc' ? 1 : -1;
+          sortedItems.sort((left, right) => {
+            const leftPrice = left.priceVisible ? left.price : null;
+            const rightPrice = right.priceVisible ? right.price : null;
+            if (leftPrice === null) return rightPrice === null ? 0 : 1;
+            if (rightPrice === null) return -1;
+            return (leftPrice - rightPrice) * direction;
+          });
+        } else if (params.sortBy === 'newest') {
+          sortedItems.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+        }
         return {
-          items: allItems.slice((page - 1) * pageSize, page * pageSize),
+          items: sortedItems.slice((page - 1) * pageSize, page * pageSize).map(toBuyerProduct),
           page,
           pageSize,
-          totalCount: allItems.length,
+          totalCount: sortedItems.length,
         };
       },
-      getById: (productId, options) =>
-        respondOne(
-          mockProducts.find((product) => product.id === productId),
-          '상품',
+      async getById(productId, options) {
+        return toBuyerProduct(
+          await respondOne(
+            mockProducts.find((product) => product.id === productId),
+            '상품',
+            options,
+          ),
+        );
+      },
+      async suggest(keyword, options) {
+        const normalizedKeyword = keyword.trim().toLowerCase();
+        if (normalizedKeyword === '') return [];
+        const matches = mockProducts
+          .filter((product) => matchesKeyword(product, normalizedKeyword))
+          .slice(0, 5)
+          .map(({ id, name, brand }) => ({ productId: id, name, brand }));
+        return respondList(matches, options);
+      },
+      async facets(params = {}, options): Promise<ProductFacets> {
+        await wait(config.mockLatencyMs, options?.signal);
+        if (config.mockScenario === 'error') {
+          throw new ApiError('NETWORK', '목 API 오류 시나리오입니다.');
+        }
+        if (config.mockScenario === 'empty') {
+          return {
+            totalCount: 0,
+            keywordTotalCount: 0,
+            categories: [],
+            brands: [],
+            certifications: [],
+          };
+        }
+        return buildFacets(params);
+      },
+      async listRelated(productId, params = {}, options): Promise<Product[]> {
+        const relatedProducts = await respondList(
+          selectRelatedProducts(productId, normalizeLimit(params.limit)),
           options,
-        ),
+        );
+        return relatedProducts.map(toBuyerProduct);
+      },
+      async listRecommended(params = {}, options): Promise<Product[]> {
+        const recommendedProducts = await respondList(
+          selectRecommendedProducts(normalizeLimit(params.limit)),
+          options,
+        );
+        return recommendedProducts.map(toBuyerProduct);
+      },
+      async listReviews(productId, params = {}, options): Promise<PagedResult<ProductReview>> {
+        const page = Math.max(1, params.page ?? 1);
+        const pageSize = Math.max(1, params.pageSize ?? DEFAULT_PAGE_SIZE);
+        const productReviews = await respondList(
+          mockReviews
+            .filter((review) => review.productId === productId)
+            .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+          options,
+        );
+        return {
+          items: productReviews.slice((page - 1) * pageSize, page * pageSize),
+          page,
+          pageSize,
+          totalCount: productReviews.length,
+        };
+      },
+    },
+    search: {
+      recommendedKeywords: (options) => respondList(mockRecommendedKeywords, options),
     },
     categories: { list: (options) => respondList(mockCategories, options) },
+    home: {
+      async getContent(options): Promise<HomeContent> {
+        await wait(config.mockLatencyMs, options?.signal);
+        if (config.mockScenario === 'error') {
+          throw new ApiError('NETWORK', '목 API 오류 시나리오입니다.');
+        }
+        if (config.mockScenario === 'empty') {
+          return {
+            heroSlides: [],
+            promoBanners: [],
+            serviceBenefits: [],
+            featuredProducts: [],
+            ctaBand: null,
+          };
+        }
+        return structuredClone({
+          heroSlides: mockHeroSlides,
+          promoBanners: mockPromoBanners,
+          serviceBenefits: mockServiceBenefits,
+          featuredProducts: mockProducts
+            .filter((product) => product.isFeatured)
+            .map(toBuyerProduct),
+          ctaBand: mockHomeCtaBand,
+        });
+      },
+    },
+    company: {
+      getInfo: (options) => respondOne(mockCompanyInfo, '사업자 정보', options),
+    },
     orders: {
       listByMember: (memberId, options) =>
         respondList(

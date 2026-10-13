@@ -22,4 +22,7 @@
 - `apps/web`, `apps/admin`, `packages/*`
 
 목 API·목 인증(`packages/api`의 mock 모듈)은 개발·검증용 스텁입니다.
-운영 빌드에서는 명시적으로 허용하지 않으면 빌드가 실패하도록 막혀 있습니다.
+운영 빌드에서 목 모드는 `*_ALLOW_MOCK_IN_PRODUCTION=true`를 명시했을 때만 허용되고, 그렇지 않으면 빌드가 실패합니다.
+단, Web은 저장소에 커밋된 `apps/web/.env.production`이 이 허용값(`NEXT_PUBLIC_API_MODE=mock`, `NEXT_PUBLIC_ALLOW_MOCK_IN_PRODUCTION=true`)을 넣어 두었으므로, 환경변수 없이 빌드하면 목 데모 빌드가 됩니다.
+목 데모 화면에는 맨 위에 "데모(목 데이터)" 안내 띠가 표시됩니다.
+셸·CI·Vercel에서 지정한 실제 환경변수가 이 파일보다 우선하므로, 운영 배포는 `NEXT_PUBLIC_API_MODE=real`과 `https` 주소의 `NEXT_PUBLIC_API_BASE_URL`을 설정해야 합니다.

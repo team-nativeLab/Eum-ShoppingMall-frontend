@@ -5,7 +5,7 @@ const ADMIN_BASE_URL = 'http://localhost:5173';
 
 /**
  * E2E·시각 확인 설정. 데스크톱 1440(기본)과 모바일웹 390 프로젝트를 둡니다.
- * 브라우저는 `npx playwright install chromium`으로 따로 설치해야 하며, CI 기본 잡에서는 돌리지 않습니다.
+ * 브라우저는 `npx playwright install chromium`으로 따로 설치하며, workflow_dispatch에서 캡처를 만듭니다.
  */
 export default defineConfig({
   testDir: 'e2e',
@@ -13,7 +13,7 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   reporter: [['list'], ['html', { open: 'never' }]],
-  use: { trace: 'on-first-retry', locale: 'ko-KR' },
+  use: { trace: 'on-first-retry', screenshot: 'on', locale: 'ko-KR' },
   projects: [
     {
       name: 'web-desktop',

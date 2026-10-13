@@ -36,6 +36,12 @@ describe('getPriceDisplay — 금액 표시 토글', () => {
     expect(PRICE_HIDDEN_LABEL).toBe('구매 불가');
   });
 
+  it('구매자 응답에 가격이 null이면 값을 노출하거나 구매를 허용하지 않습니다', () => {
+    const hiddenProduct = buildProduct({ price: null, listPrice: null, priceVisible: true });
+    expect(getPriceDisplay(hiddenProduct).isPriceVisible).toBe(false);
+    expect(canBuyNow(hiddenProduct)).toBe(false);
+  });
+
   it('정가가 판매가보다 높을 때만 정가를 보여 줍니다', () => {
     expect(getPriceDisplay(buildProduct({ price: 18000, listPrice: 22000 })).listPriceText).toBe(
       '₩22,000',

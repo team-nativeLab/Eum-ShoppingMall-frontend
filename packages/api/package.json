@@ -10,6 +10,7 @@
     "./errors": "./src/errors.ts",
     "./price": "./src/price.ts",
     "./cart": "./src/cart.ts",
+    "./category-tree": "./src/category-tree.ts",
     "./quote-status": "./src/quote-status.ts",
     "./shop-api": "./src/shop-api.ts",
     "./mock-api": "./src/mock-api.ts",

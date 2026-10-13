@@ -6,9 +6,10 @@ import { ShoppingCart } from 'lucide-react';
 import Link from 'next/link';
 import { useCart } from '@/features/cart/cart-context';
 
-/** 장바구니 바로가기와 담긴 수량 배지 */
+/** 장바구니 바로가기와 담긴 수량 배지. 저장된 장바구니 복원이 끝나기 전에는 배지를 숨깁니다. */
 export function CartLink() {
-  const { totalQuantity } = useCart();
+  const { totalQuantity, hasRestored } = useCart();
+  const badgeCount = hasRestored ? totalQuantity : 0;
   return (
     <Link
       href="/cart"
@@ -17,9 +18,9 @@ export function CartLink() {
       <Icon icon={ShoppingCart} size={24} />
       <span className="sr-only">장바구니</span>
       <CountBadge
-        count={totalQuantity}
-        label={`상품 ${totalQuantity}개`}
-        className="absolute top-4 right-4"
+        count={badgeCount}
+        label={`상품 ${badgeCount}개`}
+        className="absolute top-6 right-2"
       />
     </Link>
   );

@@ -63,6 +63,8 @@
   --shadow-3: 0 12px 32px -4px #11111129;
 
   --breakpoint-mweb: 24.375rem;
+  /* Tailwind 기본값과 같지만, 앱 JS(apps/web/src/lib/breakpoints.ts)가 같은 값을 쓰는지 테스트로 확인하려고 적어 둡니다. */
+  --breakpoint-lg: 64rem;
 
   --container-web: 1296px;
   --container-admin-content: 1136px;
