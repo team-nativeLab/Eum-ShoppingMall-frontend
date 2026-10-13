@@ -122,20 +122,41 @@ function useMenuDialog(
   }, [dialogRef, initialFocusRef, onClose]);
 }
 
+/** 헤더 검색창 공통 props(검색어 값은 주소에서 정합니다) */
+type UrlKeywordSearchProps = Omit<Parameters<typeof HeaderSearch>[0], 'value' | 'onValueChange'>;
+
+// Suspense 대기 중 빈 검색창이 입력을 받지 않도록 쓰는 빈 함수
+function ignoreValueChange() {}
+
 /**
- * 검색 결과 화면(/search?q=)의 검색어를 헤더 검색창에 채우는 컴포넌트.
- * 다른 화면으로 이동하면 검색창을 비웁니다. useSearchParams 때문에 Suspense 안에서 렌더합니다.
+ * 주소의 검색어(/search?q=)로 첫 렌더부터 채워지는 헤더 검색창.
+ * useSearchParams는 정적 화면에서 Suspense가 필요해, 대기 중에는 같은 모양의 빈 검색창을 그립니다
+ * (헤더 전체가 아니라 검색창만 다시 그려집니다). 요청마다 렌더링하는 /search는 서버 HTML부터 검색어가 들어 있어
+ * 하이드레이션 값이 어긋나지 않습니다.
  */
-function SearchKeywordSync({ onKeywordChange }: { onKeywordChange: (keyword: string) => void }) {
+function UrlKeywordHeaderSearch(searchProps: UrlKeywordSearchProps) {
+  return (
+    <Suspense
+      fallback={<HeaderSearch {...searchProps} value="" onValueChange={ignoreValueChange} />}
+    >
+      <UrlKeywordHeaderSearchField {...searchProps} />
+    </Suspense>
+  );
+}
+
+/** 주소 검색어를 초기값으로 갖고, 주소 검색어가 바뀌면 그 값으로 맞추는 검색창 */
+function UrlKeywordHeaderSearchField(searchProps: UrlKeywordSearchProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const searchKeyword = pathname === '/search' ? (searchParams.get('q') ?? '') : '';
-
-  useEffect(() => {
-    onKeywordChange(searchKeyword);
-  }, [onKeywordChange, searchKeyword]);
-
-  return null;
+  const urlKeyword = pathname === '/search' ? (searchParams.get('q') ?? '') : '';
+  const [searchValue, setSearchValue] = useState(urlKeyword);
+  // 다른 검색·다른 화면으로 이동하면 검색창을 주소 값으로 맞춥니다. 렌더 중 보정이라 effect가 필요 없습니다.
+  const [syncedUrlKeyword, setSyncedUrlKeyword] = useState(urlKeyword);
+  if (syncedUrlKeyword !== urlKeyword) {
+    setSyncedUrlKeyword(urlKeyword);
+    setSearchValue(urlKeyword);
+  }
+  return <HeaderSearch {...searchProps} value={searchValue} onValueChange={setSearchValue} />;
 }
 
 /** HF/Web/GNB: 데스크톱 탐색·검색·찜·장바구니·전체 메뉴와 모바일 헤더를 제공합니다. */
@@ -143,7 +164,6 @@ export function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const categoriesQuery = useCategoriesQuery();
-  const [searchValue, setSearchValue] = useState('');
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const closeMenu = useCallback(() => setIsMenuOpen(false), []);
@@ -164,9 +184,6 @@ export function SiteHeader() {
 
   return (
     <>
-      <Suspense fallback={null}>
-        <SearchKeywordSync onKeywordChange={setSearchValue} />
-      </Suspense>
       <header
         className={cx(
           'sticky top-0 z-30 border-line bg-bg lg:border-b',
@@ -212,9 +229,7 @@ export function SiteHeader() {
             })}
           </nav>
           <div className="flex min-w-0 flex-1 justify-end pl-24">
-            <HeaderSearch
-              value={searchValue}
-              onValueChange={setSearchValue}
+            <UrlKeywordHeaderSearch
               onSearchKeyword={searchKeyword}
               onSelectProduct={openProduct}
               className="w-full max-w-320"
@@ -282,9 +297,7 @@ export function SiteHeader() {
             </div>
             {isMobileSearchOpen ? (
               <PageContainer className="pb-12 lg:hidden">
-                <HeaderSearch
-                  value={searchValue}
-                  onValueChange={setSearchValue}
+                <UrlKeywordHeaderSearch
                   onSearchKeyword={searchKeyword}
                   onSelectProduct={openProduct}
                   onEscape={() => setIsMobileSearchOpen(false)}

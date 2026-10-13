@@ -18,7 +18,7 @@ import {
   Play,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useMemo, useState, type FocusEvent, type PointerEvent } from 'react';
+import { useMemo, useState, type FocusEvent, type PointerEvent } from 'react';
 import { PageContainer } from '@/components/page-container';
 import { usePrefersReducedMotion } from '@/lib/use-media-query';
 import { filterProductsByCategoryTree } from './best-seller-filter';
@@ -27,9 +27,9 @@ import {
   DESKTOP_CAROUSEL_PAGE_SIZE,
   ProductCarouselTrack,
   useCarouselPaging,
-  type CarouselDirection,
 } from './product-carousel';
 import { useCategoriesQuery } from './use-categories-query';
+import { heroSlideStyle, useHeroSlides } from './use-hero-slides';
 import { useHomeQuery } from './use-home-query';
 
 const HOME_ERROR_COPY: Record<string, string> = {
@@ -130,44 +130,28 @@ function HomeContentView({ content }: { content: HomeContent }) {
   );
 }
 
-/** 슬라이드 전환 시간(ms). globals.css의 --slide-duration과 같게 둡니다. */
-const SLIDE_TRANSITION_MS = 550;
-
 /** 히어로 슬라이드 레이어 상태: 보이는 중 / 들어오는 중 / 나가는 중 / 숨김 */
 type SlideLayerState = 'active' | 'entering' | 'leaving' | 'hidden';
 
 /**
  * HF/Web/HeroSlider. 6초마다 다음 배너로 넘어가고, 마우스를 올리거나 포커스가 들어오면 멈춥니다.
  * 다음(자동 넘김 포함)이면 현재 배너는 왼쪽으로 나가고 새 배너가 오른쪽에서 들어오며, 이전은 반대입니다.
- * 이미지는 함께 미끄러지고 문구는 짧게 페이드+슬라이드합니다. 이동 중에 들어온 요청은 무시합니다.
+ * 이미지는 함께 미끄러지고 문구는 짧게 페이드+슬라이드합니다. 전환 상태는 useHeroSlides가 관리합니다
+ * (전환 중 클릭은 마지막 요청 하나만 큐에 넣었다가 실행).
  * 감속 모드(prefers-reduced-motion)에서는 즉시 바꾸고, 자동 재생·진행 막대·일시정지 버튼도 숨깁니다.
  */
 function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
-  const [slideState, setSlideState] = useState<{
-    activeIndex: number;
-    leavingIndex: number | null;
-    direction: CarouselDirection;
-  }>({ activeIndex: 0, leavingIndex: null, direction: 'none' });
   const [isPausedByUser, setIsPausedByUser] = useState(false);
   const [isInteracting, setIsInteracting] = useState(false);
   const prefersReducedMotion = usePrefersReducedMotion();
-  // 응답이 바뀌어 슬라이드 수가 줄어도 범위를 벗어나지 않게 보정합니다.
-  const lastSlideIndex = Math.max(0, slides.length - 1);
-  const safeActiveIndex = Math.min(slideState.activeIndex, lastSlideIndex);
-  const leavingIndex =
-    slideState.leavingIndex !== null && slideState.leavingIndex <= lastSlideIndex
-      ? slideState.leavingIndex
-      : null;
+  const {
+    activeIndex: safeActiveIndex,
+    leavingIndex,
+    direction,
+    showSlide,
+    showAdjacentSlide,
+  } = useHeroSlides(slides.length, prefersReducedMotion);
   const activeSlide = slides[safeActiveIndex];
-
-  // 나가는 배너는 전환 시간이 지나면 숨깁니다(애니메이션 종료 이벤트에 기대지 않아 탭 전환 중에도 끝납니다).
-  useEffect(() => {
-    if (slideState.leavingIndex === null) return;
-    const finishTimer = window.setTimeout(() => {
-      setSlideState((currentState) => ({ ...currentState, leavingIndex: null }));
-    }, SLIDE_TRANSITION_MS);
-    return () => window.clearTimeout(finishTimer);
-  }, [slideState.leavingIndex, slideState.activeIndex]);
 
   if (!activeSlide) {
     return (
@@ -180,30 +164,6 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
   const hasMultipleSlides = slides.length > 1;
   const canAutoplay = hasMultipleSlides && !prefersReducedMotion;
   const isAutoplayPaused = isPausedByUser || isInteracting || !canAutoplay;
-
-  // 지정한 배너로 이동하는 함수. 방향을 주지 않으면 인덱스 차이로 정합니다.
-  const showSlide = (
-    targetIndex: number,
-    requestedDirection?: Exclude<CarouselDirection, 'none'>,
-  ) => {
-    setSlideState((currentState) => {
-      const currentIndex = Math.min(currentState.activeIndex, lastSlideIndex);
-      // 이동 중 연타는 무시해 레이어가 겹치거나 튀지 않게 합니다.
-      if (currentState.leavingIndex !== null || targetIndex === currentIndex) return currentState;
-      return {
-        activeIndex: targetIndex,
-        leavingIndex: prefersReducedMotion ? null : currentIndex,
-        direction: requestedDirection ?? (targetIndex > currentIndex ? 'next' : 'previous'),
-      };
-    });
-  };
-
-  const showAdjacentSlide = (step: -1 | 1) => {
-    showSlide(
-      (safeActiveIndex + step + slides.length) % slides.length,
-      step === 1 ? 'next' : 'previous',
-    );
-  };
 
   // 레이어별 상태: 이동 중이면 새 배너는 entering, 이전 배너는 leaving입니다.
   const getLayerState = (slideIndex: number): SlideLayerState => {
@@ -229,7 +189,8 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
       aria-label="주요 프로모션"
       aria-roledescription="carousel"
       data-testid="home-hero"
-      data-direction={slideState.direction}
+      data-direction={direction}
+      style={heroSlideStyle}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
       onFocus={() => setIsInteracting(true)}
@@ -244,7 +205,7 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
             aria-hidden="true"
             data-slide-layer="image"
             data-state={layerState}
-            data-direction={slideState.direction}
+            data-direction={direction}
             className={cx('absolute inset-0 -z-20', layerState === 'hidden' && 'invisible')}
           >
             {/* CMS가 제공한 배너 이미지는 Next 이미지 도메인 설정 없이 표시합니다.
@@ -265,8 +226,12 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
       <div className="absolute inset-0 -z-10 hidden bg-linear-to-r from-text-1/0 from-72% to-text-1/38 lg:block" />
 
       <PageContainer className="relative pt-48 pb-32 lg:h-full lg:pt-64 lg:pb-0">
+        {/* 화면낭독기용 현재 배너 안내. 자동 넘김 중에는 읽지 않고, 멈췄을 때(직접 넘길 때)만 알립니다. */}
+        <p aria-live={isAutoplayPaused ? 'polite' : 'off'} aria-atomic="true" className="sr-only">
+          {`${slides.length}개 중 ${safeActiveIndex + 1}번째: ${activeSlide.title.join(' ')}`}
+        </p>
         {/* 모든 배너 문구를 같은 칸에 겹쳐 두어, 높이가 가장 긴 문구에 맞춰 고정되고 전환 중 레이아웃이 튀지 않습니다. */}
-        <div aria-live={isAutoplayPaused ? 'polite' : 'off'} className="grid max-w-560">
+        <div className="grid max-w-560">
           {slides.map((slide, slideIndex) => {
             const layerState = getLayerState(slideIndex);
             const isCurrentSlide = slideIndex === safeActiveIndex;
@@ -281,7 +246,7 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
                 inert={!isCurrentSlide}
                 data-slide-layer="text"
                 data-state={layerState}
-                data-direction={slideState.direction}
+                data-direction={direction}
                 className={cx('col-start-1 row-start-1', layerState === 'hidden' && 'invisible')}
               >
                 <p className="text-overline text-text-2">{slide.eyebrow}</p>

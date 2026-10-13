@@ -21,7 +21,8 @@
 /*
  * 홈 히어로 슬라이드 전환. data-direction(next/previous)과 data-state(entering/leaving)로 방향을 정합니다.
  * 이미지 레이어는 화면 폭만큼, 문구 레이어는 48px만 움직이며 페이드합니다.
- * 시간(550ms)은 home-view.tsx의 SLIDE_TRANSITION_MS와 같게 둡니다. 감속 모드에서는 애니메이션을 끕니다.
+ * 시간·easing은 히어로 섹션 style의 --hero-slide-duration/--hero-slide-easing(use-hero-slides.ts 한 곳에서 정함)을 읽습니다.
+ * 감속 모드에서는 애니메이션을 끕니다.
  */
 @layer components {
   [data-slide-layer] {
@@ -42,11 +43,11 @@
   }
 
   [data-slide-layer][data-state='entering'] {
-    animation: slide-enter 550ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: slide-enter var(--hero-slide-duration) var(--hero-slide-easing) both;
   }
 
   [data-slide-layer][data-state='leaving'] {
-    animation: slide-leave 550ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: slide-leave var(--hero-slide-duration) var(--hero-slide-easing) both;
   }
 
   @media (prefers-reduced-motion: reduce) {
