@@ -5,10 +5,11 @@ import { Button } from '@eum/ui/components/Button';
 import { Icon } from '@eum/ui/components/Icon';
 import { Toast } from '@eum/ui/components/Toast';
 import { cx } from '@eum/ui/lib/cx';
-import { ChevronLeft, Heart, Menu, Search, Share2, UserRound, X } from 'lucide-react';
+import { ChevronLeft, CircleX, Heart, Menu, Search, Share2, UserRound, X } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
+  Suspense,
   useCallback,
   useEffect,
   useId,
@@ -121,6 +122,22 @@ function useMenuDialog(
   }, [dialogRef, initialFocusRef, onClose]);
 }
 
+/**
+ * 검색 결과 화면(/search?q=)의 검색어를 헤더 검색창에 채우는 컴포넌트.
+ * 다른 화면으로 이동하면 검색창을 비웁니다. useSearchParams 때문에 Suspense 안에서 렌더합니다.
+ */
+function SearchKeywordSync({ onKeywordChange }: { onKeywordChange: (keyword: string) => void }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchKeyword = pathname === '/search' ? (searchParams.get('q') ?? '') : '';
+
+  useEffect(() => {
+    onKeywordChange(searchKeyword);
+  }, [onKeywordChange, searchKeyword]);
+
+  return null;
+}
+
 /** HF/Web/GNB: 데스크톱 탐색·검색·찜·장바구니·전체 메뉴와 모바일 헤더를 제공합니다. */
 export function SiteHeader() {
   const pathname = usePathname();
@@ -147,6 +164,9 @@ export function SiteHeader() {
 
   return (
     <>
+      <Suspense fallback={null}>
+        <SearchKeywordSync onKeywordChange={setSearchValue} />
+      </Suspense>
       <header
         className={cx(
           'sticky top-0 z-30 border-line bg-bg lg:border-b',
@@ -378,6 +398,7 @@ function HeaderSearch({
   className?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
   const listboxId = useId();
   const [isPanelOpen, setIsPanelOpen] = useState(false);
@@ -463,6 +484,7 @@ function HeaderSearch({
           상품 검색
         </label>
         <input
+          ref={inputRef}
           id={inputId}
           type="search"
           role="combobox"
@@ -482,10 +504,24 @@ function HeaderSearch({
           placeholder="어떤 제품을 찾고 계신가요?"
           className="min-w-0 flex-1 bg-transparent text-body-m outline-none placeholder:text-text-3 [&::-webkit-search-cancel-button]:hidden"
         />
+        {value ? (
+          <button
+            type="button"
+            aria-label="검색어 지우기"
+            onClick={() => {
+              onValueChange('');
+              setActiveOptionIndex(-1);
+              inputRef.current?.focus();
+            }}
+            className="inline-flex size-28 shrink-0 items-center justify-center rounded-capsule text-text-3 focus-ring hover:text-text-1"
+          >
+            <Icon icon={CircleX} size={20} />
+          </button>
+        ) : null}
         <button
           type="submit"
           aria-label="검색"
-          className="inline-flex size-28 items-center justify-center rounded-capsule focus-ring"
+          className="inline-flex size-28 shrink-0 items-center justify-center rounded-capsule focus-ring"
         >
           <Icon icon={Search} size={20} />
         </button>
