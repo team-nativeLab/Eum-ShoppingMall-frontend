@@ -16,6 +16,7 @@ import { ChevronDown, LayoutGrid, List, Plus, RotateCcw, SearchX } from 'lucide-
 import Link from 'next/link';
 import { useMemo, useState, type ReactNode } from 'react';
 import { PageContainer } from '@/components/page-container';
+import { getScrollBehavior, usePrefersReducedMotion } from '@/lib/use-media-query';
 import { ProductCard } from './product-card';
 import { SearchNoResults } from './search-no-results';
 import { useCategoriesQuery } from './use-categories-query';
@@ -23,6 +24,8 @@ import { useProductFacetsQuery } from './use-product-facets-query';
 import { useProductsQuery } from './use-products-query';
 
 type SortBy = NonNullable<ProductListParams['sortBy']>;
+/** 필터 개수 조회 상태(조회 중 / 실패 / 성공) */
+type FacetsStatus = 'pending' | 'error' | 'success';
 type ActiveFilter =
   | { key: 'price'; label: string }
   | { key: 'brand'; value: string; label: string }
@@ -102,13 +105,17 @@ export function ProductListingView({
   const [excludeSoldOut, setExcludeSoldOut] = useState(false);
   const [layout, setLayout] = useState<'grid' | 'list'>('grid');
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
+  const prefersReducedMotion = usePrefersReducedMotion();
 
-  // 카테고리 화면은 카테고리 목록을 받은 뒤에 조회해 전체 상품이 잠깐 보이지 않게 합니다.
+  // 카테고리 화면은 카테고리 목록에서 slug를 확인한 뒤에 조회해, 전체 상품·전체 개수를 먼저 요청하지 않게 합니다.
   const isCategoryResolved = isSearch || selectedCategory !== undefined;
-  const facetsQuery = useProductFacetsQuery({
-    categoryId: pageCategoryId,
-    keyword: isSearch ? keyword || undefined : undefined,
-  });
+  const facetsQuery = useProductFacetsQuery(
+    {
+      categoryId: pageCategoryId,
+      keyword: isSearch ? keyword || undefined : undefined,
+    },
+    isCategoryResolved,
+  );
   const productParams: ProductListParams = {
     categoryId: pageCategoryId,
     keyword: isSearch ? keyword || undefined : undefined,
@@ -121,18 +128,25 @@ export function ProductListingView({
     page,
     pageSize,
   };
-  const productsQuery = useProductsQuery(productParams);
+  // 페이지·필터를 바꾸는 동안 이전 결과를 남겨 두어 페이지 이동 버튼(포커스)이 사라지지 않게 합니다.
+  const productsQuery = useProductsQuery(productParams, {
+    enabled: isCategoryResolved,
+    shouldKeepPreviousData: true,
+  });
 
   const categoryNameById = new Map(categoryList.map((category) => [category.id, category.name]));
   const searchCategoryFacets = (facetsQuery.data?.categories ?? []).filter(
     (categoryFacet) => categoryFacet.count > 0 && categoryNameById.has(categoryFacet.value),
   );
   const subcategoryChips = getSubcategoryChips(categoryList, selectedCategory);
-  // 검색어 범위 전체 결과 수(카테고리 칩 선택과 무관). 상품마다 상위 카테고리 하나에만 들어갑니다.
-  const keywordTotalCount = facetsQuery.data?.categories.reduce(
-    (countSum, categoryFacet) => countSum + categoryFacet.count,
-    0,
-  );
+  // 검색어 범위 전체 결과 수(카테고리 칩 선택과 무관). 서버 계약 필드를 그대로 씁니다.
+  const keywordTotalCount = facetsQuery.data?.keywordTotalCount;
+  const facetsStatus: FacetsStatus = facetsQuery.isError
+    ? 'error'
+    : facetsQuery.data
+      ? 'success'
+      : 'pending';
+  const retryFacets = () => void facetsQuery.refetch();
 
   const activeFilters: ActiveFilter[] = [];
   if (minPrice !== undefined || maxPrice !== undefined) {
@@ -256,9 +270,15 @@ export function ProductListingView({
       : '전체 상품'
     : (selectedCategory?.name ?? '카테고리');
   const isLoading = categoriesQuery.isPending || productsQuery.isPending || !isCategoryResolved;
+  // 이전 결과를 보여 주며 새 페이지·필터 결과를 받는 중
+  const isRefreshing = productsQuery.isPlaceholderData;
   const totalCount = productsQuery.data?.totalCount;
+  // 페이지 수는 서버가 실제로 적용한 pageSize로 계산합니다(요청 값과 다를 수 있음).
   const pageCount = productsQuery.data
-    ? Math.max(1, Math.ceil(productsQuery.data.totalCount / pageSize))
+    ? Math.max(
+        1,
+        Math.ceil(productsQuery.data.totalCount / Math.max(1, productsQuery.data.pageSize)),
+      )
     : 1;
   const brandFacets = facetsQuery.data?.brands ?? [];
   const certificationFacets = facetsQuery.data?.certifications ?? [];
@@ -371,6 +391,9 @@ export function ProductListingView({
                 />
               </label>
             </div>
+            {facetsStatus === 'error' ? (
+              <FacetsErrorNotice onRetry={retryFacets} className="mt-12" />
+            ) : null}
             <div className="mt-12 flex flex-wrap gap-8">
               {brandFacets.map((brandFacet) => (
                 <Chip
@@ -427,6 +450,9 @@ export function ProductListingView({
               초기화
             </button>
           </div>
+          {facetsStatus === 'error' ? (
+            <FacetsErrorNotice onRetry={retryFacets} className="mt-16" />
+          ) : null}
           <FilterSection title="가격">
             <div className="flex items-center">
               <label className="sr-only" htmlFor="minimum-price">
@@ -468,6 +494,7 @@ export function ProductListingView({
           <FilterSection title="브랜드">
             <FacetCheckboxList
               facets={brandFacets}
+              status={facetsStatus}
               selectedValues={selectedBrands}
               emptyText="브랜드 정보가 없습니다."
               onToggle={(brand) => toggleSelection(selectedBrands, brand, setSelectedBrands)}
@@ -476,6 +503,7 @@ export function ProductListingView({
           <FilterSection title="안전인증">
             <FacetCheckboxList
               facets={certificationFacets}
+              status={facetsStatus}
               selectedValues={selectedCertifications}
               emptyText="인증 정보가 없습니다."
               onToggle={(certification) =>
@@ -581,7 +609,13 @@ export function ProductListingView({
             </div>
           </div>
 
-          <div className="mt-16">
+          <div
+            className={cx(
+              'mt-16 transition-opacity motion-reduce:transition-none',
+              isRefreshing && 'opacity-60',
+            )}
+            aria-busy={isRefreshing || undefined}
+          >
             {isLoading ? (
               <div
                 aria-busy="true"
@@ -649,7 +683,8 @@ export function ProductListingView({
             totalPages={pageCount}
             onPageChange={(nextPage) => {
               setPage(nextPage);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
+              // 포커스는 누른 페이지 버튼에 그대로 두고 화면만 목록 위로 올립니다.
+              window.scrollTo({ top: 0, behavior: getScrollBehavior(prefersReducedMotion) });
             }}
             className="mt-40 flex justify-center lg:mt-64"
           />
@@ -715,19 +750,40 @@ function FilterSection({ title, children }: { title: string; children: ReactNode
   );
 }
 
-/** 개수가 붙은 체크박스 목록. 5개를 넘으면 "더보기"로 나머지를 펼칩니다. */
+/** 필터 개수 조회 실패 안내 + 다시 시도(빈 데이터 상태와 구분) */
+function FacetsErrorNotice({ onRetry, className }: { onRetry: () => void; className?: string }) {
+  return (
+    <NoticeInline tone="danger" role="alert" className={className}>
+      필터 정보를 불러오지 못했습니다.{' '}
+      <button type="button" onClick={onRetry} className="rounded-4 underline focus-ring">
+        다시 시도
+      </button>
+    </NoticeInline>
+  );
+}
+
+/**
+ * 개수가 붙은 체크박스 목록. 5개를 넘으면 "더보기"로 나머지를 펼칩니다.
+ * 조회 중이면 불러오는 중 문구를, 실패하면 아무것도 그리지 않습니다(실패 안내는 필터 위에 한 번만 보여 줌).
+ */
 function FacetCheckboxList({
   facets,
+  status,
   selectedValues,
   emptyText,
   onToggle,
 }: {
   facets: FacetCount[];
+  status: FacetsStatus;
   selectedValues: string[];
   emptyText: string;
   onToggle: (facetValue: string) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  if (status === 'pending') {
+    return <p className="text-caption text-text-3">불러오는 중입니다.</p>;
+  }
+  if (status === 'error') return null;
   if (facets.length === 0) return <p className="text-caption text-text-3">{emptyText}</p>;
   // 선택한 항목은 접혀 있어도 보이게 합니다.
   const visibleFacets = isExpanded

@@ -29,6 +29,19 @@ describe('Button', () => {
     const dangerButton = screen.getByRole('button', { name: '정지' });
     expect(dangerButton).toHaveClass('bg-danger', 'h-56');
   });
+
+  it('기본 버튼은 줄지 않고, 전체 폭 버튼은 부모 폭 안에서 줄어들 수 있습니다', () => {
+    render(
+      <>
+        <Button>기본</Button>
+        <Button isFullWidth>전체 폭</Button>
+      </>,
+    );
+    expect(screen.getByRole('button', { name: '기본' })).toHaveClass('shrink-0');
+    const fullWidthButton = screen.getByRole('button', { name: '전체 폭' });
+    expect(fullWidthButton).toHaveClass('w-full', 'min-w-0');
+    expect(fullWidthButton).not.toHaveClass('shrink-0');
+  });
 });
 
 describe('buttonClassName — 링크에 적용', () => {

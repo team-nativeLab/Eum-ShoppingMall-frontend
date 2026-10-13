@@ -4,8 +4,8 @@ import { Star } from 'lucide-react';
 const STAR_COUNT = 5;
 
 /**
- * 별점 5개(Figma 16px, 모바일 14px · 간격 2). 평점을 반올림한 개수만큼 채웁니다.
- * 화면낭독기에는 "평점 4.8점" 또는 "평점 없음"을 읽어 줍니다.
+ * 별점 5개(Figma 16px, 모바일 14px · 간격 2). 평점을 내림한 개수만큼 채웁니다
+ * (4.7점이 별 5개로 보여 실제보다 높아 보이지 않게). 화면낭독기에는 "평점 4.7점" 또는 "평점 없음"을 읽어 줍니다.
  */
 export function ProductRatingStars({
   rating,
@@ -14,7 +14,7 @@ export function ProductRatingStars({
   rating: number | null;
   className?: string;
 }) {
-  const filledCount = rating === null ? 0 : Math.round(rating);
+  const filledCount = rating === null ? 0 : Math.floor(rating);
   return (
     <span
       role="img"
