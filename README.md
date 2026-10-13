@@ -12,6 +12,7 @@
 - [목 API와 환경변수](#목-api와-환경변수)
 - [디자인 토큰](#디자인-토큰)
 - [비즈니스 규칙](#비즈니스-규칙)
+- [배포(Vercel 목 데모)](#배포vercel-목-데모)
 - [테스트와 CI](#테스트와-ci)
 - [브랜치 전략](#브랜치-전략)
 - [진행 단계](#진행-단계)
@@ -196,6 +197,7 @@ Eum-ShoppingMall-frontend/
   - `*_API_MODE`가 없거나 공백일 때 (운영 빌드는 모드를 **반드시 명시**해야 함. 배포는 `real`)
   - `mock`인데 `*_ALLOW_MOCK_IN_PRODUCTION=true`가 없을 때
   - `real`인데 `*_API_BASE_URL`이 없거나 공백일 때
+- 단, Web은 커밋된 `apps/web/.env.production`이 목 데모 값을 넣어 주므로 환경변수 없이 빌드하면 목 데모 빌드가 됩니다([배포(Vercel 목 데모)](#배포vercel-목-데모)). 셸·CI·Vercel에서 지정한 환경변수가 이 파일보다 우선합니다.
 - 검사 시점: Web은 `next build`(`next typegen` 제외), Admin은 `vite build`면 `--mode`와 무관하게(예: `--mode staging`) 항상 검사합니다. Admin의 운영 여부는 `NODE_ENV`(없으면 `production`) 기준입니다.
 - 각 앱의 `src/lib/shop-api.ts`·인증 로더는 빌드 때 치환되는 모드 상수로 분기하므로, `real`로 빌드하면 목 구현·목 데이터·목 인증 chunk가 산출물에서 제외됩니다.
 - 현재 `real` API와 인증은 스텁이라 `real` 빌드 산출물은 조회 시 `NOT_IMPLEMENTED` 오류를 냅니다. 실제 배포 대상·배포 환경은 확인 필요입니다.
@@ -252,6 +254,21 @@ Eum-ShoppingMall-frontend/
 - **장바구니** (`cart.ts`): 금액 미표시 상품과 품절 상품은 **'주문할 수 없는 상품'** 그룹으로 분리되고 합계에서 빠집니다. 수량은 1~999로 제한합니다(상한은 임시 값).
 - **회원**: **비회원 주문은 없습니다.** 관리자 계정과 일반 회원은 분리되어 있습니다.
 - **문구**: 구매자에게 보이는 문구는 합니다체로 씁니다.
+
+## 배포(Vercel 목 데모)
+Web(`apps/web`)은 Vercel의 GitHub 연동으로 목 데모를 배포합니다.
+
+| 항목 | 값 |
+|---|---|
+| Root Directory | `apps/web` (Framework: Next.js, 저장소 루트의 `package-lock.json`으로 workspaces 설치) |
+| Production Branch | `dev` |
+| Node.js | 24.x |
+| 환경변수 | 대시보드 설정 없이 저장소의 `apps/web/.env.production` 값으로 빌드합니다 |
+
+- `apps/web/.env.production`에는 목 데모 값 두 개(`NEXT_PUBLIC_API_MODE=mock`, `NEXT_PUBLIC_ALLOW_MOCK_IN_PRODUCTION=true`)만 들어 있고 비밀값은 없습니다. `.env*` 중 이 파일과 `.env.example`만 커밋합니다.
+- **real 전환**: Vercel 환경변수에 `NEXT_PUBLIC_API_MODE=real`과 `NEXT_PUBLIC_API_BASE_URL`을 설정합니다. 실제 환경변수가 `.env.production`보다 우선합니다.
+- 워크스페이스 패키지(`@eum/ui`, `@eum/api`)는 TypeScript 소스로 배포되며 `next.config.ts`의 `transpilePackages`가 함께 변환합니다.
+- `next.config.ts`가 모든 경로에 보안 헤더(CSP, `Referrer-Policy`, `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Permissions-Policy`)를 붙이고 `X-Powered-By`를 끕니다. CSP는 nonce 없이 인라인 스크립트·스타일을 허용하는 방식이며, `connect-src`에는 설정된 API 주소의 origin이 추가됩니다.
 
 ## 테스트와 CI
 ### 단위 테스트 (Vitest)

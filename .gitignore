@@ -15,9 +15,11 @@ test-results/
 blob-report/
 .playwright-cli/
 
-# 환경 변수 (.env.example만 커밋)
+# 환경 변수 (.env.example과 Web 목 데모용 apps/web/.env.production만 커밋)
 .env*
 !.env.example
+# Web 목 데모 배포용 공개 설정(비밀값 없음)
+!apps/web/.env.production
 
 # OS·에디터
 .DS_Store
@@ -25,3 +27,4 @@ blob-report/
 
 # 로컬 인수인계 문서 (커밋하지 않음)
 docs/HANDOFF.md
+docs/REMAINING_WORK.md
