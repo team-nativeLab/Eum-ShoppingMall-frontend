@@ -74,7 +74,8 @@ jobs:
     env:
       NEXT_TELEMETRY_DISABLED: '1'
       NEXT_PUBLIC_API_MODE: real
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+      # real 모드 운영 빌드는 https 주소만 허용합니다(next.config.ts). 실제로 요청하지 않는 검증용 주소입니다.
+      NEXT_PUBLIC_API_BASE_URL: https://api.example.com
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

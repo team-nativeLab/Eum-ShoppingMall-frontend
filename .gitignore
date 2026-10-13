@@ -28,3 +28,5 @@ blob-report/
 # 로컬 인수인계 문서 (커밋하지 않음)
 docs/HANDOFF.md
 docs/REMAINING_WORK.md
+# 로컬 구현 진행 기록 (커밋하지 않음)
+docs/IMPLEMENTATION_PROGRESS.md
