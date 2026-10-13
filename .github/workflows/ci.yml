@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+
+# 같은 브랜치·PR에 새 실행이 오면 이전 실행을 취소합니다.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: typecheck · lint · test · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      # 실제 API가 없는 단계라 목 모드 검증 빌드임을 명시합니다(배포 빌드가 아님).
+      NEXT_PUBLIC_API_MODE: mock
+      NEXT_PUBLIC_ALLOW_MOCK_IN_PRODUCTION: 'true'
+      VITE_API_MODE: mock
+      VITE_ALLOW_MOCK_IN_PRODUCTION: 'true'
+    steps:
+      # 공식 액션은 태그 대신 커밋 SHA로 고정합니다(태그 이동 공격 방지). 주석은 해당 SHA의 릴리스 태그입니다.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Next.js 빌드 캐시
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('apps/web/src/**', 'packages/*/src/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
+      - name: 의존성 설치
+        run: npm ci
+
+      - name: 운영 의존성 취약점 검사 (high 이상이면 실패)
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: 타입 검사 (next typegen 포함)
+        run: npm run typecheck
+
+      - name: 린트
+        run: npm run lint
+
+      - name: 포맷 검사
+        run: npm run format:check
+
+      - name: 단위 테스트
+        run: npm run test
+
+      - name: 빌드 (web · admin)
+        run: npm run build

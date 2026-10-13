@@ -1,0 +1,27 @@
+# 의존성
+node_modules/
+
+# 빌드 산출물
+.next/
+out/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# 테스트 산출물
+coverage/
+playwright-report/
+test-results/
+blob-report/
+.playwright-cli/
+
+# 환경 변수 (.env.example만 커밋)
+.env*
+!.env.example
+
+# OS·에디터
+.DS_Store
+*.log
+
+# 로컬 인수인계 문서 (커밋하지 않음)
+docs/HANDOFF.md

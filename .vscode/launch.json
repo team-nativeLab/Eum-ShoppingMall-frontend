@@ -1,0 +1,43 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "web: Next.js 서버 디버그",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev:web",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "web: Chrome 디버그 (localhost:3000)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}/apps/web"
+    },
+    {
+      "name": "admin: Vite 개발 서버",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev:admin",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "admin: Chrome 디버그 (localhost:5173)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/apps/admin"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "web: 서버 + 브라우저",
+      "configurations": ["web: Next.js 서버 디버그", "web: Chrome 디버그 (localhost:3000)"]
+    },
+    {
+      "name": "admin: 서버 + 브라우저",
+      "configurations": ["admin: Vite 개발 서버", "admin: Chrome 디버그 (localhost:5173)"]
+    }
+  ]
+}
