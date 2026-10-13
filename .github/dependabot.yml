@@ -1,0 +1,24 @@
+# 의존성 업데이트 자동 PR 설정.
+# cooldown: 새 버전이 나오고 며칠 기다린 뒤 PR을 엽니다(갓 배포된 악성·불안정 버전 회피). 보안 업데이트에는 적용되지 않습니다.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 7
+      semver-patch-days: 3
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

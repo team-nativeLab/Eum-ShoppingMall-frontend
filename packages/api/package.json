@@ -1,0 +1,25 @@
+{
+  "name": "@eum/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./types": "./src/types.ts",
+    "./config": "./src/config.ts",
+    "./errors": "./src/errors.ts",
+    "./price": "./src/price.ts",
+    "./cart": "./src/cart.ts",
+    "./quote-status": "./src/quote-status.ts",
+    "./shop-api": "./src/shop-api.ts",
+    "./mock-api": "./src/mock-api.ts",
+    "./real-api": "./src/real-api.ts",
+    "./auth": "./src/auth.ts",
+    "./mock-auth": "./src/mock-auth.ts",
+    "./redirect": "./src/redirect.ts",
+    "./query-keys": "./src/query-keys.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}
