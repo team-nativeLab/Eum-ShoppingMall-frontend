@@ -1,0 +1,192 @@
+/*
+ * 이음 쇼핑몰 디자인 토큰 (Figma HF 변수·스타일 기준)
+ * - 색: HF Color 26개. inverse는 흰색, 검정 채움은 text-1입니다.
+ * - 간격: HF space 값 2·4·6·8·12·16·20·24·32·40·48·64·80·120을 씁니다.
+ *   --spacing을 1px로 두어 숫자 유틸리티가 곧 px입니다(p-16 = 16px, gap-24 = 24px).
+ *   위 목록에 없는 간격은 쓰지 않고, 화면 디자인에 토큰 밖 값이 있으면 가장 가까운 토큰을 고릅니다.
+ *   컴포넌트 고유 예외(Figma 공통 컴포넌트 자체가 쓰는 값이라 그대로 둠):
+ *     14 — TextField·SelectField 안쪽 좌우 여백, 선택 아이콘 위치(right-14), Chip 좌우 여백, NoticeInline 좌우 여백
+ *     10 — RemovableChip 오른쪽 여백, Toast 아이콘 간격, NoticeInline(전체 폭) 위아래 여백
+ *   너비·높이·크기(w/h/size)는 컴포넌트 치수라 간격 규칙 대상이 아닙니다(예: 버튼 h-56, EmptyState 설명 폭 280).
+ * - 반경: 4·6·8·12·capsule(999)
+ *   capsule: 검색바·히어로 CTA·칩 / 8: 버튼·입력·스테퍼·상품카드 / 6: 카드 이미지
+ *   12: 섹션 박스·패널·배너·아이콘 타일·토스트 / 4: 체크박스·상태 배지
+ * - 텍스트: HF 20개 + HF/Web 4개(확인된 것). 디자인 파일 폰트는 Noto Sans KR이지만 코드는 Pretendard입니다.
+ *   letterSpacing은 % 단위라서 em으로 옮겼습니다(-0.5% → -0.005em).
+ * - 그림자: sh-1~3
+ * - 브레이크포인트: 모바일 우선입니다. 기본 스타일이 모바일웹(390) 디자인이고, 데스크톱(1440) 디자인은 lg(1024) 이상에 적용합니다.
+ *   mweb(390)은 모바일웹 디자인 기준 폭으로, 390보다 좁은 기기만 따로 다룰 때 max-mweb: 으로 씁니다.
+ *   Tailwind 기본 sm·md·lg·xl·2xl은 rem 단위라 정렬이 섞이지 않도록 같은 rem 단위(24.375rem)로 둡니다.
+ * Tailwind 기본 팔레트·텍스트 크기·반경·그림자는 끄고 위 토큰만 씁니다.
+ */
+@theme {
+  --color-*: initial;
+  --color-bg: #ffffff;
+  --color-bg-subtle: #fafafa;
+  --color-surface: #f5f5f5;
+  --color-surface-2: #ebebeb;
+  --color-line: #ebebeb;
+  --color-line-strong: #d4d4d4;
+  --color-line-control: #949494;
+  --color-text-1: #111111;
+  --color-text-2: #555555;
+  --color-text-3: #707070;
+  --color-text-disabled: #b3b3b3;
+  --color-inverse: #ffffff;
+  --color-inverse-2: #ffffffb8;
+  --color-dim: #1111117a;
+  --color-pressed-dark: #333333;
+  --color-toast: #222222;
+  --color-ph-glyph: #d6d6d6;
+  --color-danger: #c5221f;
+  --color-danger-pressed: #a11b19;
+  --color-danger-tint: #fdecea;
+  --color-success: #1e7a3c;
+  --color-success-tint: #e8f3ec;
+  --color-warning: #8a5a00;
+  --color-warning-tint: #fff4e0;
+  --color-info: #1a5dc8;
+  --color-info-tint: #eaf1fb;
+
+  --spacing: 1px;
+
+  --radius-*: initial;
+  --radius-4: 4px;
+  --radius-6: 6px;
+  --radius-8: 8px;
+  --radius-12: 12px;
+  --radius-capsule: 999px;
+
+  --shadow-*: initial;
+  --shadow-1: 0 1px 3px 0 #1111110f;
+  --shadow-2: 0 4px 16px 0 #11111114;
+  --shadow-3: 0 12px 32px -4px #11111129;
+
+  --breakpoint-mweb: 24.375rem;
+
+  --container-web: 1296px;
+  --container-admin-content: 1136px;
+
+  --font-sans:
+    'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui,
+    'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+
+  --text-*: initial;
+  --text-display: 32px;
+  --text-display--line-height: 42px;
+  --text-display--letter-spacing: -0.025em;
+  --text-display--font-weight: 700;
+  --text-h1: 26px;
+  --text-h1--line-height: 34px;
+  --text-h1--letter-spacing: -0.025em;
+  --text-h1--font-weight: 700;
+  --text-h2: 22px;
+  --text-h2--line-height: 30px;
+  --text-h2--letter-spacing: -0.02em;
+  --text-h2--font-weight: 700;
+  --text-h3: 18px;
+  --text-h3--line-height: 26px;
+  --text-h3--letter-spacing: -0.015em;
+  --text-h3--font-weight: 700;
+  --text-title: 16px;
+  --text-title--line-height: 24px;
+  --text-title--letter-spacing: -0.01em;
+  --text-title--font-weight: 500;
+  --text-body-l: 16px;
+  --text-body-l--line-height: 26px;
+  --text-body-l--letter-spacing: -0.01em;
+  --text-body-l--font-weight: 400;
+  --text-body-l-medium: 16px;
+  --text-body-l-medium--line-height: 26px;
+  --text-body-l-medium--letter-spacing: -0.01em;
+  --text-body-l-medium--font-weight: 500;
+  --text-body-m: 15px;
+  --text-body-m--line-height: 24px;
+  --text-body-m--letter-spacing: -0.005em;
+  --text-body-m--font-weight: 400;
+  --text-body-s: 14px;
+  --text-body-s--line-height: 20px;
+  --text-body-s--letter-spacing: -0.005em;
+  --text-body-s--font-weight: 400;
+  --text-body-s-medium: 14px;
+  --text-body-s-medium--line-height: 20px;
+  --text-body-s-medium--letter-spacing: -0.005em;
+  --text-body-s-medium--font-weight: 500;
+  --text-label-l: 16px;
+  --text-label-l--line-height: 24px;
+  --text-label-l--letter-spacing: -0.005em;
+  --text-label-l--font-weight: 500;
+  --text-label-m: 14px;
+  --text-label-m--line-height: 20px;
+  --text-label-m--letter-spacing: -0.005em;
+  --text-label-m--font-weight: 500;
+  --text-label-s: 12px;
+  --text-label-s--line-height: 16px;
+  --text-label-s--letter-spacing: 0;
+  --text-label-s--font-weight: 500;
+  --text-label-xs: 11px;
+  --text-label-xs--line-height: 14px;
+  --text-label-xs--letter-spacing: 0;
+  --text-label-xs--font-weight: 500;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-caption--letter-spacing: 0;
+  --text-caption--font-weight: 400;
+  --text-caption-medium: 12px;
+  --text-caption-medium--line-height: 16px;
+  --text-caption-medium--letter-spacing: 0;
+  --text-caption-medium--font-weight: 500;
+  --text-overline: 11px;
+  --text-overline--line-height: 16px;
+  --text-overline--letter-spacing: 0.16em;
+  --text-overline--font-weight: 500;
+  --text-price-l: 24px;
+  --text-price-l--line-height: 32px;
+  --text-price-l--letter-spacing: -0.015em;
+  --text-price-l--font-weight: 700;
+  --text-price-m: 16px;
+  --text-price-m--line-height: 22px;
+  --text-price-m--letter-spacing: -0.005em;
+  --text-price-m--font-weight: 700;
+  --text-web-display-l: 44px;
+  --text-web-display-l--line-height: 56px;
+  --text-web-display-l--letter-spacing: -0.015em;
+  --text-web-display-l--font-weight: 700;
+  --text-web-h2: 28px;
+  --text-web-h2--line-height: 38px;
+  --text-web-h2--letter-spacing: -0.005em;
+  --text-web-h2--font-weight: 700;
+  --text-web-price-xl: 32px;
+  --text-web-price-xl--line-height: 40px;
+  --text-web-price-xl--letter-spacing: -0.01em;
+  --text-web-price-xl--font-weight: 700;
+  --text-web-body-xl: 18px;
+  --text-web-body-xl--line-height: 30px;
+  --text-web-body-xl--letter-spacing: 0;
+  --text-web-body-xl--font-weight: 400;
+}
+
+/* 키보드 포커스 표시. Figma Focus 변형(2px text-1 외곽선)을 focus-visible에만 적용합니다. */
+@utility focus-ring {
+  &:focus-visible {
+    outline: 2px solid var(--color-text-1);
+    outline-offset: 2px;
+  }
+}
+
+/* 위험 동작용 포커스 표시(Danger 버튼) */
+@utility focus-ring-danger {
+  &:focus-visible {
+    outline: 2px solid var(--color-danger);
+    outline-offset: 2px;
+  }
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    color: var(--color-text-1);
+    background-color: var(--color-bg);
+    -webkit-font-smoothing: antialiased;
+  }
+}
