@@ -1,9 +1,11 @@
 'use client';
 
+import type { Category, ProductSuggestion } from '@eum/api/types';
 import { Button } from '@eum/ui/components/Button';
 import { Icon } from '@eum/ui/components/Icon';
+import { Toast } from '@eum/ui/components/Toast';
 import { cx } from '@eum/ui/lib/cx';
-import { Heart, Menu, Search, Share2, UserRound, X } from 'lucide-react';
+import { ChevronLeft, Heart, Menu, Search, Share2, UserRound, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -12,44 +14,111 @@ import {
   useId,
   useRef,
   useState,
+  type FocusEvent,
   type FormEvent,
   type KeyboardEvent,
   type RefObject,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { CartLink } from './cart-link';
 import { PageContainer } from './page-container';
 import { useCategoriesQuery } from '@/features/products/use-categories-query';
 import { useProductsQuery } from '@/features/products/use-products-query';
 import { useProductSuggestionsQuery } from '@/features/products/use-product-suggestions-query';
 
-const NAVIGATION_ITEMS = [
-  { label: '제품', href: '/category/personal-protective-equipment', match: '/category' },
-  { label: '브랜드', href: '/search', match: '/search' },
-  { label: '안전 솔루션', href: '/solutions', match: '/solutions' },
-  { label: '고객지원', href: '/support/notices', match: '/support' },
-  { label: '회사소개', href: '/about', match: '/about' },
-];
+interface NavigationItem {
+  label: string;
+  href: string;
+  /** 이 경로 접두사 중 하나로 시작하면 현재 메뉴로 표시합니다. 빈 배열이면 표시하지 않습니다. */
+  activePathPrefixes: string[];
+}
 
-/** 전체 화면 메뉴가 열리면 배경 스크롤을 막고 Escape로 닫습니다. */
+/**
+ * GNB 주요 메뉴. '제품'은 서버 카테고리의 첫 상위 카테고리로 보내고, 카테고리가 없으면 전체 상품(/search)으로 보냅니다.
+ * '브랜드'는 전용 화면이 없어 전체 상품으로 보내므로 현재 메뉴 표시는 하지 않습니다(제품 탐색과 겹치지 않게).
+ */
+function getNavigationItems(categories: readonly Category[]): NavigationItem[] {
+  const firstTopLevelCategory = categories.find((category) => category.parentId === null);
+  return [
+    {
+      label: '제품',
+      href: firstTopLevelCategory
+        ? '/category/' + encodeURIComponent(firstTopLevelCategory.slug)
+        : '/search',
+      activePathPrefixes: ['/category', '/products', '/search'],
+    },
+    { label: '브랜드', href: '/search', activePathPrefixes: [] },
+    { label: '안전 솔루션', href: '/solutions', activePathPrefixes: ['/solutions'] },
+    { label: '고객지원', href: '/support/notices', activePathPrefixes: ['/support'] },
+    { label: '회사소개', href: '/about', activePathPrefixes: ['/about'] },
+  ];
+}
+
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * 전체 화면 메뉴 다이얼로그의 모달 동작을 맡는 훅(다이얼로그가 마운트된 동안 동작).
+ * 열리면 배경을 inert로 막고 스크롤을 잠그며 닫기 버튼에 포커스를 줍니다.
+ * Tab은 다이얼로그 안에서만 돌고, Escape로 닫히며, 닫히면 연 버튼으로 포커스를 돌려줍니다.
+ */
 function useMenuDialog(
-  isOpen: boolean,
   onClose: () => void,
-  closeButtonRef: RefObject<HTMLButtonElement | null>,
+  dialogRef: RefObject<HTMLDivElement | null>,
+  initialFocusRef: RefObject<HTMLButtonElement | null>,
 ) {
   useEffect(() => {
-    if (!isOpen) return;
+    const dialogElement = dialogRef.current;
+    if (!dialogElement) return;
+
+    const triggerElement =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    // 다이얼로그는 body 바로 아래에 portal로 그리므로, 나머지 body 자식을 모두 배경으로 봅니다.
+    const backgroundElements = [...document.body.children].filter(
+      (bodyChild): bodyChild is HTMLElement =>
+        bodyChild instanceof HTMLElement && !bodyChild.contains(dialogElement) && !bodyChild.inert,
+    );
+    for (const backgroundElement of backgroundElements) backgroundElement.inert = true;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    closeButtonRef.current?.focus();
+    initialFocusRef.current?.focus();
+
     const handleKeyDown = (keyEvent: globalThis.KeyboardEvent) => {
-      if (keyEvent.key === 'Escape') onClose();
+      if (keyEvent.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (keyEvent.key !== 'Tab') return;
+      const focusableElements = [
+        ...dialogElement.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+      ];
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      if (!firstElement || !lastElement) return;
+      const activeElement = document.activeElement;
+      if (
+        keyEvent.shiftKey &&
+        (activeElement === firstElement || !dialogElement.contains(activeElement))
+      ) {
+        keyEvent.preventDefault();
+        lastElement.focus();
+      } else if (
+        !keyEvent.shiftKey &&
+        (activeElement === lastElement || !dialogElement.contains(activeElement))
+      ) {
+        keyEvent.preventDefault();
+        firstElement.focus();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
+
     return () => {
-      document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleKeyDown);
+      for (const backgroundElement of backgroundElements) backgroundElement.inert = false;
+      document.body.style.overflow = previousOverflow;
+      if (triggerElement?.isConnected) triggerElement.focus();
     };
-  }, [closeButtonRef, isOpen, onClose]);
+  }, [dialogRef, initialFocusRef, onClose]);
 }
 
 /** HF/Web/GNB: 데스크톱 탐색·검색·찜·장바구니·전체 메뉴와 모바일 헤더를 제공합니다. */
@@ -57,100 +126,33 @@ export function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const categoriesQuery = useCategoriesQuery();
-  const brandsQuery = useProductsQuery({ pageSize: 100 });
   const [searchValue, setSearchValue] = useState('');
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const closeMenuButtonRef = useRef<HTMLButtonElement>(null);
-  const searchContainerRef = useRef<HTMLDivElement>(null);
   const closeMenu = useCallback(() => setIsMenuOpen(false), []);
-  const suggestionsQuery = useProductSuggestionsQuery(searchValue, isSearchOpen);
   const categoryList = categoriesQuery.data ?? [];
-  const brandList = [...new Set((brandsQuery.data?.items ?? []).map((product) => product.brand))];
+  const navigationItems = getNavigationItems(categoryList);
+  // 상품 상세는 모바일에서만 상세 전용 헤더(뒤로·공유·장바구니)를 씁니다. 데스크톱 GNB는 항상 그립니다.
   const isProductDetail = pathname.startsWith('/products/');
 
-  useMenuDialog(isMenuOpen, closeMenu, closeMenuButtonRef);
-
-  useEffect(() => {
-    if (!isSearchOpen) return;
-    const handleOutsidePointer = (pointerEvent: globalThis.PointerEvent) => {
-      if (!searchContainerRef.current?.contains(pointerEvent.target as Node)) {
-        setIsSearchOpen(false);
-      }
-    };
-    window.addEventListener('pointerdown', handleOutsidePointer);
-    return () => window.removeEventListener('pointerdown', handleOutsidePointer);
-  }, [isSearchOpen]);
-
-  const submitSearch = (submitEvent: FormEvent<HTMLFormElement>) => {
-    submitEvent.preventDefault();
-    const keyword = searchValue.trim();
-    if (!keyword) return;
-    setIsSearchOpen(false);
+  const searchKeyword = (keyword: string) => {
     setIsMobileSearchOpen(false);
     router.push('/search?q=' + encodeURIComponent(keyword));
   };
 
-  const selectSuggestion = (productId: string) => {
-    setIsSearchOpen(false);
+  const openProduct = (productId: string) => {
     setIsMobileSearchOpen(false);
     router.push('/products/' + encodeURIComponent(productId));
   };
 
-  const handleShare = async () => {
-    const currentUrl = window.location.href;
-    try {
-      if (navigator.share) {
-        await navigator.share({ url: currentUrl });
-      } else if (navigator.clipboard) {
-        await navigator.clipboard.writeText(currentUrl);
-      }
-    } catch {
-      // 공유 취소는 사용자 입력으로 보고 아무 동작도 하지 않습니다.
-    }
-  };
-
-  const handleSearchKeyDown = (keyEvent: KeyboardEvent<HTMLInputElement>) => {
-    if (keyEvent.key === 'Escape') {
-      setIsSearchOpen(false);
-      setIsMobileSearchOpen(false);
-    }
-  };
-
-  if (isProductDetail) {
-    return (
-      <header className="sticky top-0 z-30 border-b border-line bg-bg lg:hidden">
-        <PageContainer className="flex h-48 items-center justify-between">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            aria-label="이전 화면"
-            className="inline-flex size-40 items-center justify-start rounded-8 focus-ring"
-          >
-            <span aria-hidden="true" className="text-h2 leading-none">
-              ‹
-            </span>
-          </button>
-          <div className="flex items-center gap-12">
-            <button
-              type="button"
-              onClick={() => void handleShare()}
-              aria-label="상품 공유"
-              className="inline-flex size-40 items-center justify-center rounded-8 focus-ring hover:bg-surface"
-            >
-              <Icon icon={Share2} size={20} />
-            </button>
-            <CartLink />
-          </div>
-        </PageContainer>
-      </header>
-    );
-  }
-
   return (
     <>
-      <header className="sticky top-0 z-30 border-line bg-bg lg:border-b">
+      <header
+        className={cx(
+          'sticky top-0 z-30 border-line bg-bg lg:border-b',
+          isProductDetail && 'border-b',
+        )}
+      >
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:top-16 focus:left-16 focus:z-50 focus:rounded-8 focus:bg-text-1 focus:px-16 focus:py-8 focus:text-label-m focus:text-inverse"
@@ -158,14 +160,20 @@ export function SiteHeader() {
           본문 바로가기
         </a>
         <PageContainer className="hidden h-72 items-center lg:flex">
-          <div className="flex w-220 shrink-0 items-center">
+          {/* 로고·메뉴·아이콘은 줄지 않고, 남는 폭은 검색바가 받습니다(1024~1440 어느 폭에서도 겹치지 않음). */}
+          <div className="flex w-160 shrink-0 items-center min-[1440px]:w-220">
             <Link href="/" className="rounded-4 text-h3 whitespace-nowrap focus-ring">
               이음산업건설
             </Link>
           </div>
-          <nav aria-label="주요 메뉴" className="flex min-w-0 items-center gap-40">
-            {NAVIGATION_ITEMS.map((navigationItem) => {
-              const isActive = pathname.startsWith(navigationItem.match);
+          <nav
+            aria-label="주요 메뉴"
+            className="flex shrink-0 items-center gap-24 min-[1440px]:gap-40 xl:gap-32"
+          >
+            {navigationItems.map((navigationItem) => {
+              const isActive = navigationItem.activePathPrefixes.some((pathPrefix) =>
+                pathname.startsWith(pathPrefix),
+              );
               return (
                 <Link
                   key={navigationItem.label}
@@ -183,26 +191,14 @@ export function SiteHeader() {
               );
             })}
           </nav>
-          <div ref={searchContainerRef} className="relative ml-auto w-320 shrink-0">
-            <SearchForm
+          <div className="flex min-w-0 flex-1 justify-end pl-24">
+            <HeaderSearch
               value={searchValue}
               onValueChange={setSearchValue}
-              onSubmit={submitSearch}
-              onFocus={() => setIsSearchOpen(true)}
-              onKeyDown={handleSearchKeyDown}
+              onSearchKeyword={searchKeyword}
+              onSelectProduct={openProduct}
+              className="w-full max-w-320"
             />
-            {isSearchOpen ? (
-              <SuggestionPanel
-                suggestions={suggestionsQuery.data ?? []}
-                isLoading={suggestionsQuery.isPending && searchValue.trim().length > 0}
-                onSelect={selectSuggestion}
-                onSearchAll={() => {
-                  const keyword = searchValue.trim();
-                  if (keyword) router.push('/search?q=' + encodeURIComponent(keyword));
-                  setIsSearchOpen(false);
-                }}
-              />
-            ) : null}
           </div>
           <div className="ml-24 flex shrink-0 items-center gap-4">
             <Link
@@ -224,6 +220,7 @@ export function SiteHeader() {
               type="button"
               onClick={() => setIsMenuOpen(true)}
               aria-label="전체 메뉴 열기"
+              aria-haspopup="dialog"
               className="inline-flex size-44 items-center justify-center rounded-8 focus-ring hover:bg-surface"
             >
               <Icon icon={Menu} size={24} />
@@ -231,235 +228,421 @@ export function SiteHeader() {
           </div>
         </PageContainer>
 
-        <div className="flex h-56 items-center justify-between px-10 lg:hidden">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsMenuOpen(true)}
-              aria-label="전체 메뉴 열기"
-              className="inline-flex size-44 items-center justify-center rounded-8 focus-ring hover:bg-surface"
-            >
-              <Icon icon={Menu} size={24} />
-            </button>
-            <Link href="/" className="rounded-4 text-h3 whitespace-nowrap focus-ring">
-              이음산업건설
-            </Link>
-          </div>
-          <div className="flex items-center">
-            <button
-              type="button"
-              aria-label={isMobileSearchOpen ? '검색 닫기' : '검색 열기'}
-              aria-expanded={isMobileSearchOpen}
-              onClick={() => setIsMobileSearchOpen((isOpen) => !isOpen)}
-              className="inline-flex size-44 items-center justify-center rounded-8 focus-ring hover:bg-surface"
-            >
-              <Icon icon={isMobileSearchOpen ? X : Search} size={24} />
-            </button>
-            <CartLink />
-          </div>
-        </div>
-        {isMobileSearchOpen ? (
-          <PageContainer className="pb-12 lg:hidden">
-            <div ref={searchContainerRef} className="relative">
-              <SearchForm
-                value={searchValue}
-                onValueChange={setSearchValue}
-                onSubmit={submitSearch}
-                onFocus={() => setIsSearchOpen(true)}
-                onKeyDown={handleSearchKeyDown}
-              />
-              {isSearchOpen ? (
-                <SuggestionPanel
-                  suggestions={suggestionsQuery.data ?? []}
-                  isLoading={suggestionsQuery.isPending && searchValue.trim().length > 0}
-                  onSelect={selectSuggestion}
-                  onSearchAll={() => {
-                    const keyword = searchValue.trim();
-                    if (keyword) router.push('/search?q=' + encodeURIComponent(keyword));
-                    setIsSearchOpen(false);
-                    setIsMobileSearchOpen(false);
-                  }}
-                />
-              ) : null}
+        {isProductDetail ? (
+          <ProductDetailMobileBar />
+        ) : (
+          <>
+            <div className="flex h-56 items-center justify-between px-10 lg:hidden">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsMenuOpen(true)}
+                  aria-label="전체 메뉴 열기"
+                  aria-haspopup="dialog"
+                  className="inline-flex size-44 items-center justify-center rounded-8 focus-ring hover:bg-surface"
+                >
+                  <Icon icon={Menu} size={24} />
+                </button>
+                <Link href="/" className="rounded-4 text-h3 whitespace-nowrap focus-ring">
+                  이음산업건설
+                </Link>
+              </div>
+              <div className="flex items-center">
+                <button
+                  type="button"
+                  aria-label={isMobileSearchOpen ? '검색 닫기' : '검색 열기'}
+                  aria-expanded={isMobileSearchOpen}
+                  onClick={() => setIsMobileSearchOpen((isOpen) => !isOpen)}
+                  className="inline-flex size-44 items-center justify-center rounded-8 focus-ring hover:bg-surface"
+                >
+                  <Icon icon={isMobileSearchOpen ? X : Search} size={24} />
+                </button>
+                <CartLink />
+              </div>
             </div>
-          </PageContainer>
-        ) : null}
+            {isMobileSearchOpen ? (
+              <PageContainer className="pb-12 lg:hidden">
+                <HeaderSearch
+                  value={searchValue}
+                  onValueChange={setSearchValue}
+                  onSearchKeyword={searchKeyword}
+                  onSelectProduct={openProduct}
+                  onEscape={() => setIsMobileSearchOpen(false)}
+                />
+              </PageContainer>
+            ) : null}
+          </>
+        )}
       </header>
-      {isMenuOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex flex-col bg-bg"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="all-menu-heading"
+      {isMenuOpen
+        ? createPortal(
+            <AllMenuDialog categories={categoryList} onClose={closeMenu} />,
+            document.body,
+          )
+        : null}
+    </>
+  );
+}
+
+/**
+ * W-03m 상품 상세 모바일 헤더(뒤로·공유·장바구니). 데스크톱에서는 숨깁니다.
+ * 뒤로가기는 이전 기록이 없으면(새 탭으로 바로 연 경우) 홈으로 보냅니다.
+ */
+function ProductDetailMobileBar() {
+  const router = useRouter();
+  const [shareMessage, setShareMessage] = useState('');
+
+  useEffect(() => {
+    if (!shareMessage) return;
+    const hideTimer = window.setTimeout(() => setShareMessage(''), 2500);
+    return () => window.clearTimeout(hideTimer);
+  }, [shareMessage]);
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      router.back();
+    } else {
+      router.push('/');
+    }
+  };
+
+  const handleShare = async () => {
+    const currentUrl = window.location.href;
+    try {
+      if (navigator.share) {
+        await navigator.share({ url: currentUrl });
+        setShareMessage('상품을 공유했습니다.');
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(currentUrl);
+        setShareMessage('상품 링크를 복사했습니다.');
+      } else {
+        setShareMessage('이 브라우저에서는 공유를 지원하지 않습니다.');
+      }
+    } catch (shareError: unknown) {
+      // 사용자가 공유 창을 닫은 경우(AbortError)는 아무 안내도 하지 않습니다.
+      if (shareError instanceof DOMException && shareError.name === 'AbortError') return;
+      setShareMessage('공유하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    }
+  };
+
+  return (
+    <>
+      <PageContainer className="flex h-48 items-center justify-between lg:hidden">
+        <button
+          type="button"
+          onClick={handleBack}
+          aria-label="이전 화면"
+          className="inline-flex size-40 items-center justify-start rounded-8 focus-ring"
         >
-          <div className="border-b border-line">
-            <PageContainer className="flex h-72 items-center justify-between">
-              <Link href="/" onClick={closeMenu} className="text-title focus-ring">
-                이음산업건설
-              </Link>
-              <h2 id="all-menu-heading" className="sr-only">
-                전체 메뉴
-              </h2>
-              <button
-                ref={closeMenuButtonRef}
-                type="button"
-                onClick={closeMenu}
-                aria-label="전체 메뉴 닫기"
-                className="inline-flex size-40 items-center justify-center rounded-8 focus-ring hover:bg-surface"
-              >
-                <Icon icon={X} size={20} />
-              </button>
-            </PageContainer>
-          </div>
-          <PageContainer className="grid flex-1 grid-cols-1 gap-24 overflow-y-auto py-32 sm:grid-cols-2 lg:grid-cols-5 lg:gap-24 lg:py-56">
-            <MenuColumn
-              title="제품"
-              items={[
-                ...categoryList
-                  .filter((category) => category.parentId === null)
-                  .map((category) => ({
-                    label: category.name,
-                    href: '/category/' + encodeURIComponent(category.slug),
-                  })),
-                { label: '전체 제품', href: '/search' },
-              ]}
-              onNavigate={closeMenu}
-            />
-            <MenuColumn
-              title="브랜드"
-              items={[
-                ...brandList.map((brand) => ({
-                  label: brand,
-                  href: '/search?q=' + encodeURIComponent(brand),
-                })),
-                { label: '전체 브랜드', href: '/search' },
-              ]}
-              onNavigate={closeMenu}
-            />
-            <MenuColumn
-              title="안전 솔루션"
-              items={[
-                { label: '맞춤 제작/납품', href: '/solutions' },
-                { label: '견적 문의', href: '/solutions' },
-                { label: '도입 사례', href: '/solutions' },
-              ]}
-              onNavigate={closeMenu}
-            />
-            <MenuColumn
-              title="고객지원"
-              items={[
-                { label: '공지사항', href: '/support/notices' },
-                { label: 'FAQ', href: '/support/faq' },
-                { label: '1:1 문의', href: '/support/inquiry' },
-              ]}
-              onNavigate={closeMenu}
-            />
-            <MenuColumn
-              title="회사소개"
-              items={[
-                { label: '개요', href: '/about' },
-                { label: '사업분야', href: '/about' },
-                { label: '연혁', href: '/about' },
-                { label: '인증', href: '/about' },
-                { label: '파트너', href: '/about' },
-                { label: '오시는 길', href: '/about' },
-              ]}
-              onNavigate={closeMenu}
-            />
-          </PageContainer>
-          <div className="border-t border-line">
-            <PageContainer className="flex h-64 items-center gap-12 text-body-s text-text-2">
-              <span>고객센터</span>
-              <Link
-                href="/support/faq"
-                onClick={closeMenu}
-                className="text-label-m text-text-1 focus-ring"
-              >
-                이용 안내
-              </Link>
-            </PageContainer>
-          </div>
+          <Icon icon={ChevronLeft} size={24} />
+        </button>
+        <div className="flex items-center gap-12">
+          <button
+            type="button"
+            onClick={() => void handleShare()}
+            aria-label="상품 공유"
+            className="inline-flex size-40 items-center justify-center rounded-8 focus-ring hover:bg-surface"
+          >
+            <Icon icon={Share2} size={20} />
+          </button>
+          <CartLink />
+        </div>
+      </PageContainer>
+      {shareMessage ? (
+        <div className="fixed inset-x-16 bottom-96 z-50 flex justify-center lg:hidden">
+          <Toast message={shareMessage} />
         </div>
       ) : null}
     </>
   );
 }
 
-function SearchForm({
+/**
+ * 헤더 검색(combobox + 자동완성 listbox). 데스크톱과 모바일이 각각 인스턴스를 가지므로
+ * 패널 열림·바깥 클릭 판정이 서로 섞이지 않습니다.
+ * 위/아래 화살표로 추천을 고르고 Enter로 열며, Escape나 Tab으로 검색 영역을 벗어나면 패널을 닫습니다.
+ */
+function HeaderSearch({
   value,
   onValueChange,
-  onSubmit,
-  onFocus,
-  onKeyDown,
+  onSearchKeyword,
+  onSelectProduct,
+  onEscape,
+  className,
 }: {
   value: string;
   onValueChange: (value: string) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onFocus: () => void;
-  onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
+  onSearchKeyword: (keyword: string) => void;
+  onSelectProduct: (productId: string) => void;
+  onEscape?: () => void;
+  className?: string;
 }) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const inputId = useId();
-  return (
-    <form
-      role="search"
-      onSubmit={onSubmit}
-      className="flex h-44 items-center gap-8 rounded-capsule bg-surface pr-16 pl-20 focus-within:bg-bg focus-within:ring-1 focus-within:ring-text-1"
-    >
-      <label htmlFor={inputId} className="sr-only">
-        상품 검색
-      </label>
-      <input
-        id={inputId}
-        type="search"
-        value={value}
-        onChange={(changeEvent) => onValueChange(changeEvent.target.value)}
-        onFocus={onFocus}
-        onKeyDown={onKeyDown}
-        placeholder="어떤 제품을 찾고 계신가요?"
-        className="min-w-0 flex-1 bg-transparent text-body-m outline-none placeholder:text-text-3 [&::-webkit-search-cancel-button]:hidden"
-      />
-      <button
-        type="submit"
-        aria-label="검색"
-        className="inline-flex size-28 items-center justify-center rounded-capsule focus-ring"
-      >
-        <Icon icon={Search} size={20} />
-      </button>
-    </form>
-  );
-}
+  const listboxId = useId();
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [activeOptionIndex, setActiveOptionIndex] = useState(-1);
+  const suggestionsQuery = useProductSuggestionsQuery(value, isPanelOpen);
+  const keyword = value.trim();
+  const suggestions: ProductSuggestion[] = suggestionsQuery.data ?? [];
+  const isLoadingSuggestions = suggestionsQuery.isPending && keyword.length > 0;
+  const isSuggestionVisible = isPanelOpen && !isLoadingSuggestions && suggestions.length > 0;
+  const safeActiveIndex =
+    isSuggestionVisible && activeOptionIndex < suggestions.length ? activeOptionIndex : -1;
+  const activeSuggestion = safeActiveIndex >= 0 ? suggestions[safeActiveIndex] : undefined;
 
-function SuggestionPanel({
-  suggestions,
-  isLoading,
-  onSelect,
-  onSearchAll,
-}: {
-  suggestions: { productId: string; name: string; brand: string }[];
-  isLoading: boolean;
-  onSelect: (productId: string) => void;
-  onSearchAll: () => void;
-}) {
-  if (isLoading || suggestions.length === 0) return null;
+  useEffect(() => {
+    if (!isPanelOpen) return;
+    const handleOutsidePointer = (pointerEvent: globalThis.PointerEvent) => {
+      if (
+        pointerEvent.target instanceof Node &&
+        !containerRef.current?.contains(pointerEvent.target)
+      ) {
+        setIsPanelOpen(false);
+      }
+    };
+    window.addEventListener('pointerdown', handleOutsidePointer);
+    return () => window.removeEventListener('pointerdown', handleOutsidePointer);
+  }, [isPanelOpen]);
+
+  const closePanel = () => {
+    setIsPanelOpen(false);
+    setActiveOptionIndex(-1);
+  };
+
+  const selectSuggestion = (productId: string) => {
+    closePanel();
+    onSelectProduct(productId);
+  };
+
+  const submitSearch = (submitEvent: FormEvent<HTMLFormElement>) => {
+    submitEvent.preventDefault();
+    if (activeSuggestion) {
+      selectSuggestion(activeSuggestion.productId);
+      return;
+    }
+    if (!keyword) return;
+    closePanel();
+    onSearchKeyword(keyword);
+  };
+
+  const handleKeyDown = (keyEvent: KeyboardEvent<HTMLInputElement>) => {
+    if (keyEvent.key === 'Escape') {
+      closePanel();
+      onEscape?.();
+      return;
+    }
+    if (keyEvent.key !== 'ArrowDown' && keyEvent.key !== 'ArrowUp') return;
+    keyEvent.preventDefault();
+    setIsPanelOpen(true);
+    if (suggestions.length === 0) return;
+    const step = keyEvent.key === 'ArrowDown' ? 1 : -1;
+    // -1(입력창)과 0~마지막 추천 사이를 순환합니다.
+    setActiveOptionIndex((currentIndex) => {
+      const startIndex = currentIndex >= suggestions.length ? -1 : currentIndex;
+      const nextIndex = startIndex + step;
+      if (nextIndex >= suggestions.length) return -1;
+      if (nextIndex < -1) return suggestions.length - 1;
+      return nextIndex;
+    });
+  };
+
+  // 포커스가 검색 영역 밖으로 나가면(Tab 이동 포함) 패널을 닫습니다.
+  const handleBlur = (blurEvent: FocusEvent<HTMLDivElement>) => {
+    if (!blurEvent.currentTarget.contains(blurEvent.relatedTarget)) closePanel();
+  };
+
   return (
-    <div className="absolute top-52 right-0 left-0 z-40 rounded-12 border border-line bg-bg p-8 shadow-2">
-      <ul aria-label="검색 자동완성">
-        {suggestions.map((suggestion) => (
-          <li key={suggestion.productId}>
-            <button
-              type="button"
-              onClick={() => onSelect(suggestion.productId)}
-              className="flex w-full items-center justify-between gap-16 rounded-8 px-12 py-10 text-left focus-ring hover:bg-surface"
+    <div ref={containerRef} onBlur={handleBlur} className={cx('relative', className)}>
+      <form
+        role="search"
+        onSubmit={submitSearch}
+        className="flex h-44 items-center gap-8 rounded-capsule bg-surface pr-16 pl-20 focus-within:bg-bg focus-within:ring-1 focus-within:ring-text-1"
+      >
+        <label htmlFor={inputId} className="sr-only">
+          상품 검색
+        </label>
+        <input
+          id={inputId}
+          type="search"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={isSuggestionVisible}
+          aria-controls={listboxId}
+          aria-activedescendant={activeSuggestion ? `${listboxId}-${safeActiveIndex}` : undefined}
+          autoComplete="off"
+          value={value}
+          onChange={(changeEvent) => {
+            onValueChange(changeEvent.target.value);
+            setActiveOptionIndex(-1);
+            setIsPanelOpen(true);
+          }}
+          onFocus={() => setIsPanelOpen(true)}
+          onKeyDown={handleKeyDown}
+          placeholder="어떤 제품을 찾고 계신가요?"
+          className="min-w-0 flex-1 bg-transparent text-body-m outline-none placeholder:text-text-3 [&::-webkit-search-cancel-button]:hidden"
+        />
+        <button
+          type="submit"
+          aria-label="검색"
+          className="inline-flex size-28 items-center justify-center rounded-capsule focus-ring"
+        >
+          <Icon icon={Search} size={20} />
+        </button>
+      </form>
+      <div
+        hidden={!isSuggestionVisible}
+        className="absolute top-52 right-0 left-0 z-40 rounded-12 border border-line bg-bg p-8 shadow-2"
+      >
+        <ul id={listboxId} role="listbox" aria-label="검색 자동완성">
+          {suggestions.map((suggestion, suggestionIndex) => (
+            // 키보드 선택은 combobox(aria-activedescendant)가 맡고, 여기서는 포인터 선택만 받습니다.
+            // eslint-disable-next-line jsx-a11y/click-events-have-key-events
+            <li
+              key={suggestion.productId}
+              id={`${listboxId}-${suggestionIndex}`}
+              role="option"
+              aria-selected={suggestionIndex === safeActiveIndex}
+              onPointerDown={(pointerEvent) => pointerEvent.preventDefault()}
+              onClick={() => selectSuggestion(suggestion.productId)}
+              className={cx(
+                'flex w-full cursor-pointer items-center justify-between gap-16 rounded-8 px-12 py-10 text-left hover:bg-surface',
+                suggestionIndex === safeActiveIndex && 'bg-surface',
+              )}
             >
               <span className="truncate text-body-s">{suggestion.name}</span>
               <span className="shrink-0 text-caption text-text-3">{suggestion.brand}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-      <Button variant="ghost" size="s" isFullWidth onClick={onSearchAll} className="mt-4">
-        검색 결과 전체 보기
-      </Button>
+            </li>
+          ))}
+        </ul>
+        <Button
+          variant="ghost"
+          size="s"
+          isFullWidth
+          onClick={() => {
+            closePanel();
+            if (keyword) onSearchKeyword(keyword);
+          }}
+          className="mt-4"
+        >
+          검색 결과 전체 보기
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** W-16 전체 메뉴 오버레이. 브랜드 목록용 상품 조회는 메뉴가 열려 있을 때만 실행합니다. */
+function AllMenuDialog({
+  categories,
+  onClose,
+}: {
+  categories: readonly Category[];
+  onClose: () => void;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  // 이 컴포넌트는 메뉴가 열렸을 때만 마운트되므로 조회도 그때만 실행됩니다.
+  const brandsQuery = useProductsQuery({ pageSize: 100 });
+  const brandList = [...new Set((brandsQuery.data?.items ?? []).map((product) => product.brand))];
+
+  useMenuDialog(onClose, dialogRef, closeButtonRef);
+
+  return (
+    <div
+      ref={dialogRef}
+      className="fixed inset-0 z-50 flex flex-col bg-bg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="all-menu-heading"
+    >
+      <div className="border-b border-line">
+        <PageContainer className="flex h-72 items-center justify-between">
+          <Link href="/" onClick={onClose} className="text-title focus-ring">
+            이음산업건설
+          </Link>
+          <h2 id="all-menu-heading" className="sr-only">
+            전체 메뉴
+          </h2>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            onClick={onClose}
+            aria-label="전체 메뉴 닫기"
+            className="inline-flex size-40 items-center justify-center rounded-8 focus-ring hover:bg-surface"
+          >
+            <Icon icon={X} size={20} />
+          </button>
+        </PageContainer>
+      </div>
+      <PageContainer className="grid flex-1 grid-cols-1 gap-24 overflow-y-auto py-32 sm:grid-cols-2 lg:grid-cols-5 lg:gap-24 lg:py-56">
+        <MenuColumn
+          title="제품"
+          items={[
+            ...categories
+              .filter((category) => category.parentId === null)
+              .map((category) => ({
+                label: category.name,
+                href: '/category/' + encodeURIComponent(category.slug),
+              })),
+            { label: '전체 제품', href: '/search' },
+          ]}
+          onNavigate={onClose}
+        />
+        <MenuColumn
+          title="브랜드"
+          items={[
+            ...brandList.map((brand) => ({
+              label: brand,
+              href: '/search?q=' + encodeURIComponent(brand),
+            })),
+            { label: '전체 브랜드', href: '/search' },
+          ]}
+          onNavigate={onClose}
+        />
+        <MenuColumn
+          title="안전 솔루션"
+          items={[
+            { label: '맞춤 제작/납품', href: '/solutions' },
+            { label: '견적 문의', href: '/solutions' },
+            { label: '도입 사례', href: '/solutions' },
+          ]}
+          onNavigate={onClose}
+        />
+        <MenuColumn
+          title="고객지원"
+          items={[
+            { label: '공지사항', href: '/support/notices' },
+            { label: 'FAQ', href: '/support/faq' },
+            { label: '1:1 문의', href: '/support/inquiry' },
+          ]}
+          onNavigate={onClose}
+        />
+        <MenuColumn
+          title="회사소개"
+          items={[
+            { label: '개요', href: '/about' },
+            { label: '사업분야', href: '/about' },
+            { label: '연혁', href: '/about' },
+            { label: '인증', href: '/about' },
+            { label: '파트너', href: '/about' },
+            { label: '오시는 길', href: '/about' },
+          ]}
+          onNavigate={onClose}
+        />
+      </PageContainer>
+      <div className="border-t border-line">
+        <PageContainer className="flex h-64 items-center gap-12 text-body-s text-text-2">
+          <span>고객센터</span>
+          <Link
+            href="/support/faq"
+            onClick={onClose}
+            className="text-label-m text-text-1 focus-ring"
+          >
+            이용 안내
+          </Link>
+        </PageContainer>
+      </div>
     </div>
   );
 }

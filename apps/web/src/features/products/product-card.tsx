@@ -8,6 +8,7 @@ import { cx } from '@eum/ui/lib/cx';
 import { Heart, ShoppingCart } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { useCart } from '@/features/cart/cart-context';
 import { useLocalCollections } from './local-collections-context';
 import { ProductImage } from './product-image';
@@ -37,6 +38,7 @@ export function ProductCard({
   const isCompactOnMobile = mobileVariant === 'compact';
   const hasRequiredOptions = product.options.some((productOption) => productOption.required);
   const productHref = `/products/${encodeURIComponent(product.id)}`;
+  const [cartAnnouncement, setCartAnnouncement] = useState('');
 
   const handleCartAction = () => {
     if (hasRequiredOptions) {
@@ -44,6 +46,7 @@ export function ProductCard({
       return;
     }
     addToCart(product);
+    setCartAnnouncement(`${product.name}을(를) 장바구니에 담았습니다.`);
   };
 
   return (
@@ -61,9 +64,11 @@ export function ProductCard({
           layout === 'list' && 'w-144 shrink-0',
         )}
       >
+        {/* 이름 링크와 같은 곳으로 가는 중복 링크라 탭 순서·보조기기에서 뺍니다. */}
         <Link
           href={productHref}
-          aria-label={`${product.name} 상세 보기`}
+          tabIndex={-1}
+          aria-hidden="true"
           className={cx(
             'block size-full transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none',
             isSoldOut && 'opacity-48',
@@ -122,18 +127,27 @@ export function ProductCard({
         </Link>
         <div
           className={cx(
-            'mt-auto flex items-center justify-between gap-8',
+            'mt-auto flex items-end justify-between gap-8',
             isCompactOnMobile ? 'lg:pt-8' : 'pt-8',
           )}
         >
-          <p
-            className={cx(
-              'min-w-0 truncate text-price-m',
-              isSoldOut ? 'text-text-3' : !priceDisplay.isPriceVisible && 'text-text-2',
-            )}
-          >
-            {priceDisplay.text}
-          </p>
+          <div className="min-w-0">
+            {priceDisplay.listPriceText ? (
+              <p className="truncate text-caption text-text-3 line-through">
+                <span className="sr-only">정가 </span>
+                {priceDisplay.listPriceText}
+              </p>
+            ) : null}
+            <p
+              className={cx(
+                'truncate text-price-m',
+                isSoldOut ? 'text-text-3' : !priceDisplay.isPriceVisible && 'text-text-2',
+              )}
+            >
+              {priceDisplay.listPriceText ? <span className="sr-only">판매가 </span> : null}
+              {priceDisplay.text}
+            </p>
+          </div>
           <button
             type="button"
             aria-label={
@@ -149,6 +163,9 @@ export function ProductCard({
             <Icon icon={ShoppingCart} size={20} />
           </button>
         </div>
+        <p role="status" className="sr-only">
+          {cartAnnouncement}
+        </p>
       </div>
     </article>
   );

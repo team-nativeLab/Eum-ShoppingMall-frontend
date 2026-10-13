@@ -7,7 +7,7 @@ test('홈은 히어로, 카테고리, 베스트 상품을 보여 줍니다', asy
   await expect(page.getByRole('heading', { name: '베스트 셀러' })).toBeVisible();
   await expect(page.getByRole('link', { name: '개인보호장비' })).toBeVisible();
   await expect(
-    page.getByRole('link', { name: 'ABS 안전모 (내관 조절형) 상세 보기' }),
+    page.getByRole('link', { name: 'ABS 안전모 (내관 조절형)', exact: true }),
   ).toBeVisible();
 
   const pageFitsViewport = await page.evaluate(

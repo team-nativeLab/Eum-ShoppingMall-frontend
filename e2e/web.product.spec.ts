@@ -10,7 +10,9 @@ test('금액 미표시 상품은 가격을 노출하지 않고 바로 구매를 
 
   await page.waitForFunction(() => localStorage.getItem('eum.cart.v2') !== null);
   await page.getByRole('button', { name: '장바구니 담기', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('장바구니에 담았습니다.');
+  await expect(
+    page.getByRole('status').filter({ hasText: '장바구니에 담았습니다.' }),
+  ).toBeVisible();
 
   const storedCart = await page.evaluate(() => localStorage.getItem('eum.cart.v2'));
   expect(JSON.parse(storedCart ?? '{}').cartItems).toEqual([
