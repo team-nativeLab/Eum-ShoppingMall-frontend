@@ -1,0 +1,5 @@
+@import 'tailwindcss';
+@import '@eum/ui/tokens.css';
+
+/* packages/ui 컴포넌트의 클래스도 생성 대상에 넣습니다(이 파일 기준 상대 경로). */
+@source '../../../../packages/ui/src';
