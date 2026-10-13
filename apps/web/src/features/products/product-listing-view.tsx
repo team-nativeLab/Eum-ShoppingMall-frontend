@@ -618,7 +618,7 @@ function NoResults({ keyword, categories }: { keyword: string; categories: Categ
       <EmptyState
         icon={SearchX}
         title={keyword ? '‘' + keyword + '’에 대한 검색 결과가 없습니다' : '등록된 상품이 없습니다'}
-        description="단어의 철자와 검색 조건을 확인한 뒤 다시 검색해 보세요."
+        description="단어의 철자와 검색 조건을 확인한 뒤 다시 검색해 보십시오."
         action={
           <Link
             href="/search"

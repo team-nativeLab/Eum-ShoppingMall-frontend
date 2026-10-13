@@ -15,6 +15,11 @@ export interface Category {
   parentId: string | null;
   /** 홈 카테고리 바에 이름 아래 보여 줄 짧은 소개. 없으면 null */
   description: string | null;
+  /**
+   * 홈 카테고리 바 아이콘 키(예: "hard-hat"). 화면이 아는 키가 아니거나 null이면 기본 아이콘을 씁니다.
+   * 서버가 아이콘 이미지 URL을 주게 되면 이 필드를 대체합니다.
+   */
+  iconKey: string | null;
 }
 
 /** 상품 */
@@ -114,6 +119,23 @@ export interface HeroSlide {
   tagline: string[];
   imageUrl: string;
   destination: string;
+  /** 주 버튼 문구(destination으로 이동) */
+  ctaLabel: string;
+  /** 데스크톱에서만 보여 주는 보조 링크. 없으면 그리지 않습니다. */
+  secondaryCta?: HomeLink;
+}
+
+/** 홈 콘텐츠의 문구 + 이동 경로 묶음 */
+export interface HomeLink {
+  label: string;
+  destination: string;
+}
+
+/** 홈 하단 견적 문의 띠(HF/Web/CTABand) */
+export interface HomeCtaBand {
+  eyebrow: string;
+  title: string;
+  cta: HomeLink;
 }
 
 /** 홈 프로모션 배너 */
@@ -139,6 +161,8 @@ export interface HomeContent {
   promoBanners: PromoBanner[];
   serviceBenefits: ServiceBenefit[];
   featuredProducts: Product[];
+  /** 하단 견적 문의 띠. 운영에서 끄면 null */
+  ctaBand: HomeCtaBand | null;
 }
 
 /** 푸터에 표시하는 사업자·고객센터 정보 */
@@ -154,7 +178,10 @@ export interface CompanyInfo {
   email: string;
   /** 개인정보보호책임자 */
   privacyOfficer: string;
+  /** 화면에 그대로 보여 주는 고객센터 번호(내선 안내 등 포함 가능) */
   customerCenterPhone: string;
+  /** 전화 걸기(tel:) 링크용 번호. 숫자와 +만 씁니다. 없으면 표시 문자열에서 추출합니다. */
+  customerCenterTel: string | null;
   /** 고객센터 운영 시간 안내 문구 */
   customerCenterHours: string;
 }

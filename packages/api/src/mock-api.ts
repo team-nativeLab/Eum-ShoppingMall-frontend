@@ -1,10 +1,16 @@
+import { collectCategoryIdsWithDescendants } from './category-tree';
 import { assertMockAllowed, type ApiConfig } from './config';
 import { ApiError } from './errors';
 import { mockAddresses } from './mock/addresses';
 import { mockCoupons, mockPoints } from './mock/benefits';
 import { mockCategories } from './mock/categories';
 import { mockCompanyInfo } from './mock/company';
-import { mockHeroSlides, mockPromoBanners, mockServiceBenefits } from './mock/home';
+import {
+  mockHeroSlides,
+  mockHomeCtaBand,
+  mockPromoBanners,
+  mockServiceBenefits,
+} from './mock/home';
 import { mockMembers } from './mock/members';
 import { mockClaims, mockOrders } from './mock/orders';
 import { mockProducts } from './mock/products';
@@ -26,22 +32,7 @@ function toBuyerProduct(product: AdminProduct): Product {
 /** 상위 카테고리를 조회할 때 그 하위 카테고리까지 포함합니다. */
 function getCategoryIds(categoryId: string | undefined): Set<string> | null {
   if (categoryId === undefined) return null;
-  const descendantIds = new Set([categoryId]);
-  let hasAddedDescendant = true;
-  while (hasAddedDescendant) {
-    hasAddedDescendant = false;
-    for (const category of mockCategories) {
-      if (
-        category.parentId &&
-        descendantIds.has(category.parentId) &&
-        !descendantIds.has(category.id)
-      ) {
-        descendantIds.add(category.id);
-        hasAddedDescendant = true;
-      }
-    }
-  }
-  return descendantIds;
+  return collectCategoryIdsWithDescendants(mockCategories, categoryId);
 }
 
 // 취소 신호를 fetch와 같은 AbortError로 바꾸는 함수
@@ -189,7 +180,13 @@ export function createMockApi(config: ApiConfig): ShopApi {
           throw new ApiError('NETWORK', '목 API 오류 시나리오입니다.');
         }
         if (config.mockScenario === 'empty') {
-          return { heroSlides: [], promoBanners: [], serviceBenefits: [], featuredProducts: [] };
+          return {
+            heroSlides: [],
+            promoBanners: [],
+            serviceBenefits: [],
+            featuredProducts: [],
+            ctaBand: null,
+          };
         }
         return structuredClone({
           heroSlides: mockHeroSlides,
@@ -198,6 +195,7 @@ export function createMockApi(config: ApiConfig): ShopApi {
           featuredProducts: mockProducts
             .filter((product) => product.isFeatured)
             .map(toBuyerProduct),
+          ctaBand: mockHomeCtaBand,
         });
       },
     },

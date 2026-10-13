@@ -8,6 +8,7 @@ export const mockCategories: Category[] = [
     name: '개인보호장비',
     parentId: null,
     description: '작업자의 안전을 위해',
+    iconKey: 'hard-hat',
   },
   {
     id: 'cat-clothing',
@@ -15,6 +16,7 @@ export const mockCategories: Category[] = [
     name: '작업복/유니폼',
     parentId: null,
     description: '편안한 작업 환경',
+    iconKey: 'shirt',
   },
   {
     id: 'cat-road',
@@ -22,6 +24,7 @@ export const mockCategories: Category[] = [
     name: '교통·도로 안전',
     parentId: null,
     description: '모두의 안전한 이동',
+    iconKey: 'traffic-cone',
   },
   {
     id: 'cat-fire',
@@ -29,6 +32,7 @@ export const mockCategories: Category[] = [
     name: '소방·방재용품',
     parentId: null,
     description: '예측할 수 있는 위험에',
+    iconKey: 'fire-extinguisher',
   },
   {
     id: 'cat-industrial',
@@ -36,6 +40,7 @@ export const mockCategories: Category[] = [
     name: '산업 현장용품',
     parentId: null,
     description: '다양한 산업 현장에',
+    iconKey: 'briefcase-medical',
   },
   {
     id: 'cat-security',
@@ -43,6 +48,7 @@ export const mockCategories: Category[] = [
     name: '보안·감시',
     parentId: null,
     description: '더 안전한 공간',
+    iconKey: 'cctv',
   },
   {
     id: 'cat-lifestyle',
@@ -50,6 +56,7 @@ export const mockCategories: Category[] = [
     name: '생활 안전용품',
     parentId: null,
     description: '일상의 안심',
+    iconKey: 'leaf',
   },
   {
     id: 'cat-custom',
@@ -57,6 +64,7 @@ export const mockCategories: Category[] = [
     name: '맞춤 제작/납품',
     parentId: null,
     description: '기업 맞춤 솔루션',
+    iconKey: 'package',
   },
   {
     id: 'cat-head',
@@ -64,6 +72,7 @@ export const mockCategories: Category[] = [
     name: '안전모',
     parentId: 'cat-ppe',
     description: null,
+    iconKey: null,
   },
   {
     id: 'cat-foot',
@@ -71,6 +80,7 @@ export const mockCategories: Category[] = [
     name: '안전화',
     parentId: 'cat-ppe',
     description: null,
+    iconKey: null,
   },
   {
     id: 'cat-fall',
@@ -78,6 +88,7 @@ export const mockCategories: Category[] = [
     name: '안전대',
     parentId: 'cat-ppe',
     description: null,
+    iconKey: null,
   },
   {
     id: 'cat-hand',
@@ -85,6 +96,7 @@ export const mockCategories: Category[] = [
     name: '장갑',
     parentId: 'cat-ppe',
     description: null,
+    iconKey: null,
   },
   {
     id: 'cat-sign',
@@ -92,5 +104,6 @@ export const mockCategories: Category[] = [
     name: '안전 표지',
     parentId: 'cat-security',
     description: null,
+    iconKey: null,
   },
 ];

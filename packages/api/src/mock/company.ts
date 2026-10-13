@@ -10,5 +10,6 @@ export const mockCompanyInfo: CompanyInfo = {
   email: 'info@example.com',
   privacyOfficer: '000',
   customerCenterPhone: '0000-0000',
+  customerCenterTel: '00000000',
   customerCenterHours: '평일 00:00 – 00:00 (주말·공휴일 휴무)',
 };

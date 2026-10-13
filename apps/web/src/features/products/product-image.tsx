@@ -18,7 +18,7 @@ export function ProductImage({
     <div
       role="img"
       aria-label={alt}
-      className={`flex size-full items-center justify-center bg-[linear-gradient(135deg,#f5f5f5,#e8e8e8)] text-ph-glyph ${className}`}
+      className={`flex size-full items-center justify-center bg-linear-135 from-surface to-surface-2 text-ph-glyph ${className}`}
     >
       <ImageIcon aria-hidden="true" size={28} strokeWidth={1.2} />
     </div>

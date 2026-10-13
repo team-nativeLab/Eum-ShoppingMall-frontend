@@ -1,7 +1,7 @@
 'use client';
 
 import { getApiFailureKind } from '@eum/api/errors';
-import type { Category, HomeContent, Product } from '@eum/api/types';
+import type { Category, HomeContent, HomeCtaBand, Product } from '@eum/api/types';
 import { buttonClassName } from '@eum/ui/components/Button';
 import { capsuleButtonClassName } from '@eum/ui/components/ButtonCapsule';
 import { Chip } from '@eum/ui/components/Chip';
@@ -18,8 +18,9 @@ import {
   Play,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState, type FocusEvent } from 'react';
+import { useMemo, useState, useSyncExternalStore, type FocusEvent, type PointerEvent } from 'react';
 import { PageContainer } from '@/components/page-container';
+import { filterProductsByCategoryTree } from './best-seller-filter';
 import { CategoryBar, MobileCategoryGrid } from './category-bar';
 import { ProductCard } from './product-card';
 import { useCategoriesQuery } from './use-categories-query';
@@ -37,57 +38,97 @@ const BEST_SELLER_PAGE_SIZE = 5;
 /** 모바일 베스트 셀러에 보여 줄 카드 수(Figma W-01m 2×2) */
 const MOBILE_BEST_SELLER_COUNT = 4;
 
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
+
+// prefers-reduced-motion 변경을 구독하는 함수(useSyncExternalStore용)
+function subscribeReducedMotion(onChange: () => void): () => void {
+  const mediaQueryList = window.matchMedia(REDUCED_MOTION_QUERY);
+  mediaQueryList.addEventListener('change', onChange);
+  return () => mediaQueryList.removeEventListener('change', onChange);
+}
+
+/** 사용자가 감속 모드를 켰는지 돌려주는 훅. 서버 렌더에서는 false로 시작합니다. */
+function usePrefersReducedMotion(): boolean {
+  return useSyncExternalStore(
+    subscribeReducedMotion,
+    () => window.matchMedia(REDUCED_MOTION_QUERY).matches,
+    () => false,
+  );
+}
+
 /** 슬라이드 번호를 Figma 인디케이터처럼 두 자리(01, 02…)로 바꿉니다. */
 function formatSlideNumber(slideIndex: number): string {
   return String(slideIndex + 1).padStart(2, '0');
 }
 
-/** W-01 메인 화면. 프로모션·베스트 상품·카테고리는 홈/API 응답에 맞춰 구성합니다. */
+/**
+ * W-01 메인 화면. 프로모션·베스트 상품은 홈 API, 카테고리는 카테고리 API 응답으로 구성합니다.
+ * 카테고리 조회가 실패해도 다른 섹션은 그대로 보여 주도록 섹션 단위로 상태를 처리합니다.
+ */
 export function HomeView() {
   const homeQuery = useHomeQuery();
-  const categoriesQuery = useCategoriesQuery();
 
-  if (homeQuery.isPending || categoriesQuery.isPending) {
-    return (
-      <div aria-busy="true" className="space-y-24">
-        <div className="h-340 animate-pulse bg-surface lg:h-480" />
-        <PageContainer>
-          <div className="h-128 animate-pulse rounded-12 bg-surface" />
-          <div className="mt-48 h-240 animate-pulse rounded-12 bg-surface" />
+  return (
+    <>
+      {/* 히어로 제목은 배너마다 바뀌므로 페이지 제목(h1)은 고정해 둡니다. */}
+      <h1 className="sr-only">이음산업건설 쇼핑몰 홈</h1>
+      {homeQuery.isPending ? (
+        <div aria-busy="true" className="space-y-24">
+          <div className="h-340 animate-pulse bg-surface lg:h-480" />
+          <PageContainer>
+            <div className="h-128 animate-pulse rounded-12 bg-surface" />
+            <div className="mt-48 h-240 animate-pulse rounded-12 bg-surface" />
+          </PageContainer>
+        </div>
+      ) : homeQuery.isError ? (
+        <PageContainer className="py-64">
+          <NoticeInline tone="danger" role="alert">
+            {HOME_ERROR_COPY[getApiFailureKind(homeQuery.error)]}
+          </NoticeInline>
         </PageContainer>
-      </div>
-    );
-  }
-
-  if (homeQuery.isError || categoriesQuery.isError) {
-    const error = homeQuery.error ?? categoriesQuery.error;
-    return (
-      <PageContainer className="py-64">
-        <NoticeInline tone="danger" role="alert">
-          {HOME_ERROR_COPY[getApiFailureKind(error)]}
-        </NoticeInline>
-      </PageContainer>
-    );
-  }
-
-  return <HomeContentView content={homeQuery.data} categories={categoriesQuery.data} />;
+      ) : (
+        <HomeContentView content={homeQuery.data} />
+      )}
+    </>
+  );
 }
 
-function HomeContentView({
-  content,
-  categories,
-}: {
-  content: HomeContent;
-  categories: Category[];
-}) {
+function HomeContentView({ content }: { content: HomeContent }) {
+  const categoriesQuery = useCategoriesQuery();
+  const categories = categoriesQuery.data ?? [];
+
   return (
     // 푸터 기본 위 여백(64)과 합쳐 Figma 간격(모바일 48, 데스크톱 120)을 맞춥니다.
     <div className="-mb-16 lg:mb-56">
       <HomeHero slides={content.heroSlides} />
-      <PageContainer>
-        <CategoryBar categories={categories} />
-      </PageContainer>
-      <MobileCategoryGrid categories={categories} />
+      {categoriesQuery.isPending ? (
+        <PageContainer>
+          <div
+            aria-busy="true"
+            className="mt-24 h-96 animate-pulse rounded-12 bg-surface lg:relative lg:z-10 lg:-mt-64 lg:h-132"
+          />
+        </PageContainer>
+      ) : categoriesQuery.isError ? (
+        <PageContainer className="pt-24 lg:pt-32">
+          <NoticeInline tone="danger" role="alert">
+            상품 카테고리를 불러오지 못했습니다.{' '}
+            <button
+              type="button"
+              onClick={() => void categoriesQuery.refetch()}
+              className="rounded-4 underline focus-ring"
+            >
+              다시 시도
+            </button>
+          </NoticeInline>
+        </PageContainer>
+      ) : (
+        <>
+          <PageContainer>
+            <CategoryBar categories={categories} />
+          </PageContainer>
+          <MobileCategoryGrid categories={categories} />
+        </>
+      )}
 
       <PageContainer className="hidden lg:block">
         <ServiceBenefits benefits={content.serviceBenefits} />
@@ -97,22 +138,28 @@ function HomeContentView({
 
       <BestSellerSection products={content.featuredProducts} categories={categories} />
 
-      <PageContainer className="hidden lg:block">
-        <QuoteBanner />
-      </PageContainer>
+      {content.ctaBand ? (
+        <PageContainer className="hidden lg:block">
+          <QuoteBanner ctaBand={content.ctaBand} />
+        </PageContainer>
+      ) : null}
     </div>
   );
 }
 
 /**
  * HF/Web/HeroSlider. 6초마다 다음 배너로 넘어가고, 마우스를 올리거나 포커스가 들어오면 멈춥니다.
- * 진행 막대 애니메이션이 끝날 때 다음 배너로 넘기므로, 감속 모드(prefers-reduced-motion)에서는 자동 재생하지 않습니다.
+ * 진행 막대 애니메이션이 끝날 때 다음 배너로 넘기므로, 감속 모드(prefers-reduced-motion)에서는
+ * 자동 재생하지 않고 진행 막대와 일시정지 버튼도 숨깁니다.
  */
 function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPausedByUser, setIsPausedByUser] = useState(false);
   const [isInteracting, setIsInteracting] = useState(false);
-  const activeSlide = slides[activeIndex];
+  const prefersReducedMotion = usePrefersReducedMotion();
+  // 응답이 바뀌어 슬라이드 수가 줄어도 범위를 벗어나지 않게 보정합니다.
+  const safeActiveIndex = slides.length > 0 ? Math.min(activeIndex, slides.length - 1) : 0;
+  const activeSlide = slides[safeActiveIndex];
 
   if (!activeSlide) {
     return (
@@ -123,11 +170,15 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
   }
 
   const hasMultipleSlides = slides.length > 1;
-  const isAutoplayPaused = isPausedByUser || isInteracting;
+  const canAutoplay = hasMultipleSlides && !prefersReducedMotion;
+  const isAutoplayPaused = isPausedByUser || isInteracting || !canAutoplay;
   const [firstDescriptionLine, ...restDescriptionLines] = activeSlide.description.split('\n');
 
   const changeSlide = (direction: -1 | 1) => {
-    setActiveIndex((currentIndex) => (currentIndex + direction + slides.length) % slides.length);
+    setActiveIndex((currentIndex) => {
+      const boundedIndex = Math.min(currentIndex, slides.length - 1);
+      return (boundedIndex + direction + slides.length) % slides.length;
+    });
   };
 
   // 포커스가 히어로 밖으로 나갈 때만 자동 재생을 다시 시작합니다.
@@ -135,37 +186,51 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
     if (!blurEvent.currentTarget.contains(blurEvent.relatedTarget)) setIsInteracting(false);
   };
 
+  // 터치는 pointerenter 뒤 pointerleave가 오지 않을 수 있어, 마우스일 때만 hover 정지를 적용합니다.
+  const handlePointerEnter = (pointerEvent: PointerEvent<HTMLElement>) => {
+    if (pointerEvent.pointerType === 'mouse') setIsInteracting(true);
+  };
+  const handlePointerLeave = (pointerEvent: PointerEvent<HTMLElement>) => {
+    if (pointerEvent.pointerType === 'mouse') setIsInteracting(false);
+  };
+
   return (
     <section
       aria-label="주요 프로모션"
       aria-roledescription="carousel"
-      onMouseEnter={() => setIsInteracting(true)}
-      onMouseLeave={() => setIsInteracting(false)}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
       onFocus={() => setIsInteracting(true)}
       onBlur={handleBlur}
       className="relative isolate overflow-hidden bg-surface lg:h-480"
     >
       {activeSlide.imageUrl ? (
         // CMS가 제공한 배너 이미지는 Next 이미지 도메인 설정 없이 표시합니다.
+        // 첫 배너는 LCP 후보라 우선 내려받고, 나머지는 넘길 때 불러옵니다.
         // eslint-disable-next-line @next/next/no-img-element
         <img
+          key={activeSlide.id}
           src={activeSlide.imageUrl}
           alt=""
           aria-hidden="true"
+          fetchPriority={safeActiveIndex === 0 ? 'high' : 'auto'}
+          loading={safeActiveIndex === 0 ? 'eager' : 'lazy'}
+          decoding="async"
           className="absolute inset-0 -z-10 size-full object-cover object-center"
         />
       ) : null}
-      <div className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,#ffffffeb_0%,#ffffff4d_100%)] lg:bg-[linear-gradient(90deg,#12121200_72%,#12121261_100%),linear-gradient(90deg,#ffffffd1_0%,#ffffff00_50%)]" />
+      <div className="absolute inset-0 -z-10 bg-linear-to-r from-bg/92 to-bg/30 lg:from-bg/82 lg:to-bg/0 lg:to-50%" />
+      <div className="absolute inset-0 -z-10 hidden bg-linear-to-r from-text-1/0 from-72% to-text-1/38 lg:block" />
 
       <PageContainer className="relative pt-48 pb-32 lg:h-full lg:pt-64 lg:pb-0">
         <div
           aria-roledescription="slide"
-          aria-label={`${slides.length}개 중 ${activeIndex + 1}번째 배너`}
+          aria-label={`${slides.length}개 중 ${safeActiveIndex + 1}번째 배너`}
           aria-live={isAutoplayPaused ? 'polite' : 'off'}
           className="max-w-560"
         >
           <p className="text-overline text-text-2">{activeSlide.eyebrow}</p>
-          <h1 className="mt-12 text-display lg:text-web-display-l">
+          <h2 className="mt-12 text-display lg:text-web-display-l">
             {activeSlide.title.map((titleLine, lineIndex) => (
               <span
                 key={titleLine + lineIndex}
@@ -174,7 +239,7 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
                 {titleLine}
               </span>
             ))}
-          </h1>
+          </h2>
           <p className="mt-12 text-body-m text-text-2 lg:mt-16 lg:text-web-body-xl">
             <span className="block">{firstDescriptionLine}</span>
             {restDescriptionLines.map((descriptionLine, lineIndex) => (
@@ -185,16 +250,18 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
           </p>
           <div className="mt-24 flex items-center gap-24">
             <Link href={activeSlide.destination} className={capsuleButtonClassName}>
-              제품 둘러보기
+              {activeSlide.ctaLabel}
               <Icon icon={ArrowRight} size={16} />
             </Link>
-            <Link
-              href="/about"
-              className="hidden items-center gap-6 rounded-4 text-label-l focus-ring hover:text-text-2 lg:inline-flex"
-            >
-              회사소개 보기
-              <Icon icon={CirclePlus} size={20} />
-            </Link>
+            {activeSlide.secondaryCta ? (
+              <Link
+                href={activeSlide.secondaryCta.destination}
+                className="hidden items-center gap-6 rounded-4 text-label-l focus-ring hover:text-text-2 lg:inline-flex"
+              >
+                {activeSlide.secondaryCta.label}
+                <Icon icon={CirclePlus} size={20} />
+              </Link>
+            ) : null}
           </div>
         </div>
 
@@ -204,7 +271,7 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
           className="mt-32 flex h-32 items-center gap-12 lg:mt-24"
         >
           {slides.map((slide, slideIndex) => {
-            const isActive = slideIndex === activeIndex;
+            const isActive = slideIndex === safeActiveIndex;
             return (
               <div key={slide.id} className="flex items-center gap-12">
                 <button
@@ -219,13 +286,13 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
                 >
                   {formatSlideNumber(slideIndex)}
                 </button>
-                {isActive && hasMultipleSlides ? (
+                {isActive && canAutoplay ? (
                   <span
                     aria-hidden="true"
                     className="relative h-1 w-32 overflow-hidden bg-line-strong lg:w-40"
                   >
                     <span
-                      key={activeIndex}
+                      key={safeActiveIndex}
                       onAnimationEnd={() => changeSlide(1)}
                       style={{ animationPlayState: isAutoplayPaused ? 'paused' : 'running' }}
                       className="animate-hero-progress absolute inset-y-0 left-0 w-1/2 bg-text-1 motion-reduce:animate-none"
@@ -235,7 +302,7 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
               </div>
             );
           })}
-          {hasMultipleSlides ? (
+          {canAutoplay ? (
             <button
               type="button"
               onClick={() => setIsPausedByUser((isPaused) => !isPaused)}
@@ -290,12 +357,15 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
 function ServiceBenefits({ benefits }: { benefits: HomeContent['serviceBenefits'] }) {
   if (benefits.length === 0) return null;
   return (
-    <ul className="mt-48 flex items-center rounded-12 border border-line px-8 py-20">
+    <ul
+      aria-label="서비스 안내"
+      className="mt-48 flex items-center rounded-12 border border-line px-8 py-20"
+    >
       {benefits.map((benefit, benefitIndex) => (
         <li key={benefit.id} className="flex min-w-0 flex-1 items-center">
           {benefitIndex > 0 ? <span aria-hidden="true" className="h-32 w-1 bg-line" /> : null}
           <div className="flex min-w-0 flex-1 flex-col gap-4 px-24">
-            <h3 className="truncate text-label-m">{benefit.title}</h3>
+            <p className="truncate text-label-m">{benefit.title}</p>
             <p className="truncate text-caption text-text-3">{benefit.description}</p>
           </div>
         </li>
@@ -319,21 +389,21 @@ function PromoBannerSection({ banners }: { banners: HomeContent['promoBanners'] 
               className="group relative isolate flex h-216 w-300 shrink-0 snap-start flex-col overflow-hidden rounded-12 bg-surface px-32 py-24 focus-ring lg:w-auto"
             >
               {banner.imageUrl ? (
-                // CMS가 제공한 배너 이미지 URL을 직접 사용합니다.
+                // CMS가 제공한 배너 이미지 URL을 직접 사용합니다. 첫 화면 아래라 지연 로드합니다.
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={banner.imageUrl}
                   alt=""
                   aria-hidden="true"
+                  loading="lazy"
+                  decoding="async"
                   className="absolute inset-0 -z-10 size-full object-cover transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transition-none"
                 />
               ) : null}
               <div
                 className={cx(
-                  'absolute inset-0 -z-10',
-                  isLight
-                    ? 'bg-[linear-gradient(90deg,#ffffffd9_0%,#ffffff0d_75%)]'
-                    : 'bg-[linear-gradient(90deg,#121212b8_0%,#12121226_90%)]',
+                  'absolute inset-0 -z-10 bg-linear-to-r',
+                  isLight ? 'from-bg/85 to-bg/5 to-75%' : 'from-text-1/72 to-text-1/15 to-90%',
                 )}
               />
               <h2 className={cx('text-h2', isLight ? 'text-text-1' : 'text-inverse')}>
@@ -371,6 +441,7 @@ function PromoBannerSection({ banners }: { banners: HomeContent['promoBanners'] 
 /**
  * 베스트 셀러. 데스크톱은 카테고리 탭 + 5열 페이지(이전/다음 버튼),
  * 모바일은 칩 + 2×2 카드 + 하단 "전체 보기" 버튼입니다(W-01m).
+ * 카테고리를 불러오지 못하면 "전체" 탭만 보여 줍니다.
  */
 function BestSellerSection({
   products,
@@ -386,16 +457,15 @@ function BestSellerSection({
     [categories],
   );
   const filteredProducts = useMemo(
-    () =>
-      activeCategoryId === null
-        ? products
-        : products.filter((product) => product.categoryId === activeCategoryId),
-    [activeCategoryId, products],
+    () => filterProductsByCategoryTree(products, categories, activeCategoryId),
+    [activeCategoryId, categories, products],
   );
   const pageCount = Math.max(1, Math.ceil(filteredProducts.length / BEST_SELLER_PAGE_SIZE));
+  // 상품 수가 줄어 현재 페이지가 사라져도 마지막 페이지를 보여 줍니다.
+  const safePageIndex = Math.min(pageIndex, pageCount - 1);
   const visibleProducts = filteredProducts.slice(
-    pageIndex * BEST_SELLER_PAGE_SIZE,
-    (pageIndex + 1) * BEST_SELLER_PAGE_SIZE,
+    safePageIndex * BEST_SELLER_PAGE_SIZE,
+    (safePageIndex + 1) * BEST_SELLER_PAGE_SIZE,
   );
   const categoryOptions = [
     { id: null, name: '전체' },
@@ -480,25 +550,27 @@ function BestSellerSection({
                 </li>
               ))}
             </ul>
-            {pageIndex > 0 ? (
-              <button
-                type="button"
-                onClick={() => setPageIndex((currentPage) => currentPage - 1)}
-                aria-label="이전 베스트 상품"
-                className="absolute top-1/2 -left-20 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring hover:bg-surface lg:inline-flex"
-              >
-                <Icon icon={ChevronLeft} size={20} />
-              </button>
-            ) : null}
-            {pageIndex < pageCount - 1 ? (
-              <button
-                type="button"
-                onClick={() => setPageIndex((currentPage) => currentPage + 1)}
-                aria-label="다음 베스트 상품"
-                className="absolute top-1/2 -right-20 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring hover:bg-surface lg:inline-flex"
-              >
-                <Icon icon={ChevronRight} size={20} />
-              </button>
+            {pageCount > 1 ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setPageIndex(Math.max(0, safePageIndex - 1))}
+                  disabled={safePageIndex === 0}
+                  aria-label="이전 베스트 상품"
+                  className="absolute top-1/2 -left-20 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
+                >
+                  <Icon icon={ChevronLeft} size={20} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPageIndex(Math.min(pageCount - 1, safePageIndex + 1))}
+                  disabled={safePageIndex >= pageCount - 1}
+                  aria-label="다음 베스트 상품"
+                  className="absolute top-1/2 -right-20 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
+                >
+                  <Icon icon={ChevronRight} size={20} />
+                </button>
+              </>
             ) : null}
           </div>
         ) : (
@@ -520,24 +592,24 @@ function BestSellerSection({
   );
 }
 
-/** HF/Web/CTABand. 맞춤 견적 문의로 이동합니다(데스크톱 전용, W-01m에는 없음). */
-function QuoteBanner() {
+/** HF/Web/CTABand. 문구·이동 경로는 홈 응답(ctaBand)으로 받습니다(데스크톱 전용, W-01m에는 없음). */
+function QuoteBanner({ ctaBand }: { ctaBand: HomeCtaBand }) {
   return (
     <section
       aria-labelledby="quote-banner-heading"
       className="mt-96 flex items-center justify-between gap-24 rounded-12 bg-text-1 px-48 py-40"
     >
       <div className="min-w-0">
-        <p className="text-overline text-inverse-2">CUSTOM ORDER</p>
+        <p className="text-overline text-inverse-2">{ctaBand.eyebrow}</p>
         <h2 id="quote-banner-heading" className="mt-4 text-h2 text-inverse">
-          현장에 꼭 맞는 안전 솔루션, 지금 상담받아 보세요.
+          {ctaBand.title}
         </h2>
       </div>
       <Link
-        href="/solutions"
+        href={ctaBand.cta.destination}
         className="inline-flex h-56 shrink-0 items-center gap-8 rounded-8 border border-inverse px-24 text-label-l text-inverse transition-colors hover:bg-pressed-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-inverse"
       >
-        견적 문의하기
+        {ctaBand.cta.label}
         <Icon icon={ArrowRight} size={20} />
       </Link>
     </section>

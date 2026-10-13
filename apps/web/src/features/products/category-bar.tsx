@@ -15,17 +15,22 @@ import { Fragment } from 'react';
 import type { Category } from '@eum/api/types';
 import { Icon } from '@eum/ui/components/Icon';
 
-// Figma CategoryBar 순서와 같은 아이콘. 카테고리가 늘어나면 마지막 아이콘(Package)을 씁니다.
-const CATEGORY_ICONS: LucideIcon[] = [
-  HardHat,
-  Shirt,
-  TrafficCone,
-  FireExtinguisher,
-  BriefcaseMedical,
-  Cctv,
-  Leaf,
-  Package,
-];
+// 서버 카테고리의 iconKey → Lucide 아이콘. 모르는 키이거나 키가 없으면 Package를 씁니다.
+const CATEGORY_ICONS_BY_KEY: Readonly<Record<string, LucideIcon>> = {
+  'hard-hat': HardHat,
+  shirt: Shirt,
+  'traffic-cone': TrafficCone,
+  'fire-extinguisher': FireExtinguisher,
+  'briefcase-medical': BriefcaseMedical,
+  cctv: Cctv,
+  leaf: Leaf,
+  package: Package,
+};
+
+/** 카테고리 아이콘 키를 아이콘 컴포넌트로 바꿉니다. */
+function getCategoryIcon(iconKey: string | null): LucideIcon {
+  return (iconKey !== null ? CATEGORY_ICONS_BY_KEY[iconKey] : undefined) ?? Package;
+}
 
 // 카테고리 바 끝의 "전체보기" 바로가기(서버 카테고리가 아닌 고정 탐색 항목)
 const VIEW_ALL_ITEM = { label: '전체보기', description: '더 다양한 제품', href: '/search' };
@@ -42,12 +47,12 @@ interface CategoryShortcut {
 function toCategoryShortcuts(categories: Category[]): CategoryShortcut[] {
   const topLevelShortcuts = categories
     .filter((category) => category.parentId === null)
-    .map((category, categoryIndex) => ({
+    .map((category) => ({
       key: category.id,
       label: category.name,
       description: category.description,
       href: '/category/' + encodeURIComponent(category.slug),
-      icon: CATEGORY_ICONS[Math.min(categoryIndex, CATEGORY_ICONS.length - 1)] ?? Package,
+      icon: getCategoryIcon(category.iconKey),
     }));
   return [...topLevelShortcuts, { key: 'all', ...VIEW_ALL_ITEM, icon: LayoutGrid }];
 }

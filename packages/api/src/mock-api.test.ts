@@ -71,13 +71,18 @@ describe('목 API 시나리오', () => {
     const categories = await mockApi.categories.list();
     const topLevelCategories = categories.filter((category) => category.parentId === null);
     expect(topLevelCategories.every((category) => category.description !== null)).toBe(true);
+    expect(homeContent.heroSlides.every((slide) => slide.ctaLabel.trim().length > 0)).toBe(true);
+    expect(homeContent.ctaBand).not.toBeNull();
   });
 
   it('사업자 정보는 푸터에 필요한 항목을 모두 반환하고, error 시나리오에서는 실패합니다', async () => {
     const companyInfo = await createMockApi(testConfig).company.getInfo();
-    expect(Object.values(companyInfo).every((fieldValue) => fieldValue.trim().length > 0)).toBe(
-      true,
-    );
+    expect(
+      Object.values(companyInfo).every(
+        (fieldValue) => fieldValue === null || fieldValue.trim().length > 0,
+      ),
+    ).toBe(true);
+    expect(companyInfo.customerCenterTel).toMatch(/^[0-9+]+$/);
     await expect(
       createMockApi({ ...testConfig, mockScenario: 'error' }).company.getInfo(),
     ).rejects.toMatchObject({ code: 'NETWORK' });
