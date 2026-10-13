@@ -3,8 +3,10 @@
 import {
   addProductToCart,
   calculateCartTotals,
+  clampCartQuantity,
   groupCartItems,
   removeCartItems,
+  resolveCartOption,
   updateCartItemQuantity,
   type CartGroups,
   type CartTotals,
@@ -58,6 +60,30 @@ function createCartItemId(productId: string, optionId: string | null): string {
   return `cart-${productId}-${optionId ?? 'default'}`;
 }
 
+/**
+ * 복원 결과(restoredItems)에 복원이 끝나기 전 메모리에서 담은 줄(pendingItems)을 합치는 함수.
+ * 같은 상품·옵션 줄은 수량을 더하고, 상품 정보는 방금 조회한 복원 결과를 씁니다.
+ */
+function mergePendingCartItems(
+  restoredItems: readonly CartItem[],
+  pendingItems: readonly CartItem[],
+): CartItem[] {
+  const mergedItems = [...restoredItems];
+  for (const pendingItem of pendingItems) {
+    const matchedIndex = mergedItems.findIndex((mergedItem) => mergedItem.id === pendingItem.id);
+    const matchedItem = matchedIndex >= 0 ? mergedItems[matchedIndex] : undefined;
+    if (matchedItem) {
+      mergedItems[matchedIndex] = {
+        ...matchedItem,
+        quantity: clampCartQuantity(matchedItem.quantity + pendingItem.quantity),
+      };
+    } else {
+      mergedItems.push(pendingItem);
+    }
+  }
+  return mergedItems;
+}
+
 /** 장바구니 상태 변경을 한곳에서 처리합니다. */
 function cartReducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
@@ -83,7 +109,15 @@ function cartReducer(state: CartState, action: CartAction): CartState {
     case 'restoreFailed':
       return { ...state, restoreError: true };
     case 'replace':
-      return { cartItems: action.cartItems, hasRestored: true, restoreError: false };
+      // 첫 복원(또는 복원 실패 뒤 재시도) 전에 담은 줄은 버리지 않고 합칩니다.
+      // 복원이 끝난 뒤의 replace(다른 탭의 storage 이벤트)는 저장소가 기준이므로 그대로 바꿉니다.
+      return {
+        cartItems: state.hasRestored
+          ? action.cartItems
+          : mergePendingCartItems(action.cartItems, state.cartItems),
+        hasRestored: true,
+        restoreError: false,
+      };
   }
 }
 
@@ -121,6 +155,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const restoreCart = useCallback(
     async (storedLines: StoredCartLine[]) => {
       const sequence = ++restoreSequence.current;
+      // TODO(real API): 상품 수만큼 단건 조회하지 않도록 ID 목록 일괄 조회 엔드포인트가 생기면 한 번에 가져옵니다.
       const restoredResults = await Promise.all(
         storedLines.map(async (storedLine) => {
           try {
@@ -130,10 +165,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
                 (await getShopApi()).products.getById(storedLine.productId, { signal }),
               staleTime: 0,
             });
+            // 옵션 문구는 최신 상품 기준으로 갱신합니다. 옵션이 사라졌으면 저장 문구를 남기고,
+            // groupCartItems가 '주문할 수 없는 상품'(optionUnavailable)으로 분리합니다.
+            const optionResolution = resolveCartOption(product, storedLine.optionId);
             return {
               status: 'restored' as const,
               cartItem: {
                 ...storedLine,
+                optionLabel: optionResolution.isAvailable
+                  ? optionResolution.optionLabel
+                  : storedLine.optionLabel,
                 id: createCartItemId(storedLine.productId, storedLine.optionId),
                 product,
               } satisfies CartItem,

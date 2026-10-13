@@ -1,5 +1,6 @@
 'use client';
 
+import { createCartOptionId, formatCartOptionLabel } from '@eum/api/cart';
 import { canAddToCart, canBuyNow, getPriceDisplay, formatKrw } from '@eum/api/price';
 import { sanitizeRedirectPath } from '@eum/api/redirect';
 import type { Product, ProductOption } from '@eum/api/types';
@@ -121,16 +122,19 @@ function ProductDetailContent({
   const missingRequiredOption = product.options.some(
     (productOption) => productOption.required && !selectedChoices[productOption.id],
   );
-  const optionIdentity = selectedOptions.length
-    ? selectedOptions
-        .map(({ productOption, choice }) => productOption.id + ':' + choice.id)
-        .join('|')
-    : null;
-  const optionLabel = selectedOptions.length
-    ? selectedOptions
-        .map(({ productOption, choice }) => productOption.label + ': ' + choice.label)
-        .join(' / ')
-    : null;
+  // 장바구니 줄 식별자·문구 형식은 @eum/api/cart가 정하며, 복원 시 같은 규칙으로 다시 해석합니다.
+  const optionIdentity = createCartOptionId(
+    selectedOptions.map(({ productOption, choice }) => ({
+      optionId: productOption.id,
+      choiceId: choice.id,
+    })),
+  );
+  const optionLabel = formatCartOptionLabel(
+    selectedOptions.map(({ productOption, choice }) => ({
+      optionLabel: productOption.label,
+      choiceLabel: choice.label,
+    })),
+  );
   const category = categories.find((item) => item.id === product.categoryId);
   const isWishlisted = wishlistIds.includes(product.id);
   const isPurchasable = canBuyNow(product);

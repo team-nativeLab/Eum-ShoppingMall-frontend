@@ -4,7 +4,9 @@ import {
   calculateCartTotals,
   CART_MAX_QUANTITY,
   clampCartQuantity,
+  createCartOptionId,
   groupCartItems,
+  resolveCartOption,
   removeCartItems,
   updateCartItemQuantity,
 } from './cart';
@@ -109,5 +111,77 @@ describe('수량 변경', () => {
     expect(
       removeCartItems(cartItems, new Set(['cart-p-ok'])).map((cartItem) => cartItem.id),
     ).toEqual(['cart-p-free']);
+  });
+});
+
+const optionProduct = buildProduct({
+  id: 'p-option',
+  price: 20000,
+  options: [
+    {
+      id: 'type',
+      label: '형태',
+      required: true,
+      choices: [
+        { id: 'wall', label: '벽걸이형', priceDelta: 0 },
+        { id: 'stand', label: '스탠드형', priceDelta: 3000 },
+      ],
+    },
+    {
+      id: 'color',
+      label: '색상',
+      required: false,
+      choices: [{ id: 'red', label: '빨강', priceDelta: 500 }],
+    },
+  ],
+});
+
+describe('장바구니 옵션 해석', () => {
+  it('옵션 식별자를 만들고 최신 옵션 문구와 추가금 합계로 해석합니다', () => {
+    const cartOptionId = createCartOptionId([
+      { optionId: 'type', choiceId: 'stand' },
+      { optionId: 'color', choiceId: 'red' },
+    ]);
+    expect(cartOptionId).toBe('type:stand|color:red');
+    expect(resolveCartOption(optionProduct, cartOptionId)).toEqual({
+      isAvailable: true,
+      optionLabel: '형태: 스탠드형 / 색상: 빨강',
+      priceDelta: 3500,
+    });
+    expect(createCartOptionId([])).toBeNull();
+  });
+
+  it('사라진 옵션·선택지, 빠진 필수 옵션, 깨진 식별자는 주문할 수 없습니다', () => {
+    expect(resolveCartOption(optionProduct, 'type:floor').isAvailable).toBe(false);
+    expect(resolveCartOption(optionProduct, 'size:xl|type:wall').isAvailable).toBe(false);
+    expect(resolveCartOption(optionProduct, 'color:red').isAvailable).toBe(false);
+    expect(resolveCartOption(optionProduct, null).isAvailable).toBe(false);
+    expect(resolveCartOption(optionProduct, 'white').isAvailable).toBe(false);
+  });
+
+  it('옵션이 없는 상품은 옵션 없이 주문할 수 있습니다', () => {
+    expect(resolveCartOption(orderableProduct, null)).toEqual({
+      isAvailable: true,
+      optionLabel: null,
+      priceDelta: 0,
+    });
+  });
+
+  it('합계에 옵션 추가금을 반영하고 옵션이 사라진 줄은 주문 불가 그룹으로 보냅니다', () => {
+    const standItem = { ...buildCartItem(optionProduct, 2), optionId: 'type:stand' };
+    const removedOptionItem = {
+      ...buildCartItem(optionProduct),
+      id: 'cart-removed',
+      optionId: 'type:floor',
+    };
+    const { unorderableItems } = groupCartItems([standItem, removedOptionItem]);
+    expect(unorderableItems).toEqual([
+      { cartItem: removedOptionItem, reason: 'optionUnavailable' },
+    ]);
+    expect(calculateCartTotals([standItem, removedOptionItem])).toMatchObject({
+      orderableCount: 1,
+      excludedCount: 1,
+      productTotal: 46000,
+    });
   });
 });

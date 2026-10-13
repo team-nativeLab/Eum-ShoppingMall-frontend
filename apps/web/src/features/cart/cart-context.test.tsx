@@ -34,6 +34,23 @@ const visibleProduct: Product = {
   createdAt: '2026-01-01T00:00:00.000Z',
   isFeatured: false,
 };
+const optionProduct: Product = {
+  ...visibleProduct,
+  id: 'p-option',
+  name: '옵션 상품',
+  price: 20000,
+  options: [
+    {
+      id: 'type',
+      label: '형태',
+      required: true,
+      choices: [
+        { id: 'wall', label: '벽걸이형', priceDelta: 0 },
+        { id: 'stand', label: '스탠드형(신규)', priceDelta: 3000 },
+      ],
+    },
+  ],
+};
 const hiddenProduct: Product = {
   ...visibleProduct,
   id: 'p-hidden',
@@ -99,6 +116,7 @@ beforeEach(() => {
   getProductById.mockImplementation(async (productId: string) => {
     if (productId === visibleProduct.id) return visibleProduct;
     if (productId === hiddenProduct.id) return hiddenProduct;
+    if (productId === optionProduct.id) return optionProduct;
     throw new ApiError('NOT_FOUND', '상품을 찾을 수 없습니다.');
   });
 });
@@ -223,6 +241,90 @@ describe('CartProvider', () => {
     });
     expect(await screen.findByText('수량 4')).toBeInTheDocument();
     expect(screen.getByText('주문 불가 1')).toBeInTheDocument();
+  });
+
+  it('복원이 끝나기 전에 담은 상품은 복원 결과에 합쳐 보존합니다', async () => {
+    window.localStorage.setItem(
+      CART_STORAGE_KEY,
+      serializeCart([{ productId: 'p-visible', quantity: 1, optionId: null, optionLabel: null }]),
+    );
+    let resolveProduct: (product: Product) => void = () => undefined;
+    getProductById.mockImplementationOnce(
+      () =>
+        new Promise<Product>((resolve) => {
+          resolveProduct = resolve;
+        }),
+    );
+    renderCart();
+    expect(screen.getByText('복원 중')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '표시 상품 담기' }));
+    await userEvent.click(screen.getByRole('button', { name: '미표시 상품 담기' }));
+    await act(async () => {
+      resolveProduct(visibleProduct);
+    });
+    await waitForRestore();
+    expect(screen.getByText('수량 4')).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem(CART_STORAGE_KEY) ?? '{}').cartItems).toEqual([
+      { productId: 'p-visible', quantity: 3, optionId: null, optionLabel: null },
+      { productId: 'p-hidden', quantity: 1, optionId: null, optionLabel: null },
+    ]);
+  });
+
+  it('복원 실패 상태에서 담은 상품도 재시도 후 저장 항목과 합칩니다', async () => {
+    window.localStorage.setItem(
+      CART_STORAGE_KEY,
+      serializeCart([{ productId: 'p-visible', quantity: 2, optionId: null, optionLabel: null }]),
+    );
+    getProductById.mockRejectedValueOnce(new ApiError('NETWORK', '잠시 후 다시 시도해 주세요.'));
+    renderCart();
+    expect(await screen.findByText('복원 실패')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '미표시 상품 담기' }));
+
+    await userEvent.click(screen.getByRole('button', { name: '복원 다시 시도' }));
+    await waitForRestore();
+    expect(screen.getByText('수량 3')).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem(CART_STORAGE_KEY) ?? '{}').cartItems).toEqual([
+      { productId: 'p-visible', quantity: 2, optionId: null, optionLabel: null },
+      { productId: 'p-hidden', quantity: 1, optionId: null, optionLabel: null },
+    ]);
+  });
+
+  it('복원 시 옵션 문구를 최신 상품 기준으로 갱신하고 추가금을 합계에 반영합니다', async () => {
+    window.localStorage.setItem(
+      CART_STORAGE_KEY,
+      serializeCart([
+        {
+          productId: 'p-option',
+          quantity: 2,
+          optionId: 'type:stand',
+          optionLabel: '형태: 옛 문구',
+        },
+      ]),
+    );
+    renderCart();
+    expect(await screen.findByText('합계 46000')).toBeInTheDocument();
+    expect(screen.getByText('주문 불가 0')).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem(CART_STORAGE_KEY) ?? '{}').cartItems).toEqual([
+      {
+        productId: 'p-option',
+        quantity: 2,
+        optionId: 'type:stand',
+        optionLabel: '형태: 스탠드형(신규)',
+      },
+    ]);
+  });
+
+  it('상품에서 사라진 옵션으로 담긴 줄은 주문할 수 없는 상품으로 분리합니다', async () => {
+    window.localStorage.setItem(
+      CART_STORAGE_KEY,
+      serializeCart([
+        { productId: 'p-option', quantity: 1, optionId: 'type:floor', optionLabel: '형태: 바닥형' },
+      ]),
+    );
+    renderCart();
+    await waitForRestore();
+    expect(screen.getByText('주문 불가 1')).toBeInTheDocument();
+    expect(screen.getByText('합계 0')).toBeInTheDocument();
   });
 
   it('깨진 저장 값은 빈 장바구니로 시작합니다', async () => {
