@@ -13,6 +13,8 @@ import type {
   PagedResult,
   Point,
   Product,
+  ProductFacets,
+  ProductReview,
   ProductSuggestion,
   Quote,
 } from './types';
@@ -27,6 +29,15 @@ export interface ProductListParams {
   certification?: string[];
   excludeSoldOut?: boolean;
   sortBy?: 'recommended' | 'priceAsc' | 'priceDesc' | 'newest';
+  page?: number;
+  pageSize?: number;
+}
+
+/** 필터 개수 조회 조건. 개수는 브랜드·인증·가격 선택과 무관하게 카테고리·검색어 범위에서 셉니다. */
+export type ProductFacetParams = Pick<ProductListParams, 'categoryId' | 'keyword'>;
+
+/** 페이지 조회 조건 */
+export interface PageParams {
   page?: number;
   pageSize?: number;
 }
@@ -47,7 +58,17 @@ export interface ShopApi {
     list(params?: ProductListParams, options?: RequestOptions): Promise<PagedResult<Product>>;
     getById(productId: string, options?: RequestOptions): Promise<Product>;
     suggest(keyword: string, options?: RequestOptions): Promise<ProductSuggestion[]>;
+    /** 목록 필터에 표시할 카테고리·브랜드·인증별 상품 수 */
+    facets(params?: ProductFacetParams, options?: RequestOptions): Promise<ProductFacets>;
+    /** 상품 리뷰(최신순) */
+    listReviews(
+      productId: string,
+      params?: PageParams,
+      options?: RequestOptions,
+    ): Promise<PagedResult<ProductReview>>;
   };
+  /** 검색 결과가 없을 때 보여 줄 추천 검색어 */
+  search: { recommendedKeywords(options?: RequestOptions): Promise<string[]> };
   categories: { list(options?: RequestOptions): Promise<Category[]> };
   home: { getContent(options?: RequestOptions): Promise<HomeContent> };
   /** 푸터 사업자·고객센터 정보 */

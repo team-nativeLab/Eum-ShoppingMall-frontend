@@ -1,4 +1,4 @@
-import type { ProductListParams } from './shop-api';
+import type { PageParams, ProductFacetParams, ProductListParams } from './shop-api';
 
 /** TanStack Query 키 모음. web과 admin이 같은 키 규칙을 씁니다. */
 export const queryKeys = {
@@ -7,7 +7,11 @@ export const queryKeys = {
     list: (params: ProductListParams = {}) => ['products', 'list', params] as const,
     detail: (productId: string) => ['products', 'detail', productId] as const,
     suggestions: (keyword: string) => ['products', 'suggestions', keyword] as const,
+    facets: (params: ProductFacetParams = {}) => ['products', 'facets', params] as const,
+    reviews: (productId: string, params: PageParams = {}) =>
+      ['products', 'reviews', productId, params] as const,
   },
+  search: { recommendedKeywords: ['search', 'recommended-keywords'] as const },
   categories: { all: ['categories'] as const },
   home: { content: ['home', 'content'] as const },
   company: { info: ['company', 'info'] as const },

@@ -1,0 +1,68 @@
+import type { ProductReview } from '../types';
+
+/** 목 상품 리뷰. 작성자 표시명은 서버가 마스킹한 값이라고 가정합니다. */
+export const mockReviews: ProductReview[] = [
+  {
+    id: 'rev-1001-1',
+    productId: 'prd-1001',
+    authorName: '김*수',
+    rating: 5,
+    content: '내관 조절이 쉬워서 오래 써도 편합니다. 현장 인원 모두 같은 제품으로 맞췄습니다.',
+    optionLabel: '색상: 백색',
+    createdAt: '2026-09-30T02:00:00.000Z',
+  },
+  {
+    id: 'rev-1001-2',
+    productId: 'prd-1001',
+    authorName: '이*영',
+    rating: 5,
+    content: '배송이 빨랐고 땀받이 교체도 간편합니다.',
+    optionLabel: '색상: 노란색',
+    createdAt: '2026-09-24T05:30:00.000Z',
+  },
+  {
+    id: 'rev-1001-3',
+    productId: 'prd-1001',
+    authorName: '박*호',
+    rating: 4,
+    content: '무게가 가벼운 편입니다. 턱끈이 조금 짧은 점만 아쉽습니다.',
+    optionLabel: '색상: 백색',
+    createdAt: '2026-09-18T08:10:00.000Z',
+  },
+  {
+    id: 'rev-1002-1',
+    productId: 'prd-1002',
+    authorName: '정*민',
+    rating: 5,
+    content: '하루 종일 신어도 발이 덜 피곤합니다.',
+    optionLabel: '사이즈: 260mm',
+    createdAt: '2026-10-02T01:00:00.000Z',
+  },
+  {
+    id: 'rev-1002-2',
+    productId: 'prd-1002',
+    authorName: '최*현',
+    rating: 4,
+    content: '사이즈는 정사이즈입니다. 밑창 접지력이 좋습니다.',
+    optionLabel: '사이즈: 270mm',
+    createdAt: '2026-09-27T03:20:00.000Z',
+  },
+  {
+    id: 'rev-1004-1',
+    productId: 'prd-1004',
+    authorName: '한*진',
+    rating: 4,
+    content: '증정품인데 품질이 괜찮습니다.',
+    optionLabel: null,
+    createdAt: '2026-09-21T06:00:00.000Z',
+  },
+  {
+    id: 'rev-1005-1',
+    productId: 'prd-1005',
+    authorName: '오*석',
+    rating: 5,
+    content: '브래킷까지 함께 와서 바로 설치했습니다.',
+    optionLabel: '설치 옵션: 벽걸이형',
+    createdAt: '2026-09-05T04:00:00.000Z',
+  },
+];

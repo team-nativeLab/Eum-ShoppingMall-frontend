@@ -41,6 +41,8 @@ export interface Product {
   /** 대표 이미지 URL. 아직 이미지가 없으면 null(플레이스홀더 표시) */
   thumbnailUrl: string | null;
   summary: string;
+  /** 모델명. 등록하지 않았으면 null */
+  modelName: string | null;
   /** 상세 갤러리. 서버 이미지가 아직 없으면 빈 배열입니다. */
   images: ProductImage[];
   /** 필수 여부를 포함한 구매 옵션 */
@@ -51,6 +53,8 @@ export interface Product {
   certifications: string[];
   /** 배송 및 반품 안내 */
   shipping: ProductShipping;
+  /** 구매 전 안내(출고·증빙·교환·반품 등). 운영에서 정한 항목을 순서대로 보여 줍니다. */
+  purchaseNotices: ProductPurchaseNotice[];
   /** 상품 평점. 리뷰가 없으면 null */
   rating: number | null;
   reviewCount: number;
@@ -99,6 +103,46 @@ export interface ProductShipping {
   estimate: string;
   fee: number;
   countryOfOrigin: string;
+  /** 상세 "배송/교환/반품 안내" 본문 */
+  policy: string;
+}
+
+/** 상세 구매 영역의 안내 한 줄(예: 출고 / 평일 오후 2시 이전 결제 시 당일 출고) */
+export interface ProductPurchaseNotice {
+  label: string;
+  description: string;
+}
+
+/** 상품 리뷰 */
+export interface ProductReview {
+  id: string;
+  productId: string;
+  /** 화면에 그대로 보여 주는 작성자 표시명(서버가 마스킹해서 내려줌) */
+  authorName: string;
+  /** 1~5 정수 평점 */
+  rating: number;
+  content: string;
+  /** 구매한 옵션 문구. 옵션 없는 상품이면 null */
+  optionLabel: string | null;
+  createdAt: string;
+}
+
+/** 목록 필터의 값별 상품 수 */
+export interface FacetCount {
+  /** 필터 값(브랜드명, 인증명, 카테고리 ID) */
+  value: string;
+  count: number;
+}
+
+/**
+ * 목록·검색 결과의 필터 개수 묶음.
+ * 카테고리 개수는 상위 카테고리 기준이고, 결과가 있는 카테고리만 담습니다.
+ */
+export interface ProductFacets {
+  totalCount: number;
+  categories: FacetCount[];
+  brands: FacetCount[];
+  certifications: FacetCount[];
 }
 
 /** 홈/검색 자동완성 상품 추천 */

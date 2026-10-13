@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ApiConfigError } from './errors';
 import { createMockApi } from './mock-api';
+import { mockProducts } from './mock/products';
 import { buildMockConfig } from './test-fixtures';
 
 const testConfig = buildMockConfig();
@@ -21,27 +22,28 @@ describe('목 API 시나리오', () => {
     const mockApi = createMockApi(testConfig);
     const priceFilteredPage = await mockApi.products.list({ minPrice: 1, maxPrice: 200000 });
     expect(priceFilteredPage.items.every((product) => product.priceVisible)).toBe(true);
-    const priceSortedPage = await mockApi.products.list({ sortBy: 'priceAsc', pageSize: 20 });
+    const priceSortedPage = await mockApi.products.list({ sortBy: 'priceAsc', pageSize: 100 });
     expect(priceSortedPage.items.at(-1)?.priceVisible).toBe(false);
   });
 
   it('키워드, 하위 카테고리, 브랜드·인증, 품절 제외, 정렬과 페이지 조건을 적용합니다', async () => {
     const mockApi = createMockApi(testConfig);
-    const categoryPage = await mockApi.products.list({ categoryId: 'cat-ppe', pageSize: 20 });
-    expect(categoryPage.items.map((product) => product.id)).toEqual([
-      'prd-1001',
-      'prd-1002',
-      'prd-1003',
-      'prd-1004',
-    ]);
+    const categoryPage = await mockApi.products.list({ categoryId: 'cat-ppe', pageSize: 100 });
+    expect(categoryPage.items.map((product) => product.id)).toEqual(
+      expect.arrayContaining(['prd-1001', 'prd-1002', 'prd-1003', 'prd-1004']),
+    );
+    // 개인보호장비 하위 카테고리 상품만 포함합니다(소방·표지 상품 제외).
+    expect(categoryPage.items.map((product) => product.id)).not.toContain('prd-1005');
+    expect(categoryPage.items.map((product) => product.id)).not.toContain('prd-1006');
 
-    const brandPage = await mockApi.products.list({ brand: ['워크핏'] });
-    expect(brandPage.items.map((product) => product.id)).toEqual(['prd-1002']);
+    const brandPage = await mockApi.products.list({ brand: ['워크핏'], pageSize: 100 });
+    expect(brandPage.items.map((product) => product.id)).toContain('prd-1002');
+    expect(brandPage.items.every((product) => product.brand === '워크핏')).toBe(true);
     const certifiedPage = await mockApi.products.list({ certification: ['KCs 안전인증'] });
     expect(certifiedPage.items.map((product) => product.id)).toContain('prd-1002');
 
-    const searchedPage = await mockApi.products.list({ keyword: '그립원' });
-    expect(searchedPage.items.map((product) => product.id)).toEqual(['prd-1004']);
+    const searchedPage = await mockApi.products.list({ keyword: '파이어킵' });
+    expect(searchedPage.items.map((product) => product.id)).toEqual(['prd-1005', 'prd-2028']);
 
     const availablePage = await mockApi.products.list({ excludeSoldOut: true });
     expect(availablePage.items.every((product) => product.stockStatus === 'inStock')).toBe(true);
@@ -50,7 +52,7 @@ describe('목 API 시나리오', () => {
 
     const secondPage = await mockApi.products.list({ page: 2, pageSize: 2 });
     expect(secondPage.items.map((product) => product.id)).toEqual(['prd-1003', 'prd-1004']);
-    expect(secondPage).toMatchObject({ page: 2, pageSize: 2, totalCount: 6 });
+    expect(secondPage).toMatchObject({ page: 2, pageSize: 2, totalCount: mockProducts.length });
   });
 
   it('홈 콘텐츠는 공개 가격 projection이 적용된 featured 상품을 반환합니다', async () => {
@@ -92,6 +94,35 @@ describe('목 API 시나리오', () => {
     const suggestions = await createMockApi(testConfig).products.suggest('안전');
     expect(suggestions.length).toBeGreaterThan(0);
     expect(suggestions.length).toBeLessThanOrEqual(5);
+  });
+
+  it('필터 개수는 카테고리·검색어 범위에서 세고, 검색 카테고리 개수는 상위 카테고리로 모읍니다', async () => {
+    const mockApi = createMockApi(testConfig);
+    const categoryFacets = await mockApi.products.facets({ categoryId: 'cat-ppe' });
+    const categoryPage = await mockApi.products.list({ categoryId: 'cat-ppe', pageSize: 100 });
+    expect(categoryFacets.totalCount).toBe(categoryPage.totalCount);
+    const brandCountSum = categoryFacets.brands.reduce(
+      (countSum, facet) => countSum + facet.count,
+      0,
+    );
+    expect(brandCountSum).toBe(categoryPage.totalCount);
+
+    const searchFacets = await mockApi.products.facets({ keyword: '안전모' });
+    expect(searchFacets.categories).toEqual([{ value: 'cat-ppe', count: searchFacets.totalCount }]);
+  });
+
+  it('리뷰는 상품별 최신순으로 페이지를 나눠 돌려줍니다', async () => {
+    const mockApi = createMockApi(testConfig);
+    const reviewPage = await mockApi.products.listReviews('prd-1001', { pageSize: 2 });
+    expect(reviewPage.totalCount).toBe(3);
+    expect(reviewPage.items).toHaveLength(2);
+    expect(reviewPage.items[0]!.createdAt >= reviewPage.items[1]!.createdAt).toBe(true);
+    expect((await mockApi.products.listReviews('prd-1003')).items).toEqual([]);
+  });
+
+  it('추천 검색어를 돌려줍니다', async () => {
+    const keywords = await createMockApi(testConfig).search.recommendedKeywords();
+    expect(keywords.length).toBeGreaterThan(0);
   });
 
   it('empty: 빈 목록을 돌려줍니다', async () => {
