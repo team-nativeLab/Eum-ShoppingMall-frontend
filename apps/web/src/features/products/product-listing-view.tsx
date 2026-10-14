@@ -14,9 +14,11 @@ import { Pagination } from '@eum/ui/components/Pagination';
 import { cx } from '@eum/ui/lib/cx';
 import { ChevronDown, LayoutGrid, List, Plus, RotateCcw, SearchX } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState, type ReactNode } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PageContainer } from '@/components/page-container';
 import { getScrollBehavior, usePrefersReducedMotion } from '@/lib/use-media-query';
+import { buildBrandSelectionHref, getBrandFilterValues } from './product-navigation';
 import { ProductCard } from './product-card';
 import { SearchNoResults } from './search-no-results';
 import { useCategoriesQuery } from './use-categories-query';
@@ -80,10 +82,18 @@ function getSubcategoryChips(
 export function ProductListingView({
   categorySlug,
   initialKeyword = '',
+  initialBrands = [],
+  initialBrowseBrands = false,
+  initialSearchParams = '',
 }: {
   categorySlug?: string;
   initialKeyword?: string;
+  initialBrands?: string[];
+  initialBrowseBrands?: boolean;
+  initialSearchParams?: string;
 }) {
+  const pathname = usePathname();
+  const router = useRouter();
   const categoriesQuery = useCategoriesQuery();
   const categoryList = useMemo(() => categoriesQuery.data ?? [], [categoriesQuery.data]);
   const isSearch = categorySlug === undefined;
@@ -100,12 +110,43 @@ export function ProductListingView({
   const [maxPriceInput, setMaxPriceInput] = useState('');
   const [minPrice, setMinPrice] = useState<number | undefined>();
   const [maxPrice, setMaxPrice] = useState<number | undefined>();
-  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const normalizedInitialBrands = getBrandFilterValues(initialBrands);
+  const initialBrandsKey = JSON.stringify(normalizedInitialBrands);
+  const [selectedBrands, setSelectedBrands] = useState(normalizedInitialBrands);
+  const [syncedInitialBrandsKey, setSyncedInitialBrandsKey] = useState(initialBrandsKey);
+  if (syncedInitialBrandsKey !== initialBrandsKey) {
+    setSyncedInitialBrandsKey(initialBrandsKey);
+    setSelectedBrands(normalizedInitialBrands);
+  }
   const [selectedCertifications, setSelectedCertifications] = useState<string[]>([]);
   const [excludeSoldOut, setExcludeSoldOut] = useState(false);
   const [layout, setLayout] = useState<'grid' | 'list'>('grid');
-  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
+  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(initialBrowseBrands);
+  const [syncedBrowseIntent, setSyncedBrowseIntent] = useState(initialBrowseBrands);
+  if (syncedBrowseIntent !== initialBrowseBrands) {
+    setSyncedBrowseIntent(initialBrowseBrands);
+    setIsMobileFiltersOpen(initialBrowseBrands);
+  }
+  const mobileBrandGroupRef = useRef<HTMLDivElement>(null);
+  const hasFocusedBrandBrowseRef = useRef(false);
   const prefersReducedMotion = usePrefersReducedMotion();
+
+  const updateSelectedBrands = (nextBrands: string[]) => {
+    const normalizedBrands = getBrandFilterValues(nextBrands);
+    setSelectedBrands(normalizedBrands);
+    setPage(1);
+    const nextHref = buildBrandSelectionHref(pathname, initialSearchParams, normalizedBrands);
+    const currentHref = initialSearchParams ? pathname + '?' + initialSearchParams : pathname;
+    if (nextHref !== currentHref) router.push(nextHref);
+  };
+
+  const toggleBrand = (brand: string) => {
+    updateSelectedBrands(
+      selectedBrands.includes(brand)
+        ? selectedBrands.filter((selectedBrand) => selectedBrand !== brand)
+        : [...selectedBrands, brand],
+    );
+  };
 
   // 카테고리 화면은 카테고리 목록에서 slug를 확인한 뒤에 조회해, 전체 상품·전체 개수를 먼저 요청하지 않게 합니다.
   const isCategoryResolved = isSearch || selectedCategory !== undefined;
@@ -146,6 +187,33 @@ export function ProductListingView({
     : facetsQuery.data
       ? 'success'
       : 'pending';
+  useEffect(() => {
+    if (!initialBrowseBrands) {
+      hasFocusedBrandBrowseRef.current = false;
+      return;
+    }
+    if (
+      !isMobileFiltersOpen ||
+      hasFocusedBrandBrowseRef.current ||
+      !window.matchMedia('(max-width: 1023px)').matches
+    ) {
+      return;
+    }
+    const brandGroup = mobileBrandGroupRef.current;
+    if (!brandGroup) return;
+    const brandChip =
+      brandGroup.querySelector<HTMLButtonElement>('button[aria-pressed="true"]') ??
+      brandGroup.querySelector<HTMLButtonElement>('button:not(:disabled)');
+    if (!brandChip && facetsStatus === 'pending') return;
+    const focusTarget = brandChip ?? brandGroup;
+    focusTarget.focus({ preventScroll: true });
+    brandGroup.scrollIntoView({
+      behavior: getScrollBehavior(prefersReducedMotion),
+      block: 'nearest',
+    });
+    // Group-only focus on an error must not block a later successful retry from focusing a chip.
+    if (brandChip || facetsStatus !== 'error') hasFocusedBrandBrowseRef.current = true;
+  }, [facetsStatus, initialBrowseBrands, isMobileFiltersOpen, prefersReducedMotion]);
   const retryFacets = () => void facetsQuery.refetch();
 
   const activeFilters: ActiveFilter[] = [];
@@ -171,7 +239,7 @@ export function ProductListingView({
     setMaxPrice(undefined);
     setMinPriceInput('');
     setMaxPriceInput('');
-    setSelectedBrands([]);
+    updateSelectedBrands([]);
     setSelectedCertifications([]);
     setExcludeSoldOut(false);
     setPage(1);
@@ -190,9 +258,7 @@ export function ProductListingView({
       setMinPriceInput('');
       setMaxPriceInput('');
     } else if (activeFilter.key === 'brand') {
-      setSelectedBrands((currentBrands) =>
-        currentBrands.filter((brand) => brand !== activeFilter.value),
-      );
+      updateSelectedBrands(selectedBrands.filter((brand) => brand !== activeFilter.value));
     } else if (activeFilter.key === 'certification') {
       setSelectedCertifications((currentCertifications) =>
         currentCertifications.filter((certification) => certification !== activeFilter.value),
@@ -224,7 +290,7 @@ export function ProductListingView({
   const selectSearchCategory = (categoryId: string | undefined) => {
     setSelectedSearchCategoryId(categoryId);
     // 카테고리가 바뀌면 그 범위에 없는 브랜드·인증 선택을 비웁니다.
-    setSelectedBrands([]);
+    updateSelectedBrands([]);
     setSelectedCertifications([]);
     setPage(1);
   };
@@ -394,18 +460,27 @@ export function ProductListingView({
             {facetsStatus === 'error' ? (
               <FacetsErrorNotice onRetry={retryFacets} className="mt-12" />
             ) : null}
-            <div className="mt-12 flex flex-wrap gap-8">
+            <h2 id="mobile-brand-filter-heading" className="mt-12 text-label-m">
+              브랜드
+            </h2>
+            <div
+              ref={mobileBrandGroupRef}
+              role="group"
+              aria-labelledby="mobile-brand-filter-heading"
+              tabIndex={-1}
+              className="mt-8 flex flex-wrap gap-8"
+            >
               {brandFacets.map((brandFacet) => (
                 <Chip
                   key={brandFacet.value}
                   isSelected={selectedBrands.includes(brandFacet.value)}
-                  onClick={() =>
-                    toggleSelection(selectedBrands, brandFacet.value, setSelectedBrands)
-                  }
+                  onClick={() => toggleBrand(brandFacet.value)}
                 >
                   {brandFacet.value}
                 </Chip>
               ))}
+            </div>
+            <div role="group" aria-label="안전인증" className="mt-12 flex flex-wrap gap-8">
               {certificationFacets.map((certificationFacet) => (
                 <Chip
                   key={certificationFacet.value}
@@ -421,6 +496,8 @@ export function ProductListingView({
                   {certificationFacet.value}
                 </Chip>
               ))}
+            </div>
+            <div role="group" aria-label="재고 상태" className="mt-12 flex flex-wrap gap-8">
               <Chip isSelected={excludeSoldOut} onClick={toggleSoldOut}>
                 품절 상품 제외
               </Chip>
@@ -497,7 +574,7 @@ export function ProductListingView({
               status={facetsStatus}
               selectedValues={selectedBrands}
               emptyText="브랜드 정보가 없습니다."
-              onToggle={(brand) => toggleSelection(selectedBrands, brand, setSelectedBrands)}
+              onToggle={toggleBrand}
             />
           </FilterSection>
           <FilterSection title="안전인증">
