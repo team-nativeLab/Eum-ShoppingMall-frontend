@@ -47,10 +47,16 @@ export function AdminLayout() {
 
   return (
     <div className="flex min-h-dvh min-w-[1280px] bg-bg-subtle text-text-1">
+      <a
+        href="#admin-main-content"
+        className="focus:shadow-lg sr-only focus:not-sr-only focus:fixed focus:top-12 focus:left-12 focus:z-50 focus:rounded-8 focus:bg-bg focus:px-16 focus:py-12 focus:text-text-1"
+      >
+        본문 바로가기
+      </a>
       <AdminSidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <AdminTopBar />
-        <main className="flex-1 p-32">
+        <main id="admin-main-content" tabIndex={-1} className="flex-1 p-32">
           <div className="mx-auto w-full max-w-admin-content">
             <Outlet />
           </div>

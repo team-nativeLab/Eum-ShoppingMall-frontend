@@ -5,6 +5,7 @@ import { Button } from '@eum/ui/components/Button';
 import { Pagination } from '@eum/ui/components/Pagination';
 import {
   AdminEmpty,
+  AdminDateInput,
   AdminError,
   AdminLoading,
   AdminNotice,
@@ -13,8 +14,8 @@ import {
   AdminTabs,
   formatAdminCurrency,
   formatAdminDateTime,
-  formatAdminDateInput,
   getAdminLocalDateKey,
+  isInvalidAdminDateInput,
   parseAdminDateInput,
 } from '@/components/AdminUI';
 import { getShopApi } from '@/lib/shop-api';
@@ -80,9 +81,11 @@ export function AdminOrdersPage() {
     queryKey: ['admin', 'orders', 'list'],
     queryFn: ({ signal }) => loadAdminOrders(signal),
   });
+  const hasInvalidDateFilter =
+    isInvalidAdminDateInput(startDate) || isInvalidAdminDateInput(endDate);
 
   const matchingOrders = useMemo(() => {
-    if (!ordersQuery.data) return [];
+    if (!ordersQuery.data || hasInvalidDateFilter) return [];
     const normalizedKeyword = searchKeyword.toLocaleLowerCase('ko-KR');
     const startDateKey = parseAdminDateInput(startDate);
     const endDateKey = parseAdminDateInput(endDate);
@@ -109,7 +112,7 @@ export function AdminOrdersPage() {
           ? right.orderedAt.localeCompare(left.orderedAt)
           : left.orderedAt.localeCompare(right.orderedAt),
       );
-  }, [endDate, ordersQuery.data, searchKeyword, sortOrder, startDate, tab]);
+  }, [endDate, hasInvalidDateFilter, ordersQuery.data, searchKeyword, sortOrder, startDate, tab]);
 
   if (ordersQuery.isPending) return <AdminLoading label="주문 목록을 불러오고 있습니다." />;
   if (ordersQuery.isError) {
@@ -189,36 +192,32 @@ export function AdminOrdersPage() {
             className="w-full min-w-0 border-0 bg-transparent text-body-s outline-none placeholder:text-text-3"
           />
         </label>
-        <label className="flex h-40 items-center gap-8 rounded-8 border border-line-control px-12 text-caption text-text-3">
-          주문일
-          <input
-            aria-label="주문 시작일"
-            type="text"
-            inputMode="numeric"
-            maxLength={10}
-            placeholder="0000.00.00"
+        <div className="flex h-40 items-center gap-8 rounded-8 border border-line-control px-12 text-caption text-text-3">
+          <span>주문일</span>
+          <AdminDateInput
+            label="주문 시작일"
             value={startDate}
-            onChange={(event) => {
-              setStartDate(formatAdminDateInput(event.target.value));
+            invalid={isInvalidAdminDateInput(startDate)}
+            errorMessageId="order-date-filter-error"
+            onChange={(nextValue) => {
+              setStartDate(nextValue);
               setPage(1);
             }}
-            className="w-104 bg-transparent text-body-s text-text-1 placeholder:text-text-3"
+            className="w-132"
           />
           <span aria-hidden="true">~</span>
-          <input
-            aria-label="주문 종료일"
-            type="text"
-            inputMode="numeric"
-            maxLength={10}
-            placeholder="0000.00.00"
+          <AdminDateInput
+            label="주문 종료일"
             value={endDate}
-            onChange={(event) => {
-              setEndDate(formatAdminDateInput(event.target.value));
+            invalid={isInvalidAdminDateInput(endDate)}
+            errorMessageId="order-date-filter-error"
+            onChange={(nextValue) => {
+              setEndDate(nextValue);
               setPage(1);
             }}
-            className="w-104 bg-transparent text-body-s text-text-1 placeholder:text-text-3"
+            className="w-132"
           />
-        </label>
+        </div>
         <Button type="button" variant="ghost" size="s" onClick={handleReset}>
           초기화
         </Button>
@@ -226,6 +225,12 @@ export function AdminOrdersPage() {
           검색
         </Button>
       </form>
+      {hasInvalidDateFilter ? (
+        <p id="order-date-filter-error" role="alert" className="mt-8 text-caption text-danger">
+          시작일과 종료일은 YYYY.MM.DD 형식의 유효한 날짜여야 합니다. 날짜를 수정하면 해당 조건으로
+          결과를 다시 표시합니다.
+        </p>
+      ) : null}
       <section
         className="mt-16 overflow-hidden rounded-12 border border-line bg-bg"
         aria-label="주문 검색 결과"
@@ -267,13 +272,15 @@ export function AdminOrdersPage() {
         </div>
         {visibleOrders.length === 0 ? (
           <AdminEmpty
-            title="주문 내역이 없습니다"
+            title={hasInvalidDateFilter ? '주문일 입력을 확인해 주세요' : '주문 내역이 없습니다'}
             description={
-              ordersQuery.data.orderListUnavailable
-                ? '실제 주문 API가 연결되면 이곳에 주문이 표시됩니다.'
-                : ordersQuery.data.failedMemberCount
-                  ? '검색 조건에 맞는 주문이 없거나 일부 회원의 주문을 조회하지 못했습니다.'
-                  : '검색어나 주문 상태를 확인해 주세요.'
+              hasInvalidDateFilter
+                ? '올바른 날짜를 입력하면 검색 결과가 표시됩니다.'
+                : ordersQuery.data.orderListUnavailable
+                  ? '실제 주문 API가 연결되면 이곳에 주문이 표시됩니다.'
+                  : ordersQuery.data.failedMemberCount
+                    ? '검색 조건에 맞는 주문이 없거나 일부 회원의 주문을 조회하지 못했습니다.'
+                    : '검색어나 주문 상태를 확인해 주세요.'
             }
           />
         ) : (

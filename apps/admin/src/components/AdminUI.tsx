@@ -1,5 +1,5 @@
-import { AlertCircle, LoaderCircle } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { AlertCircle, CalendarDays, LoaderCircle } from 'lucide-react';
+import { useRef, type ReactNode } from 'react';
 import { Badge, type BadgeTone } from '@eum/ui/components/Badge';
 import { Button } from '@eum/ui/components/Button';
 import { Icon } from '@eum/ui/components/Icon';
@@ -101,10 +101,17 @@ interface AdminNoticeProps {
   children: ReactNode;
   tone?: 'info' | 'warning' | 'error';
   className?: string;
+  action?: ReactNode;
 }
 
 /** API 미지원 등 다음 단계가 필요한 내용을 현재 화면의 상태로 안내합니다. */
-export function AdminNotice({ id, children, tone = 'info', className = '' }: AdminNoticeProps) {
+export function AdminNotice({
+  id,
+  children,
+  tone = 'info',
+  className = '',
+  action,
+}: AdminNoticeProps) {
   const toneClassName =
     tone === 'warning'
       ? 'border-warning-tint bg-warning-tint text-warning'
@@ -117,7 +124,10 @@ export function AdminNotice({ id, children, tone = 'info', className = '' }: Adm
       className={`flex items-start gap-8 rounded-8 border px-12 py-10 text-body-s ${toneClassName} ${className}`}
     >
       <Icon icon={AlertCircle} size={16} className="mt-2 shrink-0" />
-      <p>{children}</p>
+      <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-8">
+        <p>{children}</p>
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
     </div>
   );
 }
@@ -153,6 +163,8 @@ export function AdminError({
 }: AdminErrorProps) {
   return (
     <div
+      role="alert"
+      aria-live="assertive"
       className={`${adminPanelClassName} flex min-h-240 flex-col items-center justify-center px-24 py-32 text-center`}
     >
       <Icon icon={AlertCircle} size={24} className="text-danger" />
@@ -261,6 +273,82 @@ export function parseAdminDateInput(value: string): string {
   if (month < 1 || month > 12 || day < 1 || day > (daysByMonth[month - 1] ?? 0)) return '';
 
   return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+}
+
+/** 빈 값은 선택 사항으로 허용하고, 값이 있는 잘못된 날짜만 감지합니다. */
+export function isInvalidAdminDateInput(value: string): boolean {
+  return value.trim() !== '' && parseAdminDateInput(value) === '';
+}
+
+interface AdminDateInputProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  className?: string;
+  invalid?: boolean;
+  errorMessageId?: string;
+}
+
+/** Dotted 날짜 입력과 키보드로 열 수 있는 브라우저 달력 버튼을 제공합니다. */
+export function AdminDateInput({
+  label,
+  value,
+  onChange,
+  className = '',
+  invalid = false,
+  errorMessageId,
+}: AdminDateInputProps) {
+  const nativeDateInputRef = useRef<HTMLInputElement>(null);
+
+  const openDatePicker = () => {
+    const nativeDateInput = nativeDateInputRef.current;
+    if (!nativeDateInput) return;
+
+    if (typeof nativeDateInput.showPicker === 'function') {
+      try {
+        nativeDateInput.showPicker();
+        return;
+      } catch {
+        // Some browsers reject showPicker for a visually hidden input; use the native click fallback.
+      }
+    }
+    nativeDateInput.click();
+  };
+
+  return (
+    <div className={`relative flex h-32 items-center ${className}`}>
+      <input
+        aria-label={label}
+        aria-invalid={invalid || undefined}
+        aria-describedby={invalid ? errorMessageId : undefined}
+        type="text"
+        inputMode="numeric"
+        maxLength={10}
+        placeholder="0000.00.00"
+        value={value}
+        onChange={(event) => onChange(formatAdminDateInput(event.target.value))}
+        className="h-full w-full min-w-0 bg-transparent pr-28 text-body-s text-text-1 placeholder:text-text-3"
+      />
+      <button
+        type="button"
+        aria-label={`${label} 달력 열기`}
+        title={`${label} 달력 열기`}
+        onClick={openDatePicker}
+        className="absolute top-1/2 right-2 z-10 flex size-28 -translate-y-1/2 items-center justify-center rounded-4 text-text-3 focus-ring hover:bg-surface hover:text-text-1"
+      >
+        <Icon icon={CalendarDays} size={16} />
+      </button>
+      <input
+        ref={nativeDateInputRef}
+        aria-hidden="true"
+        tabIndex={-1}
+        type="date"
+        value={parseAdminDateInput(value)}
+        onChange={(event) => onChange(formatAdminDateInput(event.target.value))}
+        className="pointer-events-none absolute top-1/2 right-2 size-28 -translate-y-1/2 opacity-0"
+      />
+    </div>
+  );
 }
 
 const QUOTE_STATUS: Record<string, { label: string; tone: BadgeTone }> = QUOTE_STATUS_META;

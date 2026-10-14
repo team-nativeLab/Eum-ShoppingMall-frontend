@@ -7,14 +7,15 @@ import { Button } from '@eum/ui/components/Button';
 import { Pagination } from '@eum/ui/components/Pagination';
 import {
   AdminEmpty,
+  AdminDateInput,
   AdminError,
   AdminLoading,
   AdminNotice,
   AdminPageHeader,
   AdminTabs,
-  formatAdminDateInput,
   formatAdminDate,
   formatAdminDateTime,
+  isInvalidAdminDateInput,
   parseAdminDateInput,
 } from '@/components/AdminUI';
 import { getShopApi } from '@/lib/shop-api';
@@ -58,6 +59,8 @@ export function AdminQuotesPage() {
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
   const [statusPreviews, setStatusPreviews] = useState<Partial<Record<string, QuoteStatus>>>({});
   const [page, setPage] = useState(1);
+  const hasInvalidDateFilter =
+    isInvalidAdminDateInput(startDateInput) || isInvalidAdminDateInput(endDateInput);
   const quotesQuery = useQuery({
     queryKey: ['admin', 'quotes', 'list'],
     queryFn: ({ signal }) => loadQuotes(signal),
@@ -119,6 +122,7 @@ export function AdminQuotesPage() {
 
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (hasInvalidDateFilter) return;
     setAppliedFilters({
       keyword: searchText.trim(),
       startDate: parseAdminDateInput(startDateInput),
@@ -178,35 +182,25 @@ export function AdminQuotesPage() {
           />
         </label>
         <div className="flex h-40 items-center gap-8 rounded-8 border border-line-control px-12">
-          <label htmlFor="quote-start-date" className="flex min-w-132 items-center">
-            <span className="sr-only">접수 시작일</span>
-            <input
-              id="quote-start-date"
-              type="text"
-              inputMode="numeric"
-              maxLength={10}
-              placeholder="0000.00.00"
-              value={startDateInput}
-              onChange={(event) => setStartDateInput(formatAdminDateInput(event.target.value))}
-              className="w-104 bg-transparent text-body-s text-text-2 outline-none placeholder:text-text-3"
-            />
-          </label>
+          <AdminDateInput
+            label="접수 시작일"
+            value={startDateInput}
+            invalid={isInvalidAdminDateInput(startDateInput)}
+            errorMessageId="quote-date-filter-error"
+            onChange={setStartDateInput}
+            className="w-132"
+          />
           <span className="text-caption text-text-3" aria-hidden="true">
             ~
           </span>
-          <label htmlFor="quote-end-date" className="flex min-w-132 items-center">
-            <span className="sr-only">접수 종료일</span>
-            <input
-              id="quote-end-date"
-              type="text"
-              inputMode="numeric"
-              maxLength={10}
-              placeholder="0000.00.00"
-              value={endDateInput}
-              onChange={(event) => setEndDateInput(formatAdminDateInput(event.target.value))}
-              className="w-104 bg-transparent text-body-s text-text-2 outline-none placeholder:text-text-3"
-            />
-          </label>
+          <AdminDateInput
+            label="접수 종료일"
+            value={endDateInput}
+            invalid={isInvalidAdminDateInput(endDateInput)}
+            errorMessageId="quote-date-filter-error"
+            onChange={setEndDateInput}
+            className="w-132"
+          />
         </div>
         <label className="sr-only" htmlFor="quote-type-unavailable">
           견적 유형
@@ -231,6 +225,12 @@ export function AdminQuotesPage() {
           </Button>
         </div>
       </form>
+      {hasInvalidDateFilter ? (
+        <p id="quote-date-filter-error" role="alert" className="mt-8 text-caption text-danger">
+          시작일과 종료일은 YYYY.MM.DD 형식의 유효한 날짜여야 합니다. 검색 조건을 수정하고 다시
+          검색해 주세요. 이전 검색 결과는 유지됩니다.
+        </p>
+      ) : null}
 
       <div className="mt-24 grid items-start gap-16 xl:grid-cols-[minmax(0,1.414fr)_minmax(360px,1fr)]">
         <section aria-label="견적 문의 목록" className="min-w-0">

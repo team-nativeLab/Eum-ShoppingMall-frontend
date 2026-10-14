@@ -24,6 +24,7 @@ interface DashboardOrder {
 
 interface DashboardData {
   products: Product[];
+  productTotalCount: number;
   orders: DashboardOrder[];
   quotes: Quote[];
   unavailableOrderMemberCount: number;
@@ -58,6 +59,7 @@ async function loadDashboardData(signal: AbortSignal): Promise<DashboardData> {
   );
   return {
     products: productPage.items,
+    productTotalCount: productPage.totalCount,
     orders,
     quotes,
     unavailableOrderMemberCount: orderListUnavailable
@@ -223,8 +225,18 @@ export function AdminDashboardPage() {
   if (dashboardQuery.isPending) return <AdminLoading label="대시보드 현황을 불러오고 있습니다." />;
   if (dashboardQuery.isError) return <AdminError onRetry={() => void dashboardQuery.refetch()} />;
 
-  const { products, orders, quotes, unavailableOrderMemberCount, orderListUnavailable } =
-    dashboardQuery.data;
+  const {
+    products,
+    productTotalCount,
+    orders,
+    quotes,
+    unavailableOrderMemberCount,
+    orderListUnavailable,
+  } = dashboardQuery.data;
+  const isProductAggregationPartial = productTotalCount > products.length;
+  const productAggregationHint = isProductAggregationPartial
+    ? `${products.length.toLocaleString('ko-KR')}개 조회분 · 전체 ${productTotalCount.toLocaleString('ko-KR')}개`
+    : '전체 상품 기준';
   const activeProducts = products.filter((product) => product.stockStatus === 'inStock');
   const soldOutProducts = products.filter((product) => product.stockStatus === 'soldOut');
   const hiddenPriceProducts = products.filter((product) => !product.priceVisible);
@@ -241,9 +253,26 @@ export function AdminDashboardPage() {
         title="대시보드"
         description={`기준 ${formatAdminDateTime(new Date().toISOString())}`}
       />
+      {isProductAggregationPartial ? (
+        <AdminNotice tone="warning" className="mb-16">
+          상품 지표는 전체 {productTotalCount.toLocaleString('ko-KR')}개 중 첫{' '}
+          {products.length.toLocaleString('ko-KR')}개 조회분만 집계한 부분 결과입니다.
+          판매중·품절·금액 미표시 수와 아래 재고 표는 전체 상품 기준이 아닙니다.
+        </AdminNotice>
+      ) : null}
       <div className="grid grid-cols-6 gap-12">
-        <AdminCountTile label="판매중 상품" value={activeProducts.length} href="/products" />
-        <AdminCountTile label="품절 상품" value={soldOutProducts.length} href="/products" />
+        <AdminCountTile
+          label="판매중 상품"
+          value={activeProducts.length}
+          href="/products"
+          hint={productAggregationHint}
+        />
+        <AdminCountTile
+          label="품절 상품"
+          value={soldOutProducts.length}
+          href="/products"
+          hint={productAggregationHint}
+        />
         <AdminCountTile
           label="재고 부족"
           value="—"
@@ -255,6 +284,7 @@ export function AdminDashboardPage() {
           label="금액 미표시 상품"
           value={hiddenPriceProducts.length}
           href="/products"
+          hint={productAggregationHint}
         />
         <AdminCountTile
           label="신규 주문"
@@ -287,7 +317,7 @@ export function AdminDashboardPage() {
       <div className="mt-16 grid grid-cols-2 gap-16">
         <AdminPanel
           title="상품 재고 상태"
-          description="수량 API가 없어 품절 여부만 표시합니다."
+          description={`${isProductAggregationPartial ? `첫 ${products.length.toLocaleString('ko-KR')}개 조회분 · ` : ''}수량 API가 없어 품절 여부만 표시합니다.`}
           action={
             <Link to="/products" className="text-label-s hover:underline">
               전체 보기

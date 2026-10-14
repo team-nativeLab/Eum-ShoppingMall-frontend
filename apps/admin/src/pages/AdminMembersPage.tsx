@@ -5,14 +5,15 @@ import { Button } from '@eum/ui/components/Button';
 import { Pagination } from '@eum/ui/components/Pagination';
 import {
   AdminEmpty,
+  AdminDateInput,
   AdminError,
   AdminLoading,
   AdminNotice,
   AdminPageHeader,
   AdminTabs,
-  formatAdminDateInput,
   formatAdminDate,
   getAdminLocalDateKey,
+  isInvalidAdminDateInput,
   parseAdminDateInput,
 } from '@/components/AdminUI';
 import { getShopApi } from '@/lib/shop-api';
@@ -90,9 +91,11 @@ export function AdminMembersPage() {
     enabled: membersQuery.data !== undefined,
     queryFn: ({ signal }) => loadMemberOrderCounts(membersQuery.data ?? [], signal),
   });
+  const hasInvalidDateFilter =
+    isInvalidAdminDateInput(startDate) || isInvalidAdminDateInput(endDate);
 
   const matchingMembers = useMemo(() => {
-    if (!membersQuery.data) return [];
+    if (!membersQuery.data || hasInvalidDateFilter) return [];
     const normalizedKeyword = searchKeyword.toLocaleLowerCase('ko-KR');
     const startDateKey = parseAdminDateInput(startDate);
     const endDateKey = parseAdminDateInput(endDate);
@@ -113,7 +116,7 @@ export function AdminMembersPage() {
           ? right.joinedAt.localeCompare(left.joinedAt)
           : left.joinedAt.localeCompare(right.joinedAt),
       );
-  }, [endDate, membersQuery.data, searchKeyword, sortOrder, startDate]);
+  }, [endDate, hasInvalidDateFilter, membersQuery.data, searchKeyword, sortOrder, startDate]);
 
   if (membersQuery.isPending) return <AdminLoading label="회원 목록을 불러오고 있습니다." />;
   if (membersQuery.isError) {
@@ -161,7 +164,20 @@ export function AdminMembersPage() {
           표시합니다.
         </AdminNotice>
       ) : memberOrderCountsQuery.data?.failedMemberIds.size ? (
-        <AdminNotice tone="warning" className="mb-16">
+        <AdminNotice
+          tone="warning"
+          className="mb-16"
+          action={
+            <Button
+              type="button"
+              variant="secondary"
+              size="s"
+              onClick={() => void memberOrderCountsQuery.refetch()}
+            >
+              다시 조회
+            </Button>
+          }
+        >
           {memberOrderCountsQuery.data.failedMemberIds.size.toLocaleString('ko-KR')}명의 주문 수를
           조회하지 못했습니다. 해당 회원은 0건으로 간주하지 않습니다.
         </AdminNotice>
@@ -186,36 +202,32 @@ export function AdminMembersPage() {
             className="w-full min-w-0 border-0 bg-transparent text-body-s outline-none placeholder:text-text-3"
           />
         </label>
-        <label className="flex h-40 items-center gap-8 rounded-8 border border-line-control px-12 text-caption text-text-3">
-          가입일
-          <input
-            aria-label="가입 시작일"
-            type="text"
-            inputMode="numeric"
-            maxLength={10}
-            placeholder="0000.00.00"
+        <div className="flex h-40 items-center gap-8 rounded-8 border border-line-control px-12 text-caption text-text-3">
+          <span>가입일</span>
+          <AdminDateInput
+            label="가입 시작일"
             value={startDate}
-            onChange={(event) => {
-              setStartDate(formatAdminDateInput(event.target.value));
+            invalid={isInvalidAdminDateInput(startDate)}
+            errorMessageId="member-date-filter-error"
+            onChange={(nextValue) => {
+              setStartDate(nextValue);
               setPage(1);
             }}
-            className="w-104 bg-transparent text-body-s text-text-1 placeholder:text-text-3"
+            className="w-132"
           />
           <span aria-hidden="true">~</span>
-          <input
-            aria-label="가입 종료일"
-            type="text"
-            inputMode="numeric"
-            maxLength={10}
-            placeholder="0000.00.00"
+          <AdminDateInput
+            label="가입 종료일"
             value={endDate}
-            onChange={(event) => {
-              setEndDate(formatAdminDateInput(event.target.value));
+            invalid={isInvalidAdminDateInput(endDate)}
+            errorMessageId="member-date-filter-error"
+            onChange={(nextValue) => {
+              setEndDate(nextValue);
               setPage(1);
             }}
-            className="w-104 bg-transparent text-body-s text-text-1 placeholder:text-text-3"
+            className="w-132"
           />
-        </label>
+        </div>
         <Button type="button" variant="ghost" size="s" onClick={handleReset}>
           초기화
         </Button>
@@ -223,6 +235,12 @@ export function AdminMembersPage() {
           검색
         </Button>
       </form>
+      {hasInvalidDateFilter ? (
+        <p id="member-date-filter-error" role="alert" className="mt-8 text-caption text-danger">
+          시작일과 종료일은 YYYY.MM.DD 형식의 유효한 날짜여야 합니다. 날짜를 수정하면 해당 조건으로
+          결과를 다시 표시합니다.
+        </p>
+      ) : null}
       <section
         className="mt-16 overflow-hidden rounded-12 border border-line bg-bg"
         aria-label="회원 검색 결과"
@@ -263,7 +281,14 @@ export function AdminMembersPage() {
           </div>
         </div>
         {visibleMembers.length === 0 ? (
-          <AdminEmpty title="회원이 없습니다" description="검색어나 가입일 범위를 확인해 주세요." />
+          <AdminEmpty
+            title={hasInvalidDateFilter ? '가입일 입력을 확인해 주세요' : '회원이 없습니다'}
+            description={
+              hasInvalidDateFilter
+                ? '올바른 날짜를 입력하면 검색 결과가 표시됩니다.'
+                : '검색어나 가입일 범위를 확인해 주세요.'
+            }
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-800 border-collapse text-left text-body-s">
