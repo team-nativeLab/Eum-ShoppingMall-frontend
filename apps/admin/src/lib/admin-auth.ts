@@ -1,4 +1,4 @@
-import { createRealAdminAuth, getBrowserStore, type AdminAuthClient } from '@eum/api/auth';
+import { createMemoryStore, createRealAdminAuth, type AdminAuthClient } from '@eum/api/auth';
 import { getAdminApiConfig } from './api-config';
 
 let adminAuthPromise: Promise<AdminAuthClient> | null = null;
@@ -8,7 +8,8 @@ async function loadAdminAuth(): Promise<AdminAuthClient> {
   const apiConfig = getAdminApiConfig();
   if (import.meta.env.VITE_API_MODE !== 'real' && apiConfig.mode === 'mock') {
     const { createAdminMockAuth } = await import('@eum/api/mock-auth');
-    return createAdminMockAuth(apiConfig, getBrowserStore());
+    // Admin 데모 세션은 SPA 메모리에만 유지해 브라우저 저장소에 기록하지 않습니다.
+    return createAdminMockAuth(apiConfig, createMemoryStore());
   }
   return createRealAdminAuth(apiConfig);
 }

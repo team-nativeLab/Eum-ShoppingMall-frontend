@@ -36,33 +36,71 @@ import { PageContainer } from './page-container';
 import { useCategoriesQuery } from '@/features/products/use-categories-query';
 import { useProductsQuery } from '@/features/products/use-products-query';
 import { useProductSuggestionsQuery } from '@/features/products/use-product-suggestions-query';
+import {
+  buildBrandBrowseHref,
+  isBrandBrowseMode,
+  getBrandFilterValues,
+  getPrimaryNavigationItems,
+  isPrimaryNavigationItemActive,
+} from '@/features/products/product-navigation';
 
-interface NavigationItem {
-  label: string;
-  href: string;
-  /** 이 경로 접두사 중 하나로 시작하면 현재 메뉴로 표시합니다. 빈 배열이면 표시하지 않습니다. */
-  activePathPrefixes: string[];
+/** URL-dependent active state stays below Suspense because the header lives in the root layout. */
+function PrimaryNavigation({
+  pathname,
+  selectedBrands,
+  brandBrowseIntent = false,
+  searchParamsReady = true,
+}: {
+  pathname: string;
+  selectedBrands: readonly string[];
+  brandBrowseIntent?: boolean;
+  searchParamsReady?: boolean;
+}) {
+  return (
+    <nav
+      aria-label="주요 메뉴"
+      className="flex shrink-0 items-center gap-24 min-[1440px]:gap-40 xl:gap-32"
+    >
+      {getPrimaryNavigationItems().map((navigationItem) => {
+        const isActive = isPrimaryNavigationItemActive(
+          navigationItem,
+          pathname,
+          selectedBrands,
+          searchParamsReady,
+          brandBrowseIntent,
+        );
+        return (
+          <Link
+            key={navigationItem.key}
+            href={navigationItem.href}
+            aria-current={isActive ? 'page' : undefined}
+            className={cx(
+              'relative inline-flex h-72 items-center text-label-l whitespace-nowrap text-text-1 focus-ring',
+              isActive
+                ? 'after:absolute after:inset-x-0 after:bottom-0 after:h-2 after:bg-text-1'
+                : 'hover:text-text-2',
+            )}
+          >
+            {navigationItem.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
 }
 
-/**
- * GNB 주요 메뉴. '제품'은 서버 카테고리의 첫 상위 카테고리로 보내고, 카테고리가 없으면 전체 상품(/search)으로 보냅니다.
- * '브랜드'는 전용 화면이 없어 전체 상품으로 보내므로 현재 메뉴 표시는 하지 않습니다(제품 탐색과 겹치지 않게).
- */
-function getNavigationItems(categories: readonly Category[]): NavigationItem[] {
-  const firstTopLevelCategory = categories.find((category) => category.parentId === null);
-  return [
-    {
-      label: '제품',
-      href: firstTopLevelCategory
-        ? '/category/' + encodeURIComponent(firstTopLevelCategory.slug)
-        : '/search',
-      activePathPrefixes: ['/category', '/products', '/search'],
-    },
-    { label: '브랜드', href: '/search', activePathPrefixes: [] },
-    { label: '안전 솔루션', href: '/solutions', activePathPrefixes: ['/solutions'] },
-    { label: '고객지원', href: '/support/notices', activePathPrefixes: ['/support'] },
-    { label: '회사소개', href: '/about', activePathPrefixes: ['/about'] },
-  ];
+/** Brand filter state controls whether Product or Brand is active. */
+function UrlAwarePrimaryNavigation({ pathname }: { pathname: string }) {
+  const searchParams = useSearchParams();
+  const selectedBrands = getBrandFilterValues(searchParams.getAll('brand'));
+  const brandBrowseIntent = isBrandBrowseMode(searchParams.getAll('browse'));
+  return (
+    <PrimaryNavigation
+      pathname={pathname}
+      selectedBrands={selectedBrands}
+      brandBrowseIntent={brandBrowseIntent}
+    />
+  );
 }
 
 const FOCUSABLE_SELECTOR =
@@ -179,7 +217,6 @@ export function SiteHeader() {
   const [isScrolled, setIsScrolled] = useState(false);
   const closeMenu = useCallback(() => setIsMenuOpen(false), []);
   const categoryList = categoriesQuery.data ?? [];
-  const navigationItems = getNavigationItems(categoryList);
   // 상품 상세는 모바일에서만 상세 전용 헤더(뒤로·공유·장바구니)를 씁니다. 데스크톱 GNB는 항상 그립니다.
   const isProductDetail = pathname.startsWith('/products/');
   const checkoutStep = pathname.startsWith('/checkout/')
@@ -305,31 +342,17 @@ export function SiteHeader() {
               이음산업건설
             </Link>
           </div>
-          <nav
-            aria-label="주요 메뉴"
-            className="flex shrink-0 items-center gap-24 min-[1440px]:gap-40 xl:gap-32"
+          <Suspense
+            fallback={
+              <PrimaryNavigation
+                pathname={pathname}
+                selectedBrands={[]}
+                searchParamsReady={false}
+              />
+            }
           >
-            {navigationItems.map((navigationItem) => {
-              const isActive = navigationItem.activePathPrefixes.some((pathPrefix) =>
-                pathname.startsWith(pathPrefix),
-              );
-              return (
-                <Link
-                  key={navigationItem.label}
-                  href={navigationItem.href}
-                  aria-current={isActive ? 'page' : undefined}
-                  className={cx(
-                    'relative inline-flex h-full items-center text-label-l whitespace-nowrap text-text-1 focus-ring',
-                    isActive
-                      ? 'after:absolute after:inset-x-0 after:bottom-0 after:h-2 after:bg-text-1'
-                      : 'hover:text-text-2',
-                  )}
-                >
-                  {navigationItem.label}
-                </Link>
-              );
-            })}
-          </nav>
+            <UrlAwarePrimaryNavigation pathname={pathname} />
+          </Suspense>
           <div className="flex min-w-0 flex-1 justify-end pl-24">
             <UrlKeywordHeaderSearch
               onSearchKeyword={searchKeyword}
@@ -745,9 +768,9 @@ function AllMenuDialog({
           items={[
             ...brandList.map((brand) => ({
               label: brand,
-              href: '/search?q=' + encodeURIComponent(brand),
+              href: buildBrandBrowseHref(brand),
             })),
-            { label: '전체 브랜드', href: '/search' },
+            { label: '전체 브랜드', href: buildBrandBrowseHref() },
           ]}
           onNavigate={onClose}
         />
