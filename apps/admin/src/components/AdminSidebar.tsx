@@ -10,7 +10,7 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react';
-import { NavLink } from 'react-router';
+import { NavLink, useLocation } from 'react-router';
 
 interface AdminMenuItem {
   label: string;
@@ -30,6 +30,9 @@ const ADMIN_MENU_ITEMS: AdminMenuItem[] = [
 
 /** 관리자 사이드바(Figma HF/Admin/Sidebar, w240). 활성 메뉴는 검정 채움입니다. */
 export function AdminSidebar() {
+  const location = useLocation();
+  const isProductSection = location.pathname.startsWith('/products');
+
   return (
     <aside className="flex w-240 shrink-0 flex-col border-r border-line bg-bg">
       <div className="flex h-64 items-center gap-8 px-20">
@@ -55,6 +58,37 @@ export function AdminSidebar() {
                 <Icon icon={menuItem.icon} size={20} />
                 {menuItem.label}
               </NavLink>
+              {menuItem.to === '/products' && isProductSection ? (
+                <ul className="mt-4 ml-44 grid gap-2 border-l border-line pl-12">
+                  <li>
+                    <NavLink
+                      to="/products"
+                      end
+                      className={({ isActive }) =>
+                        cx(
+                          'flex h-36 items-center rounded-6 px-8 text-body-s focus-ring',
+                          isActive ? 'font-medium text-text-1' : 'text-text-3 hover:text-text-1',
+                        )
+                      }
+                    >
+                      상품 목록
+                    </NavLink>
+                  </li>
+                  <li>
+                    <NavLink
+                      to="/products/new"
+                      className={({ isActive }) =>
+                        cx(
+                          'flex h-36 items-center rounded-6 px-8 text-body-s focus-ring',
+                          isActive ? 'font-medium text-text-1' : 'text-text-3 hover:text-text-1',
+                        )
+                      }
+                    >
+                      상품 등록
+                    </NavLink>
+                  </li>
+                </ul>
+              ) : null}
             </li>
           ))}
         </ul>
