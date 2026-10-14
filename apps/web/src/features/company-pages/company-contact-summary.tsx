@@ -30,7 +30,7 @@ export function CompanyContactSummary({ variant }: CompanyContactSummaryProps) {
   const companyInfo = companyQuery.data;
   const phoneHref = companyInfo ? getPhoneHref(companyInfo) : null;
   const phone = companyInfo?.customerCenterPhone.trim() ?? '';
-  const email = companyInfo?.email.trim() ?? '';
+  const email = (variant === 'quote' ? companyInfo?.quoteEmail : companyInfo?.email)?.trim() ?? '';
   const address = companyInfo?.address.trim() ?? '';
   const hours = companyInfo?.customerCenterHours.trim() ?? '';
   const emptyValueLabel = companyQuery.isLoading

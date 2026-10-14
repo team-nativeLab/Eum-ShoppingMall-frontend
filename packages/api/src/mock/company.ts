@@ -8,6 +8,7 @@ export const mockCompanyInfo: CompanyInfo = {
   mailOrderSalesNumber: '제0000-서울00-0000호',
   address: '서울특별시 00구 00로 00',
   email: 'info@example.com',
+  quoteEmail: 'quote@example.com',
   privacyOfficer: '000',
   customerCenterPhone: '0000-0000',
   customerCenterTel: '00000000',

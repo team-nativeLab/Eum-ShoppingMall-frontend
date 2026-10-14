@@ -92,6 +92,8 @@ describe('목 API 시나리오', () => {
       ),
     ).toBe(true);
     expect(companyInfo.customerCenterTel).toMatch(/^[0-9+]+$/);
+    expect(companyInfo.email).toBe('info@example.com');
+    expect(companyInfo.quoteEmail).toBe('quote@example.com');
     await expect(
       createMockApi({ ...testConfig, mockScenario: 'error' }).company.getInfo(),
     ).rejects.toMatchObject({ code: 'NETWORK' });

@@ -1,7 +1,7 @@
 'use client';
 
 import { queryKeys } from '@eum/api/query-keys';
-import type { Faq, Inquiry, Notice } from '@eum/api/types';
+import type { Faq, Notice, Order } from '@eum/api/types';
 import { Button } from '@eum/ui/components/Button';
 import { Checkbox } from '@eum/ui/components/Checkbox';
 import { Chip } from '@eum/ui/components/Chip';
@@ -373,96 +373,41 @@ export function FaqPage() {
   );
 }
 
-function InquiryBadge({ status }: { status: Inquiry['status'] }) {
-  const isAnswered = status === 'answered';
-  return (
-    <span
-      className={
-        isAnswered
-          ? 'rounded-capsule bg-surface-2 px-10 py-4 text-caption text-text-2'
-          : 'rounded-capsule border border-line-strong px-10 py-4 text-caption text-text-2'
-      }
-    >
-      {isAnswered ? '답변완료' : '답변대기'}
-    </span>
-  );
-}
+function InquiryForm({ memberId }: { memberId: string | null }) {
+  const [inquiryBody, setInquiryBody] = useState('');
+  const [feedback, setFeedback] = useState('');
+  const [hasCompletedPreview, setHasCompletedPreview] = useState(false);
+  const ordersQuery = useQuery({
+    queryKey: memberId ? queryKeys.orders.byMember(memberId) : ['orders', 'member', null],
+    enabled: Boolean(memberId),
+    queryFn: async ({ signal }): Promise<Order[]> => {
+      if (!memberId) return [];
+      return (await getShopApi()).orders.listByMember(memberId, { signal });
+    },
+  });
 
-function InquiryHistory({ inquiries }: { inquiries: Inquiry[] }) {
-  const rows = [...inquiries].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
-  return (
-    <section aria-labelledby="inquiry-history-heading" className="mb-40">
-      <div className="mb-16 flex items-center justify-between gap-8">
-        <h2 id="inquiry-history-heading" className="text-h4">
-          내 문의 내역
-        </h2>
-        <Link
-          href="#inquiry-form-heading"
-          className="inline-flex h-40 shrink-0 items-center rounded-4 bg-text-1 px-16 text-label-s text-inverse focus-ring"
-        >
-          문의 작성
-        </Link>
-      </div>
-      <div className="hidden overflow-x-auto lg:block">
-        <table className="w-full table-fixed border-t border-text-1">
-          <colgroup>
-            <col className="w-120" />
-            <col />
-            <col className="w-144" />
-          </colgroup>
-          <thead className="sr-only">
-            <tr className="border-b border-line bg-surface text-caption font-medium text-text-2">
-              <th scope="col" className="px-12 py-12 text-center">
-                상태
-              </th>
-              <th scope="col" className="px-16 py-12 text-left">
-                제목
-              </th>
-              <th scope="col" className="px-12 py-12 text-center">
-                문의일
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((inquiry) => (
-              <tr key={inquiry.id} className="border-b border-line">
-                <td className="px-12 py-16 text-center">
-                  <InquiryBadge status={inquiry.status} />
-                </td>
-                <td className="truncate px-16 py-16 text-body-s">{inquiry.title}</td>
-                <td className="px-12 py-16 text-center text-body-s text-text-3">
-                  {formatDate(inquiry.createdAt)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="lg:hidden">
-        {rows.map((inquiry) => (
-          <article key={inquiry.id} className="border-b border-line py-16">
-            <div className="flex items-center justify-between gap-8">
-              <InquiryBadge status={inquiry.status} />
-              <time className="text-caption text-text-3">{formatDate(inquiry.createdAt)}</time>
-            </div>
-            <h3 className="mt-10 text-body-s font-medium">{inquiry.title}</h3>
-          </article>
-        ))}
-      </div>
-      {rows.length === 0 ? (
-        <p className="py-32 text-center text-body-s text-text-3">등록된 문의가 없습니다.</p>
-      ) : null}
-    </section>
-  );
-}
+  function handleSubmit(submitEvent: FormEvent<HTMLFormElement>) {
+    submitEvent.preventDefault();
+    if (hasCompletedPreview) {
+      setFeedback('이미 접수 미리보기를 완료했습니다. 입력값은 저장되지 않았습니다.');
+      return;
+    }
+    submitEvent.currentTarget.reset();
+    setInquiryBody('');
+    setHasCompletedPreview(true);
+    setFeedback('문의가 접수되었습니다. 데모 화면이며 입력값은 전송·저장되지 않았습니다.');
+  }
 
-function InquiryForm() {
   return (
     <section aria-labelledby="inquiry-form-heading">
       <form
         aria-labelledby="inquiry-form-heading"
         className="space-y-20 rounded-12 border border-line p-16 sm:p-24"
-        onSubmit={(submitEvent) => submitEvent.preventDefault()}
+        onSubmit={handleSubmit}
+        onReset={() => {
+          setInquiryBody('');
+          setFeedback('작성 내용을 초기화했습니다. 입력값은 저장되지 않았습니다.');
+        }}
       >
         <div className="flex items-end justify-between gap-12">
           <h2 id="inquiry-form-heading" tabIndex={-1} className="text-h4 scroll-mt-96">
@@ -484,8 +429,34 @@ function InquiryForm() {
               { value: 'etc', label: '기타' },
             ]}
           />
-          <TextField label="관련 주문 (선택)" placeholder="주문번호를 입력해 주세요" />
+          <SelectField
+            label="주문 선택 (선택)"
+            defaultValue=""
+            options={[
+              { value: '', label: '관련 주문을 선택해 주세요 (선택)' },
+              ...(ordersQuery.data ?? []).map((order) => ({
+                value: order.id,
+                label: `${order.orderNumber} · ${formatDate(order.orderedAt)}`,
+              })),
+            ]}
+          />
         </div>
+        {memberId && ordersQuery.isError ? (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center justify-between gap-8 text-body-s text-danger"
+          >
+            <span>주문 목록을 불러오지 못했습니다.</span>
+            <Button
+              type="button"
+              variant="secondary"
+              size="s"
+              onClick={() => void ordersQuery.refetch()}
+            >
+              다시 시도
+            </Button>
+          </div>
+        ) : null}
         <TextField
           label="제목 *"
           placeholder="문의 제목을 입력해 주세요"
@@ -497,9 +468,20 @@ function InquiryForm() {
           <textarea
             required
             aria-required="true"
+            value={inquiryBody}
+            onChange={(changeEvent) => setInquiryBody(changeEvent.currentTarget.value)}
+            maxLength={1000}
+            aria-describedby="inquiry-body-count"
             className="min-h-160 w-full resize-y rounded-8 border border-line-strong bg-bg p-14 text-body-m outline-none placeholder:text-text-3 focus:border-text-1 focus:ring-[0.5px] focus:ring-text-1 focus:ring-inset"
             placeholder="문의 내용을 입력해 주세요"
           />
+          <span
+            id="inquiry-body-count"
+            aria-live="polite"
+            className="text-right text-caption text-text-3"
+          >
+            {inquiryBody.length.toLocaleString('ko-KR')} / 1,000
+          </span>
         </label>
         <div className="space-y-8">
           <span className="block text-label-m">파일 첨부</span>
@@ -510,38 +492,51 @@ function InquiryForm() {
           </label>
           <p className="text-caption text-text-3">첨부 파일 업로드는 현재 지원하지 않습니다.</p>
         </div>
-        <Checkbox>답변이 등록되면 알림 받기</Checkbox>
+        <div className="space-y-8">
+          <Checkbox>개인정보 수집·이용 안내에 동의합니다</Checkbox>
+          <p className="text-caption text-text-3">
+            동의 여부는 화면 확인에만 쓰이며 실제 수집·저장이나 전송은 하지 않습니다.
+          </p>
+        </div>
         <div className="flex flex-col gap-12 border-t border-line pt-16 sm:flex-row sm:items-center sm:justify-between">
           <p id="inquiry-form-note" className="text-caption text-text-3">
-            문의 등록 기능은 아직 연결되지 않았습니다.
+            입력 내용은 이 화면에서만 유지되며 실제 문의로 전달되지 않습니다.
           </p>
           <div className="flex shrink-0 justify-end gap-8">
             <Button type="reset" variant="secondary" size="m">
               취소
             </Button>
-            <Button type="submit" disabled size="m" aria-describedby="inquiry-form-note">
+            <Button type="submit" size="m" aria-describedby="inquiry-form-note">
               등록
             </Button>
           </div>
         </div>
+        {feedback ? (
+          <p role="status" className="rounded-8 bg-surface p-12 text-body-s text-text-2">
+            {feedback}
+          </p>
+        ) : null}
+        {hasCompletedPreview ? (
+          <button
+            type="button"
+            onClick={() =>
+              setFeedback(
+                '이미 접수 미리보기를 완료했습니다. 실제 문의 기록은 생성되지 않았습니다.',
+              )
+            }
+            className="rounded-4 text-caption text-text-3 underline focus-ring"
+          >
+            접수 상태 다시 보기
+          </button>
+        ) : null}
       </form>
     </section>
   );
 }
 
-/** API에서 문의용 회원을 찾은 다음 해당 회원의 문의만 읽고, 새 문의는 disabled 시안으로 둡니다. */
+/** 고객 문의 작성 폼을 렌더링합니다. 회원 문의 내역은 마이페이지에서 확인합니다. */
 export function InquiryPage() {
   const { member, status: memberStatus, refreshMember } = useMemberSession();
-  const inquiryQuery = useQuery({
-    queryKey: ['support', 'inquiries', member?.id ?? null],
-    enabled: memberStatus === 'ready' && member !== null,
-    queryFn: async ({ signal }) => {
-      if (!member) throw new Error('문의 내역을 확인할 회원 정보가 없습니다.');
-      const api = await getShopApi();
-      return api.inquiries.listByMember(member.id, { signal });
-    },
-  });
-
   return (
     <SupportShell activePath="/support/inquiry">
       {memberStatus === 'loading' ? <LoadingState label="회원 정보를 확인하는 중입니다." /> : null}
@@ -552,21 +547,20 @@ export function InquiryPage() {
         />
       ) : null}
       {memberStatus === 'ready' && !member ? (
-        <p role="status" className="mb-40 py-24 text-center text-body-s text-text-3">
-          로그인 후 문의 내역을 확인할 수 있습니다.
+        <p role="status" className="mb-16 text-body-s text-text-3">
+          문의 내역은 로그인 후 마이페이지에서 확인할 수 있습니다.
         </p>
       ) : null}
-      {member && inquiryQuery.isLoading ? (
-        <LoadingState label="문의 내역을 불러오는 중입니다." />
+      {member ? (
+        <p className="mb-16 text-body-s text-text-2">
+          작성한 문의는{' '}
+          <Link href="/mypage/inquiries" className="underline focus-ring">
+            마이페이지 문의 내역
+          </Link>
+          에서 확인할 수 있습니다.
+        </p>
       ) : null}
-      {member && inquiryQuery.isError ? (
-        <SupportQueryError
-          message="문의 내역을 불러오지 못했습니다."
-          onRetry={() => void inquiryQuery.refetch()}
-        />
-      ) : null}
-      {member && inquiryQuery.isSuccess ? <InquiryHistory inquiries={inquiryQuery.data} /> : null}
-      <InquiryForm />
+      <InquiryForm memberId={member?.id ?? null} />
     </SupportShell>
   );
 }

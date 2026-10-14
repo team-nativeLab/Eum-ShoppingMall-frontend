@@ -6,11 +6,14 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useMemberSession } from '@/features/auth/member-session';
+import { MemberInquiryDetailPage, MemberInquiriesPage } from '@/features/mypage/member-inquiries';
 import { getShopApi } from '@/lib/shop-api';
 import { FaqPage, InquiryPage, NoticesPage } from './support-pages';
 
 vi.mock('@/lib/shop-api', () => ({ getShopApi: vi.fn() }));
 vi.mock('@/features/auth/member-session', () => ({ useMemberSession: vi.fn() }));
+const routerMock = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: routerMock.push }) }));
 
 const companyInfo: CompanyInfo = {
   companyName: '이음산업건설',
@@ -76,6 +79,7 @@ function createApi(notices: Notice[], apiFaqs: Faq[] = faqs): ShopApi {
     notices: { list: async () => notices },
     faqs: { list: async () => apiFaqs },
     members: { list: vi.fn(async () => [{ id: 'mem-001' }]) },
+    orders: { listByMember: vi.fn(async () => []) },
     inquiries: {
       listByMember: vi.fn(async (memberId: string) =>
         inquiries.filter((inquiry) => inquiry.memberId === memberId),
@@ -260,46 +264,112 @@ describe('company support routes', () => {
     expect(screen.getAllByText('배송', { exact: true })).toHaveLength(1);
   });
 
-  it('문의 내역 세 행을 보여 주고 연결되지 않은 제출은 비활성화합니다', async () => {
+  it('문의 작성 화면은 주문 선택과 1,000자 카운터를 제공하고 입력을 초기화합니다', async () => {
     mockMemberSession(createMember('mem-001'));
     renderWithQuery(<InquiryPage />);
-    expect(await screen.findAllByText('배송 일정 문의드립니다')).toHaveLength(2);
-    expect(screen.getAllByText('세금계산서 발행 요청')).toHaveLength(2);
-    expect(screen.getAllByText('대량 구매 견적 문의')).toHaveLength(2);
-    expect(screen.getByRole('button', { name: '등록' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '취소' })).toBeEnabled();
-    expect(screen.getByRole('link', { name: '문의 작성' })).toHaveAttribute(
-      'href',
-      '#inquiry-form-heading',
-    );
-    expect(screen.getByRole('heading', { name: '문의 작성' }).closest('form')).not.toBeNull();
-    expect(screen.getByRole('heading', { name: '문의 작성' })).toHaveClass('scroll-mt-96');
+    expect(await screen.findByRole('heading', { name: '문의 작성' })).toBeInTheDocument();
     expect(screen.getByLabelText('문의 유형 *')).toBeRequired();
     expect(screen.getByLabelText('제목 *')).toBeRequired();
-    expect(screen.getByLabelText('문의 내용 *')).toBeRequired();
-    expect(screen.getByText('문의 등록 기능은 아직 연결되지 않았습니다.')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /문의 내용/ })).toBeRequired();
+    expect(screen.getByLabelText('주문 선택 (선택)')).toBeInTheDocument();
+    expect(screen.getByText('0 / 1,000')).toBeInTheDocument();
 
     const inquiryType = screen.getByLabelText('문의 유형 *');
     const title = screen.getByLabelText('제목 *');
-    const body = screen.getByLabelText('문의 내용 *');
+    const body = screen.getByRole('textbox', { name: /문의 내용/ });
     fireEvent.change(inquiryType, { target: { value: 'delivery' } });
     fireEvent.change(title, { target: { value: '작성 중인 제목' } });
     fireEvent.change(body, { target: { value: '작성 중인 내용' } });
+    expect(screen.getByText('8 / 1,000')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '취소' }));
     expect(inquiryType).toHaveValue('');
     expect(title).toHaveValue('');
     expect(body).toHaveValue('');
+    expect(
+      screen.getByText('작성 내용을 초기화했습니다. 입력값은 저장되지 않았습니다.'),
+    ).toBeInTheDocument();
     const api = await getShopApi();
     expect(api.members.list).not.toHaveBeenCalled();
+    expect(api.orders.listByMember).toHaveBeenCalledWith(
+      'mem-001',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(api.inquiries.listByMember).not.toHaveBeenCalled();
+  });
+
+  it('문의 등록은 입력값을 지운 뒤 저장하지 않는 데모 완료 안내를 보여 줍니다', async () => {
+    mockMemberSession(createMember('mem-001'));
+    renderWithQuery(<InquiryPage />);
+    await screen.findByRole('heading', { name: '문의 작성' });
+    fireEvent.change(screen.getByLabelText('문의 유형 *'), { target: { value: 'delivery' } });
+    fireEvent.change(screen.getByLabelText('제목 *'), { target: { value: '배송 확인' } });
+    fireEvent.change(screen.getByRole('textbox', { name: /문의 내용/ }), {
+      target: { value: '배송 일정을 확인해 주세요.' },
+    });
+    fireEvent.submit(
+      screen.getByRole('heading', { name: '문의 작성' }).closest('form') as HTMLFormElement,
+    );
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      '문의가 접수되었습니다. 데모 화면이며 입력값은 전송·저장되지 않았습니다.',
+    );
+    expect(screen.getByLabelText('제목 *')).toHaveValue('');
+    expect(screen.getByRole('textbox', { name: /문의 내용/ })).toHaveValue('');
+    expect(screen.getByText('접수 상태 다시 보기')).toBeInTheDocument();
+    const api = await getShopApi();
+    expect(api.inquiries.listByMember).not.toHaveBeenCalled();
+  });
+
+  it('회원 문의 목록은 현재 세션 회원의 문의만 표시하고 상세 경로를 연결합니다', async () => {
+    mockMemberSession(createMember('mem-001'));
+    renderWithQuery(<MemberInquiriesPage />);
+    const inquiryLinks = await screen.findAllByRole('link', { name: '배송 일정 문의드립니다' });
+    expect(inquiryLinks[0]).toHaveAttribute('href', '/mypage/inquiries/inq-1');
+    expect(await screen.findAllByText('세금계산서 발행 요청')).toHaveLength(2);
+    expect(await screen.findAllByText('대량 구매 견적 문의')).toHaveLength(2);
+    const api = await getShopApi();
     expect(api.inquiries.listByMember).toHaveBeenCalledWith(
       'mem-001',
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
-  it('첫 번째가 아닌 현재 회원에게 다른 회원의 문의를 표시하지 않습니다', async () => {
+  it('회원 문의 상세는 문의 본문을 화면 텍스트로 표시합니다', async () => {
+    const detailInquiry = { ...inquiries[0], body: '<script>alert(1)</script>문의 내용' };
+    vi.mocked(getShopApi).mockResolvedValue({
+      ...createApi([]),
+      inquiries: { listByMember: vi.fn(async () => [detailInquiry]) },
+    } as unknown as ShopApi);
+    mockMemberSession(createMember('mem-001'));
+    renderWithQuery(<MemberInquiryDetailPage inquiryId="inq-1" />);
+    expect(await screen.findByText('<script>alert(1)</script>문의 내용')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('회원 문의 상세 조회 실패는 고정 문구와 다시 시도 동작을 표시합니다', async () => {
+    const detailInquiry = { ...inquiries[0], body: '다시 불러온 문의 내용' };
+    const listByMember = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('sensitive server failure'))
+      .mockResolvedValueOnce([detailInquiry]);
+    vi.mocked(getShopApi).mockResolvedValue({
+      ...createApi([]),
+      inquiries: { listByMember },
+    } as unknown as ShopApi);
+    mockMemberSession(createMember('mem-001'));
+    renderWithQuery(<MemberInquiryDetailPage inquiryId="inq-1" />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('문의 내용을 불러오지 못했습니다.');
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+
+    expect(await screen.findByText('다시 불러온 문의 내용')).toBeInTheDocument();
+    expect(listByMember).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText('sensitive server failure')).not.toBeInTheDocument();
+  });
+
+  it('회원 문의 목록은 다른 회원의 fixture를 걸러 냅니다', async () => {
     mockMemberSession(createMember('mem-002'));
-    renderWithQuery(<InquiryPage />);
+    renderWithQuery(<MemberInquiriesPage />);
     expect(await screen.findByText('등록된 문의가 없습니다.')).toBeInTheDocument();
     expect(screen.queryByText('배송 일정 문의드립니다')).not.toBeInTheDocument();
     const api = await getShopApi();
@@ -313,7 +383,7 @@ describe('company support routes', () => {
   it('로그아웃 상태에서는 회원 문의를 조회하지 않습니다', async () => {
     renderWithQuery(<InquiryPage />);
     expect(await screen.findByRole('status')).toHaveTextContent(
-      '로그인 후 문의 내역을 확인할 수 있습니다.',
+      '문의 내역은 로그인 후 마이페이지에서 확인할 수 있습니다.',
     );
     expect(screen.queryByText('배송 일정 문의드립니다')).not.toBeInTheDocument();
     const api = await getShopApi();

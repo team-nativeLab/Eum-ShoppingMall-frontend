@@ -159,4 +159,37 @@ describe('SiteHeader product and brand navigation', () => {
       '/search?brand=3M&browse=brands',
     );
   });
+
+  it('keeps the compact desktop header and removes scroll listeners on unmount', () => {
+    const originalInnerWidth = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+    const originalScrollY = Object.getOwnPropertyDescriptor(window, 'scrollY');
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 9 });
+    const addEventListener = vi.spyOn(window, 'addEventListener');
+    const removeEventListener = vi.spyOn(window, 'removeEventListener');
+
+    const { unmount } = render(<SiteHeader />, { wrapper: createWrapper() });
+    const header = screen.getByRole('banner');
+    const desktopNavigationRow = header.querySelector('[class~="h-64"]');
+    expect(desktopNavigationRow).toBeInTheDocument();
+    expect(header).toHaveClass('shadow-1');
+
+    const scrollHandler = addEventListener.mock.calls.find(
+      ([eventName]) => eventName === 'scroll',
+    )?.[1];
+    const resizeHandler = addEventListener.mock.calls.find(
+      ([eventName]) => eventName === 'resize',
+    )?.[1];
+    expect(scrollHandler).toBeTypeOf('function');
+    expect(resizeHandler).toBeTypeOf('function');
+
+    unmount();
+    expect(removeEventListener).toHaveBeenCalledWith('scroll', scrollHandler);
+    expect(removeEventListener).toHaveBeenCalledWith('resize', resizeHandler);
+
+    if (originalInnerWidth) Object.defineProperty(window, 'innerWidth', originalInnerWidth);
+    else Reflect.deleteProperty(window, 'innerWidth');
+    if (originalScrollY) Object.defineProperty(window, 'scrollY', originalScrollY);
+    else Reflect.deleteProperty(window, 'scrollY');
+  });
 });

@@ -46,6 +46,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { ProductCard } from '@/features/products/product-card';
 import { useLocalCollections } from '@/features/products/local-collections-context';
+import { useMemberSession } from '@/features/auth/member-session';
 import { getWebApiConfig } from '@/lib/api-config';
 import { MyPageActionLink, MyPageShell, type MyPageSection } from './mypage-shell';
 import {
@@ -156,8 +157,13 @@ const ORDER_STAGE_ORDER: OrderStatus[] = [
 const QUOTE_STAGE_ORDER: QuoteStatus[] = ['received', 'consulting', 'quoteSent', 'completed'];
 export function MyPageScreen({ section, itemId }: { section: MyPageSection; itemId?: string }) {
   const addAddressActionRef = useRef<(() => void) | null>(null);
+  const { member, status: memberStatus, refreshMember } = useMemberSession();
   const { wishlistIds, recentIds, recentViewedAt } = useLocalCollections();
-  const query = useMyPageData(getCollectionProductIds(section, wishlistIds, recentIds), section);
+  const query = useMyPageData(
+    getCollectionProductIds(section, wishlistIds, recentIds),
+    section,
+    member?.id ?? null,
+  );
   const dashboardTop =
     section === 'dashboard' && query.data?.member ? (
       <DashboardSummary
@@ -189,7 +195,24 @@ export function MyPageScreen({ section, itemId }: { section: MyPageSection; item
         ) : undefined
       }
     >
-      {query.isPending ? (
+      {memberStatus === 'loading' ? (
+        <PageLoadingState />
+      ) : memberStatus === 'error' ? (
+        <PageErrorState onRetry={() => void refreshMember()} />
+      ) : !member ? (
+        <div
+          role="status"
+          className="rounded-12 border border-line bg-bg-subtle px-20 py-32 text-center"
+        >
+          <p className="text-body-s text-text-2">로그인 후 회원 정보를 확인할 수 있습니다.</p>
+          <Link
+            href="/login?redirect=%2Fmypage"
+            className="mt-16 inline-flex min-h-44 items-center justify-center rounded-8 bg-text-1 px-16 text-label-m text-inverse focus-ring"
+          >
+            로그인
+          </Link>
+        </div>
+      ) : query.isPending ? (
         <PageLoadingState />
       ) : query.isError ? (
         <PageErrorState onRetry={() => void query.refetch()} />

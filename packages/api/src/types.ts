@@ -232,6 +232,8 @@ export interface CompanyInfo {
   mailOrderSalesNumber: string;
   address: string;
   email: string;
+  /** 견적 문의 담당 이메일. 제공하지 않으면 견적 화면에서 연락처를 생략합니다. */
+  quoteEmail?: string;
   /** 개인정보보호책임자 */
   privacyOfficer: string;
   /** 화면에 그대로 보여 주는 고객센터 번호(내선 안내 등 포함 가능) */

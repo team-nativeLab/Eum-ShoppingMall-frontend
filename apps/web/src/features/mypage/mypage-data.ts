@@ -46,13 +46,21 @@ export function getCollectionProductIds(
 }
 
 /** 현재 화면에서 사용하는 API만 요청해 무관한 실패가 화면에 섞이지 않게 합니다. */
-export function useMyPageData(productIds: string[], scope: MyPageDataScope) {
+export function useMyPageData(
+  productIds: string[],
+  scope: MyPageDataScope,
+  memberId: string | null,
+) {
+  const uniqueProductIds = [...new Set(productIds)].sort();
+  const isCollection = scope === 'wishlist' || scope === 'recent';
   return useQuery({
-    queryKey: [...queryKeys.members.all, 'mypage', scope, [...new Set(productIds)].sort()],
+    queryKey: isCollection
+      ? [...queryKeys.members.all, 'mypage', scope, uniqueProductIds]
+      : [...queryKeys.myPage.byMember(memberId ?? 'anonymous'), scope, uniqueProductIds],
+    enabled: isCollection || Boolean(memberId),
     queryFn: async ({ signal }): Promise<MyPageData> => {
       const api = await getShopApi();
       const uniqueProductIds = [...new Set(productIds)];
-      const isCollection = scope === 'wishlist' || scope === 'recent';
 
       if (isCollection) {
         const productResults = await Promise.allSettled(
@@ -90,9 +98,9 @@ export function useMyPageData(productIds: string[], scope: MyPageDataScope) {
       }
 
       const members = await api.members.list({ signal });
-      const member = members[0];
+      const member = members.find((candidate) => candidate.id === memberId);
       if (!member) {
-        throw new Error('표시할 목 회원 정보가 없습니다.');
+        throw new Error('회원 정보를 확인할 수 없습니다.');
       }
 
       const needsOrders =

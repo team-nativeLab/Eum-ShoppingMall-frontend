@@ -16,6 +16,7 @@ import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 import { PageContainer } from '@/components/page-container';
 import { useMemberSession } from '@/features/auth/member-session';
+import { buildQuoteInquiryHref } from '@/features/company-pages/quote-inquiry-link';
 import { useCart } from '@/features/cart/cart-context';
 import { ProductImage } from '@/features/products/product-image';
 import { useCheckout } from './checkout-context';
@@ -313,7 +314,9 @@ export function CartPageView() {
           ) : null}
           {orderableIds.length === 0 ? (
             <Link
-              href="/solutions"
+              href={buildQuoteInquiryHref(
+                groups.unorderableItems.map((item) => item.cartItem.productId),
+              )}
               className={cx(
                 buttonClassName({ variant: 'secondary', size: 'l', isFullWidth: true }),
                 'mt-24',
@@ -457,7 +460,7 @@ function CartLine({
         {linePrice}
         {unavailableReason === 'priceHidden' ? (
           <Link
-            href="/solutions"
+            href={buildQuoteInquiryHref([item.productId])}
             className="mt-4 block text-caption text-text-1 underline focus-ring"
           >
             견적 문의 →

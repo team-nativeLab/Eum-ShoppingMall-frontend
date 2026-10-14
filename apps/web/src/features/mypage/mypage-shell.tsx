@@ -1,8 +1,12 @@
-import { ChevronRight } from 'lucide-react';
-import Link from 'next/link';
-import { PageContainer } from '@/components/page-container';
+'use client';
+
 import { buttonClassName } from '@eum/ui/components/Button';
 import { cx } from '@eum/ui/lib/cx';
+import { ChevronRight } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useMemberSession } from '@/features/auth/member-session';
+import { PageContainer } from '@/components/page-container';
 import type { ReactNode } from 'react';
 
 interface MyPageNavLink {
@@ -39,7 +43,7 @@ export const MYPAGE_NAV_GROUPS: MyPageNavGroup[] = [
       { key: 'profile', label: '내 정보 관리', href: '/mypage/profile' },
       { key: 'addresses', label: '배송지 관리', href: '/mypage/addresses' },
       { key: 'quotes', label: '견적 문의 내역', href: '/mypage/quotes' },
-      { key: 'inquiries', label: '1:1 문의 내역', href: '/support/inquiry' },
+      { key: 'inquiries', label: '1:1 문의 내역', href: '/mypage/inquiries' },
       { key: 'logout', label: '로그아웃', href: '/login' },
     ],
   },
@@ -61,7 +65,9 @@ export type MyPageSection =
   | 'quotes'
   | 'quote-detail';
 
-const SECTION_NAV_KEY: Record<MyPageSection, string> = {
+type MyPageShellSection = MyPageSection | 'inquiries' | 'inquiry-detail';
+
+const SECTION_NAV_KEY: Record<MyPageShellSection, string> = {
   dashboard: 'dashboard',
   orders: 'orders',
   'order-detail': 'orders',
@@ -76,6 +82,8 @@ const SECTION_NAV_KEY: Record<MyPageSection, string> = {
   addresses: 'addresses',
   quotes: 'quotes',
   'quote-detail': 'quotes',
+  inquiries: 'inquiries',
+  'inquiry-detail': 'inquiries',
 };
 
 export function MyPageShell({
@@ -85,22 +93,31 @@ export function MyPageShell({
   dashboardTop,
   children,
 }: {
-  activeSection: MyPageSection;
+  activeSection: MyPageShellSection;
   title: string;
   titleAction?: ReactNode;
   dashboardTop?: ReactNode;
   children: ReactNode;
 }) {
+  const router = useRouter();
+  const { clearMember } = useMemberSession();
   const activeKey = SECTION_NAV_KEY[activeSection];
   const activeLink = MYPAGE_NAV_GROUPS.flatMap((group) => group.links).find(
     (link) => link.key === activeKey,
   );
   const mobileLinks = [
     { key: 'dashboard', label: '마이페이지', href: '/mypage' },
-    ...MYPAGE_NAV_GROUPS.flatMap((group) => group.links).filter(
-      (link) => link.key !== 'logout' && link.key !== 'inquiries',
-    ),
+    ...MYPAGE_NAV_GROUPS.flatMap((group) => group.links),
   ];
+
+  async function handleLogout() {
+    try {
+      await clearMember();
+    } catch {
+      // 로컬 세션·회원 캐시는 clearMember에서 정리하고, 로그인 화면으로 이동합니다.
+    }
+    router.push('/login');
+  }
 
   return (
     <div data-mypage-shell="">
@@ -133,23 +150,37 @@ export function MyPageShell({
           </ol>
         </nav>
 
-        <div className="-mx-20 mb-20 flex gap-8 overflow-x-auto px-20 pb-4 lg:hidden">
-          {mobileLinks.map((link) => (
-            <Link
-              key={link.key}
-              href={link.href}
-              aria-current={link.key === activeKey ? 'page' : undefined}
-              className={cx(
-                'shrink-0 rounded-capsule border px-14 py-8 text-label-s focus-ring',
-                link.key === activeKey
-                  ? 'border-text-1 bg-text-1 text-inverse'
-                  : 'border-line text-text-2',
-              )}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </div>
+        <nav
+          aria-label="모바일 마이페이지 메뉴"
+          className="-mx-20 mb-20 flex gap-8 overflow-x-auto px-20 pb-4 lg:hidden"
+        >
+          {mobileLinks.map((link) =>
+            link.key === 'logout' ? (
+              <button
+                key={link.key}
+                type="button"
+                onClick={() => void handleLogout()}
+                className="shrink-0 rounded-capsule border border-line px-14 py-8 text-label-s text-text-2 focus-ring"
+              >
+                {link.label}
+              </button>
+            ) : (
+              <Link
+                key={link.key}
+                href={link.href}
+                aria-current={link.key === activeKey ? 'page' : undefined}
+                className={cx(
+                  'shrink-0 rounded-capsule border px-14 py-8 text-label-s focus-ring',
+                  link.key === activeKey
+                    ? 'border-text-1 bg-text-1 text-inverse'
+                    : 'border-line text-text-2',
+                )}
+              >
+                {link.label}
+              </Link>
+            ),
+          )}
+        </nav>
 
         {dashboardTop}
 
@@ -172,18 +203,28 @@ export function MyPageShell({
                   <ul className="flex flex-col gap-2">
                     {group.links.map((link) => (
                       <li key={link.key}>
-                        <Link
-                          href={link.href}
-                          aria-current={link.key === activeKey ? 'page' : undefined}
-                          className={cx(
-                            'flex min-h-40 items-center rounded-8 px-12 text-body-s focus-ring',
-                            link.key === activeKey
-                              ? 'bg-surface text-label-m text-text-1'
-                              : 'text-text-2 hover:bg-surface',
-                          )}
-                        >
-                          {link.label}
-                        </Link>
+                        {link.key === 'logout' ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleLogout()}
+                            className="flex min-h-40 w-full items-center rounded-8 px-12 text-left text-body-s text-text-2 focus-ring hover:bg-surface"
+                          >
+                            {link.label}
+                          </button>
+                        ) : (
+                          <Link
+                            href={link.href}
+                            aria-current={link.key === activeKey ? 'page' : undefined}
+                            className={cx(
+                              'flex min-h-40 items-center rounded-8 px-12 text-body-s focus-ring',
+                              link.key === activeKey
+                                ? 'bg-surface text-label-m text-text-1'
+                                : 'text-text-2 hover:bg-surface',
+                            )}
+                          >
+                            {link.label}
+                          </Link>
+                        )}
                       </li>
                     ))}
                   </ul>
