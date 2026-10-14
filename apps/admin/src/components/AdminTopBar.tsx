@@ -3,6 +3,7 @@ import { Button, buttonClassName } from '@eum/ui/components/Button';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useMatches, useNavigate } from 'react-router';
 import { currentAdminQueryKey, getAdminAuth } from '@/lib/admin-auth';
+import { getAdminApiConfig } from '@/lib/api-config';
 import type { AdminRouteHandle } from '@/routes';
 
 // route handle에 제목이 있는지 확인하는 타입 가드
@@ -28,6 +29,7 @@ export function AdminTopBar() {
     queryFn: async () => (await getAdminAuth()).getCurrentUser(),
   });
   const webBaseUrl = import.meta.env.VITE_WEB_BASE_URL;
+  const isMockMode = getAdminApiConfig().mode === 'mock';
 
   const breadcrumbItems: BreadcrumbItem[] = [{ label: '관리자', href: '/' }];
   if (currentHandle?.section) breadcrumbItems.push({ label: currentHandle.section });
@@ -39,7 +41,7 @@ export function AdminTopBar() {
       await (await getAdminAuth()).logout();
     } finally {
       // 서버 로그아웃 실패와 상관없이 화면의 로그인 정보는 지우고 로그인 화면으로 보냅니다.
-      queryClient.removeQueries({ queryKey: currentAdminQueryKey });
+      queryClient.removeQueries({ queryKey: ['admin'] });
       await navigate('/login', { replace: true });
     }
   };
@@ -55,6 +57,11 @@ export function AdminTopBar() {
         )}
       />
       <div className="flex items-center gap-8">
+        {isMockMode ? (
+          <span className="rounded-6 bg-warning-tint px-8 py-4 text-caption text-warning">
+            목 데이터
+          </span>
+        ) : null}
         {webBaseUrl ? (
           <a
             href={webBaseUrl}
