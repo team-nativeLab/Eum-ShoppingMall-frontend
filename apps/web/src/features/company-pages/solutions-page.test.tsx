@@ -97,6 +97,52 @@ beforeEach(() => {
 });
 
 describe('quote request preview', () => {
+  it('견적 폼 정보를 정해진 순서로 보여 주고 전체 수량 도움말을 연결합니다', async () => {
+    renderWithQueryClient(<SolutionsPageContent />);
+    await screen.findByRole('combobox', { name: '상품 선택' });
+
+    const form = screen.getByRole('region', { name: '견적 문의 입력' });
+    const productsHeading = screen.getByRole('heading', { name: '문의 상품' });
+    const inquiryTypeLegend = screen.getByText('문의 유형 *');
+    const memberPrefillNote = screen.getByText(
+      '회원 정보를 입력란에 미리 채울 수 있습니다. 입력 후에도 직접 수정할 수 있습니다.',
+    );
+    const companyNameInput = screen.getByLabelText('회사명 *');
+    const quantityInput = screen.getByRole('spinbutton', { name: '현장 전체 예상 수량' });
+    const deliveryDateInput = screen.getByLabelText('희망 납기');
+    const deliveryLocationInput = screen.getByLabelText('납품 지역');
+    const interestLegend = screen.getByText('관심 품목');
+    const detailsLabel = screen.getByText('상세 내용');
+    const attachmentGroup = screen.getByRole('group', {
+      name: '파일 첨부 영역. 파일 업로드 기능은 준비 중입니다.',
+    });
+    const privacyCheckbox = screen.getByRole('checkbox', {
+      name: '[필수] 개인정보 수집·이용 동의',
+    });
+    const submitButton = screen.getByRole('button', { name: '견적 문의 접수' });
+
+    const expectBefore = (first: Element, second: Element) => {
+      expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    };
+
+    expect(form).toContainElement(productsHeading);
+    expectBefore(productsHeading, inquiryTypeLegend);
+    expectBefore(inquiryTypeLegend, memberPrefillNote);
+    expectBefore(memberPrefillNote, companyNameInput);
+    expectBefore(companyNameInput, quantityInput);
+    expectBefore(quantityInput, deliveryDateInput);
+    expectBefore(deliveryDateInput, deliveryLocationInput);
+    expectBefore(deliveryLocationInput, interestLegend);
+    expectBefore(interestLegend, detailsLabel);
+    expectBefore(detailsLabel, attachmentGroup);
+    expectBefore(attachmentGroup, privacyCheckbox);
+    expectBefore(privacyCheckbox, submitButton);
+    expect(quantityInput).toHaveAttribute('name', 'quantity');
+    expect(quantityInput).toHaveAccessibleDescription(
+      '이 문의로 필요한 전체 수량을 입력해 주세요.',
+    );
+  });
+
   it('상품·옵션·수량을 선택하고 접수 후 입력 내용을 저장하지 않는 완료 미리보기를 표시합니다', async () => {
     renderWithQueryClient(<SolutionsPageContent />);
     const productSelect = await screen.findByRole('combobox', { name: '상품 선택' });
