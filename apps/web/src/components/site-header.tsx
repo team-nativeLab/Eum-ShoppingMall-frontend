@@ -176,6 +176,7 @@ export function SiteHeader() {
   const categoriesQuery = useCategoriesQuery();
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
   const closeMenu = useCallback(() => setIsMenuOpen(false), []);
   const categoryList = categoriesQuery.data ?? [];
   const navigationItems = getNavigationItems(categoryList);
@@ -194,6 +195,24 @@ export function SiteHeader() {
     setIsMobileSearchOpen(false);
     router.push('/search?q=' + encodeURIComponent(keyword));
   };
+
+  // 데스크톱 GNB는 첫 8px 스크롤부터 Figma의 compact 높이로 전환합니다.
+  // 높이 변경으로 브라우저가 scrollY를 8px 보정해도 임계점에서 반복 전환되지 않도록 복귀점은 4px로 둡니다.
+  // 첫 렌더는 고정값이라 SSR/하이드레이션 결과가 같고, 감속 설정에서는 CSS transition을 끕니다.
+  useEffect(() => {
+    const updateHeaderState = () => {
+      setIsScrolled(
+        (wasScrolled) => window.innerWidth >= 1024 && window.scrollY >= (wasScrolled ? 4 : 8),
+      );
+    };
+    updateHeaderState();
+    window.addEventListener('scroll', updateHeaderState, { passive: true });
+    window.addEventListener('resize', updateHeaderState);
+    return () => {
+      window.removeEventListener('scroll', updateHeaderState);
+      window.removeEventListener('resize', updateHeaderState);
+    };
+  }, []);
 
   const openProduct = (productId: string) => {
     setIsMobileSearchOpen(false);
@@ -263,7 +282,8 @@ export function SiteHeader() {
     <>
       <header
         className={cx(
-          'sticky top-0 z-30 border-line bg-bg lg:border-b',
+          'sticky top-0 z-30 border-line bg-bg transition-[box-shadow] duration-200 ease-[cubic-bezier(.2,0,0,1)] motion-reduce:transition-none lg:border-b',
+          isScrolled && 'shadow-1',
           isProductDetail && 'border-b',
         )}
       >
@@ -273,7 +293,12 @@ export function SiteHeader() {
         >
           본문 바로가기
         </a>
-        <PageContainer className="hidden h-72 items-center lg:flex">
+        <PageContainer
+          className={cx(
+            'hidden items-center transition-[height] duration-200 ease-[cubic-bezier(.2,0,0,1)] motion-reduce:transition-none lg:flex',
+            isScrolled ? 'h-64' : 'h-72',
+          )}
+        >
           {/* 로고·메뉴·아이콘은 줄지 않고, 남는 폭은 검색바가 받습니다(1024~1440 어느 폭에서도 겹치지 않음). */}
           <div className="flex w-160 shrink-0 items-center min-[1440px]:w-220">
             <Link href="/" className="rounded-4 text-h3 whitespace-nowrap focus-ring">
@@ -294,7 +319,7 @@ export function SiteHeader() {
                   href={navigationItem.href}
                   aria-current={isActive ? 'page' : undefined}
                   className={cx(
-                    'relative inline-flex h-72 items-center text-label-l whitespace-nowrap text-text-1 focus-ring',
+                    'relative inline-flex h-full items-center text-label-l whitespace-nowrap text-text-1 focus-ring',
                     isActive
                       ? 'after:absolute after:inset-x-0 after:bottom-0 after:h-2 after:bg-text-1'
                       : 'hover:text-text-2',

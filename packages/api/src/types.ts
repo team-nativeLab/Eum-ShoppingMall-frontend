@@ -407,6 +407,8 @@ export interface Notice {
   body: string;
   isPinned: boolean;
   publishedAt: string;
+  /** 조회수를 제공하는 API만 전달합니다. 값이 없으면 화면은 미제공으로 표시합니다. */
+  viewCount?: number;
 }
 
 /** 자주 묻는 질문 */
