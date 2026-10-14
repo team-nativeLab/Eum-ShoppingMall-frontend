@@ -70,9 +70,10 @@ export function isPrimaryNavigationItemActive(
   pathname: string,
   selectedBrands: readonly string[],
   searchParamsReady = true,
+  brandBrowseIntent = false,
 ): boolean {
   const isProductListingRoute = pathname === '/search' || pathname.startsWith('/category/');
-  const isBrandBrowsing = isProductListingRoute && selectedBrands.length > 0;
+  const isBrandBrowsing = isProductListingRoute && (selectedBrands.length > 0 || brandBrowseIntent);
 
   if (item.key === 'products') {
     if (isBrandBrowsing) return false;

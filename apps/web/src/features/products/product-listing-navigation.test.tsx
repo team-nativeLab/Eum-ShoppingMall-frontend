@@ -103,16 +103,44 @@ describe('ProductListingView brand navigation', () => {
     );
 
     expect(screen.getByRole('button', { name: '필터' })).toHaveAttribute('aria-expanded', 'true');
+    const brandHeading = screen.getByRole('heading', { name: '브랜드', level: 2 });
+    expect(brandHeading).toBeVisible();
     const brandGroup = screen.getByRole('group', { name: '브랜드' });
-    expect(await within(brandGroup).findByRole('button', { name: '3M' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    await waitFor(() => expect(brandGroup).toHaveFocus());
+    expect(brandGroup).toHaveAttribute('aria-labelledby', brandHeading.id);
+    expect(brandGroup).not.toHaveClass('focus-visible:outline-2');
+    const selectedBrandChip = await within(brandGroup).findByRole('button', { name: '3M' });
+    expect(selectedBrandChip).toHaveAttribute('aria-pressed', 'true');
+    await waitFor(() => expect(selectedBrandChip).toHaveFocus());
     expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({
       behavior: 'auto',
       block: 'nearest',
     });
+  });
+
+  it('moves focus into the brand chips when retrying mobile brand browsing succeeds', async () => {
+    const user = userEvent.setup();
+    apiMocks.listFacets
+      .mockRejectedValueOnce(new Error('temporary facet failure'))
+      .mockResolvedValueOnce({
+        totalCount: 0,
+        keywordTotalCount: 10,
+        categories: [],
+        brands: [{ value: '3M', count: 4 }],
+        certifications: [],
+      });
+
+    render(<ProductListingView initialBrowseBrands />, { wrapper: createWrapper() });
+
+    const [retryButton] = await screen.findAllByRole('button', { name: '다시 시도' });
+    if (!retryButton) throw new Error('모바일 필터 재시도 버튼을 찾을 수 없습니다.');
+    const brandGroup = screen.getByRole('group', { name: '브랜드' });
+    await waitFor(() => expect(brandGroup).toHaveFocus());
+
+    retryButton.focus();
+    await user.keyboard('{Enter}');
+
+    const brandChip = await within(brandGroup).findByRole('button', { name: '3M' });
+    await waitFor(() => expect(brandChip).toHaveFocus());
   });
 
   it('pushes a brand selection into the URL without dropping the query or browse intent', async () => {

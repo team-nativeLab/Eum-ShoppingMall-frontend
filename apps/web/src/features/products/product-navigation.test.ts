@@ -52,6 +52,19 @@ describe('product and brand navigation', () => {
     expect(isPrimaryNavigationItemActive(productsItem!, '/search', ['3M'])).toBe(false);
   });
 
+  it('marks Brand active for the browse intent without a selected brand filter', () => {
+    const items = getPrimaryNavigationItems();
+    const productsItem = items.find((item) => item.key === 'products');
+    const brandsItem = items.find((item) => item.key === 'brands');
+
+    expect(productsItem).toBeDefined();
+    expect(brandsItem).toBeDefined();
+    expect(isPrimaryNavigationItemActive(productsItem!, '/search', [], true, true)).toBe(false);
+    expect(isPrimaryNavigationItemActive(brandsItem!, '/search', [], true, true)).toBe(true);
+    expect(isPrimaryNavigationItemActive(productsItem!, '/search', [])).toBe(true);
+    expect(isPrimaryNavigationItemActive(brandsItem!, '/search', [])).toBe(false);
+  });
+
   it('marks only the brand active when a category has a selected brand filter', () => {
     const items = getPrimaryNavigationItems();
     const productsItem = items.find((item) => item.key === 'products');

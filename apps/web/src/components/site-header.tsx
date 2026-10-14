@@ -38,6 +38,7 @@ import { useProductsQuery } from '@/features/products/use-products-query';
 import { useProductSuggestionsQuery } from '@/features/products/use-product-suggestions-query';
 import {
   buildBrandBrowseHref,
+  isBrandBrowseMode,
   getBrandFilterValues,
   getPrimaryNavigationItems,
   isPrimaryNavigationItemActive,
@@ -47,10 +48,12 @@ import {
 function PrimaryNavigation({
   pathname,
   selectedBrands,
+  brandBrowseIntent = false,
   searchParamsReady = true,
 }: {
   pathname: string;
   selectedBrands: readonly string[];
+  brandBrowseIntent?: boolean;
   searchParamsReady?: boolean;
 }) {
   return (
@@ -64,6 +67,7 @@ function PrimaryNavigation({
           pathname,
           selectedBrands,
           searchParamsReady,
+          brandBrowseIntent,
         );
         return (
           <Link
@@ -89,7 +93,14 @@ function PrimaryNavigation({
 function UrlAwarePrimaryNavigation({ pathname }: { pathname: string }) {
   const searchParams = useSearchParams();
   const selectedBrands = getBrandFilterValues(searchParams.getAll('brand'));
-  return <PrimaryNavigation pathname={pathname} selectedBrands={selectedBrands} />;
+  const brandBrowseIntent = isBrandBrowseMode(searchParams.getAll('browse'));
+  return (
+    <PrimaryNavigation
+      pathname={pathname}
+      selectedBrands={selectedBrands}
+      brandBrowseIntent={brandBrowseIntent}
+    />
+  );
 }
 
 const FOCUSABLE_SELECTOR =

@@ -101,6 +101,23 @@ describe('SiteHeader product and brand navigation', () => {
     );
   });
 
+  it('activates only Brand when the search URL opens the brand browser without a selected filter', async () => {
+    navigationMocks.pathname = '/search';
+    navigationMocks.search = 'browse=brands';
+    render(<SiteHeader />, { wrapper: createWrapper() });
+    const primaryNavigation = screen.getByRole('navigation', { name: '주요 메뉴' });
+
+    await waitFor(() => {
+      expect(within(primaryNavigation).getByRole('link', { name: '브랜드' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+    });
+    expect(within(primaryNavigation).getByRole('link', { name: '제품' })).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
   it('activates only Brand when a selected brand filter is applied to a category route', async () => {
     navigationMocks.pathname = '/category/gloves';
     navigationMocks.search = 'brand=3M';

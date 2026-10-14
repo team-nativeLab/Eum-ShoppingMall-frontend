@@ -131,28 +131,6 @@ export function ProductListingView({
   const hasFocusedBrandBrowseRef = useRef(false);
   const prefersReducedMotion = usePrefersReducedMotion();
 
-  useEffect(() => {
-    if (!initialBrowseBrands) {
-      hasFocusedBrandBrowseRef.current = false;
-      return;
-    }
-    if (
-      !isMobileFiltersOpen ||
-      hasFocusedBrandBrowseRef.current ||
-      !window.matchMedia('(max-width: 1023px)').matches
-    ) {
-      return;
-    }
-    const brandGroup = mobileBrandGroupRef.current;
-    if (!brandGroup) return;
-    brandGroup.focus({ preventScroll: true });
-    brandGroup.scrollIntoView({
-      behavior: getScrollBehavior(prefersReducedMotion),
-      block: 'nearest',
-    });
-    hasFocusedBrandBrowseRef.current = true;
-  }, [initialBrowseBrands, isMobileFiltersOpen, prefersReducedMotion]);
-
   const updateSelectedBrands = (nextBrands: string[]) => {
     const normalizedBrands = getBrandFilterValues(nextBrands);
     setSelectedBrands(normalizedBrands);
@@ -209,6 +187,33 @@ export function ProductListingView({
     : facetsQuery.data
       ? 'success'
       : 'pending';
+  useEffect(() => {
+    if (!initialBrowseBrands) {
+      hasFocusedBrandBrowseRef.current = false;
+      return;
+    }
+    if (
+      !isMobileFiltersOpen ||
+      hasFocusedBrandBrowseRef.current ||
+      !window.matchMedia('(max-width: 1023px)').matches
+    ) {
+      return;
+    }
+    const brandGroup = mobileBrandGroupRef.current;
+    if (!brandGroup) return;
+    const brandChip =
+      brandGroup.querySelector<HTMLButtonElement>('button[aria-pressed="true"]') ??
+      brandGroup.querySelector<HTMLButtonElement>('button:not(:disabled)');
+    if (!brandChip && facetsStatus === 'pending') return;
+    const focusTarget = brandChip ?? brandGroup;
+    focusTarget.focus({ preventScroll: true });
+    brandGroup.scrollIntoView({
+      behavior: getScrollBehavior(prefersReducedMotion),
+      block: 'nearest',
+    });
+    // Group-only focus on an error must not block a later successful retry from focusing a chip.
+    if (brandChip || facetsStatus !== 'error') hasFocusedBrandBrowseRef.current = true;
+  }, [facetsStatus, initialBrowseBrands, isMobileFiltersOpen, prefersReducedMotion]);
   const retryFacets = () => void facetsQuery.refetch();
 
   const activeFilters: ActiveFilter[] = [];
@@ -455,12 +460,15 @@ export function ProductListingView({
             {facetsStatus === 'error' ? (
               <FacetsErrorNotice onRetry={retryFacets} className="mt-12" />
             ) : null}
+            <h2 id="mobile-brand-filter-heading" className="mt-12 text-label-m">
+              브랜드
+            </h2>
             <div
               ref={mobileBrandGroupRef}
               role="group"
-              aria-label="브랜드"
+              aria-labelledby="mobile-brand-filter-heading"
               tabIndex={-1}
-              className="mt-12 flex flex-wrap gap-8 rounded-4 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-text-1"
+              className="mt-8 flex flex-wrap gap-8"
             >
               {brandFacets.map((brandFacet) => (
                 <Chip
