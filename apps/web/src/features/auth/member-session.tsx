@@ -1,5 +1,6 @@
 'use client';
 
+import { queryKeys } from '@eum/api/query-keys';
 import type { Member } from '@eum/api/types';
 import {
   createContext,
@@ -10,6 +11,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { getMemberAuth } from '@/lib/member-auth';
 
 type MemberSessionStatus = 'loading' | 'ready' | 'error';
@@ -24,8 +26,22 @@ interface MemberSessionValue {
 
 const MemberSessionContext = createContext<MemberSessionValue | null>(null);
 
+async function clearMemberScopedQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  await Promise.all([
+    queryClient.cancelQueries({ queryKey: queryKeys.inquiries.all }),
+    queryClient.cancelQueries({ queryKey: queryKeys.orders.allByMember }),
+    queryClient.cancelQueries({ queryKey: queryKeys.addresses.all }),
+    queryClient.cancelQueries({ queryKey: queryKeys.myPage.all }),
+  ]);
+  queryClient.removeQueries({ queryKey: queryKeys.inquiries.all });
+  queryClient.removeQueries({ queryKey: queryKeys.orders.allByMember });
+  queryClient.removeQueries({ queryKey: queryKeys.addresses.all });
+  queryClient.removeQueries({ queryKey: queryKeys.myPage.all });
+}
+
 /** 회원 목 세션은 userId만 저장하고, 프로필은 앱이 열린 동안 메모리에서만 유지합니다. */
 export function MemberSessionProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [member, setMember] = useState<Member | null>(null);
   const [status, setStatus] = useState<MemberSessionStatus>('loading');
   const setSessionMember = useCallback((nextMember: Member | null) => {
@@ -48,10 +64,20 @@ export function MemberSessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const clearMember = useCallback(async () => {
-    await (await getMemberAuth()).logout();
-    setMember(null);
-    setStatus('ready');
-  }, []);
+    try {
+      await (await getMemberAuth()).logout();
+    } finally {
+      await clearMemberScopedQueries(queryClient);
+      setMember(null);
+      setStatus('ready');
+    }
+  }, [queryClient]);
+
+  useEffect(() => {
+    return () => {
+      void clearMemberScopedQueries(queryClient);
+    };
+  }, [member?.id, queryClient]);
 
   useEffect(() => {
     let isMounted = true;

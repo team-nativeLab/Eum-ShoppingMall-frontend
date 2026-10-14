@@ -1,6 +1,6 @@
 import type { Faq, Inquiry, Notice, Quote } from '../types';
 
-/** 목 공지사항 */
+/** 목 공지사항. 첫 화면은 Figma 밀도와 같이 고정 공지 2개와 일반 공지 8개를 표시합니다. */
 export const mockNotices: Notice[] = [
   {
     id: 'ntc-001',
@@ -8,29 +8,246 @@ export const mockNotices: Notice[] = [
     body: '연휴 기간 주문은 연휴 이후 순차 출고합니다.',
     isPinned: true,
     publishedAt: '2026-09-20T09:00:00+09:00',
+    viewCount: 128,
   },
   {
     id: 'ntc-002',
     title: '개인정보 처리방침 개정 안내',
     body: '개정된 처리방침은 공지일로부터 7일 후 시행합니다.',
-    isPinned: false,
+    isPinned: true,
     publishedAt: '2026-08-11T09:00:00+09:00',
+    viewCount: 96,
   },
+  {
+    id: 'ntc-003',
+    title: '현장 안전용품 공급 일정 안내',
+    body: '현장 안전용품 공급 일정 안내입니다.',
+    isPinned: false,
+    publishedAt: '2026-07-28T09:00:00+09:00',
+    viewCount: 82,
+  },
+  {
+    id: 'ntc-004',
+    title: '맞춤 제작 상품 상담 안내',
+    body: '맞춤 제작 상품 상담 안내입니다.',
+    isPinned: false,
+    publishedAt: '2026-07-12T09:00:00+09:00',
+    viewCount: 71,
+  },
+  {
+    id: 'ntc-005',
+    title: '고객센터 운영 시간 안내',
+    body: '고객센터 운영 시간 안내입니다.',
+    isPinned: false,
+    publishedAt: '2026-06-24T09:00:00+09:00',
+    viewCount: 64,
+  },
+  {
+    id: 'ntc-006',
+    title: '사업자 회원 견적 문의 안내',
+    body: '사업자 회원 견적 문의 안내입니다.',
+    isPinned: false,
+    publishedAt: '2026-06-10T09:00:00+09:00',
+    viewCount: 53,
+  },
+  {
+    id: 'ntc-007',
+    title: '안전용품 정기 납품 상담 안내',
+    body: '안전용품 정기 납품 상담 안내입니다.',
+    isPinned: false,
+    publishedAt: '2026-05-22T09:00:00+09:00',
+    viewCount: 47,
+  },
+  {
+    id: 'ntc-008',
+    title: '배송지 입력 시 확인 사항',
+    body: '배송지 입력 시 확인 사항입니다.',
+    isPinned: false,
+    publishedAt: '2026-05-08T09:00:00+09:00',
+    viewCount: 39,
+  },
+  {
+    id: 'ntc-009',
+    title: '상품 교환 및 반품 절차 안내',
+    body: '상품 교환 및 반품 절차 안내입니다.',
+    isPinned: false,
+    publishedAt: '2026-04-18T09:00:00+09:00',
+    viewCount: 31,
+  },
+  {
+    id: 'ntc-010',
+    title: '온라인 쇼핑몰 이용 안내',
+    body: '온라인 쇼핑몰 이용 안내입니다.',
+    isPinned: false,
+    publishedAt: '2026-04-02T09:00:00+09:00',
+    viewCount: 26,
+  },
+  {
+    id: 'ntc-011',
+    title: '안전용품 상품 정보 안내',
+    body: '안전용품 상품 정보 안내입니다.',
+    isPinned: false,
+    publishedAt: '2026-03-17T09:00:00+09:00',
+    viewCount: 21,
+  },
+  {
+    id: 'ntc-012',
+    title: '공휴일 고객센터 운영 안내',
+    body: '공휴일 고객센터 운영 안내입니다.',
+    isPinned: false,
+    publishedAt: '2026-03-01T09:00:00+09:00',
+    viewCount: 18,
+  },
+  {
+    id: 'ntc-013',
+    title: '현장 납품 일정 확인 안내',
+    body: '현장 납품 일정 확인 안내입니다.',
+    isPinned: false,
+    publishedAt: '2026-02-14T09:00:00+09:00',
+    viewCount: 14,
+  },
+  {
+    id: 'ntc-014',
+    title: '상품 문의 접수 방법 안내',
+    body: '상품 문의 접수 방법 안내입니다.',
+    isPinned: false,
+    publishedAt: '2026-01-25T09:00:00+09:00',
+    viewCount: 12,
+  },
+  {
+    id: 'ntc-015',
+    title: '설 연휴 배송 일정 안내',
+    body: '설 연휴 배송 일정 안내입니다.',
+    isPinned: false,
+    publishedAt: '2026-01-08T09:00:00+09:00',
+    viewCount: 10,
+  },
+  {
+    id: 'ntc-016',
+    title: '회사 로고 인쇄 상담 안내',
+    body: '회사 로고 인쇄 상담 안내입니다.',
+    isPinned: false,
+    publishedAt: '2025-12-19T09:00:00+09:00',
+    viewCount: 8,
+  },
+  {
+    id: 'ntc-017',
+    title: '대량 구매 전 확인 사항',
+    body: '대량 구매 전 확인 사항입니다.',
+    isPinned: false,
+    publishedAt: '2025-12-04T09:00:00+09:00',
+    viewCount: 7,
+  },
+  {
+    id: 'ntc-018',
+    title: '안전용품 취급 및 보관 안내',
+    body: '안전용품 취급 및 보관 안내입니다.',
+    isPinned: false,
+    publishedAt: '2025-11-18T09:00:00+09:00',
+    viewCount: 6,
+  },
+  {
+    id: 'ntc-019',
+    title: '결제 관련 문의 안내',
+    body: '결제 관련 문의 안내입니다.',
+    isPinned: false,
+    publishedAt: '2025-11-02T09:00:00+09:00',
+    viewCount: 5,
+  },
+  {
+    id: 'ntc-020',
+    title: '배송 완료 후 확인 사항',
+    body: '배송 완료 후 확인 사항입니다.',
+    isPinned: false,
+    publishedAt: '2025-10-16T09:00:00+09:00',
+    viewCount: 4,
+  },
+  ...Array.from({ length: 80 }, (_, index) => ({
+    id: `ntc-${String(index + 21).padStart(3, '0')}`,
+    title: `쇼핑몰 이용 안내 ${index + 1}`,
+    body: '쇼핑몰 이용에 참고해 주세요.',
+    isPinned: false,
+    publishedAt: new Date(Date.UTC(2025, 9, 15 - index)).toISOString(),
+    viewCount: Math.max(0, 3 - Math.floor(index / 4)),
+  })),
 ];
 
-/** 목 FAQ */
+/** 목 FAQ. 대표 질문 7개는 Figma 화면에 표시된 문구를 사용합니다. */
 export const mockFaqs: Faq[] = [
   {
     id: 'faq-001',
-    category: '주문·결제',
-    question: '가격이 "구매 불가"로 보이는 상품은 어떻게 구매합니까?',
-    answer: '견적 문의를 남겨 주시면 담당자가 연락드립니다.',
+    category: '배송',
+    question: '주문 후 배송까지 얼마나 걸리나요?',
+    answer:
+      '결제 완료 후 평균 2~3일(영업일 기준) 이내 출고됩니다. 맞춤 제작 상품은 별도 안내드립니다.',
   },
   {
     id: 'faq-002',
+    category: '주문/결제',
+    question: '금액이 표시되지 않는 상품은 어떻게 구매하나요?',
+    answer: '상품별 요구사항과 수량을 알려 주시면 담당자가 확인 후 안내드립니다.',
+  },
+  {
+    id: 'faq-003',
+    category: '견적·대량구매',
+    question: '대량 구매 시 할인이 가능한가요?',
+    answer:
+      '수량과 납품 일정에 따라 상담이 필요합니다. 안전 솔루션 문의에서 필요한 내용을 남겨 주세요.',
+  },
+  {
+    id: 'faq-004',
+    category: '주문/결제',
+    question: '세금계산서 발행이 가능한가요?',
+    answer: '사업자 정보와 주문 내역을 확인한 뒤 발행 여부를 안내해 드립니다.',
+  },
+  {
+    id: 'faq-005',
+    category: '교환/반품',
+    question: '교환·반품은 어떻게 신청하나요?',
+    answer: '상품 상태와 주문 정보를 확인할 수 있도록 고객센터로 문의해 주세요.',
+  },
+  {
+    id: 'faq-006',
+    category: '견적·대량구매',
+    question: '회사 로고 인쇄(맞춤 제작)가 가능한가요?',
+    answer: '상품과 인쇄 사양에 따라 가능 여부가 달라집니다. 안전 솔루션 문의를 이용해 주세요.',
+  },
+  {
+    id: 'faq-007',
     category: '배송',
-    question: '배송은 얼마나 걸립니까?',
-    answer: '결제 완료 후 영업일 기준 2~3일이 걸립니다.',
+    question: '배송지를 변경하고 싶어요.',
+    answer: '출고 전 주문의 변경 가능 여부를 고객센터에서 확인해 드립니다.',
+  },
+];
+
+/** 목 1:1 문의. 내 문의 내역 화면은 최신 3개 행을 보여 줍니다. */
+export const mockInquiries: Inquiry[] = [
+  {
+    id: 'inq-001',
+    memberId: 'mem-001',
+    title: '배송 일정 문의드립니다',
+    body: '주문 상품의 배송 일정을 확인하고 싶습니다.',
+    status: 'answered',
+    createdAt: '2026-10-02T09:00:00+09:00',
+    answer: '배송 일정을 확인해 안내드렸습니다.',
+  },
+  {
+    id: 'inq-002',
+    memberId: 'mem-001',
+    title: '세금계산서 발행 요청',
+    body: '세금계산서 발행 가능 여부를 문의합니다.',
+    status: 'waiting',
+    createdAt: '2026-09-25T13:30:00+09:00',
+    answer: null,
+  },
+  {
+    id: 'inq-003',
+    memberId: 'mem-001',
+    title: '대량 구매 견적 문의',
+    body: '대량 구매 상담 가능 여부를 문의합니다.',
+    status: 'answered',
+    createdAt: '2026-09-12T16:20:00+09:00',
+    answer: '요청 사항을 확인해 안내드렸습니다.',
   },
 ];
 
@@ -80,18 +297,5 @@ export const mockQuotes: Quote[] = [
     status: 'canceled',
     requestedAt: '2026-09-01T11:30:00+09:00',
     memberId: 'mem-002',
-  },
-];
-
-/** 목 1:1 문의 */
-export const mockInquiries: Inquiry[] = [
-  {
-    id: 'inq-001',
-    memberId: 'mem-001',
-    title: '세금계산서 발행 문의',
-    body: '주문 20261001-0001 건 세금계산서 발행을 요청합니다.',
-    status: 'answered',
-    createdAt: '2026-10-02T09:00:00+09:00',
-    answer: '요청하신 세금계산서를 발행했습니다.',
   },
 ];

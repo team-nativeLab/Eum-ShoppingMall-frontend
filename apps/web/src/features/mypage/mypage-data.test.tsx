@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { queryKeys } from '@eum/api/query-keys';
 import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -27,7 +28,7 @@ function createWrapper() {
   function Wrapper({ children }: { children: ReactNode }) {
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
   }
-  return Wrapper;
+  return { Wrapper, queryClient };
 }
 
 describe('useMyPageData', () => {
@@ -65,8 +66,9 @@ describe('useMyPageData', () => {
   });
 
   it('collection routes skip member and unrelated API requests', async () => {
-    const { result } = renderHook(() => useMyPageData(['product-a'], 'wishlist'), {
-      wrapper: createWrapper(),
+    const { Wrapper } = createWrapper();
+    const { result } = renderHook(() => useMyPageData(['product-a'], 'wishlist', 'member-a'), {
+      wrapper: Wrapper,
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -83,9 +85,13 @@ describe('useMyPageData', () => {
       .mockRejectedValueOnce(new Error('상품 API 실패'))
       .mockResolvedValueOnce({ id: 'product-b', name: '목 상품 B' });
 
-    const { result } = renderHook(() => useMyPageData(['product-a', 'product-b'], 'recent'), {
-      wrapper: createWrapper(),
-    });
+    const { Wrapper } = createWrapper();
+    const { result } = renderHook(
+      () => useMyPageData(['product-a', 'product-b'], 'recent', 'member-a'),
+      {
+        wrapper: Wrapper,
+      },
+    );
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(result.current.data?.products).toEqual([{ id: 'product-b', name: '목 상품 B' }]);
@@ -98,7 +104,10 @@ describe('useMyPageData', () => {
   it('a relevant endpoint failure reaches the existing query error and retry state', async () => {
     apiMocks.ordersList.mockRejectedValue(new Error('주문 API 일시 오류'));
 
-    const { result } = renderHook(() => useMyPageData([], 'orders'), { wrapper: createWrapper() });
+    const { Wrapper } = createWrapper();
+    const { result } = renderHook(() => useMyPageData([], 'orders', 'member-a'), {
+      wrapper: Wrapper,
+    });
     await waitFor(() => expect(result.current.isError).toBe(true));
 
     expect(apiMocks.membersList).toHaveBeenCalledOnce();
@@ -109,5 +118,40 @@ describe('useMyPageData', () => {
     expect(apiMocks.addressesList).not.toHaveBeenCalled();
     expect(apiMocks.quotesList).not.toHaveBeenCalled();
     expect(apiMocks.productById).not.toHaveBeenCalled();
+  });
+
+  it('stores member-owned screens in member-specific cache entries', async () => {
+    apiMocks.membersList.mockResolvedValue([
+      { id: 'member-a', name: '회원 A', email: 'a@example.com', pointBalance: 0 },
+      { id: 'member-b', name: '회원 B', email: 'b@example.com', pointBalance: 0 },
+    ]);
+    const { Wrapper, queryClient } = createWrapper();
+    const { result, rerender } = renderHook(
+      ({ memberId }: { memberId: string }) => useMyPageData([], 'addresses', memberId),
+      { initialProps: { memberId: 'member-a' }, wrapper: Wrapper },
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    rerender({ memberId: 'member-b' });
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryData([...queryKeys.myPage.byMember('member-b'), 'addresses', []]),
+      ).toBeDefined(),
+    );
+
+    expect(
+      queryClient.getQueryData([...queryKeys.myPage.byMember('member-a'), 'addresses', []]),
+    ).toBeDefined();
+    expect(apiMocks.addressesList).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not fetch member-owned data without a session member ID', () => {
+    const { Wrapper } = createWrapper();
+    const { result } = renderHook(() => useMyPageData([], 'addresses', null), {
+      wrapper: Wrapper,
+    });
+
+    expect(result.current.isPending).toBe(true);
+    expect(apiMocks.membersList).not.toHaveBeenCalled();
+    expect(apiMocks.addressesList).not.toHaveBeenCalled();
   });
 });

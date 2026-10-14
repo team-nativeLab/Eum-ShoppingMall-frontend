@@ -1,8 +1,12 @@
-import { ComingSoon, createComingSoonMetadata } from '@/components/coming-soon';
+import type { Metadata } from 'next';
+import { AboutPageContent } from '@/features/company-pages/about-page';
 
-// 준비 중 화면. 실제 화면을 만들 때 이 파일을 교체합니다.
-export const metadata = createComingSoonMetadata('회사소개');
+export const metadata: Metadata = {
+  title: '회사소개',
+  description: '이음산업건설의 사업 분야와 위치를 소개합니다.',
+  robots: { index: true, follow: true },
+};
 
 export default function AboutPage() {
-  return <ComingSoon screenTitle="회사소개" />;
+  return <AboutPageContent />;
 }

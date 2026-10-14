@@ -10,16 +10,20 @@ import { usePathname } from 'next/navigation';
 export function DemoModeBanner() {
   const pathname = usePathname();
   if (pathname === '/login' || pathname === '/signup') return null;
+  const isFigmaPresentationRoute =
+    pathname === '/about' || pathname === '/solutions' || pathname.startsWith('/support/');
 
   return (
     <aside aria-label="데모 안내">
-      <div
-        data-demo-banner-visual=""
-        aria-hidden="true"
-        className="bg-warning-tint px-16 py-4 text-center text-caption-medium text-warning"
-      >
-        데모 화면입니다. 상품·가격·회사 정보는 목 데이터이며 주문과 결제는 처리되지 않습니다.
-      </div>
+      {!isFigmaPresentationRoute ? (
+        <div
+          data-demo-banner-visual=""
+          aria-hidden="true"
+          className="bg-warning-tint px-16 py-4 text-center text-caption-medium text-warning"
+        >
+          데모 화면입니다. 상품·가격·회사 정보는 목 데이터이며 주문과 결제는 처리되지 않습니다.
+        </div>
+      ) : null}
       <span className="sr-only">
         데모 화면입니다. 상품·가격·회사 정보는 목 데이터이며 주문과 결제는 처리되지 않습니다.
       </span>

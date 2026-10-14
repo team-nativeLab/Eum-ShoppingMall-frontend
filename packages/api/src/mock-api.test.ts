@@ -4,11 +4,16 @@ import { createMockApi } from './mock-api';
 import { mockProducts } from './mock/products';
 import { mockReviews } from './mock/reviews';
 import { mockAddresses } from './mock/addresses';
+import { mockNotices } from './mock/support';
 import { buildMockConfig } from './test-fixtures';
 
 const testConfig = buildMockConfig();
 
 describe('목 API 시나리오', () => {
+  it('공지 목은 Figma pagination 10페이지에 맞춰 100건을 제공합니다', () => {
+    expect(mockNotices).toHaveLength(100);
+  });
+
   it('normal: 목 상품을 돌려주고 금액 미표시 상품도 포함합니다', async () => {
     const productPage = await createMockApi(testConfig).products.list();
     expect(productPage.totalCount).toBeGreaterThan(0);
@@ -87,6 +92,8 @@ describe('목 API 시나리오', () => {
       ),
     ).toBe(true);
     expect(companyInfo.customerCenterTel).toMatch(/^[0-9+]+$/);
+    expect(companyInfo.email).toBe('info@example.com');
+    expect(companyInfo.quoteEmail).toBe('quote@example.com');
     await expect(
       createMockApi({ ...testConfig, mockScenario: 'error' }).company.getInfo(),
     ).rejects.toMatchObject({ code: 'NETWORK' });

@@ -1,8 +1,8 @@
-import { ComingSoon, createComingSoonMetadata } from '@/components/coming-soon';
+import type { Metadata } from 'next';
+import { InquiryPage } from '@/features/company-support/support-pages';
 
-// 준비 중 화면. 실제 화면을 만들 때 이 파일을 교체합니다.
-export const metadata = createComingSoonMetadata('1:1 문의');
+export const metadata: Metadata = { title: '1:1 문의' };
 
-export default function InquiryPage() {
-  return <ComingSoon screenTitle="1:1 문의" />;
+export default function InquiryRoute() {
+  return <InquiryPage />;
 }

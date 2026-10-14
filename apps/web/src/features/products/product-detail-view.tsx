@@ -28,6 +28,7 @@ import {
   usePrefersReducedMotion,
 } from '@/lib/use-media-query';
 import { useLocalCollections } from './local-collections-context';
+import { buildQuoteInquiryHref } from '@/features/company-pages/quote-inquiry-link';
 import { ProductCarouselSection } from './product-carousel';
 import { ProductImage } from './product-image';
 import { ProductRatingStars } from './product-rating-stars';
@@ -48,8 +49,6 @@ import { useRelatedProductsQuery } from './use-related-products-query';
 
 /** 함께 구매하면 좋은 제품 최대 수(5열 × 2페이지) */
 const RELATED_PRODUCT_LIMIT = 10;
-/** 견적 문의 경로(대량 구매 안내 링크) */
-const QUOTE_INQUIRY_PATH = '/solutions';
 /** 금액 미표시 상품 안내(데스크톱 구매 영역·요약 박스·모바일 하단 바 공통) */
 const PRICE_HIDDEN_NOTICE =
   '금액 미공개 상품이라 바로 구매할 수 없습니다. 장바구니 담기·견적 문의만 가능합니다.';
@@ -541,7 +540,7 @@ function ProductDetailContent({
                 {notice?.message}
               </p>
               <Link
-                href={QUOTE_INQUIRY_PATH}
+                href={buildQuoteInquiryHref([product.id])}
                 className="mt-16 inline-flex rounded-4 text-label-m underline underline-offset-2 focus-ring hover:text-text-2"
               >
                 대량 구매는 견적 문의 →
