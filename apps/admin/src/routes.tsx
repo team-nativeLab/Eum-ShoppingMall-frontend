@@ -11,6 +11,9 @@ import { AdminQuotesPage } from './pages/AdminQuotesPage';
 import { AdminMembersPage } from './pages/AdminMembersPage';
 import { AdminMemberDetailPage } from './pages/AdminMemberDetailPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { AdminSettingsPage } from './pages/AdminSettingsPage';
+import { AdminCouponsPage } from './pages/AdminCouponsPage';
+import { AdminWithdrawnMemberDetailPage } from './pages/AdminWithdrawnMemberDetailPage';
 
 /** 화면 제목·상위 메뉴를 route handle에 담아 TopBar 경로 표시에 씁니다. */
 export interface AdminRouteHandle {
@@ -71,9 +74,24 @@ export const adminRoutes: RouteObject[] = [
         element: <AdminMembersPage />,
       },
       {
+        path: 'members/withdrawn/:memberId',
+        handle: { title: '탈퇴 회원 상세', section: '회원 관리' },
+        element: <AdminWithdrawnMemberDetailPage />,
+      },
+      {
         path: 'members/:memberId',
         handle: { title: '회원 상세', section: '회원 관리' },
         element: <AdminMemberDetailPage />,
+      },
+      {
+        path: 'settings/shipping-discount',
+        handle: { title: '배송·할인 설정', section: '운영 설정' },
+        element: <AdminSettingsPage />,
+      },
+      {
+        path: 'coupons',
+        handle: { title: '쿠폰 관리', section: '운영 설정' },
+        element: <AdminCouponsPage />,
       },
       { path: '*', handle: { title: '페이지 없음' }, element: <NotFoundPage /> },
     ],

@@ -8,6 +8,8 @@ import {
   Package,
   Receipt,
   Users,
+  Truck,
+  TicketPercent,
   type LucideIcon,
 } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router';
@@ -26,6 +28,8 @@ const ADMIN_MENU_ITEMS: AdminMenuItem[] = [
   { label: '주문 관리', to: '/orders', icon: Receipt },
   { label: '견적 문의', to: '/quotes', icon: MessageSquareText },
   { label: '회원 관리', to: '/members', icon: Users },
+  { label: '배송·할인 설정', to: '/settings/shipping-discount', icon: Truck },
+  { label: '쿠폰 관리', to: '/coupons', icon: TicketPercent },
 ];
 
 /** 관리자 사이드바(Figma HF/Admin/Sidebar, w240). 활성 메뉴는 검정 채움입니다. */
