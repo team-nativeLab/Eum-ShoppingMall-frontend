@@ -1,8 +1,14 @@
-import { ComingSoon, createComingSoonMetadata } from '@/components/coming-soon';
+import type { Metadata } from 'next';
+import { LoginPageView } from '@/features/auth/login-page';
 
-// 준비 중 화면. 실제 화면을 만들 때 이 파일을 교체합니다.
-export const metadata = createComingSoonMetadata('로그인');
+export const metadata: Metadata = { title: '로그인' };
 
-export default function LoginPage() {
-  return <ComingSoon screenTitle="로그인" />;
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ redirect?: string | string[] }>;
+}) {
+  const params = await searchParams;
+  const rawRedirect = typeof params.redirect === 'string' ? params.redirect : undefined;
+  return <LoginPageView rawRedirect={rawRedirect} />;
 }

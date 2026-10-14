@@ -1,9 +1,11 @@
 import { collectCategoryIdsWithDescendants } from './category-tree';
+import { resolveCartOption } from './cart';
 import { assertMockAllowed, type ApiConfig } from './config';
 import { ApiError } from './errors';
 import { mockAddresses } from './mock/addresses';
 import { mockCoupons, mockPoints } from './mock/benefits';
 import { mockCategories } from './mock/categories';
+import { mockCheckoutOptions } from './mock/checkout';
 import { mockCompanyInfo } from './mock/company';
 import {
   mockHeroSlides,
@@ -20,13 +22,17 @@ import { mockFaqs, mockInquiries, mockNotices, mockQuotes } from './mock/support
 import type { ProductFacetParams, RequestOptions, ShopApi } from './shop-api';
 import type {
   AdminProduct,
+  CheckoutOptions,
+  CreateOrderInput,
   FacetCount,
   HomeContent,
+  OrderReceipt,
   PagedResult,
   Product,
   ProductFacets,
   ProductReview,
 } from './types';
+import { canBuyNow } from './price';
 
 const DEFAULT_PAGE_SIZE = 20;
 /** 관련·추천 상품 기본 개수 */
@@ -175,6 +181,7 @@ function wait(delayMs: number, signal: AbortSignal | undefined): Promise<void> {
  */
 export function createMockApi(config: ApiConfig): ShopApi {
   assertMockAllowed(config);
+  let orderSequence = 0;
 
   // 목록 응답: 지연 → 에러/빈 시나리오 처리 → 복사본 반환
   async function respondList<TItem>(
@@ -327,6 +334,11 @@ export function createMockApi(config: ApiConfig): ShopApi {
     search: {
       recommendedKeywords: (options) => respondList(mockRecommendedKeywords, options),
     },
+    checkout: {
+      async getOptions(options): Promise<CheckoutOptions> {
+        return respondOne(mockCheckoutOptions, '주문서 선택지', options);
+      },
+    },
     categories: { list: (options) => respondList(mockCategories, options) },
     home: {
       async getContent(options): Promise<HomeContent> {
@@ -369,6 +381,69 @@ export function createMockApi(config: ApiConfig): ShopApi {
           '주문',
           options,
         ),
+      async create(input: CreateOrderInput, options): Promise<OrderReceipt> {
+        await wait(config.mockLatencyMs, options?.signal);
+        if (config.mockScenario === 'error') {
+          throw new ApiError('NETWORK', '목 API 오류 시나리오입니다.');
+        }
+        if (input.lines.length === 0) {
+          throw new ApiError('VALIDATION', '주문할 상품을 선택해 주세요.');
+        }
+
+        let productTotal = 0;
+        for (const orderLine of input.lines) {
+          if (!Number.isInteger(orderLine.quantity) || orderLine.quantity < 1) {
+            throw new ApiError('VALIDATION', '상품 수량을 확인해 주세요.');
+          }
+          const adminProduct = mockProducts.find((product) => product.id === orderLine.productId);
+          const product = adminProduct ? toBuyerProduct(adminProduct) : undefined;
+          if (!product || !canBuyNow(product)) {
+            throw new ApiError('VALIDATION', '주문할 수 없는 상품이 포함되어 있습니다.');
+          }
+          const option = resolveCartOption(product, orderLine.optionId);
+          if (!option.isAvailable) {
+            throw new ApiError('VALIDATION', '상품 옵션을 다시 선택해 주세요.');
+          }
+          productTotal += ((product.price ?? 0) + option.priceDelta) * orderLine.quantity;
+        }
+
+        const coupon = input.couponId
+          ? mockCoupons.find((candidate) => candidate.id === input.couponId)
+          : undefined;
+        if (input.couponId && (!coupon || coupon.isUsed || productTotal < coupon.minOrderAmount)) {
+          throw new ApiError('VALIDATION', '사용할 수 없는 쿠폰입니다.');
+        }
+        const rawDiscount = coupon
+          ? coupon.discountType === 'amount'
+            ? coupon.discountValue
+            : Math.floor((productTotal * coupon.discountValue) / 100)
+          : 0;
+        const discountTotal = Math.min(productTotal, rawDiscount);
+        const remainingAfterDiscount = productTotal - discountTotal;
+        if (!Number.isInteger(input.pointsToUse) || input.pointsToUse < 0) {
+          throw new ApiError('VALIDATION', '사용할 적립금을 확인해 주세요.');
+        }
+        const pointsUsed = Math.min(input.pointsToUse, remainingAfterDiscount);
+        const shippingFee =
+          productTotal === 0 || productTotal >= mockCheckoutOptions.freeShippingThreshold
+            ? 0
+            : mockCheckoutOptions.shippingFee;
+        const paymentTotal = Math.max(0, remainingAfterDiscount - pointsUsed + shippingFee);
+        const now = new Date();
+        const timestamp = now
+          .toISOString()
+          .replace(/[-:TZ.]/g, '')
+          .slice(0, 14);
+        const orderNumber = `${timestamp}-${String(++orderSequence).padStart(4, '0')}`;
+        return structuredClone({
+          orderNumber,
+          productTotal,
+          discountTotal,
+          shippingFee,
+          pointsUsed,
+          paymentTotal,
+        });
+      },
     },
     claims: {
       listByMember: (memberId, options) => {

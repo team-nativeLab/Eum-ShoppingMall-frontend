@@ -9,7 +9,12 @@
  * - 화면의 로그인 확인은 UX일 뿐이고 실제 인가는 서버가 합니다.
  * - 운영 빌드에서 ALLOW_MOCK_IN_PRODUCTION 없이 만들면 ApiConfigError로 거부합니다.
  */
-import type { AdminAuthClient, KeyValueStore, MemberAuthClient } from './auth';
+import type {
+  AdminAuthClient,
+  KeyValueStore,
+  MemberAuthClientWithSignup,
+  MemberSignupResult,
+} from './auth';
 import { assertMockAllowed, type ApiConfig } from './config';
 import { ApiError } from './errors';
 import { mockAdminUsers, mockMembers } from './mock/members';
@@ -17,6 +22,10 @@ import { mockAdminUsers, mockMembers } from './mock/members';
 const SESSION_SCHEMA_VERSION = 1;
 export const MEMBER_SESSION_KEY = 'eum.mock-session.member.v1';
 export const ADMIN_SESSION_KEY = 'eum.mock-session.admin.v1';
+
+/** 회원가입 목 데이터는 현재 페이지 수명 동안만 메모리에 둡니다. 비밀번호는 저장하지 않습니다. */
+const transientSignupMembers = new Map<string, MemberSignupResult>();
+let transientSignupSequence = 0;
 
 interface StoredMockSession {
   version: typeof SESSION_SCHEMA_VERSION;
@@ -60,15 +69,18 @@ function assertFilled(fieldValues: string[]): void {
 }
 
 /** 일반 회원용 목 인증을 만드는 함수 */
-export function createMemberMockAuth(config: ApiConfig, store: KeyValueStore): MemberAuthClient {
+export function createMemberMockAuth(
+  config: ApiConfig,
+  store: KeyValueStore,
+): MemberAuthClientWithSignup {
   assertMockAllowed(config);
   return {
     async login({ email, password }) {
       assertFilled([email, password]);
       const normalizedEmail = email.trim().toLowerCase();
-      const member = mockMembers.find(
-        (candidate) => candidate.email.toLowerCase() === normalizedEmail,
-      );
+      const member =
+        mockMembers.find((candidate) => candidate.email.toLowerCase() === normalizedEmail) ??
+        transientSignupMembers.get(normalizedEmail);
       if (!member) {
         throw new ApiError('INVALID_CREDENTIALS', '이메일 또는 비밀번호가 올바르지 않습니다.');
       }
@@ -81,8 +93,41 @@ export function createMemberMockAuth(config: ApiConfig, store: KeyValueStore): M
     async getCurrentUser() {
       const session = readSession(store, MEMBER_SESSION_KEY);
       if (!session) return null;
-      const member = mockMembers.find((candidate) => candidate.id === session.userId);
+      const member =
+        mockMembers.find((candidate) => candidate.id === session.userId) ??
+        [...transientSignupMembers.values()].find((candidate) => candidate.id === session.userId);
       return member ? structuredClone(member) : null;
+    },
+    async isEmailAvailable(email) {
+      assertFilled([email]);
+      const normalizedEmail = email.trim().toLowerCase();
+      const hasFixture = mockMembers.some(
+        (candidate) => candidate.email.toLowerCase() === normalizedEmail,
+      );
+      return !hasFixture && !transientSignupMembers.has(normalizedEmail);
+    },
+    async signup({ email, password, name, phone, accountType }) {
+      assertFilled([email, password, name, phone]);
+      const normalizedEmail = email.trim().toLowerCase();
+      const isEmailTaken = mockMembers.some(
+        (candidate) => candidate.email.toLowerCase() === normalizedEmail,
+      );
+      if (isEmailTaken || transientSignupMembers.has(normalizedEmail)) {
+        throw new ApiError('VALIDATION', '이미 사용 중인 이메일입니다.');
+      }
+      const member = {
+        id: `mem-demo-${++transientSignupSequence}`,
+        email: normalizedEmail,
+        name: name.trim(),
+        phone: phone.trim(),
+        joinedAt: new Date().toISOString(),
+        pointBalance: 0,
+        accountType,
+      };
+      // 가입한 회원의 연락처는 브라우저 저장소에 기록하지 않고 현재 목 앱 수명 동안만 보관합니다.
+      transientSignupMembers.set(normalizedEmail, member);
+      writeSession(store, MEMBER_SESSION_KEY, member.id);
+      return structuredClone(member);
     },
   };
 }

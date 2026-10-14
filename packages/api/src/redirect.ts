@@ -5,6 +5,7 @@ const REDIRECT_BASE_ORIGIN = 'https://redirect-check.invalid';
  * 로그인 후 이동할 ?redirect= 값을 같은 사이트 안의 경로로 제한하는 함수.
  * 반드시 URL 디코딩이 끝난 최종 값(예: URLSearchParams.get() 결과)에 적용합니다.
  * 디코딩 전 값에 적용하면 %2F%2F 같은 인코딩 우회를 놓칠 수 있습니다.
+ * 배열이나 그 외 비문자열 입력은 안전하지 않은 값으로 보고 fallback을 돌려줍니다.
  *
  * 거절(→ fallback) 조건
  * - '/'로 시작하지 않는 값(https://…, javascript:… 등)
@@ -15,11 +16,9 @@ const REDIRECT_BASE_ORIGIN = 'https://redirect-check.invalid';
  * - 정규화 결과가 '//' 또는 '/\\'로 시작하는 값
  * 통과하면 정규화된 pathname + search + hash를 돌려줍니다.
  */
-export function sanitizeRedirectPath(
-  rawRedirect: string | null | undefined,
-  fallbackPath = '/',
-): string {
-  if (!rawRedirect || !rawRedirect.startsWith('/')) return fallbackPath;
+export function sanitizeRedirectPath(rawRedirect: unknown, fallbackPath = '/'): string {
+  if (typeof rawRedirect !== 'string' || !rawRedirect || !rawRedirect.startsWith('/'))
+    return fallbackPath;
   if (rawRedirect.includes('\\')) return fallbackPath;
   for (const character of rawRedirect) {
     const codePoint = character.codePointAt(0) ?? 0;

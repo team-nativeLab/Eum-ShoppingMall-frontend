@@ -4,6 +4,8 @@ import { shouldRetryQuery } from '@eum/api/errors';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { CartProvider } from '@/features/cart/cart-context';
+import { MemberSessionProvider } from '@/features/auth/member-session';
+import { CheckoutProvider } from '@/features/checkout/checkout-context';
 import { LocalCollectionsProvider } from '@/features/products/local-collections-context';
 
 // 기본값: 재시도할 가치가 있는 오류(네트워크 등)만 1번 재시도, 30초 동안은 새로 받지 않음
@@ -25,7 +27,11 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <LocalCollectionsProvider>
-        <CartProvider>{children}</CartProvider>
+        <MemberSessionProvider>
+          <CheckoutProvider>
+            <CartProvider>{children}</CartProvider>
+          </CheckoutProvider>
+        </MemberSessionProvider>
       </LocalCollectionsProvider>
     </QueryClientProvider>
   );
