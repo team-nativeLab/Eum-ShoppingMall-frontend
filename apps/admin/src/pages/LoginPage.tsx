@@ -4,10 +4,11 @@ import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { TextField } from '@eum/ui/components/TextField';
 import { ApiError } from '@eum/api/errors';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router';
 import { AdminError, AdminLoading } from '@/components/AdminUI';
 import { currentAdminQueryKey, getAdminAuth } from '@/lib/admin-auth';
+import { ensureAdminSessionActive, startAdminSession } from '@/lib/admin-request-lifecycle';
 import { sanitizeRedirectPath } from '@eum/api/redirect';
 
 /** 관리자 목 인증에 연결된 로그인 화면입니다. 로그인은 실제 인가를 대신하지 않습니다. */
@@ -19,6 +20,9 @@ export function LoginPage() {
     queryKey: currentAdminQueryKey,
     queryFn: async () => (await getAdminAuth()).getCurrentUser(),
   });
+  useEffect(() => {
+    if (currentAdminQuery.data) ensureAdminSessionActive();
+  }, [currentAdminQuery.data]);
   const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
@@ -64,6 +68,9 @@ export function LoginPage() {
     setIsSubmitting(true);
     try {
       const signedInAdmin = await (await getAdminAuth()).login({ loginId, password });
+      startAdminSession();
+      await queryClient.cancelQueries({ queryKey: ['admin'] });
+      queryClient.removeQueries({ queryKey: ['admin'] });
       queryClient.setQueryData(currentAdminQueryKey, signedInAdmin);
       await navigate(redirectPath, { replace: true });
     } catch (loginError: unknown) {

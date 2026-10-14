@@ -1,5 +1,5 @@
-import { useMemo, useState, type FormEvent } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { Button } from '@eum/ui/components/Button';
 import { Pagination } from '@eum/ui/components/Pagination';
@@ -21,15 +21,27 @@ import {
 import { getShopApi } from '@/lib/shop-api';
 import { getAdminApiConfig } from '@/lib/api-config';
 import { mapSettledWithConcurrency } from '@/lib/settled-concurrency';
+import { createAdminRequestScope } from '@/lib/admin-request-lifecycle';
 import type { Member, Order, OrderStatus } from '@eum/api/types';
 
 type OrderTab = 'all' | OrderStatus;
+type AdminOrderMember = Pick<Member, 'id' | 'name' | 'email' | 'phone'>;
+type AdminOrderSummary = Pick<
+  Order,
+  'id' | 'orderNumber' | 'orderedAt' | 'status' | 'memberId' | 'paymentTotal'
+> & {
+  lines: Pick<Order['lines'][number], 'productName'>[];
+};
+
 interface AdminOrdersData {
-  orders: Order[];
-  membersById: Map<string, Member>;
+  orders: AdminOrderSummary[];
+  membersById: Map<string, AdminOrderMember>;
+  failedMemberIds: string[];
   failedMemberCount: number;
   orderListUnavailable: boolean;
 }
+
+const ADMIN_ORDERS_QUERY_KEY = ['admin', 'orders', 'list'] as const;
 
 const ORDER_TABS: { value: OrderTab; label: string }[] = [
   { value: 'all', label: '전체' },
@@ -41,10 +53,28 @@ const ORDER_TABS: { value: OrderTab; label: string }[] = [
   { value: 'canceled', label: '취소·반품' },
 ];
 
+function toAdminOrderSummary(order: Order): AdminOrderSummary {
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    orderedAt: order.orderedAt,
+    status: order.status,
+    memberId: order.memberId,
+    paymentTotal: order.paymentTotal,
+    lines: order.lines.map(({ productName }) => ({ productName })),
+  };
+}
+
 /** 현재 API의 회원별 주문 조회를 모아 관리자 주문 목록을 만듭니다. */
 async function loadAdminOrders(signal: AbortSignal): Promise<AdminOrdersData> {
   if (getAdminApiConfig().mode === 'real') {
-    return { orders: [], membersById: new Map(), failedMemberCount: 0, orderListUnavailable: true };
+    return {
+      orders: [],
+      membersById: new Map(),
+      failedMemberIds: [],
+      failedMemberCount: 0,
+      orderListUnavailable: true,
+    };
   }
   const api = await getShopApi();
   const members = await api.members.list({ signal });
@@ -52,23 +82,48 @@ async function loadAdminOrders(signal: AbortSignal): Promise<AdminOrdersData> {
     members,
     5,
     async (member) => ({
-      member,
+      member: {
+        id: member.id,
+        name: member.name,
+        email: member.email,
+        phone: member.phone,
+      },
       orders: await api.orders.listByMember(member.id, { signal }),
     }),
     signal,
   );
+  const failedMemberIds = memberOrders.flatMap((result, index) => {
+    const member = members[index];
+    return result.status === 'rejected' && member ? [member.id] : [];
+  });
   return {
     orders: memberOrders.flatMap((result) =>
-      result.status === 'fulfilled' ? result.value.orders : [],
+      result.status === 'fulfilled' ? result.value.orders.map(toAdminOrderSummary) : [],
     ),
-    membersById: new Map(members.map((member) => [member.id, member])),
-    failedMemberCount: memberOrders.filter((result) => result.status === 'rejected').length,
+    membersById: new Map(
+      members.map(
+        (member) =>
+          [
+            member.id,
+            {
+              id: member.id,
+              name: member.name,
+              email: member.email,
+              phone: member.phone,
+            },
+          ] as const,
+      ),
+    ),
+    failedMemberIds,
+    failedMemberCount: failedMemberIds.length,
     orderListUnavailable: false,
   };
 }
 
 /** 주문을 검색하고 상태·기간별로 좁혀서 표시합니다. */
 export function AdminOrdersPage() {
+  const [orderRetryAnnouncement, setOrderRetryAnnouncement] = useState('');
+  const [isRetryingOrders, setIsRetryingOrders] = useState(false);
   const [searchInput, setSearchInput] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -77,10 +132,100 @@ export function AdminOrdersPage() {
   const [sortOrder, setSortOrder] = useState<'recent' | 'oldest'>('recent');
   const [pageSize, setPageSize] = useState(20);
   const [page, setPage] = useState(1);
+  const retryScopeRef = useRef<ReturnType<typeof createAdminRequestScope> | null>(null);
+  const queryClient = useQueryClient();
   const ordersQuery = useQuery({
-    queryKey: ['admin', 'orders', 'list'],
+    queryKey: ADMIN_ORDERS_QUERY_KEY,
     queryFn: ({ signal }) => loadAdminOrders(signal),
   });
+
+  useEffect(
+    () => () => {
+      retryScopeRef.current?.cancel();
+    },
+    [],
+  );
+
+  const handleRetryOrders = async () => {
+    const cachedOrderData = ordersQuery.data;
+    const failedMemberIds = cachedOrderData?.failedMemberIds;
+    if (!cachedOrderData || !failedMemberIds?.length) {
+      setOrderRetryAnnouncement('주문 재조회 대상을 확인하지 못했습니다. 현재 결과를 유지합니다.');
+      return;
+    }
+
+    retryScopeRef.current?.cancel();
+    retryScopeRef.current = null;
+    const requestScope = createAdminRequestScope();
+    if (!requestScope.isCurrent()) {
+      requestScope.dispose();
+      return;
+    }
+    retryScopeRef.current = requestScope;
+    setIsRetryingOrders(true);
+    setOrderRetryAnnouncement('회원별 주문을 다시 조회하고 있습니다.');
+    try {
+      const api = await getShopApi();
+      if (!requestScope.isCurrent()) return;
+      const retryResults = await mapSettledWithConcurrency(
+        failedMemberIds,
+        5,
+        async (memberId) => ({
+          memberId,
+          orders: await api.orders.listByMember(memberId, { signal: requestScope.signal }),
+        }),
+        requestScope.signal,
+      );
+      if (!requestScope.isCurrent()) return;
+      const resolvedMemberIds = new Set(
+        retryResults.flatMap((result) =>
+          result.status === 'fulfilled' ? [result.value.memberId] : [],
+        ),
+      );
+      const stillFailedMemberIds = retryResults.flatMap((result, index) => {
+        const memberId = failedMemberIds[index];
+        return result.status === 'rejected' && memberId ? [memberId] : [];
+      });
+      const retriedOrders = retryResults.flatMap((result) =>
+        result.status === 'fulfilled' ? result.value.orders.map(toAdminOrderSummary) : [],
+      );
+
+      if (!requestScope.isCurrent()) return;
+      queryClient.setQueryData<AdminOrdersData>(ADMIN_ORDERS_QUERY_KEY, (currentData) => {
+        if (!currentData) return undefined;
+        const failedMemberIds = new Set(
+          currentData.failedMemberIds.filter((memberId) => !resolvedMemberIds.has(memberId)),
+        );
+        stillFailedMemberIds.forEach((memberId) => failedMemberIds.add(memberId));
+
+        return {
+          ...currentData,
+          orders: [
+            ...currentData.orders.filter((order) => !resolvedMemberIds.has(order.memberId)),
+            ...retriedOrders,
+          ],
+          failedMemberIds: [...failedMemberIds],
+          failedMemberCount: failedMemberIds.size,
+        };
+      });
+
+      if (!requestScope.isCurrent()) return;
+      setOrderRetryAnnouncement(
+        stillFailedMemberIds.length > 0
+          ? `주문 재조회 후에도 회원 ${stillFailedMemberIds.length.toLocaleString('ko-KR')}명의 주문 조회에 실패했습니다.`
+          : '회원별 주문 재조회가 완료되었습니다.',
+      );
+    } catch {
+      if (!requestScope.isCurrent()) return;
+      setOrderRetryAnnouncement('주문 재조회에 실패했습니다. 기존 목록과 경고를 유지합니다.');
+    } finally {
+      if (retryScopeRef.current === requestScope) {
+        retryScopeRef.current = null;
+      }
+      requestScope.dispose();
+      if (requestScope.isCurrent()) setIsRetryingOrders(false);
+    }
+  };
   const hasInvalidDateFilter =
     isInvalidAdminDateInput(startDate) || isInvalidAdminDateInput(endDate);
 
@@ -115,7 +260,7 @@ export function AdminOrdersPage() {
   }, [endDate, hasInvalidDateFilter, ordersQuery.data, searchKeyword, sortOrder, startDate, tab]);
 
   if (ordersQuery.isPending) return <AdminLoading label="주문 목록을 불러오고 있습니다." />;
-  if (ordersQuery.isError) {
+  if (ordersQuery.isError && !ordersQuery.data) {
     return (
       <AdminError
         title="주문 목록을 불러오지 못했습니다"
@@ -164,11 +309,28 @@ export function AdminOrdersPage() {
           : '전체 주문 조회 API가 없어 등록 회원별 조회 결과를 모아 표시합니다. 결제수단 정보와 변경 기능은 제공되지 않습니다.'}
       </AdminNotice>
       {ordersQuery.data.failedMemberCount > 0 ? (
-        <AdminNotice tone="warning" className="mb-16">
+        <AdminNotice
+          tone="warning"
+          className="mb-16"
+          action={
+            <Button
+              type="button"
+              variant="secondary"
+              size="s"
+              disabled={isRetryingOrders || ordersQuery.isFetching}
+              onClick={() => void handleRetryOrders()}
+            >
+              {isRetryingOrders || ordersQuery.isFetching ? '조회 중…' : '다시 조회'}
+            </Button>
+          }
+        >
           회원 {ordersQuery.data.failedMemberCount.toLocaleString('ko-KR')}명의 주문 조회에
           실패했습니다. 현재 목록은 조회가 완료된 회원의 부분 결과입니다.
         </AdminNotice>
       ) : null}
+      <span role="status" aria-live="polite" className="sr-only">
+        {orderRetryAnnouncement}
+      </span>
       <AdminTabs
         label="주문 상태 필터"
         options={tabOptions}

@@ -1,5 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
+import { Button } from '@eum/ui/components/Button';
 import {
   AdminCountTile,
   AdminEmpty,
@@ -15,21 +17,32 @@ import {
 import { getShopApi } from '@/lib/shop-api';
 import { getAdminApiConfig } from '@/lib/api-config';
 import { mapSettledWithConcurrency } from '@/lib/settled-concurrency';
-import type { Member, Order, Product, Quote } from '@eum/api/types';
+import { createAdminRequestScope } from '@/lib/admin-request-lifecycle';
+import type { Member, Order, Product } from '@eum/api/types';
+
+type DashboardMember = Pick<Member, 'id' | 'name'>;
+type DashboardOrderRecord = Pick<
+  Order,
+  'id' | 'orderNumber' | 'orderedAt' | 'status' | 'memberId' | 'paymentTotal'
+>;
 
 interface DashboardOrder {
-  order: Order;
-  member: Member | undefined;
+  order: DashboardOrderRecord;
+  member: DashboardMember | undefined;
 }
 
 interface DashboardData {
   products: Product[];
   productTotalCount: number;
   orders: DashboardOrder[];
-  quotes: Quote[];
+  membersById: Map<string, DashboardMember>;
+  failedOrderMemberIds: string[];
+  pendingQuoteCount: number;
   unavailableOrderMemberCount: number;
   orderListUnavailable: boolean;
 }
+
+const DASHBOARD_QUERY_KEY = ['admin', 'dashboard'] as const;
 
 /** 회원별 주문 API와 공용 목록 API의 목 조회값으로 대시보드 데이터를 만듭니다. */
 async function loadDashboardData(signal: AbortSignal): Promise<DashboardData> {
@@ -46,25 +59,48 @@ async function loadDashboardData(signal: AbortSignal): Promise<DashboardData> {
         members,
         5,
         async (member) => ({
-          member,
+          member: { id: member.id, name: member.name },
           orders: await api.orders.listByMember(member.id, { signal }),
         }),
         signal,
       );
-  const memberById = new Map(members.map((member) => [member.id, member]));
+  const memberById = new Map(
+    members.map((member) => [member.id, { id: member.id, name: member.name }] as const),
+  );
   const orders = ordersByMember.flatMap((result) =>
     result.status === 'fulfilled'
-      ? result.value.orders.map((order) => ({ order, member: memberById.get(order.memberId) }))
+      ? result.value.orders.map((order) => ({
+          order: {
+            id: order.id,
+            orderNumber: order.orderNumber,
+            orderedAt: order.orderedAt,
+            status: order.status,
+            memberId: order.memberId,
+            paymentTotal: order.paymentTotal,
+          },
+          member: memberById.get(order.memberId),
+        }))
       : [],
   );
+  const pendingQuoteCount = quotes.filter(
+    (quote) => quote.status === 'received' || quote.status === 'consulting',
+  ).length;
+  const failedOrderMemberIds = orderListUnavailable
+    ? []
+    : ordersByMember.flatMap((result, index) => {
+        const member = members[index];
+        return result.status === 'rejected' && member ? [member.id] : [];
+      });
   return {
     products: productPage.items,
     productTotalCount: productPage.totalCount,
     orders,
-    quotes,
+    membersById: memberById,
+    failedOrderMemberIds,
+    pendingQuoteCount,
     unavailableOrderMemberCount: orderListUnavailable
       ? members.length
-      : ordersByMember.filter((result) => result.status === 'rejected').length,
+      : failedOrderMemberIds.length,
     orderListUnavailable,
   };
 }
@@ -218,18 +254,125 @@ function AdminDashboardCharts({
 
 /** 목 데이터 집계와 접근 가능한 간단 차트를 보여 줍니다. */
 export function AdminDashboardPage() {
+  const [orderRetryAnnouncement, setOrderRetryAnnouncement] = useState('');
+  const [isRetryingOrders, setIsRetryingOrders] = useState(false);
+  const retryScopeRef = useRef<ReturnType<typeof createAdminRequestScope> | null>(null);
+  const queryClient = useQueryClient();
   const dashboardQuery = useQuery({
-    queryKey: ['admin', 'dashboard'],
+    queryKey: DASHBOARD_QUERY_KEY,
     queryFn: ({ signal }) => loadDashboardData(signal),
   });
+
+  useEffect(
+    () => () => {
+      retryScopeRef.current?.cancel();
+    },
+    [],
+  );
+
+  const handleRetryOrders = async () => {
+    const cachedDashboardData = dashboardQuery.data;
+    const failedOrderMemberIds = cachedDashboardData?.failedOrderMemberIds;
+    if (!cachedDashboardData || !failedOrderMemberIds?.length) {
+      setOrderRetryAnnouncement('주문 재조회 대상을 확인하지 못했습니다. 현재 결과를 유지합니다.');
+      return;
+    }
+
+    retryScopeRef.current?.cancel();
+    retryScopeRef.current = null;
+    const requestScope = createAdminRequestScope();
+    if (!requestScope.isCurrent()) {
+      requestScope.dispose();
+      return;
+    }
+    retryScopeRef.current = requestScope;
+    setIsRetryingOrders(true);
+    setOrderRetryAnnouncement('회원별 주문을 다시 조회하고 있습니다.');
+    try {
+      const api = await getShopApi();
+      if (!requestScope.isCurrent()) return;
+      const retryResults = await mapSettledWithConcurrency(
+        failedOrderMemberIds,
+        5,
+        async (memberId) => ({
+          memberId,
+          orders: await api.orders.listByMember(memberId, { signal: requestScope.signal }),
+        }),
+        requestScope.signal,
+      );
+      if (!requestScope.isCurrent()) return;
+      const resolvedMemberIds = new Set(
+        retryResults.flatMap((result) =>
+          result.status === 'fulfilled' ? [result.value.memberId] : [],
+        ),
+      );
+      const stillFailedMemberIds = retryResults.flatMap((result, index) => {
+        const memberId = failedOrderMemberIds[index];
+        return result.status === 'rejected' && memberId ? [memberId] : [];
+      });
+      const retriedOrders = retryResults.flatMap((result) =>
+        result.status === 'fulfilled'
+          ? result.value.orders.map((order) => ({
+              order: {
+                id: order.id,
+                orderNumber: order.orderNumber,
+                orderedAt: order.orderedAt,
+                status: order.status,
+                memberId: order.memberId,
+                paymentTotal: order.paymentTotal,
+              },
+              member: cachedDashboardData.membersById.get(result.value.memberId),
+            }))
+          : [],
+      );
+
+      if (!requestScope.isCurrent()) return;
+      queryClient.setQueryData<DashboardData>(DASHBOARD_QUERY_KEY, (currentData) => {
+        if (!currentData) return undefined;
+        const failedOrderMemberIds = new Set(
+          currentData.failedOrderMemberIds.filter((memberId) => !resolvedMemberIds.has(memberId)),
+        );
+        stillFailedMemberIds.forEach((memberId) => failedOrderMemberIds.add(memberId));
+
+        return {
+          ...currentData,
+          orders: [
+            ...currentData.orders.filter(({ order }) => !resolvedMemberIds.has(order.memberId)),
+            ...retriedOrders,
+          ],
+          failedOrderMemberIds: [...failedOrderMemberIds],
+          unavailableOrderMemberCount: currentData.orderListUnavailable
+            ? currentData.unavailableOrderMemberCount
+            : failedOrderMemberIds.size,
+        };
+      });
+
+      if (!requestScope.isCurrent()) return;
+      setOrderRetryAnnouncement(
+        stillFailedMemberIds.length > 0
+          ? `주문 재조회 후에도 회원 ${stillFailedMemberIds.length.toLocaleString('ko-KR')}명의 주문 조회에 실패했습니다.`
+          : '회원별 주문 재조회가 완료되었습니다.',
+      );
+    } catch {
+      if (!requestScope.isCurrent()) return;
+      setOrderRetryAnnouncement('주문 재조회에 실패했습니다. 기존 결과와 경고를 유지합니다.');
+    } finally {
+      if (retryScopeRef.current === requestScope) {
+        retryScopeRef.current = null;
+      }
+      requestScope.dispose();
+      if (requestScope.isCurrent()) setIsRetryingOrders(false);
+    }
+  };
+
   if (dashboardQuery.isPending) return <AdminLoading label="대시보드 현황을 불러오고 있습니다." />;
-  if (dashboardQuery.isError) return <AdminError onRetry={() => void dashboardQuery.refetch()} />;
+  if (!dashboardQuery.data) return <AdminError onRetry={() => void dashboardQuery.refetch()} />;
 
   const {
     products,
     productTotalCount,
     orders,
-    quotes,
+    pendingQuoteCount,
     unavailableOrderMemberCount,
     orderListUnavailable,
   } = dashboardQuery.data;
@@ -240,9 +383,6 @@ export function AdminDashboardPage() {
   const activeProducts = products.filter((product) => product.stockStatus === 'inStock');
   const soldOutProducts = products.filter((product) => product.stockStatus === 'soldOut');
   const hiddenPriceProducts = products.filter((product) => !product.priceVisible);
-  const pendingQuotes = quotes.filter(
-    (quote) => quote.status === 'received' || quote.status === 'consulting',
-  );
   const recentOrders = [...orders]
     .sort((left, right) => right.order.orderedAt.localeCompare(left.order.orderedAt))
     .slice(0, 5);
@@ -294,7 +434,7 @@ export function AdminDashboardPage() {
         />
         <AdminCountTile
           label="미처리 견적 문의"
-          value={pendingQuotes.length}
+          value={pendingQuoteCount}
           href="/quotes"
           emphasis
         />
@@ -306,11 +446,28 @@ export function AdminDashboardPage() {
           표시하지 않습니다.
         </AdminNotice>
       ) : unavailableOrderMemberCount > 0 ? (
-        <AdminNotice tone="warning" className="mt-16">
+        <AdminNotice
+          tone="warning"
+          className="mt-16"
+          action={
+            <Button
+              type="button"
+              variant="secondary"
+              size="s"
+              disabled={isRetryingOrders || dashboardQuery.isFetching}
+              onClick={() => void handleRetryOrders()}
+            >
+              {isRetryingOrders || dashboardQuery.isFetching ? '조회 중…' : '주문 다시 조회'}
+            </Button>
+          }
+        >
           회원 {unavailableOrderMemberCount.toLocaleString('ko-KR')}명의 주문 조회에 실패해 부분
           결과만 표시합니다.
         </AdminNotice>
       ) : null}
+      <span role="status" aria-live="polite" className="sr-only">
+        {orderRetryAnnouncement}
+      </span>
 
       <AdminDashboardCharts orders={orders} unavailable={orderListUnavailable} />
 

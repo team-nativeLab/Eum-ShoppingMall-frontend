@@ -2,6 +2,7 @@ import { Breadcrumb, type BreadcrumbItem } from '@eum/ui/components/Breadcrumb';
 import { Button, buttonClassName } from '@eum/ui/components/Button';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useMatches, useNavigate } from 'react-router';
+import { endAdminSession } from '@/lib/admin-request-lifecycle';
 import { currentAdminQueryKey, getAdminAuth } from '@/lib/admin-auth';
 import { getAdminApiConfig } from '@/lib/api-config';
 import type { AdminRouteHandle } from '@/routes';
@@ -37,10 +38,13 @@ export function AdminTopBar() {
 
   // 목 세션을 지우고 로그인 화면으로 보내는 함수
   const handleLogout = async () => {
+    endAdminSession();
     try {
+      await queryClient.cancelQueries({ queryKey: ['admin'] });
       await (await getAdminAuth()).logout();
+    } catch {
+      // 로컬 관리자 상태는 로그아웃 응답과 무관하게 정리합니다.
     } finally {
-      // 서버 로그아웃 실패와 상관없이 화면의 로그인 정보는 지우고 로그인 화면으로 보냅니다.
       queryClient.removeQueries({ queryKey: ['admin'] });
       await navigate('/login', { replace: true });
     }

@@ -1,5 +1,6 @@
 import { Button, buttonClassName } from '@eum/ui/components/Button';
 import { Pagination } from '@eum/ui/components/Pagination';
+import { Switch } from '@eum/ui/components/Switch';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
@@ -14,6 +15,8 @@ import {
   formatAdminCurrency,
   formatAdminDate,
 } from '@/components/AdminUI';
+import { PriceVisibilityConfirmDialog } from '@/components/PriceVisibilityConfirmDialog';
+import { useAdminPriceVisibilityPreview } from '@/lib/admin-price-visibility-preview';
 import { getShopApi } from '@/lib/shop-api';
 import type { Category, Product } from '@eum/api/types';
 
@@ -63,7 +66,7 @@ function categoryPath(categoryId: string, categories: Category[]): string {
   return parent ? parent.name + ' > ' + category.name : category.name;
 }
 
-/** Admin 상품 목록. 가격 표시 상태는 읽기 전용이며 별도 변경 API는 연결하지 않습니다. */
+/** Admin 상품 목록과 상품 금액 표시의 세션 내 미리보기를 제공합니다. */
 export function AdminProductsPage() {
   const [searchText, setSearchText] = useState('');
   const [keyword, setKeyword] = useState('');
@@ -77,6 +80,9 @@ export function AdminProductsPage() {
   const [stockStatusOverrides, setStockStatusOverrides] = useState<
     Partial<Record<string, Product['stockStatus']>>
   >({});
+  const [pendingHideProducts, setPendingHideProducts] = useState<Product[]>([]);
+  const [priceVisibilityAnnouncement, setPriceVisibilityAnnouncement] = useState('');
+  const { getPreviewValue, hasPreviewChanges, setPreviewValue } = useAdminPriceVisibilityPreview();
   const productQuery = useQuery({
     queryKey: ['admin', 'products', keyword, categoryId],
     queryFn: ({ signal }) => loadProducts(keyword, categoryId, signal),
@@ -92,7 +98,7 @@ export function AdminProductsPage() {
       .filter((product) => {
         if (tab === 'selling') return product.stockStatus === 'inStock';
         if (tab === 'soldOut') return product.stockStatus === 'soldOut';
-        if (tab === 'hiddenPrice') return !product.priceVisible;
+        if (tab === 'hiddenPrice') return !getPreviewValue(product);
         return true;
       })
       .filter((product) => salesStatus === 'all' || product.stockStatus === salesStatus)
@@ -101,7 +107,7 @@ export function AdminProductsPage() {
           ? left.createdAt.localeCompare(right.createdAt)
           : right.createdAt.localeCompare(left.createdAt),
       );
-  }, [productQuery.data, salesStatus, sortOrder, stockStatusOverrides, tab]);
+  }, [getPreviewValue, productQuery.data, salesStatus, sortOrder, stockStatusOverrides, tab]);
   const allFilteredProducts = useMemo(() => {
     if (!productQuery.data) return [];
     return productQuery.data.products
@@ -118,20 +124,41 @@ export function AdminProductsPage() {
   const totalPages = Math.max(1, Math.ceil(visibleProducts.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pageProducts = visibleProducts.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const selectedProducts = visibleProducts.filter((product) => selectedIds.includes(product.id));
   const tabOptions = PRODUCT_TABS.map((option) => ({
     ...option,
     count: allFilteredProducts.filter((product) => {
       const currentStatus = stockStatusOverrides[product.id] ?? product.stockStatus;
       if (option.value === 'selling') return currentStatus === 'inStock';
       if (option.value === 'soldOut') return currentStatus === 'soldOut';
-      if (option.value === 'hiddenPrice') return !product.priceVisible;
+      if (option.value === 'hiddenPrice') return !getPreviewValue(product);
       return true;
     }).length,
   }));
+  const handleBulkShow = () => {
+    if (selectedProducts.length === 0) return;
+    setPreviewValue(selectedProducts, true);
+    setPriceVisibilityAnnouncement(
+      `${selectedProducts.length.toLocaleString('ko-KR')}개 상품의 금액 표시를 켜서 현재 관리자 화면에서 미리봅니다.`,
+    );
+  };
+  const handleOpenBulkHide = () => {
+    if (selectedProducts.length === 0) return;
+    setPendingHideProducts(selectedProducts);
+  };
+  const handleConfirmBulkHide = () => {
+    if (pendingHideProducts.length === 0) return;
+    setPreviewValue(pendingHideProducts, false);
+    setPriceVisibilityAnnouncement(
+      `${pendingHideProducts.length.toLocaleString('ko-KR')}개 상품의 금액 표시를 꺼서 현재 관리자 화면에서 미리봅니다.`,
+    );
+    setPendingHideProducts([]);
+  };
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setKeyword(searchText.trim());
     setPage(1);
+    setSelectedIds([]);
   };
   const handleReset = () => {
     setSearchText('');
@@ -140,6 +167,8 @@ export function AdminProductsPage() {
     setSalesStatus('all');
     setTab('all');
     setPage(1);
+    setSelectedIds([]);
+    setPendingHideProducts([]);
   };
   const handleSelectPage = (checked: boolean) => {
     const pageIds = pageProducts.map((product) => product.id);
@@ -168,6 +197,8 @@ export function AdminProductsPage() {
         onChange={(nextTab) => {
           setTab(nextTab);
           setPage(1);
+          setSelectedIds([]);
+          setPendingHideProducts([]);
         }}
       />
       {productQuery.data.totalCount > productQuery.data.products.length ? (
@@ -180,6 +211,12 @@ export function AdminProductsPage() {
         <AdminNotice tone="warning" className="mt-12">
           판매 상태 변경은 현재 화면의 임시 미리보기입니다. 서버에 저장되지 않으며 페이지를
           새로고침하면 사라집니다.
+        </AdminNotice>
+      ) : null}
+      {hasPreviewChanges ? (
+        <AdminNotice tone="info" className="mt-12">
+          금액 표시 변경은 현재 관리자 화면에서만 미리보기로 유지됩니다. 서버에 저장되지 않으며
+          구매자 화면·장바구니·주문에는 반영되지 않습니다. 새로고침 또는 로그아웃하면 초기화됩니다.
         </AdminNotice>
       ) : null}
 
@@ -206,6 +243,8 @@ export function AdminProductsPage() {
           onChange={(event) => {
             setCategoryId(event.target.value);
             setPage(1);
+            setSelectedIds([]);
+            setPendingHideProducts([]);
           }}
           className="h-40 w-160 rounded-8 border border-line-control bg-bg px-12 text-body-s"
         >
@@ -225,6 +264,8 @@ export function AdminProductsPage() {
           onChange={(event) => {
             setSalesStatus(event.target.value);
             setPage(1);
+            setSelectedIds([]);
+            setPendingHideProducts([]);
           }}
           className="h-40 w-144 rounded-8 border border-line-control bg-bg px-12 text-body-s"
         >
@@ -247,14 +288,8 @@ export function AdminProductsPage() {
         <div className="flex h-48 items-center justify-between gap-16 border-b border-line px-20">
           <p className="text-body-s text-text-2">
             검색 결과 {visibleProducts.length.toLocaleString('ko-KR')}개
-            {selectedIds.length ? ' · ' + selectedIds.length + '개 선택' : ''}
           </p>
           <div className="flex items-center gap-8">
-            {selectedIds.length ? (
-              <Button variant="ghost" size="s" onClick={() => setSelectedIds([])}>
-                선택 해제
-              </Button>
-            ) : null}
             <label className="sr-only" htmlFor="admin-product-sort">
               정렬 기준
             </label>
@@ -285,6 +320,35 @@ export function AdminProductsPage() {
             </select>
           </div>
         </div>
+        {selectedProducts.length > 0 ? (
+          <section
+            aria-label="선택 상품 작업"
+            className="flex flex-wrap items-center justify-between gap-12 border-b border-text-1 bg-text-1 px-20 py-12 text-inverse"
+          >
+            <p className="text-label-m text-inverse">
+              {selectedProducts.length.toLocaleString('ko-KR')}개 상품 선택
+            </p>
+            <div className="flex items-center gap-8">
+              <Button variant="secondary" size="s" onClick={handleBulkShow}>
+                금액 표시
+              </Button>
+              <Button variant="secondary" size="s" onClick={handleOpenBulkHide}>
+                금액 미표시
+              </Button>
+              <Button
+                variant="ghost"
+                size="s"
+                className="text-inverse hover:bg-bg/10 active:bg-bg/10"
+                onClick={() => setSelectedIds([])}
+              >
+                선택 해제
+              </Button>
+            </div>
+          </section>
+        ) : null}
+        <p role="status" aria-live="polite" className="sr-only">
+          {priceVisibilityAnnouncement}
+        </p>
         {pageProducts.length === 0 ? (
           <AdminEmpty
             title="검색 결과가 없습니다"
@@ -316,10 +380,10 @@ export function AdminProductsPage() {
                   <th scope="col" className="w-120 px-8 py-12 font-medium">
                     카테고리
                   </th>
-                  <th scope="col" className="w-96 px-8 py-12 text-right font-medium">
+                  <th scope="col" className="w-144 px-8 py-12 text-right font-medium">
                     판매가
                   </th>
-                  <th scope="col" className="w-80 px-8 py-12 font-medium">
+                  <th scope="col" className="w-112 px-8 py-12 font-medium">
                     금액 표시
                   </th>
                   <th scope="col" className="w-76 px-8 py-12 font-medium">
@@ -337,105 +401,116 @@ export function AdminProductsPage() {
                 </tr>
               </thead>
               <tbody>
-                {pageProducts.map((product) => (
-                  <tr key={product.id} className="border-t border-line hover:bg-bg-subtle">
-                    <td className="px-8 py-12">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(product.id)}
-                        aria-label={product.name + ' 선택'}
-                        onChange={(event) =>
-                          setSelectedIds((previous) =>
-                            event.target.checked
-                              ? [...previous, product.id]
-                              : previous.filter((productId) => productId !== product.id),
-                          )
-                        }
-                        className="size-20 accent-text-1"
-                      />
-                    </td>
-                    <td className="px-4 py-12">
-                      <div className="size-48 overflow-hidden rounded-6 bg-surface-2">
-                        {product.thumbnailUrl ? (
-                          <img
-                            src={product.thumbnailUrl}
-                            alt=""
-                            className="size-full object-cover"
-                          />
-                        ) : (
-                          <span className="sr-only">이미지 없음</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="max-w-160 px-8 py-12">
-                      <Link
-                        to={'/products/' + product.id}
-                        className="block truncate font-medium hover:underline"
-                        title={product.name}
-                      >
-                        {product.name}
-                      </Link>
-                      <span
-                        className="mt-2 block truncate text-caption text-text-3"
-                        title={product.id}
-                      >
-                        {product.id}
-                      </span>
-                    </td>
-                    <td
-                      className="max-w-120 truncate px-8 py-12 text-text-2"
-                      title={categoryPath(product.categoryId, productQuery.data.categories)}
-                    >
-                      {categoryPath(product.categoryId, productQuery.data.categories)}
-                    </td>
-                    <td className="px-8 py-12 text-right whitespace-nowrap">
-                      {product.price === null ? '금액 미표시' : formatAdminCurrency(product.price)}
-                    </td>
-                    <td className="px-8 py-12 text-body-s text-text-2">
-                      {product.priceVisible ? '표시' : '미표시'}
-                    </td>
-                    <td className="px-8 py-12 text-text-3">미제공</td>
-                    <td className="px-8 py-12">
-                      <AdminStatusBadge status={product.stockStatus} kind="product" />
-                    </td>
-                    <td className="px-8 py-12 whitespace-nowrap text-text-3">
-                      {formatAdminDate(product.createdAt)}
-                    </td>
-                    <td className="px-8 py-12">
-                      <details className="relative">
-                        <summary className="cursor-pointer list-none rounded-6 border border-line-control px-10 py-6 text-caption focus-ring">
-                          작업
-                        </summary>
-                        <div className="shadow-lg absolute right-0 z-10 mt-4 grid min-w-144 gap-2 rounded-8 border border-line bg-bg p-6">
-                          <button
-                            type="button"
-                            className="rounded-4 px-8 py-6 text-left text-caption focus-ring hover:bg-surface"
-                            onClick={() =>
-                              setStockStatusOverrides((previous) => ({
-                                ...previous,
-                                [product.id]: 'inStock',
-                              }))
-                            }
-                          >
-                            판매중으로 미리보기
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded-4 px-8 py-6 text-left text-caption focus-ring hover:bg-surface"
-                            onClick={() =>
-                              setStockStatusOverrides((previous) => ({
-                                ...previous,
-                                [product.id]: 'soldOut',
-                              }))
-                            }
-                          >
-                            품절로 미리보기
-                          </button>
+                {pageProducts.map((product) => {
+                  const isPriceVisible = getPreviewValue(product);
+                  return (
+                    <tr key={product.id} className="border-t border-line hover:bg-bg-subtle">
+                      <td className="px-8 py-6">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(product.id)}
+                          aria-label={product.name + ' 선택'}
+                          onChange={(event) =>
+                            setSelectedIds((previous) =>
+                              event.target.checked
+                                ? [...previous, product.id]
+                                : previous.filter((productId) => productId !== product.id),
+                            )
+                          }
+                          className="size-20 accent-text-1"
+                        />
+                      </td>
+                      <td className="px-4 py-6">
+                        <div className="size-40 overflow-hidden rounded-6 bg-surface-2">
+                          {product.thumbnailUrl ? (
+                            <img
+                              src={product.thumbnailUrl}
+                              alt=""
+                              className="size-full object-cover"
+                            />
+                          ) : (
+                            <span className="sr-only">이미지 없음</span>
+                          )}
                         </div>
-                      </details>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="max-w-160 px-8 py-6">
+                        <Link
+                          to={'/products/' + product.id}
+                          className="block truncate font-medium hover:underline"
+                          title={product.name}
+                        >
+                          {product.name}
+                        </Link>
+                        <span
+                          className="mt-2 block truncate text-caption text-text-3"
+                          title={product.id}
+                        >
+                          {product.id}
+                        </span>
+                      </td>
+                      <td
+                        className="max-w-120 truncate px-8 py-6 text-text-2"
+                        title={categoryPath(product.categoryId, productQuery.data.categories)}
+                      >
+                        {categoryPath(product.categoryId, productQuery.data.categories)}
+                      </td>
+                      <td className="px-8 py-6 text-right whitespace-nowrap">
+                        {product.price === null
+                          ? '실제 금액 미제공'
+                          : formatAdminCurrency(product.price)}
+                      </td>
+                      <td className="px-8 py-6 text-body-s text-text-2">
+                        <Switch
+                          label={`${product.name} 금액 표시`}
+                          isChecked={isPriceVisible}
+                          onCheckedChange={(nextValue) => setPreviewValue([product], nextValue)}
+                          onText="표시"
+                          offText="미표시"
+                        />
+                      </td>
+                      <td className="px-8 py-6 text-text-3">미제공</td>
+                      <td className="px-8 py-6">
+                        <AdminStatusBadge status={product.stockStatus} kind="product" />
+                      </td>
+                      <td className="px-8 py-6 whitespace-nowrap text-text-3">
+                        {formatAdminDate(product.createdAt)}
+                      </td>
+                      <td className="px-8 py-6">
+                        <details className="relative">
+                          <summary className="cursor-pointer list-none rounded-6 border border-line-control px-10 py-6 text-caption focus-ring">
+                            작업
+                          </summary>
+                          <div className="shadow-lg absolute right-0 z-10 mt-4 grid min-w-144 gap-2 rounded-8 border border-line bg-bg p-6">
+                            <button
+                              type="button"
+                              className="rounded-4 px-8 py-6 text-left text-caption focus-ring hover:bg-surface"
+                              onClick={() =>
+                                setStockStatusOverrides((previous) => ({
+                                  ...previous,
+                                  [product.id]: 'inStock',
+                                }))
+                              }
+                            >
+                              판매중으로 미리보기
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-4 px-8 py-6 text-left text-caption focus-ring hover:bg-surface"
+                              onClick={() =>
+                                setStockStatusOverrides((previous) => ({
+                                  ...previous,
+                                  [product.id]: 'soldOut',
+                                }))
+                              }
+                            >
+                              품절로 미리보기
+                            </button>
+                          </div>
+                        </details>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -446,6 +521,12 @@ export function AdminProductsPage() {
         totalPages={totalPages}
         onPageChange={setPage}
         className="mt-20 flex justify-center"
+      />
+      <PriceVisibilityConfirmDialog
+        isOpen={pendingHideProducts.length > 0}
+        selectedProducts={pendingHideProducts}
+        onCancel={() => setPendingHideProducts([])}
+        onConfirm={handleConfirmBulkHide}
       />
     </section>
   );

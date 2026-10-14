@@ -1,5 +1,6 @@
 import { Button, buttonClassName } from '@eum/ui/components/Button';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
+import { Switch } from '@eum/ui/components/Switch';
 import { SelectField, TextField } from '@eum/ui/components/TextField';
 import { useQuery } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
@@ -12,6 +13,7 @@ import {
   AdminPanel,
   AdminStatusBadge,
 } from '@/components/AdminUI';
+import { useAdminPriceVisibilityPreview } from '@/lib/admin-price-visibility-preview';
 import { getShopApi } from '@/lib/shop-api';
 import type { Category, Product } from '@eum/api/types';
 
@@ -57,6 +59,9 @@ function ProductEditor({
   const [extraOptionRows, setExtraOptionRows] = useState(0);
   const [selectedFileNames, setSelectedFileNames] = useState<string[]>([]);
   const [demoMessage, setDemoMessage] = useState('');
+  const [isNewProductPriceVisible, setNewProductPriceVisible] = useState(true);
+  const { getPreviewValue, setPreviewValue } = useAdminPriceVisibilityPreview();
+  const previewPriceVisible = product ? getPreviewValue(product) : isNewProductPriceVisible;
   const leafOptions = categories.filter((category) => category.parentId === rootCategoryId);
 
   const handleSave = (event: FormEvent<HTMLFormElement>) => {
@@ -77,6 +82,16 @@ function ProductEditor({
           </>
         }
       />
+      <div className="mb-16">
+        <AdminNotice tone="info">
+          이 폼의 입력은 화면 확인용입니다. 저장을 눌러도 서버에는 반영되지 않습니다.
+        </AdminNotice>
+        {demoMessage ? (
+          <NoticeInline role="status" tone="warning" className="mt-8">
+            {demoMessage}
+          </NoticeInline>
+        ) : null}
+      </div>
       <nav
         aria-label="상품 정보 섹션"
         className="mb-16 flex h-44 items-center gap-20 overflow-x-auto border-b border-line text-body-s text-text-2"
@@ -96,11 +111,6 @@ function ProductEditor({
         ))}
       </nav>
 
-      {demoMessage ? (
-        <NoticeInline role="status" tone="warning" className="mb-16">
-          {demoMessage}
-        </NoticeInline>
-      ) : null}
       <div className="grid grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] items-start gap-16">
         <div className="flex min-w-0 flex-col gap-16">
           <AdminPanel
@@ -183,42 +193,65 @@ function ProductEditor({
           <AdminPanel
             id="price-info"
             title="가격"
-            description="가격 정보는 저장하지 않는 데모 상태입니다."
+            description="판매가와 금액 표시 상태를 함께 확인합니다."
             className="scroll-mt-24"
             bodyClassName="p-20"
           >
-            <div className="grid grid-cols-2 gap-16">
-              <TextField
-                label="판매가"
-                name="price"
-                type="number"
-                min="0"
-                defaultValue={product?.price ?? ''}
-                placeholder="판매가를 입력해 주세요"
-                helperText={
-                  product?.price === null
-                    ? '현재 조회 응답에 실제 판매가가 포함되지 않았습니다.'
-                    : undefined
-                }
-              />
-              <TextField
-                label="정가"
-                name="listPrice"
-                type="number"
-                min="0"
-                defaultValue={product?.listPrice ?? ''}
-                placeholder="정가를 입력해 주세요"
-              />
-            </div>
-            {product ? (
-              <div className="mt-16 flex items-center justify-between rounded-8 bg-surface px-12 py-10">
-                <span className="text-body-s text-text-2">구매자 화면 가격 표시</span>
-                <span className="text-label-m">{product.priceVisible ? '표시' : '미표시'}</span>
+            <div className="space-y-16">
+              <div
+                role="group"
+                aria-label="판매가 및 금액 표시"
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-16 rounded-8 border border-line bg-surface p-16"
+              >
+                <TextField
+                  label="판매가"
+                  name="price"
+                  type="number"
+                  min="0"
+                  defaultValue={product?.price ?? ''}
+                  placeholder="판매가를 입력해 주세요"
+                  helperText={
+                    product?.price === null
+                      ? '실제 금액 미제공: API 응답에 판매가가 포함되지 않았습니다.'
+                      : undefined
+                  }
+                />
+                <Switch
+                  label="금액 표시"
+                  isChecked={previewPriceVisible}
+                  onCheckedChange={(nextValue) => {
+                    if (product) {
+                      setPreviewValue([product], nextValue);
+                    } else {
+                      setNewProductPriceVisible(nextValue);
+                    }
+                  }}
+                  onText="표시"
+                  offText="미표시"
+                />
               </div>
-            ) : null}
-            <AdminNotice tone="warning" className="mt-16">
-              금액 표시 설정은 정책 확인 후 연결합니다. 이 화면에서는 전환하거나 저장할 수 없습니다.
-            </AdminNotice>
+              <div className="max-w-400 border-t border-line pt-12">
+                <p className="mb-8 text-caption text-text-3">정가</p>
+                <TextField
+                  label="정가"
+                  isLabelHidden
+                  name="listPrice"
+                  type="number"
+                  min="0"
+                  defaultValue={product?.listPrice ?? ''}
+                  placeholder="정가를 입력해 주세요"
+                  helperText={
+                    product?.listPrice === null
+                      ? '실제 금액 미제공: API 응답에 정가가 포함되지 않았습니다.'
+                      : undefined
+                  }
+                />
+              </div>
+              <AdminNotice tone="warning">
+                이 스위치는 현재 관리자 세션 미리보기만 바꿉니다. 서버에 저장되지 않으며 구매자
+                화면·장바구니·주문에는 반영되지 않습니다. 새로고침 또는 로그아웃하면 초기화됩니다.
+              </AdminNotice>
+            </div>
           </AdminPanel>
 
           <AdminPanel
@@ -401,24 +434,14 @@ function ProductEditor({
             <div className="border-t border-line pt-16">
               <p className="text-label-m">금액 표시</p>
               <p className="mt-4 text-body-s text-text-3">
-                {product
-                  ? product.priceVisible
-                    ? '구매자 화면에 가격을 표시합니다.'
-                    : '구매자 화면에서 금액을 숨깁니다.'
-                  : '저장 정책 결정 후 표시 설정을 연결합니다.'}
+                {previewPriceVisible
+                  ? '표시 상태로 관리자 미리보기 중입니다.'
+                  : '미표시 상태로 관리자 미리보기 중입니다.'}
               </p>
               <a href="#price-info" className="mt-8 inline-flex text-label-s text-text-2 underline">
                 가격 섹션 보기
               </a>
             </div>
-            <NoticeInline tone="info">
-              상품 등록·수정은 화면 확인용입니다. 저장은 지원하지 않습니다.
-            </NoticeInline>
-          </AdminPanel>
-          <AdminPanel title="데모 안내" bodyClassName="p-20">
-            <p className="text-body-s text-text-2">
-              폼 입력은 페이지를 벗어나면 사라지며 서버로 전송되지 않습니다.
-            </p>
           </AdminPanel>
         </aside>
       </div>

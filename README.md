@@ -118,10 +118,10 @@ Eum-ShoppingMall-frontend/
 │   │       └── lib/             # api-config.ts(env 검증), shop-api.ts, member-auth.ts
 │   └── admin/                   # @eum/admin — Vite + React Router 관리자 SPA
 │       └── src/
-│           ├── components/      # AdminSidebar, AdminTopBar
+│           ├── components/      # AdminSidebar, AdminTopBar, AdminUI, PriceVisibilityConfirmDialog
 │           ├── layouts/         # AdminLayout
-│           ├── pages/           # LoginPage, PlaceholderPage, NotFoundPage
-│           ├── lib/             # api-config.ts(env 검증), shop-api.ts, admin-auth.ts
+│           ├── pages/           # 대시보드, 상품·카테고리·견적·주문·회원 관리, 로그인, 오류 화면
+│           ├── lib/             # API·인증 설정, 관리자 가격 미리보기, 동시성 유틸리티
 │           └── routes.tsx       # 관리자 라우트 정의
 ├── packages/
 │   ├── ui/                      # @eum/ui — 디자인 토큰(tokens.css) + 공통 컴포넌트
@@ -251,6 +251,7 @@ Eum-ShoppingMall-frontend/
   - 표시: 가격을 `₩12,000` 형식으로 보여 주고 구매할 수 있습니다. `₩0`도 그대로 표시합니다.
   - 미표시: 가격 자리에 **"구매 불가"** 를 표시합니다. 보기·찜·장바구니 담기만 가능하고 바로 구매는 할 수 없습니다.
   - `canBuyNow()`는 금액 표시이면서 재고가 있을 때만 `true`, `canAddToCart()`는 품절만 막습니다.
+  - Admin 상품 목록·수정 화면의 금액 표시 토글은 현재 관리자 라우트 안에서만 유지되는 메모리 미리보기입니다. 서버나 브라우저 저장소에 기록되지 않고 구매자 화면·장바구니·주문에도 반영되지 않으며, 새로고침하거나 로그아웃하면 초기화됩니다. 실제 금액이 API 응답에서 `null`이면 임의의 가격을 만들지 않고 `실제 금액 미제공`으로 표시합니다.
 - **장바구니** (`cart.ts`): 금액 미표시 상품과 품절 상품은 **'주문할 수 없는 상품'** 그룹으로 분리되고 합계에서 빠집니다. 수량은 1~999로 제한합니다(상한은 임시 값).
 - **회원**: **비회원 주문은 없습니다.** 관리자 계정과 일반 회원은 분리되어 있습니다.
 - **문구**: 구매자에게 보이는 문구는 합니다체로 씁니다.
@@ -298,7 +299,7 @@ jsdom 프로젝트는 `test/setup-dom.ts`에서 jest-dom 매처를 등록하고 
 - `apps/admin`, `packages/*`: typescript-eslint recommended + react-hooks + jsx-a11y recommended
 - 공통: `no-explicit-any`, `consistent-type-imports`, 미사용 변수 오류(`_` 접두사는 예외), 목 데이터 직접 import 금지
 
-단위 테스트는 `packages/api`의 비즈니스 규칙·설정·목 API·목 인증·redirect, `packages/ui` 공통 컴포넌트·페이지네이션, Web 장바구니 상태·저장소를 다룹니다. Admin(`apps/admin`)에는 아직 단위 테스트 파일이 없습니다.
+단위 테스트는 `packages/api`의 비즈니스 규칙·설정·목 API·목 인증·redirect, `packages/ui` 공통 컴포넌트·페이지네이션, Web 장바구니 상태·저장소를 다룹니다. Admin(`apps/admin`) 테스트는 관리자 날짜 입력 유틸리티, 대시보드·주문 목록의 부분 주문 조회 재시도, 상품 금액 표시 미리보기 흐름을 다룹니다.
 
 ### CI (`.github/workflows/ci.yml`)
 `dev`, `main` 브랜치에 대한 push와 pull request에서 실행됩니다. `.nvmrc`의 Node 버전으로 아래를 순서대로 검사합니다.
@@ -336,7 +337,7 @@ npm과 GitHub Actions를 주간으로 확인해 업데이트 PR을 엽니다. �
 | 5단계 | 회사소개·견적문의·고객지원 | 회사소개, 견적문의(안전 솔루션), 공지사항, FAQ, 1:1 문의 |
 | 6단계 | 관리자(Admin) | 로그인, 대시보드, 상품 목록·등록·수정, 카테고리, 견적 문의, 주문, 회원 관리 |
 
-현재 Admin의 대부분 라우트(`apps/admin/src/routes.tsx`)는 6단계에서 실제 화면으로 바꿀 자리표시(`PlaceholderPage`)입니다. 단계별 완료 여부는 GitHub 이슈와 PR에서 확인합니다.
+Admin 라우트(`apps/admin/src/routes.tsx`)는 로그인, 대시보드, 상품 목록·등록·수정, 카테고리, 견적 문의, 주문 목록·상세, 회원 목록·상세를 각각 전용 페이지에 연결합니다. `PlaceholderPage` 파일은 남아 있지만 현재 라우트에서 사용하지 않습니다. 상품 등록·수정과 Admin 금액 표시 변경은 데모 미리보기이며 서버에 저장되지 않습니다. 단계별 병합·완료 여부는 GitHub 이슈와 PR에서 확인합니다.
 
 ## 보안 제보
 보안 취약점은 공개 이슈로 올리지 말고 GitHub의 비공개 취약점 제보(저장소 **Security** 탭 → **Report a vulnerability**)를 이용해 주십시오. 제보 절차와 지원 범위는 [SECURITY.md](SECURITY.md)를 참고하세요.
