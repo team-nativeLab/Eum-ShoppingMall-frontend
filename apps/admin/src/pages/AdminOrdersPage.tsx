@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { Button } from '@eum/ui/components/Button';
 import { Pagination } from '@eum/ui/components/Pagination';
+import { Modal } from '@eum/ui/components/Modal';
 import {
   AdminEmpty,
   AdminDateInput,
@@ -22,6 +23,10 @@ import { getShopApi } from '@/lib/shop-api';
 import { getAdminApiConfig } from '@/lib/api-config';
 import { mapSettledWithConcurrency } from '@/lib/settled-concurrency';
 import { createAdminRequestScope } from '@/lib/admin-request-lifecycle';
+import {
+  ADMIN_TRACKING_MAX_CHARACTERS,
+  validateAdminTrackingRows,
+} from '@/lib/admin-preview-validation';
 import type { Member, Order, OrderStatus } from '@eum/api/types';
 
 type OrderTab = 'all' | OrderStatus;
@@ -132,6 +137,11 @@ export function AdminOrdersPage() {
   const [sortOrder, setSortOrder] = useState<'recent' | 'oldest'>('recent');
   const [pageSize, setPageSize] = useState(20);
   const [page, setPage] = useState(1);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [previewPreparingIds, setPreviewPreparingIds] = useState<string[]>([]);
+  const [bulkMessage, setBulkMessage] = useState('');
+  const [isTrackingModalOpen, setIsTrackingModalOpen] = useState(false);
+  const [trackingInput, setTrackingInput] = useState('');
   const retryScopeRef = useRef<ReturnType<typeof createAdminRequestScope> | null>(null);
   const queryClient = useQueryClient();
   const ordersQuery = useQuery({
@@ -147,6 +157,7 @@ export function AdminOrdersPage() {
   );
 
   const handleRetryOrders = async () => {
+    setSelectedOrderIds([]);
     const cachedOrderData = ordersQuery.data;
     const failedMemberIds = cachedOrderData?.failedMemberIds;
     if (!cachedOrderData || !failedMemberIds?.length) {
@@ -284,6 +295,7 @@ export function AdminOrdersPage() {
     event.preventDefault();
     setSearchKeyword(searchInput.trim());
     setPage(1);
+    setSelectedOrderIds([]);
   };
   const handleReset = () => {
     setSearchInput('');
@@ -292,6 +304,17 @@ export function AdminOrdersPage() {
     setEndDate('');
     setTab('all');
     setPage(1);
+    setSelectedOrderIds([]);
+  };
+  const trackingValidation = validateAdminTrackingRows(trackingInput, selectedOrderIds);
+  const applyTrackingPreview = () => {
+    if (!trackingValidation.validRows.length) return;
+    setBulkMessage(
+      `${trackingValidation.validRows.length}건의 송장 입력을 화면에서만 미리봤습니다. 실제 배송 정보는 변경되지 않았습니다.${trackingValidation.errors.length ? ` ${trackingValidation.errors.length}개 오류를 제외했습니다.` : ''}`,
+    );
+    setIsTrackingModalOpen(false);
+    setTrackingInput('');
+    setSelectedOrderIds([]);
   };
 
   return (
@@ -338,8 +361,13 @@ export function AdminOrdersPage() {
         onChange={(nextTab) => {
           setTab(nextTab);
           setPage(1);
+          setSelectedOrderIds([]);
         }}
       />
+      <AdminNotice className="mt-12" tone="warning">
+        일괄 배송 준비 처리는 현재 화면의 미리보기만 변경합니다. 엑셀 다운로드와 송장 반영은 운영
+        API 미연결로 실행하지 않습니다.
+      </AdminNotice>
       <form
         className="mt-16 flex flex-wrap items-center gap-8 rounded-12 border border-line bg-bg p-12"
         onSubmit={handleSearch}
@@ -364,6 +392,7 @@ export function AdminOrdersPage() {
             onChange={(nextValue) => {
               setStartDate(nextValue);
               setPage(1);
+              setSelectedOrderIds([]);
             }}
             className="w-132"
           />
@@ -376,6 +405,7 @@ export function AdminOrdersPage() {
             onChange={(nextValue) => {
               setEndDate(nextValue);
               setPage(1);
+              setSelectedOrderIds([]);
             }}
             className="w-132"
           />
@@ -408,7 +438,10 @@ export function AdminOrdersPage() {
             <select
               id="admin-order-sort"
               value={sortOrder}
-              onChange={(event) => setSortOrder(event.target.value as 'recent' | 'oldest')}
+              onChange={(event) => {
+                setSortOrder(event.target.value as 'recent' | 'oldest');
+                setSelectedOrderIds([]);
+              }}
               className="h-36 rounded-8 border border-line-control bg-bg px-12 text-body-s"
             >
               <option value="recent">최근 주문순</option>
@@ -423,6 +456,7 @@ export function AdminOrdersPage() {
               onChange={(event) => {
                 setPageSize(Number(event.target.value));
                 setPage(1);
+                setSelectedOrderIds([]);
               }}
               className="h-36 rounded-8 border border-line-control bg-bg px-12 text-body-s"
             >
@@ -431,6 +465,48 @@ export function AdminOrdersPage() {
               <option value={100}>100개씩</option>
             </select>
           </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-8 border-b border-line px-20 py-10">
+          <span className="text-body-s text-text-2">선택 {selectedOrderIds.length}건</span>
+          <Button
+            type="button"
+            size="s"
+            variant="secondary"
+            disabled={!selectedOrderIds.length}
+            onClick={() => {
+              setPreviewPreparingIds((ids) => [...new Set([...ids, ...selectedOrderIds])]);
+              setBulkMessage(
+                `${selectedOrderIds.length}건을 배송 준비 상태로 화면에서만 미리 반영했습니다.`,
+              );
+              setSelectedOrderIds([]);
+            }}
+          >
+            배송준비로 변경
+          </Button>
+          <Button
+            type="button"
+            size="s"
+            variant="secondary"
+            disabled={!selectedOrderIds.length}
+            onClick={() => setIsTrackingModalOpen(true)}
+          >
+            송장 일괄 등록
+          </Button>
+          <Button
+            type="button"
+            size="s"
+            variant="secondary"
+            disabled
+            aria-describedby="order-export-help"
+          >
+            엑셀 다운로드
+          </Button>
+          <span id="order-export-help" className="text-caption text-text-3">
+            실제 파일 다운로드는 제공하지 않습니다.
+          </span>
+          <span role="status" aria-live="polite" className="text-caption text-warning">
+            {bulkMessage}
+          </span>
         </div>
         {visibleOrders.length === 0 ? (
           <AdminEmpty
@@ -450,6 +526,9 @@ export function AdminOrdersPage() {
             <table className="w-full min-w-880 border-collapse text-left text-body-s">
               <thead className="bg-surface text-label-s text-text-2">
                 <tr>
+                  <th scope="col" className="px-12 py-12 font-medium">
+                    <span className="sr-only">선택</span>
+                  </th>
                   <th scope="col" className="px-20 py-12 font-medium">
                     주문번호
                   </th>
@@ -483,6 +562,20 @@ export function AdminOrdersPage() {
                     : '상품 정보 없음';
                   return (
                     <tr key={order.id} className="border-t border-line hover:bg-bg-subtle">
+                      <td className="px-12 py-12">
+                        <input
+                          type="checkbox"
+                          aria-label={`${order.orderNumber} 선택`}
+                          checked={selectedOrderIds.includes(order.id)}
+                          onChange={(event) =>
+                            setSelectedOrderIds((ids) =>
+                              event.target.checked
+                                ? [...ids, order.id]
+                                : ids.filter((id) => id !== order.id),
+                            )
+                          }
+                        />
+                      </td>
                       <td className="px-20 py-12">
                         <Link
                           to={`/orders/${order.id}`}
@@ -508,7 +601,12 @@ export function AdminOrdersPage() {
                       </td>
                       <td className="px-12 py-12 text-text-3">미제공</td>
                       <td className="px-20 py-12">
-                        <AdminStatusBadge status={order.status} kind="order" />
+                        <AdminStatusBadge
+                          status={
+                            previewPreparingIds.includes(order.id) ? 'preparing' : order.status
+                          }
+                          kind="order"
+                        />
                       </td>
                     </tr>
                   );
@@ -521,9 +619,59 @@ export function AdminOrdersPage() {
       <Pagination
         currentPage={currentPage}
         totalPages={totalPages}
-        onPageChange={setPage}
+        onPageChange={(nextPage) => {
+          setPage(nextPage);
+          setSelectedOrderIds([]);
+        }}
         className="mt-20 flex justify-center"
       />
+      <Modal
+        isOpen={isTrackingModalOpen}
+        onClose={() => {
+          setIsTrackingModalOpen(false);
+          setTrackingInput('');
+        }}
+        title="송장 일괄 등록 미리보기"
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setIsTrackingModalOpen(false);
+                setTrackingInput('');
+              }}
+            >
+              취소
+            </Button>
+            <Button disabled={!trackingValidation.validRows.length} onClick={applyTrackingPreview}>
+              유효 행 미리보기
+            </Button>
+          </>
+        }
+      >
+        <div className="mt-16 grid gap-12 text-body-s">
+          <AdminNotice tone="warning">
+            주문 ID, 택배사, 송장번호를 쉼표로 구분해 한 줄씩 입력합니다. 값은 저장·전송되지
+            않습니다.
+          </AdminNotice>
+          <textarea
+            maxLength={ADMIN_TRACKING_MAX_CHARACTERS + 1}
+            value={trackingInput}
+            onChange={(event) => setTrackingInput(event.target.value)}
+            rows={6}
+            placeholder="order-demo-001, 택배사, 1234567890"
+            className="resize-y rounded-8 border border-line-control p-12"
+          />
+          {trackingValidation.errors.length ? (
+            <ul role="alert" className="grid gap-4 text-danger">
+              {trackingValidation.errors.map((error, index) => (
+                <li key={`${error}-${index}`}>{error}</li>
+              ))}
+            </ul>
+          ) : null}
+          <p>유효한 미리보기 행 {trackingValidation.validRows.length}건</p>
+        </div>
+      </Modal>
     </section>
   );
 }

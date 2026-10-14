@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router';
 import { Button } from '@eum/ui/components/Button';
+import { Modal } from '@eum/ui/components/Modal';
 import {
   AdminEmpty,
   AdminError,
@@ -31,6 +32,9 @@ export function AdminOrderDetailPage() {
   const [previewStatusByOrder, setPreviewStatusByOrder] = useState<
     Partial<Record<string, OrderStatus>>
   >({});
+  const [cancelReason, setCancelReason] = useState('');
+  const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
+  const [cancelPreviewMessage, setCancelPreviewMessage] = useState('');
   const orderQuery = useQuery({
     queryKey: ['admin', 'orders', 'detail', orderId],
     enabled: Boolean(orderId),
@@ -49,6 +53,15 @@ export function AdminOrderDetailPage() {
       return members.find((member) => member.id === memberId);
     },
   });
+  const claimsQuery = useQuery({
+    queryKey: ['admin', 'orders', 'claims', orderQuery.data?.memberId],
+    enabled: Boolean(orderQuery.data?.memberId),
+    queryFn: async ({ signal }) => {
+      const memberId = orderQuery.data?.memberId;
+      if (!memberId) return [];
+      return (await getShopApi()).claims.listByMember(memberId, { signal });
+    },
+  });
 
   if (orderQuery.isPending) return <AdminLoading label="주문 상세 정보를 불러오고 있습니다." />;
   if (orderQuery.isError) {
@@ -64,6 +77,14 @@ export function AdminOrderDetailPage() {
   const order = orderQuery.data;
   const previewStatus = previewStatusByOrder[order.id] ?? order.status;
   const totalQuantity = order.lines.reduce((total, line) => total + line.quantity, 0);
+  const cancelRequest = claimsQuery.data?.find(
+    (claim) =>
+      claim.orderId === order.id && claim.type === 'cancel' && claim.status === 'requested',
+  );
+  const closeCancelConfirm = () => {
+    setIsCancelConfirmOpen(false);
+    setCancelReason('');
+  };
 
   return (
     <section aria-label="주문 상세">
@@ -87,6 +108,40 @@ export function AdminOrderDetailPage() {
         주문 상태·배송 정보·메모는 이 화면에서만 미리보기로 반영됩니다. 서버에는 저장되거나 주문
         취소가 처리되지 않습니다.
       </AdminNotice>
+      {cancelRequest ? (
+        <AdminPanel
+          title="취소 요청"
+          className="mb-16"
+          action={
+            <span className="rounded-6 bg-warning-tint px-8 py-4 text-caption text-warning">
+              요청 접수
+            </span>
+          }
+        >
+          <dl className="grid grid-cols-[140px_1fr] gap-10 p-20 text-body-s">
+            <dt className="text-text-3">요청 사유</dt>
+            <dd>{cancelRequest.reason}</dd>
+            <dt className="text-text-3">환불 예정 금액</dt>
+            <dd>{formatAdminCurrency(order.paymentTotal)}</dd>
+            <dt className="text-text-3">환불 수단</dt>
+            <dd>원 결제 수단 (세부 정보 미제공)</dd>
+          </dl>
+          <div className="border-t border-line px-20 py-12">
+            <Button size="s" variant="secondary" onClick={() => setIsCancelConfirmOpen(true)}>
+              취소 요청 확인 미리보기
+            </Button>
+          </div>
+        </AdminPanel>
+      ) : null}
+      {claimsQuery.isError ? (
+        <AdminNotice className="mb-16" tone="warning">
+          취소 요청 정보를 불러오지 못했습니다. 일반 주문 취소 상태와 취소 요청을 구분할 수
+          없습니다.{' '}
+          <button type="button" className="underline" onClick={() => void claimsQuery.refetch()}>
+            다시 시도
+          </button>
+        </AdminNotice>
+      ) : null}
       {memberQuery.isError ? (
         <AdminNotice tone="error" className="mb-16">
           주문자 회원 정보를 불러오지 못했습니다.{' '}
@@ -215,6 +270,54 @@ export function AdminOrderDetailPage() {
           />
         </aside>
       </div>
+      <Modal
+        isOpen={isCancelConfirmOpen}
+        onClose={closeCancelConfirm}
+        title="취소 요청 확인"
+        actions={
+          <>
+            <Button variant="secondary" onClick={closeCancelConfirm}>
+              닫기
+            </Button>
+            <Button
+              disabled={!cancelReason}
+              onClick={() => {
+                setCancelPreviewMessage(
+                  '취소 요청 확인을 화면에서만 미리봤습니다. 환불·주문 상태는 변경되지 않았습니다.',
+                );
+                closeCancelConfirm();
+              }}
+            >
+              확인 미리보기
+            </Button>
+          </>
+        }
+      >
+        <div className="mt-16 grid gap-12 text-body-s">
+          <AdminNotice tone="warning">
+            요청을 확인하면 실제 처리에서는 주문 취소와 결제 취소·환불이 진행될 수 있습니다. 이
+            데모는 해당 작업을 수행하지 않습니다.
+          </AdminNotice>
+          <p>사유를 선택해야 미리보기를 진행할 수 있습니다.</p>
+          <label className="grid gap-6">
+            확인 사유
+            <select
+              value={cancelReason}
+              onChange={(event) => setCancelReason(event.target.value)}
+              className="h-40 rounded-8 border border-line-control bg-bg px-12"
+            >
+              <option value="">사유 선택</option>
+              <option value="요청 내용 확인">요청 내용 확인</option>
+              <option value="고객 연락 확인">고객 연락 확인</option>
+            </select>
+          </label>
+        </div>
+      </Modal>
+      {cancelPreviewMessage ? (
+        <p role="status" className="mt-12 text-caption text-warning">
+          {cancelPreviewMessage}
+        </p>
+      ) : null}
     </section>
   );
 }

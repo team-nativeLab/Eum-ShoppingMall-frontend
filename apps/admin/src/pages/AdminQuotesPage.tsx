@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
 import type { Quote, QuoteStatus } from '@eum/api/types';
 import { QUOTE_STATUS_META } from '@eum/api/quote-status';
 import { Badge } from '@eum/ui/components/Badge';
 import { Button } from '@eum/ui/components/Button';
+import { Modal } from '@eum/ui/components/Modal';
 import { Pagination } from '@eum/ui/components/Pagination';
 import {
   AdminEmpty,
@@ -19,6 +20,11 @@ import {
   parseAdminDateInput,
 } from '@/components/AdminUI';
 import { getShopApi } from '@/lib/shop-api';
+import {
+  getBrowserLocalDateKey,
+  validateAdminQuoteDraft,
+  type AdminQuoteDraft,
+} from '@/lib/admin-preview-validation';
 
 type QuoteStatusFilter = 'all' | QuoteStatus;
 
@@ -343,6 +349,34 @@ function QuoteDetailPanel({
   const [draftStatus, setDraftStatus] = useState<QuoteStatus>(quote.status);
   const [adminMemo, setAdminMemo] = useState('');
   const [previewMessage, setPreviewMessage] = useState('');
+  const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
+  const [quoteDraft, setQuoteDraft] = useState<AdminQuoteDraft>({
+    amount: '',
+    expiresAt: '',
+    notice: '',
+    attachments: [],
+  });
+  const [quoteErrors, setQuoteErrors] = useState<string[]>([]);
+  const [quotePreview, setQuotePreview] = useState('');
+  const quoteFileInputRef = useRef<HTMLInputElement>(null);
+  const resetQuoteDraft = () => {
+    if (quoteFileInputRef.current) quoteFileInputRef.current.value = '';
+    setQuoteDraft({ amount: '', expiresAt: '', notice: '', attachments: [] });
+    setQuoteErrors([]);
+  };
+  const closeQuoteModal = () => {
+    setIsQuoteModalOpen(false);
+    resetQuoteDraft();
+  };
+  const validateAndPreviewQuote = () => {
+    const validationErrors = validateAdminQuoteDraft(quoteDraft, getBrowserLocalDateKey());
+    setQuoteErrors(validationErrors);
+    if (validationErrors.length) return;
+    setQuotePreview(
+      '견적 발송 미리보기를 완료했습니다. 이메일은 전송되지 않았고 파일과 입력값은 보관되지 않습니다.',
+    );
+    closeQuoteModal();
+  };
 
   return (
     <aside className="min-w-0 rounded-12 border border-line bg-bg p-24" aria-label="견적 문의 상세">
@@ -418,9 +452,11 @@ function QuoteDetailPanel({
           type="button"
           variant="secondary"
           className="flex-1"
-          onClick={() =>
-            setPreviewMessage('견적서 발송 API가 없어 실제 메일은 발송되지 않았습니다.')
-          }
+          onClick={() => {
+            resetQuoteDraft();
+            setQuotePreview('');
+            setIsQuoteModalOpen(true);
+          }}
         >
           견적서 발송
         </Button>
@@ -437,6 +473,94 @@ function QuoteDetailPanel({
           임시 반영
         </Button>
       </div>
+      {quotePreview ? (
+        <p role="status" className="mt-12 text-caption text-warning">
+          {quotePreview}
+        </p>
+      ) : null}
+      <Modal
+        isOpen={isQuoteModalOpen}
+        onClose={closeQuoteModal}
+        title="견적서 발송 미리보기"
+        actions={
+          <>
+            <Button variant="secondary" onClick={closeQuoteModal}>
+              취소
+            </Button>
+            <Button onClick={validateAndPreviewQuote}>발송 미리보기</Button>
+          </>
+        }
+      >
+        <div className="mt-16 grid max-h-[65vh] gap-12 overflow-y-auto pr-4 text-body-s">
+          <AdminNotice tone="warning">
+            발송, 업로드, 상태 저장은 실행되지 않습니다. 입력값과 파일은 이 화면의 메모리에서만
+            사용되고 닫을 때 지워집니다.
+          </AdminNotice>
+          <label className="grid gap-4">
+            견적 금액
+            <input
+              type="number"
+              min="1"
+              max="1000000000"
+              value={quoteDraft.amount}
+              onChange={(event) =>
+                setQuoteDraft((current) => ({ ...current, amount: event.target.value }))
+              }
+              className="h-40 rounded-8 border border-line-control px-12"
+            />
+          </label>
+          <label className="grid gap-4">
+            유효기간
+            <input
+              type="date"
+              value={quoteDraft.expiresAt}
+              onChange={(event) =>
+                setQuoteDraft((current) => ({ ...current, expiresAt: event.target.value }))
+              }
+              className="h-40 rounded-8 border border-line-control px-12"
+            />
+          </label>
+          <label className="grid gap-4">
+            고객 안내
+            <textarea
+              maxLength={1000}
+              value={quoteDraft.notice}
+              onChange={(event) =>
+                setQuoteDraft((current) => ({ ...current, notice: event.target.value }))
+              }
+              className="min-h-80 rounded-8 border border-line-control p-12"
+            />
+            <span className="text-caption text-text-3">{quoteDraft.notice.length}/1,000자</span>
+          </label>
+          <label className="grid gap-4">
+            견적서 파일 (PDF 1개)
+            <input
+              ref={quoteFileInputRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              onChange={(event) =>
+                setQuoteDraft((current) => ({
+                  ...current,
+                  attachments: Array.from(event.target.files ?? []),
+                }))
+              }
+              className="text-body-s"
+            />
+          </label>
+          {quoteDraft.attachments.map((file) => (
+            <span key={`${file.name}-${file.size}`} className="text-caption text-text-3">
+              {file.name} · {(file.size / 1024 / 1024).toFixed(1)}MB
+            </span>
+          ))}
+          {quoteErrors.length ? (
+            <ul role="alert" className="grid gap-4 text-danger">
+              {quoteErrors.map((error) => (
+                <li key={error}>{error}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      </Modal>
     </aside>
   );
 }

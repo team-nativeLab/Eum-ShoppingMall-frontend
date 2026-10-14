@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router';
 import { Button } from '@eum/ui/components/Button';
+import { Modal } from '@eum/ui/components/Modal';
 import {
   AdminEmpty,
   AdminError,
@@ -293,6 +294,12 @@ function MemberAccountPanel() {
   const [accountState, setAccountState] = useState('unchanged');
   const [memo, setMemo] = useState('');
   const [message, setMessage] = useState('');
+  const [isWithdrawConfirmOpen, setIsWithdrawConfirmOpen] = useState(false);
+  const [withdrawConfirmation, setWithdrawConfirmation] = useState('');
+  const closeWithdrawConfirm = () => {
+    setIsWithdrawConfirmOpen(false);
+    setWithdrawConfirmation('');
+  };
 
   return (
     <AdminPanel title="계정 관리">
@@ -348,9 +355,10 @@ function MemberAccountPanel() {
             variant="danger"
             isFullWidth
             className="mt-10"
-            onClick={() =>
-              setMessage('탈퇴 처리는 실행되지 않았습니다. 실제 회원 데이터는 변경되지 않았습니다.')
-            }
+            onClick={() => {
+              setWithdrawConfirmation('');
+              setIsWithdrawConfirmOpen(true);
+            }}
           >
             탈퇴 처리 안내
           </Button>
@@ -361,6 +369,49 @@ function MemberAccountPanel() {
           </p>
         ) : null}
       </div>
+      <Modal
+        isOpen={isWithdrawConfirmOpen}
+        onClose={closeWithdrawConfirm}
+        title="강제 탈퇴 미리보기 확인"
+        actions={
+          <>
+            <Button variant="secondary" onClick={closeWithdrawConfirm}>
+              취소
+            </Button>
+            <Button
+              variant="danger"
+              disabled={withdrawConfirmation !== '탈퇴'}
+              onClick={() => {
+                setMessage(
+                  '탈퇴 처리는 실행되지 않았습니다. 실제 회원 데이터는 변경되지 않았습니다.',
+                );
+                closeWithdrawConfirm();
+              }}
+            >
+              확인 미리보기
+            </Button>
+          </>
+        }
+      >
+        <div className="mt-16 grid gap-12 text-body-s">
+          <AdminNotice tone="warning">
+            실제 탈퇴 처리나 API 요청은 실행하지 않는 확인 미리보기입니다.
+          </AdminNotice>
+          <p>
+            실제 서비스에서 탈퇴가 진행되면 쿠폰·포인트 사용, 진행 중 주문 처리, 법정 보관 정보와
+            이용 제한에 영향을 줄 수 있습니다. 이 데모에서는 회원 상태나 기록을 변경하지 않습니다.
+          </p>
+          <label className="grid gap-6">
+            계속하려면 <strong>탈퇴</strong>를 입력해 주세요.
+            <input
+              value={withdrawConfirmation}
+              onChange={(event) => setWithdrawConfirmation(event.target.value)}
+              className="h-40 rounded-8 border border-line-control bg-bg px-12"
+              autoComplete="off"
+            />
+          </label>
+        </div>
+      </Modal>
     </AdminPanel>
   );
 }

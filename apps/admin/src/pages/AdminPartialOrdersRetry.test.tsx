@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router';
@@ -174,6 +174,33 @@ describe('partial order lookup retry actions', () => {
       products: { list: apiMocks.listProducts },
       quotes: { list: apiMocks.listQuotes },
     });
+  });
+
+  it('previews only selected orders and clears selection when the filter changes', async () => {
+    const user = userEvent.setup();
+    apiMocks.membersList.mockResolvedValue([memberA, memberB]);
+    apiMocks.listOrdersByMember.mockImplementation((memberId: string) =>
+      Promise.resolve([createOrder(memberId, `ORDER-${memberId}`)]),
+    );
+    renderWithAdminProviders(<AdminOrdersPage />);
+    const firstOrderRow = await screen.findByRole('row', { name: /ORDER-member-a/ });
+    await user.click(within(firstOrderRow).getByRole('checkbox', { name: 'ORDER-member-a 선택' }));
+    expect(screen.getByText('선택 1건')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '배송준비로 변경' }));
+    expect(
+      screen.getByText('1건을 배송 준비 상태로 화면에서만 미리 반영했습니다.'),
+    ).toBeInTheDocument();
+    expect(within(firstOrderRow).getByText('배송준비')).toBeInTheDocument();
+    expect(screen.getByText('선택 0건')).toBeInTheDocument();
+
+    const secondOrderRow = screen.getByRole('row', { name: /ORDER-member-b/ });
+    await user.click(within(secondOrderRow).getByRole('checkbox', { name: 'ORDER-member-b 선택' }));
+    await user.click(
+      within(screen.getByRole('group', { name: '주문 상태 필터' })).getByRole('button', {
+        name: /^배송완료/,
+      }),
+    );
+    await waitFor(() => expect(screen.getByText('선택 0건')).toBeInTheDocument());
   });
 
   it('retries member order lookups from the Orders warning', async () => {

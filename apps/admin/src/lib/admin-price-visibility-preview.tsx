@@ -3,10 +3,19 @@ import type { Product } from '@eum/api/types';
 
 type PriceVisibilityProduct = Pick<Product, 'id' | 'priceVisible'>;
 
+export interface PriceVisibilityPreviewSnapshot {
+  product: PriceVisibilityProduct;
+  isVisible: boolean;
+}
+
 interface AdminPriceVisibilityPreviewValue {
   previewValues: ReadonlyMap<string, boolean>;
   hasPreviewChanges: boolean;
   getPreviewValue: (product: PriceVisibilityProduct) => boolean;
+  capturePreviewValues: (
+    products: readonly PriceVisibilityProduct[],
+  ) => PriceVisibilityPreviewSnapshot[];
+  restorePreviewValues: (snapshots: readonly PriceVisibilityPreviewSnapshot[]) => void;
   setPreviewValue: (products: readonly PriceVisibilityProduct[], isVisible: boolean) => void;
 }
 
@@ -53,14 +62,46 @@ export function AdminPriceVisibilityPreviewProvider({ children }: { children: Re
     [],
   );
 
+  const capturePreviewValues = useCallback(
+    (products: readonly PriceVisibilityProduct[]) =>
+      products.map((product) => ({ product, isVisible: getPreviewValue(product) })),
+    [getPreviewValue],
+  );
+
+  const restorePreviewValues = useCallback(
+    (snapshots: readonly PriceVisibilityPreviewSnapshot[]) => {
+      setPreviewValues((previousValues) => {
+        let nextValues: Map<string, boolean> | null = null;
+        for (const { product, isVisible } of snapshots) {
+          const currentValues = nextValues ?? previousValues;
+          const hasOverride = currentValues.has(product.id);
+          const nextOverride = isVisible === product.priceVisible ? undefined : isVisible;
+          const isUnchanged =
+            nextOverride === undefined
+              ? !hasOverride
+              : currentValues.get(product.id) === nextOverride;
+          if (isUnchanged) continue;
+
+          nextValues ??= new Map(previousValues);
+          if (nextOverride === undefined) nextValues.delete(product.id);
+          else nextValues.set(product.id, nextOverride);
+        }
+        return nextValues ?? previousValues;
+      });
+    },
+    [],
+  );
+
   const contextValue = useMemo(
     () => ({
       previewValues,
       hasPreviewChanges: previewValues.size > 0,
       getPreviewValue,
+      capturePreviewValues,
+      restorePreviewValues,
       setPreviewValue,
     }),
-    [getPreviewValue, previewValues, setPreviewValue],
+    [capturePreviewValues, getPreviewValue, previewValues, restorePreviewValues, setPreviewValue],
   );
 
   return (

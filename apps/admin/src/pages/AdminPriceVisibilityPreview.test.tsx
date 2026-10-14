@@ -298,6 +298,32 @@ describe('admin price visibility previews', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('restores each selected product to its exact previous preview value after undo', async () => {
+    const user = userEvent.setup();
+    renderAdminApp();
+    await screen.findByRole('row', { name: /상품 A/ });
+    await user.click(screen.getByRole('checkbox', { name: '상품 A 선택' }));
+    await user.click(screen.getByRole('checkbox', { name: '상품 B 선택' }));
+    await user.click(screen.getByRole('button', { name: /^금액 표시$/ }));
+    expect(screen.getByRole('switch', { name: '상품 A 금액 표시' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(screen.getByRole('switch', { name: '상품 B 금액 표시' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await user.click(screen.getByRole('button', { name: '되돌리기' }));
+    expect(screen.getByRole('switch', { name: '상품 A 금액 표시' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(screen.getByRole('switch', { name: '상품 B 금액 표시' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+  });
+
   it('clears selection when search, category, sales filter, or tab changes', async () => {
     const user = userEvent.setup();
     renderAdminApp();

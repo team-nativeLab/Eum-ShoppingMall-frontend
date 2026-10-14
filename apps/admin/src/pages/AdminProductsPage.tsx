@@ -2,7 +2,7 @@ import { Button, buttonClassName } from '@eum/ui/components/Button';
 import { Pagination } from '@eum/ui/components/Pagination';
 import { Switch } from '@eum/ui/components/Switch';
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import {
   AdminEmpty,
@@ -16,7 +16,10 @@ import {
   formatAdminDate,
 } from '@/components/AdminUI';
 import { PriceVisibilityConfirmDialog } from '@/components/PriceVisibilityConfirmDialog';
-import { useAdminPriceVisibilityPreview } from '@/lib/admin-price-visibility-preview';
+import {
+  useAdminPriceVisibilityPreview,
+  type PriceVisibilityPreviewSnapshot,
+} from '@/lib/admin-price-visibility-preview';
 import { getShopApi } from '@/lib/shop-api';
 import type { Category, Product } from '@eum/api/types';
 
@@ -82,11 +85,27 @@ export function AdminProductsPage() {
   >({});
   const [pendingHideProducts, setPendingHideProducts] = useState<Product[]>([]);
   const [priceVisibilityAnnouncement, setPriceVisibilityAnnouncement] = useState('');
-  const { getPreviewValue, hasPreviewChanges, setPreviewValue } = useAdminPriceVisibilityPreview();
+  const [undoAction, setUndoAction] = useState<{
+    message: string;
+    snapshots: PriceVisibilityPreviewSnapshot[];
+  } | null>(null);
+  const {
+    capturePreviewValues,
+    getPreviewValue,
+    hasPreviewChanges,
+    restorePreviewValues,
+    setPreviewValue,
+  } = useAdminPriceVisibilityPreview();
   const productQuery = useQuery({
     queryKey: ['admin', 'products', keyword, categoryId],
     queryFn: ({ signal }) => loadProducts(keyword, categoryId, signal),
   });
+
+  useEffect(() => {
+    if (!undoAction) return;
+    const timeoutId = window.setTimeout(() => setUndoAction(null), 7000);
+    return () => window.clearTimeout(timeoutId);
+  }, [undoAction]);
 
   const visibleProducts = useMemo(() => {
     if (!productQuery.data) return [];
@@ -137,10 +156,11 @@ export function AdminProductsPage() {
   }));
   const handleBulkShow = () => {
     if (selectedProducts.length === 0) return;
+    const snapshots = capturePreviewValues(selectedProducts);
     setPreviewValue(selectedProducts, true);
-    setPriceVisibilityAnnouncement(
-      `${selectedProducts.length.toLocaleString('ko-KR')}개 상품의 금액 표시를 켜서 현재 관리자 화면에서 미리봅니다.`,
-    );
+    const message = `${selectedProducts.length.toLocaleString('ko-KR')}개 상품의 금액 표시를 켜서 현재 관리자 화면에서 미리봅니다.`;
+    setPriceVisibilityAnnouncement(message);
+    setUndoAction({ message, snapshots });
   };
   const handleOpenBulkHide = () => {
     if (selectedProducts.length === 0) return;
@@ -148,10 +168,11 @@ export function AdminProductsPage() {
   };
   const handleConfirmBulkHide = () => {
     if (pendingHideProducts.length === 0) return;
+    const snapshots = capturePreviewValues(pendingHideProducts);
     setPreviewValue(pendingHideProducts, false);
-    setPriceVisibilityAnnouncement(
-      `${pendingHideProducts.length.toLocaleString('ko-KR')}개 상품의 금액 표시를 꺼서 현재 관리자 화면에서 미리봅니다.`,
-    );
+    const message = `${pendingHideProducts.length.toLocaleString('ko-KR')}개 상품의 금액 표시를 꺼서 현재 관리자 화면에서 미리봅니다.`;
+    setPriceVisibilityAnnouncement(message);
+    setUndoAction({ message, snapshots });
     setPendingHideProducts([]);
   };
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {
@@ -217,6 +238,28 @@ export function AdminProductsPage() {
         <AdminNotice tone="info" className="mt-12">
           금액 표시 변경은 현재 관리자 화면에서만 미리보기로 유지됩니다. 서버에 저장되지 않으며
           구매자 화면·장바구니·주문에는 반영되지 않습니다. 새로고침 또는 로그아웃하면 초기화됩니다.
+        </AdminNotice>
+      ) : null}
+      {undoAction ? (
+        <AdminNotice
+          className="mt-12"
+          tone="info"
+          action={
+            <Button
+              type="button"
+              variant="secondary"
+              size="s"
+              onClick={() => {
+                restorePreviewValues(undoAction.snapshots);
+                setPriceVisibilityAnnouncement('금액 표시를 변경 전 미리보기 값으로 되돌렸습니다.');
+                setUndoAction(null);
+              }}
+            >
+              되돌리기
+            </Button>
+          }
+        >
+          {undoAction.message}
         </AdminNotice>
       ) : null}
 

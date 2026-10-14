@@ -20,6 +20,7 @@ import { getShopApi } from '@/lib/shop-api';
 import { getAdminApiConfig } from '@/lib/api-config';
 import { mapSettledWithConcurrency } from '@/lib/settled-concurrency';
 import type { Member } from '@eum/api/types';
+import { ADMIN_WITHDRAWN_MEMBER_FIXTURES } from '@/lib/admin-preview-fixtures';
 
 interface MemberOrderCounts {
   countByMemberId: Map<string, number>;
@@ -75,6 +76,7 @@ async function loadMemberOrderCounts(
 
 /** 회원 검색, 가입일 필터, 정렬 및 페이지 이동을 제공합니다. */
 export function AdminMembersPage() {
+  const [memberTab, setMemberTab] = useState<'all' | 'withdrawn'>('all');
   const [searchInput, setSearchInput] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -184,182 +186,242 @@ export function AdminMembersPage() {
       ) : null}
       <AdminTabs
         label="회원 유형 필터"
-        options={[{ value: 'all', label: '전체', count: matchingMembers.length }]}
-        value="all"
-        onChange={() => undefined}
+        options={[
+          { value: 'all', label: '전체', count: matchingMembers.length },
+          {
+            value: 'withdrawn',
+            label: '탈퇴 회원 (데모)',
+            count: ADMIN_WITHDRAWN_MEMBER_FIXTURES.length,
+          },
+        ]}
+        value={memberTab}
+        onChange={(value) => {
+          setMemberTab(value);
+          setPage(1);
+        }}
       />
-      <form
-        className="mt-16 flex flex-wrap items-center gap-8 rounded-12 border border-line bg-bg p-12"
-        onSubmit={handleSearch}
-      >
-        <label className="flex h-40 min-w-240 flex-1 items-center rounded-8 border border-line-control px-12">
-          <span className="sr-only">이름·이메일·연락처 검색</span>
-          <input
-            type="search"
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            placeholder="이름 · 이메일 · 연락처"
-            className="w-full min-w-0 border-0 bg-transparent text-body-s outline-none placeholder:text-text-3"
-          />
-        </label>
-        <div className="flex h-40 items-center gap-8 rounded-8 border border-line-control px-12 text-caption text-text-3">
-          <span>가입일</span>
-          <AdminDateInput
-            label="가입 시작일"
-            value={startDate}
-            invalid={isInvalidAdminDateInput(startDate)}
-            errorMessageId="member-date-filter-error"
-            onChange={(nextValue) => {
-              setStartDate(nextValue);
-              setPage(1);
-            }}
-            className="w-132"
-          />
-          <span aria-hidden="true">~</span>
-          <AdminDateInput
-            label="가입 종료일"
-            value={endDate}
-            invalid={isInvalidAdminDateInput(endDate)}
-            errorMessageId="member-date-filter-error"
-            onChange={(nextValue) => {
-              setEndDate(nextValue);
-              setPage(1);
-            }}
-            className="w-132"
-          />
-        </div>
-        <Button type="button" variant="ghost" size="s" onClick={handleReset}>
-          초기화
-        </Button>
-        <Button type="submit" size="s">
-          검색
-        </Button>
-      </form>
-      {hasInvalidDateFilter ? (
+      {memberTab === 'withdrawn' ? (
+        <section
+          aria-label="합성 탈퇴 회원 목록"
+          className="mt-16 overflow-x-auto rounded-12 border border-line bg-bg"
+        >
+          <AdminNotice className="m-12" tone="warning">
+            아래는 Admin 전용 합성 fixture이며 실제 회원을 탈퇴 상태로 분류하지 않습니다. 이메일과
+            연락처는 마스킹했습니다.
+          </AdminNotice>
+          <table className="w-full min-w-760 border-collapse text-left text-body-s">
+            <thead className="bg-surface text-caption text-text-2">
+              <tr>
+                {['회원 번호', '이름', '유형', '이메일', '연락처', '탈퇴 구분', '탈퇴일'].map(
+                  (label) => (
+                    <th key={label} className="px-16 py-12 font-medium">
+                      {label}
+                    </th>
+                  ),
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {ADMIN_WITHDRAWN_MEMBER_FIXTURES.map((member) => (
+                <tr key={member.id} className="border-t border-line">
+                  <td className="px-16 py-12">
+                    <Link
+                      to={`/members/withdrawn/${member.id}`}
+                      className="focus-ring hover:underline"
+                    >
+                      {member.memberNumber}
+                    </Link>
+                  </td>
+                  <td className="px-16 py-12">{member.name}</td>
+                  <td className="px-16 py-12">{member.memberType}</td>
+                  <td className="px-16 py-12">{member.email}</td>
+                  <td className="px-16 py-12">{member.phone}</td>
+                  <td className="px-16 py-12">{member.withdrawalType}</td>
+                  <td className="px-16 py-12">{formatAdminDate(member.withdrawnAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      ) : null}
+      {memberTab === 'all' ? (
+        <form
+          className="mt-16 flex flex-wrap items-center gap-8 rounded-12 border border-line bg-bg p-12"
+          onSubmit={handleSearch}
+        >
+          <label className="flex h-40 min-w-240 flex-1 items-center rounded-8 border border-line-control px-12">
+            <span className="sr-only">이름·이메일·연락처 검색</span>
+            <input
+              type="search"
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              placeholder="이름 · 이메일 · 연락처"
+              className="w-full min-w-0 border-0 bg-transparent text-body-s outline-none placeholder:text-text-3"
+            />
+          </label>
+          <div className="flex h-40 items-center gap-8 rounded-8 border border-line-control px-12 text-caption text-text-3">
+            <span>가입일</span>
+            <AdminDateInput
+              label="가입 시작일"
+              value={startDate}
+              invalid={isInvalidAdminDateInput(startDate)}
+              errorMessageId="member-date-filter-error"
+              onChange={(nextValue) => {
+                setStartDate(nextValue);
+                setPage(1);
+              }}
+              className="w-132"
+            />
+            <span aria-hidden="true">~</span>
+            <AdminDateInput
+              label="가입 종료일"
+              value={endDate}
+              invalid={isInvalidAdminDateInput(endDate)}
+              errorMessageId="member-date-filter-error"
+              onChange={(nextValue) => {
+                setEndDate(nextValue);
+                setPage(1);
+              }}
+              className="w-132"
+            />
+          </div>
+          <Button type="button" variant="ghost" size="s" onClick={handleReset}>
+            초기화
+          </Button>
+          <Button type="submit" size="s">
+            검색
+          </Button>
+        </form>
+      ) : null}
+      {memberTab === 'all' && hasInvalidDateFilter ? (
         <p id="member-date-filter-error" role="alert" className="mt-8 text-caption text-danger">
           시작일과 종료일은 YYYY.MM.DD 형식의 유효한 날짜여야 합니다. 날짜를 수정하면 해당 조건으로
           결과를 다시 표시합니다.
         </p>
       ) : null}
-      <section
-        className="mt-16 overflow-hidden rounded-12 border border-line bg-bg"
-        aria-label="회원 검색 결과"
-      >
-        <div className="flex min-h-48 flex-wrap items-center justify-between gap-12 border-b border-line px-20 py-8">
-          <p className="text-body-s text-text-2">
-            검색 결과 {matchingMembers.length.toLocaleString('ko-KR')}명
-          </p>
-          <div className="flex items-center gap-8">
-            <label className="sr-only" htmlFor="admin-member-sort">
-              정렬 기준
-            </label>
-            <select
-              id="admin-member-sort"
-              value={sortOrder}
-              onChange={(event) => setSortOrder(event.target.value as 'recent' | 'oldest')}
-              className="h-36 rounded-8 border border-line-control bg-bg px-12 text-body-s"
-            >
-              <option value="recent">최근 가입순</option>
-              <option value="oldest">오래된 순</option>
-            </select>
-            <label className="sr-only" htmlFor="admin-member-page-size">
-              페이지당 표시 수
-            </label>
-            <select
-              id="admin-member-page-size"
-              value={pageSize}
-              onChange={(event) => {
-                setPageSize(Number(event.target.value));
-                setPage(1);
-              }}
-              className="h-36 rounded-8 border border-line-control bg-bg px-12 text-body-s"
-            >
-              <option value={20}>20개씩</option>
-              <option value={50}>50개씩</option>
-              <option value={100}>100개씩</option>
-            </select>
+      {memberTab === 'all' ? (
+        <section
+          className="mt-16 overflow-hidden rounded-12 border border-line bg-bg"
+          aria-label="회원 검색 결과"
+        >
+          <div className="flex min-h-48 flex-wrap items-center justify-between gap-12 border-b border-line px-20 py-8">
+            <p className="text-body-s text-text-2">
+              검색 결과 {matchingMembers.length.toLocaleString('ko-KR')}명
+            </p>
+            <div className="flex items-center gap-8">
+              <label className="sr-only" htmlFor="admin-member-sort">
+                정렬 기준
+              </label>
+              <select
+                id="admin-member-sort"
+                value={sortOrder}
+                onChange={(event) => setSortOrder(event.target.value as 'recent' | 'oldest')}
+                className="h-36 rounded-8 border border-line-control bg-bg px-12 text-body-s"
+              >
+                <option value="recent">최근 가입순</option>
+                <option value="oldest">오래된 순</option>
+              </select>
+              <label className="sr-only" htmlFor="admin-member-page-size">
+                페이지당 표시 수
+              </label>
+              <select
+                id="admin-member-page-size"
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value));
+                  setPage(1);
+                }}
+                className="h-36 rounded-8 border border-line-control bg-bg px-12 text-body-s"
+              >
+                <option value={20}>20개씩</option>
+                <option value={50}>50개씩</option>
+                <option value={100}>100개씩</option>
+              </select>
+            </div>
           </div>
-        </div>
-        {visibleMembers.length === 0 ? (
-          <AdminEmpty
-            title={hasInvalidDateFilter ? '가입일 입력을 확인해 주세요' : '회원이 없습니다'}
-            description={
-              hasInvalidDateFilter
-                ? '올바른 날짜를 입력하면 검색 결과가 표시됩니다.'
-                : '검색어나 가입일 범위를 확인해 주세요.'
-            }
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-800 border-collapse text-left text-body-s">
-              <thead className="bg-surface text-label-s text-text-2">
-                <tr>
-                  <th scope="col" className="px-20 py-12 font-medium">
-                    이름 / 이메일
-                  </th>
-                  <th scope="col" className="px-12 py-12 font-medium">
-                    유형
-                  </th>
-                  <th scope="col" className="px-12 py-12 font-medium">
-                    회사명
-                  </th>
-                  <th scope="col" className="px-12 py-12 font-medium">
-                    연락처
-                  </th>
-                  <th scope="col" className="px-12 py-12 text-right font-medium">
-                    주문 수
-                  </th>
-                  <th scope="col" className="px-12 py-12 font-medium whitespace-nowrap">
-                    가입일
-                  </th>
-                  <th scope="col" className="px-20 py-12 font-medium">
-                    상태
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleMembers.map((member) => (
-                  <tr key={member.id} className="border-t border-line hover:bg-bg-subtle">
-                    <td className="px-20 py-12">
-                      <Link
-                        to={`/members/${member.id}`}
-                        className="block font-medium focus-ring hover:underline"
-                      >
-                        {member.name}
-                      </Link>
-                      <span className="mt-2 block text-caption text-text-3">{member.email}</span>
-                    </td>
-                    <td className="px-12 py-12 text-text-3">미제공</td>
-                    <td className="px-12 py-12 text-text-3">미제공</td>
-                    <td className="px-12 py-12 whitespace-nowrap">{maskPhone(member.phone)}</td>
-                    <td className="px-12 py-12 text-right">
-                      {memberOrderCountsQuery.data
-                        ? memberOrderCountsQuery.data.orderCountApiUnavailable
-                          ? '미제공'
-                          : memberOrderCountsQuery.data.failedMemberIds.has(member.id)
-                            ? '조회 실패'
-                            : (memberOrderCountsQuery.data.countByMemberId.get(member.id) ?? 0)
-                        : memberOrderCountsQuery.isError
-                          ? '미제공'
-                          : '불러오는 중'}
-                    </td>
-                    <td className="px-12 py-12 whitespace-nowrap text-text-2">
-                      {formatAdminDate(member.joinedAt)}
-                    </td>
-                    <td className="px-20 py-12 text-text-3">미제공</td>
+          {visibleMembers.length === 0 ? (
+            <AdminEmpty
+              title={hasInvalidDateFilter ? '가입일 입력을 확인해 주세요' : '회원이 없습니다'}
+              description={
+                hasInvalidDateFilter
+                  ? '올바른 날짜를 입력하면 검색 결과가 표시됩니다.'
+                  : '검색어나 가입일 범위를 확인해 주세요.'
+              }
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-800 border-collapse text-left text-body-s">
+                <thead className="bg-surface text-label-s text-text-2">
+                  <tr>
+                    <th scope="col" className="px-20 py-12 font-medium">
+                      이름 / 이메일
+                    </th>
+                    <th scope="col" className="px-12 py-12 font-medium">
+                      유형
+                    </th>
+                    <th scope="col" className="px-12 py-12 font-medium">
+                      회사명
+                    </th>
+                    <th scope="col" className="px-12 py-12 font-medium">
+                      연락처
+                    </th>
+                    <th scope="col" className="px-12 py-12 text-right font-medium">
+                      주문 수
+                    </th>
+                    <th scope="col" className="px-12 py-12 font-medium whitespace-nowrap">
+                      가입일
+                    </th>
+                    <th scope="col" className="px-20 py-12 font-medium">
+                      상태
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-      <Pagination
-        currentPage={currentPage}
-        totalPages={totalPages}
-        onPageChange={setPage}
-        className="mt-20 flex justify-center"
-      />
+                </thead>
+                <tbody>
+                  {visibleMembers.map((member) => (
+                    <tr key={member.id} className="border-t border-line hover:bg-bg-subtle">
+                      <td className="px-20 py-12">
+                        <Link
+                          to={`/members/${member.id}`}
+                          className="block font-medium focus-ring hover:underline"
+                        >
+                          {member.name}
+                        </Link>
+                        <span className="mt-2 block text-caption text-text-3">{member.email}</span>
+                      </td>
+                      <td className="px-12 py-12 text-text-3">미제공</td>
+                      <td className="px-12 py-12 text-text-3">미제공</td>
+                      <td className="px-12 py-12 whitespace-nowrap">{maskPhone(member.phone)}</td>
+                      <td className="px-12 py-12 text-right">
+                        {memberOrderCountsQuery.data
+                          ? memberOrderCountsQuery.data.orderCountApiUnavailable
+                            ? '미제공'
+                            : memberOrderCountsQuery.data.failedMemberIds.has(member.id)
+                              ? '조회 실패'
+                              : (memberOrderCountsQuery.data.countByMemberId.get(member.id) ?? 0)
+                          : memberOrderCountsQuery.isError
+                            ? '미제공'
+                            : '불러오는 중'}
+                      </td>
+                      <td className="px-12 py-12 whitespace-nowrap text-text-2">
+                        {formatAdminDate(member.joinedAt)}
+                      </td>
+                      <td className="px-20 py-12 text-text-3">미제공</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      ) : null}
+      {memberTab === 'all' ? (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          className="mt-20 flex justify-center"
+        />
+      ) : null}
     </section>
   );
 }
