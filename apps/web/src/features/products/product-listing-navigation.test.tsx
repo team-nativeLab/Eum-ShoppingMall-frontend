@@ -187,3 +187,100 @@ describe('ProductListingView brand navigation', () => {
     expect(screen.queryByRole('button', { name: '3M 삭제' })).not.toBeInTheDocument();
   });
 });
+
+describe('ProductListingView listing toolbar', () => {
+  beforeEach(() => {
+    navigationMocks.pathname = '/search';
+    navigationMocks.push.mockReset();
+    apiMocks.getShopApi.mockResolvedValue({
+      products: { list: apiMocks.listProducts, facets: apiMocks.listFacets },
+      categories: { list: apiMocks.listCategories },
+    });
+    apiMocks.listProducts.mockResolvedValue({ items: [], page: 1, pageSize: 24, totalCount: 0 });
+    apiMocks.listCategories.mockResolvedValue([]);
+    apiMocks.listFacets.mockResolvedValue({
+      totalCount: 0,
+      keywordTotalCount: 10,
+      categories: [],
+      brands: [],
+      certifications: [],
+    });
+  });
+
+  it('keeps responsive sort controls accessible and applies view changes without a new query', async () => {
+    const user = userEvent.setup();
+    render(<ProductListingView />, { wrapper: createWrapper() });
+    await screen.findByText('등록된 상품이 없습니다');
+
+    const mobileSort = screen.getByLabelText('정렬', { selector: '#sort-products-mobile' });
+    const desktopSort = screen.getByLabelText('정렬', { selector: '#sort-products' });
+    const pageSize = screen.getByLabelText('페이지 상품 수');
+    const viewToggleGroup = screen.getByRole('group', { name: '보기 방식' });
+    const gridToggle = within(viewToggleGroup).getByRole('button', { name: '그리드 보기' });
+    const listToggle = within(viewToggleGroup).getByRole('button', { name: '목록 보기' });
+
+    expect(mobileSort).toHaveClass('sm:hidden');
+    expect(mobileSort).toHaveClass('h-40', 'w-140');
+    expect(desktopSort).toHaveClass('h-40', 'w-120', 'lg:w-140');
+    expect(pageSize).toHaveClass('h-40', 'hidden', 'w-120', 'sm:block');
+    expect(desktopSort.parentElement).toHaveClass('items-center', 'gap-8', 'sm:flex');
+    expect(viewToggleGroup).toHaveClass('h-40', 'w-80', 'items-center', 'gap-2');
+    expect(
+      desktopSort.compareDocumentPosition(pageSize) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      pageSize.compareDocumentPosition(viewToggleGroup) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(gridToggle).toHaveAttribute('aria-pressed', 'true');
+    expect(listToggle).toHaveAttribute('aria-pressed', 'false');
+
+    const queryCount = apiMocks.listProducts.mock.calls.length;
+    await user.click(listToggle);
+    expect(gridToggle).toHaveAttribute('aria-pressed', 'false');
+    expect(listToggle).toHaveAttribute('aria-pressed', 'true');
+    expect(apiMocks.listProducts).toHaveBeenCalledTimes(queryCount);
+  });
+
+  it('resets pagination to page one when sort order or page size changes', async () => {
+    const user = userEvent.setup();
+    apiMocks.listProducts.mockImplementation(
+      async (params: { page: number; pageSize: number }) => ({
+        items: [],
+        page: params.page,
+        pageSize: params.pageSize,
+        totalCount: 80,
+      }),
+    );
+
+    render(<ProductListingView />, { wrapper: createWrapper() });
+    await user.click(await screen.findByRole('button', { name: '2페이지' }));
+    await waitFor(() =>
+      expect(apiMocks.listProducts.mock.calls.at(-1)?.[0]).toEqual(
+        expect.objectContaining({ page: 2, pageSize: 24 }),
+      ),
+    );
+
+    await user.selectOptions(
+      screen.getByLabelText('정렬', { selector: '#sort-products' }),
+      'priceAsc',
+    );
+    await waitFor(() =>
+      expect(apiMocks.listProducts.mock.calls.at(-1)?.[0]).toEqual(
+        expect.objectContaining({ page: 1, sortBy: 'priceAsc' }),
+      ),
+    );
+
+    await user.click(await screen.findByRole('button', { name: '2페이지' }));
+    await waitFor(() =>
+      expect(apiMocks.listProducts.mock.calls.at(-1)?.[0]).toEqual(
+        expect.objectContaining({ page: 2, sortBy: 'priceAsc' }),
+      ),
+    );
+    await user.selectOptions(screen.getByLabelText('페이지 상품 수'), '48');
+    await waitFor(() =>
+      expect(apiMocks.listProducts.mock.calls.at(-1)?.[0]).toEqual(
+        expect.objectContaining({ page: 1, pageSize: 48, sortBy: 'priceAsc' }),
+      ),
+    );
+  });
+});
