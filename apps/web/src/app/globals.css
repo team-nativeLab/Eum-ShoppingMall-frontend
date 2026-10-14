@@ -78,3 +78,8 @@
     opacity: var(--slide-faded-opacity);
   }
 }
+
+/* MyPage keeps the demo note available to screen readers without shifting the Figma layout. */
+body:has(#main-content [data-mypage-shell]) [data-demo-banner-visual] {
+  display: none;
+}

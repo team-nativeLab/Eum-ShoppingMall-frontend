@@ -5,6 +5,7 @@ import './globals.css';
 import { DemoModeBanner } from '@/components/demo-mode-banner';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
+import { getWebApiConfig } from '@/lib/api-config';
 import { Providers } from './providers';
 
 export const metadata: Metadata = {
@@ -15,7 +16,7 @@ export const metadata: Metadata = {
   description: '산업 안전용품 온라인 쇼핑몰',
 };
 
-/** web 앱 루트 레이아웃. 데모 안내 띠(목 모드) · GNB · 본문 · Footer 순서로 그립니다. */
+/** web 앱 루트 레이아웃. 데모 안내 · GNB · 본문 · Footer 순서로 그립니다. */
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ko">
@@ -23,7 +24,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <Providers>
           <div className="flex min-h-dvh flex-col">
             {/* 빌드 때 문자열로 치환되므로 real 빌드에서는 이 분기와 띠가 산출물에서 빠집니다. */}
-            {process.env.NEXT_PUBLIC_API_MODE !== 'real' ? <DemoModeBanner /> : null}
+            {getWebApiConfig().mode !== 'real' ? <DemoModeBanner /> : null}
             <SiteHeader />
             <main id="main-content" className="flex-1">
               {children}

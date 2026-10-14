@@ -1,8 +1,7 @@
-import { ComingSoon, createComingSoonMetadata } from '@/components/coming-soon';
+import { MyPageScreen } from '@/features/mypage/mypage-screen';
 
-// 준비 중 화면. 실제 화면을 만들 때 이 파일을 교체합니다.
-export const metadata = createComingSoonMetadata('적립금');
+export const metadata = { title: '적립금' };
 
 export default function PointsPage() {
-  return <ComingSoon screenTitle="적립금" />;
+  return <MyPageScreen section="points" />;
 }
