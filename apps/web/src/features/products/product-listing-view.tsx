@@ -425,7 +425,7 @@ export function ProductListingView({
         </nav>
       ) : null}
 
-      <div className="mt-16 lg:hidden">
+      <div className="mt-16 flex flex-wrap items-center gap-8 lg:hidden">
         <button
           type="button"
           aria-expanded={isMobileFiltersOpen}
@@ -435,8 +435,30 @@ export function ProductListingView({
           <Icon icon={ChevronDown} size={16} className={isMobileFiltersOpen ? 'rotate-180' : ''} />
           필터
         </button>
+        <label className="sr-only" htmlFor="sort-products-mobile">
+          정렬
+        </label>
+        <select
+          id="sort-products-mobile"
+          value={sortBy}
+          onChange={(changeEvent) => {
+            const nextSort = SORT_OPTIONS.find(
+              (sortOption) => sortOption.value === changeEvent.target.value,
+            );
+            if (!nextSort) return;
+            setSortBy(nextSort.value);
+            setPage(1);
+          }}
+          className={cx(SELECT_CLASS, 'w-140 sm:hidden')}
+        >
+          {SORT_OPTIONS.map((sortOption) => (
+            <option key={sortOption.value} value={sortOption.value}>
+              {sortOption.label}
+            </option>
+          ))}
+        </select>
         {isMobileFiltersOpen ? (
-          <div className="mt-12 rounded-12 border border-line p-16">
+          <div className="mt-12 w-full rounded-12 border border-line p-16">
             <div className="grid grid-cols-2 gap-16">
               <label className="text-caption text-text-2">
                 최소 가격
@@ -624,7 +646,7 @@ export function ProductListingView({
                 </button>
               ) : null}
             </div>
-            <div className="ml-auto flex items-center gap-8">
+            <div className="ml-auto hidden flex-wrap items-center gap-8 sm:flex">
               <label className="sr-only" htmlFor="sort-products">
                 정렬
               </label>
@@ -668,7 +690,7 @@ export function ProductListingView({
               <div
                 role="group"
                 aria-label="보기 방식"
-                className="hidden gap-2 rounded-8 bg-surface p-2 sm:flex"
+                className="hidden h-40 w-80 items-center justify-center gap-2 rounded-8 bg-surface p-2 sm:flex"
               >
                 <ViewToggleButton
                   label="그리드 보기"
