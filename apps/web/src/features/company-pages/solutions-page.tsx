@@ -108,13 +108,13 @@ function InquiryProductsPanel({
   return (
     <section
       aria-labelledby="inquiry-products-title"
-      className="flex flex-col gap-12 rounded-12 border border-line bg-bg-subtle p-20"
+      className="flex flex-col gap-16 rounded-12 border border-line bg-bg-subtle p-16 md:gap-24 md:p-24"
     >
-      <div className="flex items-center justify-between gap-12">
+      <div className="flex flex-col gap-12 sm:flex-row sm:items-center sm:justify-between">
         <h2 id="inquiry-products-title" className="text-label-l">
           문의 상품
         </h2>
-        <div className="flex min-w-0 items-center gap-8">
+        <div className="flex min-w-0 items-center gap-8 sm:max-w-[360px]">
           <label className="sr-only" htmlFor="quote-product-select">
             상품 선택
           </label>
@@ -123,7 +123,7 @@ function InquiryProductsPanel({
             value={selectedProductId}
             onChange={(event) => onSelectedProductChange(event.currentTarget.value)}
             disabled={products.length === 0}
-            className="max-w-220 min-w-0 rounded-8 border border-line-control bg-bg px-12 py-8 text-body-s focus-ring"
+            className="min-w-0 flex-1 rounded-8 border border-line-control bg-bg px-12 py-8 text-body-s focus-ring sm:max-w-220"
           >
             <option value="">상품을 선택해 주세요</option>
             {products.map((product) => (
@@ -154,11 +154,13 @@ function InquiryProductsPanel({
             if (!product) return null;
             return (
               <li key={product.id} className="flex flex-col gap-12 py-12 first:pt-0 last:pb-0">
-                <div className="flex min-w-0 items-center gap-12">
-                  <span aria-hidden="true" className="size-48 shrink-0 rounded-6 bg-surface" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-body-s-medium">{product.name}</p>
-                    <p className="mt-2 text-caption text-text-3">{product.brand}</p>
+                <div className="flex min-w-0 flex-wrap items-center gap-12">
+                  <div className="flex min-w-0 flex-1 items-center gap-12">
+                    <span aria-hidden="true" className="size-48 shrink-0 rounded-6 bg-surface" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-body-s-medium break-words">{product.name}</p>
+                      <p className="mt-2 text-caption text-text-3">{product.brand}</p>
+                    </div>
                   </div>
                   <label className="flex shrink-0 items-center gap-6 text-caption text-text-2">
                     수량
@@ -319,7 +321,7 @@ function QuoteFormVisual({
   return (
     <section id="quote-form" aria-label="견적 문의 입력" className="min-w-0 scroll-mt-80">
       <form
-        className="flex flex-col gap-24"
+        className="flex flex-col gap-32"
         onSubmit={handleSubmit}
         onReset={() => {
           setSelectedProducts([]);
@@ -332,79 +334,103 @@ function QuoteFormVisual({
           setResetVersion((version) => version + 1);
         }}
       >
-        <InquiryProductsPanel
-          products={productsQuery.data?.items ?? []}
-          selectedProducts={selectedProducts}
-          selectedProductId={selectedProductId}
-          onSelectedProductChange={setSelectedProductId}
-          onAddProduct={handleAddProduct}
-          onRemoveProduct={(productId) =>
-            setSelectedProducts((current) =>
-              current.filter((selection) => selection.productId !== productId),
-            )
-          }
-          onChangeQuantity={(productId, quantity) =>
-            setSelectedProducts((current) =>
-              current.map((selection) =>
-                selection.productId === productId
-                  ? { ...selection, quantity: Math.max(1, Math.min(9999, quantity || 1)) }
-                  : selection,
-              ),
-            )
-          }
-          onChangeOption={(productId, optionId, choiceId) =>
-            setSelectedProducts((current) =>
-              current.map((selection) =>
-                selection.productId === productId
-                  ? {
-                      ...selection,
-                      optionChoiceIds: { ...selection.optionChoiceIds, [optionId]: choiceId },
-                    }
-                  : selection,
-              ),
-            )
-          }
-          errorMessage={productError}
-        />
-        {productsQuery.isPending ? (
-          <p role="status" className="text-caption text-text-3">
-            상품을 불러오는 중입니다.
-          </p>
-        ) : null}
-        {productsQuery.isError ? (
-          <div
-            role="alert"
-            className="flex items-center justify-between gap-12 text-body-s text-danger"
-          >
-            <span>상품 목록을 불러오지 못했습니다.</span>
+        <div className="flex flex-col gap-12">
+          <InquiryProductsPanel
+            products={productsQuery.data?.items ?? []}
+            selectedProducts={selectedProducts}
+            selectedProductId={selectedProductId}
+            onSelectedProductChange={setSelectedProductId}
+            onAddProduct={handleAddProduct}
+            onRemoveProduct={(productId) =>
+              setSelectedProducts((current) =>
+                current.filter((selection) => selection.productId !== productId),
+              )
+            }
+            onChangeQuantity={(productId, quantity) =>
+              setSelectedProducts((current) =>
+                current.map((selection) =>
+                  selection.productId === productId
+                    ? { ...selection, quantity: Math.max(1, Math.min(9999, quantity || 1)) }
+                    : selection,
+                ),
+              )
+            }
+            onChangeOption={(productId, optionId, choiceId) =>
+              setSelectedProducts((current) =>
+                current.map((selection) =>
+                  selection.productId === productId
+                    ? {
+                        ...selection,
+                        optionChoiceIds: { ...selection.optionChoiceIds, [optionId]: choiceId },
+                      }
+                    : selection,
+                ),
+              )
+            }
+            errorMessage={productError}
+          />
+          {productsQuery.isPending ? (
+            <p role="status" className="text-caption text-text-3">
+              상품을 불러오는 중입니다.
+            </p>
+          ) : null}
+          {productsQuery.isError ? (
+            <div
+              role="alert"
+              className="flex items-center justify-between gap-12 text-body-s text-danger"
+            >
+              <span>상품 목록을 불러오지 못했습니다.</span>
+              <Button
+                type="button"
+                variant="secondary"
+                size="s"
+                onClick={() => void productsQuery.refetch()}
+              >
+                다시 시도
+              </Button>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex flex-col gap-16">
+          <fieldset className="flex flex-col gap-8">
+            <legend className="text-label-m">문의 유형 *</legend>
+            <div className="flex flex-wrap gap-x-24 gap-y-12">
+              <Radio name="inquiryType" value="custom" defaultChecked>
+                맞춤 제작
+              </Radio>
+              <Radio name="inquiryType" value="bulk">
+                대량 구매
+              </Radio>
+              <Radio name="inquiryType" value="regular-supply">
+                정기 납품
+              </Radio>
+              <Radio name="inquiryType" value="other">
+                기타
+              </Radio>
+            </div>
+          </fieldset>
+
+          <div className="flex flex-col gap-8 rounded-8 bg-surface px-12 py-12 sm:flex-row sm:items-center sm:justify-between sm:gap-16">
+            <p className="min-w-0 text-body-s text-text-2">
+              회원 정보를 입력란에 미리 채울 수 있습니다. 입력 후에도 직접 수정할 수 있습니다.
+            </p>
             <Button
               type="button"
-              variant="secondary"
               size="s"
-              onClick={() => void productsQuery.refetch()}
+              variant="secondary"
+              disabled={!member}
+              onClick={() => {
+                if (!member) return;
+                setContactName(member.name);
+                setEmail(member.email);
+                setPhone(member.phone);
+              }}
             >
-              다시 시도
+              {member ? '회원 정보로 미리 채우기' : '로그인 후 회원 정보 미리 채우기'}
             </Button>
           </div>
-        ) : null}
-
-        <fieldset className="flex flex-col gap-12">
-          <legend className="text-label-m">문의 유형 *</legend>
-          <div className="flex flex-wrap gap-x-24 gap-y-12">
-            <Radio name="inquiryType" value="custom" defaultChecked>
-              맞춤 제작
-            </Radio>
-            <Radio name="inquiryType" value="bulk">
-              대량 구매
-            </Radio>
-            <Radio name="inquiryType" value="regular-supply">
-              정기 납품
-            </Radio>
-            <Radio name="inquiryType" value="other">
-              기타
-            </Radio>
-          </div>
-        </fieldset>
+        </div>
 
         <div className="grid grid-cols-1 gap-24 min-[600px]:grid-cols-2">
           <TextField
@@ -448,36 +474,14 @@ function QuoteFormVisual({
           />
         </div>
 
-        <div className="rounded-8 bg-surface px-12 py-12">
-          <p className="text-body-s text-text-2">
-            회원 정보를 입력란에 미리 채울 수 있습니다. 입력 후에도 직접 수정할 수 있습니다.
-          </p>
-          <Button
-            type="button"
-            size="s"
-            variant="secondary"
-            className="mt-8"
-            disabled={!member}
-            onClick={() => {
-              if (!member) return;
-              setContactName(member.name);
-              setEmail(member.email);
-              setPhone(member.phone);
-            }}
-          >
-            {member ? '회원 정보로 미리 채우기' : '로그인 후 회원 정보 미리 채우기'}
-          </Button>
-        </div>
-
-        <InterestItemChoices />
-
-        <div className="grid grid-cols-1 gap-24 min-[600px]:grid-cols-2">
+        <div className="grid grid-cols-1 items-start gap-24 min-[600px]:grid-cols-2">
           <TextField
-            label="예상 수량"
+            label="현장 전체 예상 수량"
             name="quantity"
             type="number"
             min={1}
-            placeholder="예: 300개"
+            placeholder="예: 300"
+            helperText="이 문의로 필요한 전체 수량을 입력해 주세요."
           />
           <QuoteDateField key={resetVersion} />
         </div>
@@ -487,7 +491,10 @@ function QuoteFormVisual({
           name="deliveryLocation"
           autoComplete="address-level2"
           placeholder="예: 경기도 00시"
+          helperText="여러 지역 납품이면 대표 지역을 적어 주세요."
         />
+
+        <InterestItemChoices />
 
         <QuoteDetailsField key={resetVersion} />
 
