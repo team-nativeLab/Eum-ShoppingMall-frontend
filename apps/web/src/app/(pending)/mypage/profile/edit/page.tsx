@@ -1,8 +1,7 @@
-import { ComingSoon, createComingSoonMetadata } from '@/components/coming-soon';
+import { MyPageScreen } from '@/features/mypage/mypage-screen';
 
-// 준비 중 화면. 실제 화면을 만들 때 이 파일을 교체합니다.
-export const metadata = createComingSoonMetadata('내 정보 수정');
+export const metadata = { title: '내 정보 수정' };
 
 export default function ProfileEditPage() {
-  return <ComingSoon screenTitle="내 정보 수정" />;
+  return <MyPageScreen section="profile-edit" />;
 }

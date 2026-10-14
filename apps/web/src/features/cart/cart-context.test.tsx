@@ -3,7 +3,9 @@ import { ApiError } from '@eum/api/errors';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ReactNode } from 'react';
 import type { Product } from '@eum/api/types';
+import { CartLink } from '@/components/cart-link';
 import { CartProvider, useCart } from './cart-context';
 import { CART_STORAGE_KEY, serializeCart } from './cart-storage';
 
@@ -11,6 +13,22 @@ const { getProductById } = vi.hoisted(() => ({ getProductById: vi.fn() }));
 
 vi.mock('@/lib/shop-api', () => ({
   getShopApi: async () => ({ products: { getById: getProductById } }),
+}));
+
+vi.mock('next/link', () => ({
+  default: ({
+    href,
+    children,
+    className,
+  }: {
+    href: string;
+    children: ReactNode;
+    className?: string;
+  }) => (
+    <a href={href} className={className}>
+      {children}
+    </a>
+  ),
 }));
 
 const visibleProduct: Product = {
@@ -84,6 +102,7 @@ function CartProbe() {
       <p>수량 {totalQuantity}</p>
       <p>합계 {cartTotals.productTotal}</p>
       <p>주문 불가 {cartGroups.unorderableItems.length}</p>
+      <CartLink />
       <button type="button" onClick={() => addToCart(visibleProduct, 2)}>
         표시 상품 담기
       </button>
@@ -134,6 +153,34 @@ afterEach(() => {
 });
 
 describe('CartProvider', () => {
+  it('shows pending additions immediately and then shows the restored merged quantity', async () => {
+    window.localStorage.setItem(
+      CART_STORAGE_KEY,
+      serializeCart([{ productId: 'p-visible', quantity: 1, optionId: null, optionLabel: null }]),
+    );
+    let resolveProduct: (product: Product) => void = () => undefined;
+    getProductById.mockImplementationOnce(
+      () =>
+        new Promise<Product>((resolve) => {
+          resolveProduct = resolve;
+        }),
+    );
+
+    renderCart();
+    expect(screen.getByText('복원 중')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '장바구니' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /장바구니 상품 \d+개/ })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '표시 상품 담기' }));
+    expect(screen.getByRole('link', { name: /장바구니.*상품 2개/ })).toBeInTheDocument();
+
+    await act(async () => {
+      resolveProduct(visibleProduct);
+    });
+    await waitForRestore();
+    expect(screen.getByRole('link', { name: /장바구니.*상품 3개/ })).toBeInTheDocument();
+  });
+
   it('localStorage 쓰기가 실패해도 메모리 상태로 계속 동작합니다', async () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new DOMException('quota', 'QuotaExceededError');
