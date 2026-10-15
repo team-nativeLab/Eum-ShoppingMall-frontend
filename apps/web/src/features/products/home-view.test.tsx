@@ -47,6 +47,7 @@ const homeContent: HomeContent = {
       imageUrl: '',
       destination: '/about',
       ctaLabel: '둘러보기',
+      secondaryCta: { label: '회사소개 보기', destination: '/about' },
     },
   ],
   promoBanners: [
@@ -159,6 +160,16 @@ describe('HomeView desktop section layout', () => {
     const promoCards = within(promoSection).getAllByRole('link');
     expect(promoCards).toHaveLength(3);
     expect(promoCards[0]).toHaveClass('h-216', 'lg:h-184');
+    for (const promoCard of promoCards) {
+      expect(promoCard).toHaveAttribute('href', '/about');
+      expect(promoCard.querySelector('a, button')).toBeNull();
+      expect(promoCard.querySelector('[aria-hidden="true"]')).toHaveClass(
+        'size-32',
+        'rounded-capsule',
+      );
+    }
+    expect(promoCards[0]?.querySelector('[aria-hidden="true"]')).toHaveClass('text-inverse');
+    expect(promoCards[1]?.querySelector('[aria-hidden="true"]')).toHaveClass('text-text-1');
     expect(bestSellerSection.parentElement).toHaveClass('lg:mt-64');
     const productTrack = screen.getByRole('list', { name: '베스트 상품' });
     const productRow = productTrack.parentElement;
@@ -166,6 +177,17 @@ describe('HomeView desktop section layout', () => {
     expect(productTrack).toHaveAttribute('data-page-size', '7');
     expect(quoteSection).toHaveClass('mt-64');
     expect(serviceBenefits).toHaveClass('mt-64');
+  });
+
+  it('keeps the hero company link destination and label without a plus icon', async () => {
+    render(<HomeView />, { wrapper: createWrapper() });
+
+    const companyLink = await screen.findByRole('link', { name: '회사소개 보기' });
+
+    expect(companyLink).toHaveAttribute('href', '/about');
+    expect(companyLink.querySelector('svg')).toBeNull();
+    expect(companyLink).toHaveClass('hidden', 'lg:inline-flex');
+    expect(screen.getByRole('link', { name: '둘러보기' })).toHaveAttribute('href', '/about');
   });
 
   it('resets the home carousel to the first page when selecting a category', async () => {

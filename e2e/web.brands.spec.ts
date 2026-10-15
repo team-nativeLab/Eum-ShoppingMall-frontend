@@ -17,12 +17,8 @@ test('GNB 브랜드에서 브랜드 목록 → 상세 → 브랜드 제품 목�
     await expect(menuTrigger).toHaveCount(1);
     await menuTrigger.click();
 
-    // PR #45 uses a dialog; the integrated popup uses a nonmodal nav wrapper.
-    const allMenu = page
-      .locator('#site-header-all-menu')
-      .or(page.getByRole('dialog', { name: '전체 메뉴' }));
+    const allMenu = page.locator('#site-header-all-menu');
     await expect(allMenu).toBeVisible();
-
     const allBrandsLink = allMenu.getByRole('link', { name: '전체 브랜드' });
     if (!(await allBrandsLink.isVisible())) {
       const brandDisclosure = allMenu.locator('summary').filter({ hasText: '브랜드' });

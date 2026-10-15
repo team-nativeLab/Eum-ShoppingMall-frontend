@@ -8,15 +8,7 @@ import { Chip } from '@eum/ui/components/Chip';
 import { Icon } from '@eum/ui/components/Icon';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { cx } from '@eum/ui/lib/cx';
-import {
-  ArrowLeft,
-  ArrowRight,
-  ChevronLeft,
-  ChevronRight,
-  CirclePlus,
-  Pause,
-  Play,
-} from 'lucide-react';
+import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo, useState, type FocusEvent, type PointerEvent } from 'react';
 import { PageContainer } from '@/components/page-container';
@@ -272,10 +264,9 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
                   {slide.secondaryCta ? (
                     <Link
                       href={slide.secondaryCta.destination}
-                      className="hidden items-center gap-6 rounded-4 text-label-l focus-ring hover:text-text-2 lg:inline-flex"
+                      className="hidden items-center gap-6 rounded-4 text-label-l focus-ring hover:text-text-2 hover:underline hover:underline-offset-4 lg:inline-flex"
                     >
                       {slide.secondaryCta.label}
-                      <Icon icon={CirclePlus} size={20} />
                     </Link>
                   ) : null}
                 </div>
@@ -443,11 +434,13 @@ function PromoBannerSection({ banners }: { banners: HomeContent['promoBanners'] 
               <span
                 aria-hidden="true"
                 className={cx(
-                  'mt-auto inline-flex size-36 items-center justify-center rounded-capsule border',
-                  isLight ? 'border-line-control text-text-1' : 'border-inverse text-inverse',
+                  'mt-auto inline-flex size-32 items-center justify-center rounded-capsule border transition-colors motion-reduce:transition-none',
+                  isLight
+                    ? 'border-line-control text-text-1 group-hover:bg-text-1 group-hover:text-inverse'
+                    : 'border-inverse text-inverse group-hover:bg-bg group-hover:text-text-1',
                 )}
               >
-                <Icon icon={ArrowRight} size={16} />
+                <Icon icon={ArrowRight} size={20} />
               </span>
             </Link>
           );
