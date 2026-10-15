@@ -241,6 +241,59 @@ describe('ProductListingView listing toolbar', () => {
     expect(apiMocks.listProducts).toHaveBeenCalledTimes(queryCount);
   });
 
+  it('collapses only the empty mobile filter row while preserving responsive spacing and chips', async () => {
+    const user = userEvent.setup();
+    apiMocks.listFacets.mockResolvedValue({
+      totalCount: 3,
+      keywordTotalCount: 3,
+      categories: [],
+      brands: [{ value: '3M', count: 1 }],
+      certifications: [{ value: 'KS', count: 1 }],
+    });
+    render(<ProductListingView />, { wrapper: createWrapper() });
+    await screen.findByText('등록된 상품이 없습니다');
+
+    const desktopSort = screen.getByLabelText('정렬', { selector: '#sort-products' });
+    const toolbar = desktopSort.parentElement?.parentElement;
+    const productResults = toolbar?.nextElementSibling;
+    const listingGrid = toolbar?.parentElement?.parentElement;
+    expect(toolbar).toHaveClass('min-h-0', 'sm:min-h-48');
+    expect(listingGrid).toHaveClass('mt-24');
+    expect(productResults).toHaveClass('mt-8', 'sm:mt-16');
+
+    await user.click(screen.getByRole('button', { name: '필터' }));
+    expect(screen.getByRole('button', { name: '필터' })).toHaveAttribute('aria-expanded', 'true');
+    await user.click(within(screen.getByRole('group', { name: '재고 상태' })).getByRole('button'));
+    expect(screen.getByRole('button', { name: '전체 해제' })).toBeInTheDocument();
+    expect(toolbar?.querySelectorAll('[aria-label$="삭제"]')).toHaveLength(1);
+    await user.click(
+      within(screen.getByRole('group', { name: '브랜드' })).getByRole('button', { name: '3M' }),
+    );
+    await user.click(
+      within(screen.getByRole('group', { name: '안전인증' })).getByRole('button', { name: 'KS' }),
+    );
+    expect(toolbar?.firstElementChild).toHaveClass('flex-wrap');
+    expect(toolbar?.querySelectorAll('[aria-label$="삭제"]')).toHaveLength(3);
+    expect(toolbar).toHaveClass('min-h-0', 'sm:min-h-48');
+    expect(productResults).toHaveClass('mt-8', 'sm:mt-16');
+
+    await user.click(screen.getByRole('button', { name: '전체 해제' }));
+    expect(screen.queryByRole('button', { name: '전체 해제' })).not.toBeInTheDocument();
+  });
+
+  it('uses the same mobile result spacing in category listings', async () => {
+    apiMocks.listCategories.mockResolvedValue([
+      { id: 'category-safety', slug: 'safety', name: '안전용품', parentId: null },
+    ]);
+    render(<ProductListingView categorySlug="safety" />, { wrapper: createWrapper() });
+    await screen.findByText('등록된 상품이 없습니다');
+
+    const desktopSort = screen.getByLabelText('정렬', { selector: '#sort-products' });
+    const toolbar = desktopSort.parentElement?.parentElement;
+    expect(toolbar).toHaveClass('min-h-0', 'sm:min-h-48');
+    expect(toolbar?.nextElementSibling).toHaveClass('mt-8', 'sm:mt-16');
+  });
+
   it('resets pagination to page one when sort order or page size changes', async () => {
     const user = userEvent.setup();
     apiMocks.listProducts.mockImplementation(

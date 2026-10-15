@@ -622,7 +622,7 @@ export function ProductListingView({
         </aside>
 
         <div className="min-w-0">
-          <div className="flex min-h-48 flex-wrap items-center gap-8">
+          <div className="flex min-h-0 flex-wrap items-center gap-8 sm:min-h-48">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-8">
               {activeFilters.map((activeFilter) => (
                 <RemovableChip
@@ -710,7 +710,7 @@ export function ProductListingView({
 
           <div
             className={cx(
-              'mt-16 transition-opacity motion-reduce:transition-none',
+              'mt-8 transition-opacity motion-reduce:transition-none sm:mt-16',
               isRefreshing && 'opacity-60',
             )}
             aria-busy={isRefreshing || undefined}
