@@ -14,6 +14,8 @@ import { NotFoundPage } from './pages/NotFoundPage';
 import { AdminSettingsPage } from './pages/AdminSettingsPage';
 import { AdminCouponsPage } from './pages/AdminCouponsPage';
 import { AdminWithdrawnMemberDetailPage } from './pages/AdminWithdrawnMemberDetailPage';
+import { AdminBrandsPage } from './pages/AdminBrandsPage';
+import { AdminBrandFormPage } from './pages/AdminBrandFormPage';
 
 /** 화면 제목·상위 메뉴를 route handle에 담아 TopBar 경로 표시에 씁니다. */
 export interface AdminRouteHandle {
@@ -52,6 +54,21 @@ export const adminRoutes: RouteObject[] = [
         path: 'categories',
         handle: { title: '카테고리 관리' },
         element: <AdminCategoriesPage />,
+      },
+      {
+        path: 'brands',
+        handle: { title: '브랜드 관리', section: '브랜드 관리' },
+        element: <AdminBrandsPage />,
+      },
+      {
+        path: 'brands/new',
+        handle: { title: '브랜드 등록', section: '브랜드 관리' },
+        element: <AdminBrandFormPage />,
+      },
+      {
+        path: 'brands/:brandId',
+        handle: { title: '브랜드 수정', section: '브랜드 관리' },
+        element: <AdminBrandFormPage />,
       },
       {
         path: 'quotes',

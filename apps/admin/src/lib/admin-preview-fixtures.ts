@@ -8,6 +8,7 @@ export interface AdminWithdrawnMemberFixture {
   withdrawalType: '본인 탈퇴' | '강제 탈퇴';
   reason: string;
   withdrawnAt: string;
+  rejoinEligibleAt: string;
   retentionUntil: string;
   processedBy: string;
   businessName: string;
@@ -28,6 +29,7 @@ export const ADMIN_WITHDRAWN_MEMBER_FIXTURES: AdminWithdrawnMemberFixture[] = [
     withdrawalType: '본인 탈퇴',
     reason: '탈퇴 사유 미제공',
     withdrawnAt: '2026-10-14T09:00:00+09:00',
+    rejoinEligibleAt: '2026-11-14',
     retentionUntil: '2031-10-14',
     processedBy: '본인',
     businessName: '—',
@@ -68,6 +70,7 @@ export const ADMIN_WITHDRAWN_MEMBER_FIXTURES: AdminWithdrawnMemberFixture[] = [
     withdrawalType: '강제 탈퇴',
     reason: '운영 정책 위반 · 데모 예시',
     withdrawnAt: '2026-10-12T14:30:00+09:00',
+    rejoinEligibleAt: '2026-11-12',
     retentionUntil: '2031-10-12',
     processedBy: '데모 관리자',
     businessName: '회*명',

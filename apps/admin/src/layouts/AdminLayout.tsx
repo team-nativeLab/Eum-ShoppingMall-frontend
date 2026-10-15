@@ -4,6 +4,8 @@ import { AdminSidebar } from '@/components/AdminSidebar';
 import { AdminTopBar } from '@/components/AdminTopBar';
 import { AdminError, AdminLoading } from '@/components/AdminUI';
 import { AdminPriceVisibilityPreviewProvider } from '@/lib/admin-price-visibility-preview';
+import { AdminBrandPreviewProvider } from '@/lib/admin-brand-preview';
+import { AdminProductExposurePreviewProvider } from '@/lib/admin-product-exposure-preview';
 import { currentAdminQueryKey, getAdminAuth } from '@/lib/admin-auth';
 
 /**
@@ -48,23 +50,27 @@ export function AdminLayout() {
 
   return (
     <AdminPriceVisibilityPreviewProvider>
-      <div className="flex min-h-dvh min-w-[1280px] bg-bg-subtle text-text-1">
-        <a
-          href="#admin-main-content"
-          className="focus:shadow-lg sr-only focus:not-sr-only focus:fixed focus:top-12 focus:left-12 focus:z-50 focus:rounded-8 focus:bg-bg focus:px-16 focus:py-12 focus:text-text-1"
-        >
-          본문 바로가기
-        </a>
-        <AdminSidebar />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <AdminTopBar />
-          <main id="admin-main-content" tabIndex={-1} className="flex-1 p-32">
-            <div className="mx-auto w-full max-w-admin-content">
-              <Outlet />
+      <AdminProductExposurePreviewProvider>
+        <AdminBrandPreviewProvider>
+          <div className="flex min-h-dvh min-w-[1280px] bg-bg-subtle text-text-1">
+            <a
+              href="#admin-main-content"
+              className="focus:shadow-lg sr-only focus:not-sr-only focus:fixed focus:top-12 focus:left-12 focus:z-50 focus:rounded-8 focus:bg-bg focus:px-16 focus:py-12 focus:text-text-1"
+            >
+              본문 바로가기
+            </a>
+            <AdminSidebar />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <AdminTopBar />
+              <main id="admin-main-content" tabIndex={-1} className="flex-1 p-32">
+                <div className="mx-auto w-full max-w-admin-content">
+                  <Outlet />
+                </div>
+              </main>
             </div>
-          </main>
-        </div>
-      </div>
+          </div>
+        </AdminBrandPreviewProvider>
+      </AdminProductExposurePreviewProvider>
     </AdminPriceVisibilityPreviewProvider>
   );
 }

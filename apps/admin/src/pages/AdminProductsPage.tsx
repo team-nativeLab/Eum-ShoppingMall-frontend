@@ -17,13 +17,17 @@ import {
 } from '@/components/AdminUI';
 import { PriceVisibilityConfirmDialog } from '@/components/PriceVisibilityConfirmDialog';
 import {
+  useAdminProductExposurePreview,
+  type ProductExposureSnapshot,
+} from '@/lib/admin-product-exposure-preview';
+import {
   useAdminPriceVisibilityPreview,
   type PriceVisibilityPreviewSnapshot,
 } from '@/lib/admin-price-visibility-preview';
 import { getShopApi } from '@/lib/shop-api';
 import type { Category, Product } from '@eum/api/types';
 
-type ProductTab = 'all' | 'selling' | 'soldOut' | 'hiddenPrice';
+type ProductTab = 'all' | 'selling' | 'soldOut' | 'hiddenPrice' | 'hiddenExposure';
 interface ProductListData {
   products: Product[];
   categories: Category[];
@@ -35,6 +39,7 @@ const PRODUCT_TABS = [
   { value: 'selling', label: '판매중' },
   { value: 'soldOut', label: '품절' },
   { value: 'hiddenPrice', label: '금액 미표시' },
+  { value: 'hiddenExposure', label: '숨김' },
 ] as const satisfies readonly { value: ProductTab; label: string }[];
 
 /** 목록 조회 API 결과에서 필요한 상품과 카테고리를 함께 불러옵니다. */
@@ -89,6 +94,10 @@ export function AdminProductsPage() {
     message: string;
     snapshots: PriceVisibilityPreviewSnapshot[];
   } | null>(null);
+  const [exposureUndoAction, setExposureUndoAction] = useState<{
+    message: string;
+    snapshots: ProductExposureSnapshot[];
+  } | null>(null);
   const {
     capturePreviewValues,
     getPreviewValue,
@@ -96,6 +105,13 @@ export function AdminProductsPage() {
     restorePreviewValues,
     setPreviewValue,
   } = useAdminPriceVisibilityPreview();
+  const {
+    capturePreviewValues: captureExposureValues,
+    getPreviewValue: getExposurePreviewValue,
+    previewValues: exposurePreviewValues,
+    restorePreviewValues: restoreExposureValues,
+    setPreviewValue: setExposurePreviewValue,
+  } = useAdminProductExposurePreview();
   const productQuery = useQuery({
     queryKey: ['admin', 'products', keyword, categoryId],
     queryFn: ({ signal }) => loadProducts(keyword, categoryId, signal),
@@ -106,6 +122,11 @@ export function AdminProductsPage() {
     const timeoutId = window.setTimeout(() => setUndoAction(null), 7000);
     return () => window.clearTimeout(timeoutId);
   }, [undoAction]);
+  useEffect(() => {
+    if (!exposureUndoAction) return;
+    const timeoutId = window.setTimeout(() => setExposureUndoAction(null), 7000);
+    return () => window.clearTimeout(timeoutId);
+  }, [exposureUndoAction]);
 
   const visibleProducts = useMemo(() => {
     if (!productQuery.data) return [];
@@ -118,6 +139,7 @@ export function AdminProductsPage() {
         if (tab === 'selling') return product.stockStatus === 'inStock';
         if (tab === 'soldOut') return product.stockStatus === 'soldOut';
         if (tab === 'hiddenPrice') return !getPreviewValue(product);
+        if (tab === 'hiddenExposure') return !getExposurePreviewValue(product);
         return true;
       })
       .filter((product) => salesStatus === 'all' || product.stockStatus === salesStatus)
@@ -126,7 +148,15 @@ export function AdminProductsPage() {
           ? left.createdAt.localeCompare(right.createdAt)
           : right.createdAt.localeCompare(left.createdAt),
       );
-  }, [getPreviewValue, productQuery.data, salesStatus, sortOrder, stockStatusOverrides, tab]);
+  }, [
+    getExposurePreviewValue,
+    getPreviewValue,
+    productQuery.data,
+    salesStatus,
+    sortOrder,
+    stockStatusOverrides,
+    tab,
+  ]);
   const allFilteredProducts = useMemo(() => {
     if (!productQuery.data) return [];
     return productQuery.data.products
@@ -151,9 +181,16 @@ export function AdminProductsPage() {
       if (option.value === 'selling') return currentStatus === 'inStock';
       if (option.value === 'soldOut') return currentStatus === 'soldOut';
       if (option.value === 'hiddenPrice') return !getPreviewValue(product);
+      if (option.value === 'hiddenExposure') return !getExposurePreviewValue(product);
       return true;
     }).length,
   }));
+  const handleExposureChange = (product: Product, nextValue: boolean) => {
+    const snapshots = captureExposureValues([product]);
+    setExposurePreviewValue([product], nextValue);
+    const message = `${product.name} 상품을 ${nextValue ? '노출' : '숨김'} 처리한 화면 미리보기입니다.`;
+    setExposureUndoAction({ message, snapshots });
+  };
   const handleBulkShow = () => {
     if (selectedProducts.length === 0) return;
     const snapshots = capturePreviewValues(selectedProducts);
@@ -240,6 +277,12 @@ export function AdminProductsPage() {
           구매자 화면·장바구니·주문에는 반영되지 않습니다. 새로고침 또는 로그아웃하면 초기화됩니다.
         </AdminNotice>
       ) : null}
+      {exposurePreviewValues.size > 0 ? (
+        <AdminNotice tone="info" className="mt-12">
+          상품 노출 상태는 금액 표시와 별개로 이 관리자 화면에서만 미리봅니다. 저장되지 않으며
+          새로고침하면 초기화됩니다.
+        </AdminNotice>
+      ) : null}
       {undoAction ? (
         <AdminNotice
           className="mt-12"
@@ -260,6 +303,27 @@ export function AdminProductsPage() {
           }
         >
           {undoAction.message}
+        </AdminNotice>
+      ) : null}
+      {exposureUndoAction ? (
+        <AdminNotice
+          className="mt-12"
+          tone="info"
+          action={
+            <Button
+              type="button"
+              variant="secondary"
+              size="s"
+              onClick={() => {
+                restoreExposureValues(exposureUndoAction.snapshots);
+                setExposureUndoAction(null);
+              }}
+            >
+              되돌리기
+            </Button>
+          }
+        >
+          {exposureUndoAction.message}
         </AdminNotice>
       ) : null}
 
@@ -399,7 +463,7 @@ export function AdminProductsPage() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1080px] table-fixed border-collapse text-left text-body-s">
+            <table className="w-full min-w-[1200px] table-fixed border-collapse text-left text-body-s">
               <thead className="bg-surface text-label-s text-text-2">
                 <tr>
                   <th scope="col" className="w-52 px-8 py-12">
@@ -429,6 +493,9 @@ export function AdminProductsPage() {
                   <th scope="col" className="w-112 px-8 py-12 font-medium">
                     금액 표시
                   </th>
+                  <th scope="col" className="w-112 px-8 py-12 font-medium">
+                    상품 노출
+                  </th>
                   <th scope="col" className="w-76 px-8 py-12 font-medium">
                     재고 수량
                   </th>
@@ -446,6 +513,7 @@ export function AdminProductsPage() {
               <tbody>
                 {pageProducts.map((product) => {
                   const isPriceVisible = getPreviewValue(product);
+                  const isProductExposed = getExposurePreviewValue(product);
                   return (
                     <tr key={product.id} className="border-t border-line hover:bg-bg-subtle">
                       <td className="px-8 py-6">
@@ -509,6 +577,15 @@ export function AdminProductsPage() {
                           onCheckedChange={(nextValue) => setPreviewValue([product], nextValue)}
                           onText="표시"
                           offText="미표시"
+                        />
+                      </td>
+                      <td className="px-8 py-6 text-body-s text-text-2">
+                        <Switch
+                          label={`${product.name} 상품 노출`}
+                          isChecked={isProductExposed}
+                          onCheckedChange={(nextValue) => handleExposureChange(product, nextValue)}
+                          onText="노출"
+                          offText="숨김"
                         />
                       </td>
                       <td className="px-8 py-6 text-text-3">미제공</td>

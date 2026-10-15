@@ -3,6 +3,7 @@ import { Icon } from '@eum/ui/components/Icon';
 import { cx } from '@eum/ui/lib/cx';
 import {
   FolderTree,
+  Tags,
   LayoutDashboard,
   MessageSquareText,
   Package,
@@ -25,6 +26,7 @@ const ADMIN_MENU_ITEMS: AdminMenuItem[] = [
   { label: '대시보드', to: '/', icon: LayoutDashboard },
   { label: '상품 관리', to: '/products', icon: Package },
   { label: '카테고리 관리', to: '/categories', icon: FolderTree },
+  { label: '브랜드 관리', to: '/brands', icon: Tags },
   { label: '주문 관리', to: '/orders', icon: Receipt },
   { label: '견적 문의', to: '/quotes', icon: MessageSquareText },
   { label: '회원 관리', to: '/members', icon: Users },
@@ -36,6 +38,7 @@ const ADMIN_MENU_ITEMS: AdminMenuItem[] = [
 export function AdminSidebar() {
   const location = useLocation();
   const isProductSection = location.pathname.startsWith('/products');
+  const isBrandSection = location.pathname.startsWith('/brands');
 
   return (
     <aside className="flex w-240 shrink-0 flex-col border-r border-line bg-bg">
@@ -89,6 +92,37 @@ export function AdminSidebar() {
                       }
                     >
                       상품 등록
+                    </NavLink>
+                  </li>
+                </ul>
+              ) : null}
+              {menuItem.to === '/brands' && isBrandSection ? (
+                <ul className="mt-4 ml-44 grid gap-2 border-l border-line pl-12">
+                  <li>
+                    <NavLink
+                      to="/brands"
+                      end
+                      className={({ isActive }) =>
+                        cx(
+                          'flex h-36 items-center rounded-6 px-8 text-body-s focus-ring',
+                          isActive ? 'font-medium text-text-1' : 'text-text-3 hover:text-text-1',
+                        )
+                      }
+                    >
+                      브랜드 목록
+                    </NavLink>
+                  </li>
+                  <li>
+                    <NavLink
+                      to="/brands/new"
+                      className={({ isActive }) =>
+                        cx(
+                          'flex h-36 items-center rounded-6 px-8 text-body-s focus-ring',
+                          isActive ? 'font-medium text-text-1' : 'text-text-3 hover:text-text-1',
+                        )
+                      }
+                    >
+                      브랜드 등록
                     </NavLink>
                   </li>
                 </ul>

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider } from 'react-router';
@@ -201,6 +201,8 @@ describe('Admin demo preview flows', () => {
     expect(screen.getByText('ex*****@email.com')).toBeInTheDocument();
     expect(screen.getByText('주문 이력 (2)')).toBeInTheDocument();
     expect(screen.getByText('견적 문의 이력 (1)')).toBeInTheDocument();
+    expect(screen.getByText('재가입 가능 예정일')).toBeInTheDocument();
+    expect(screen.getByText('2026-11-14')).toBeInTheDocument();
     expect(screen.getByText(/합성 데모 기록입니다/)).toBeInTheDocument();
   });
 
@@ -257,9 +259,13 @@ describe('Admin demo preview flows', () => {
       </QueryClientProvider>,
     );
     await user.click(await screen.findByRole('button', { name: '취소 요청 확인 미리보기' }));
-    await user.selectOptions(screen.getByLabelText('확인 사유'), '요청 내용 확인');
-    await user.click(screen.getByRole('button', { name: '닫기' }));
+    const cancellationDialog = screen.getByRole('dialog');
+    expect(within(cancellationDialog).getByText('환불 금액')).toBeInTheDocument();
+    expect(within(cancellationDialog).getByText('₩1,000')).toBeInTheDocument();
+    expect(within(cancellationDialog).getByText('결제 수단과 동일')).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText(/취소 사유/), '요청 내용 확인');
+    await user.click(screen.getByRole('button', { name: '취소' }));
     await user.click(screen.getByRole('button', { name: '취소 요청 확인 미리보기' }));
-    expect(screen.getByLabelText('확인 사유')).toHaveValue('');
+    expect(screen.getByLabelText(/취소 사유/)).toHaveValue('');
   });
 });
