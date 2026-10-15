@@ -438,25 +438,32 @@ export function ProductListingView({
         <label className="sr-only" htmlFor="sort-products-mobile">
           정렬
         </label>
-        <select
-          id="sort-products-mobile"
-          value={sortBy}
-          onChange={(changeEvent) => {
-            const nextSort = SORT_OPTIONS.find(
-              (sortOption) => sortOption.value === changeEvent.target.value,
-            );
-            if (!nextSort) return;
-            setSortBy(nextSort.value);
-            setPage(1);
-          }}
-          className={cx(SELECT_CLASS, 'w-140 sm:hidden')}
-        >
-          {SORT_OPTIONS.map((sortOption) => (
-            <option key={sortOption.value} value={sortOption.value}>
-              {sortOption.label}
-            </option>
-          ))}
-        </select>
+        <div className="relative w-140 sm:hidden">
+          <select
+            id="sort-products-mobile"
+            value={sortBy}
+            onChange={(changeEvent) => {
+              const nextSort = SORT_OPTIONS.find(
+                (sortOption) => sortOption.value === changeEvent.target.value,
+              );
+              if (!nextSort) return;
+              setSortBy(nextSort.value);
+              setPage(1);
+            }}
+            className={cx(SELECT_CLASS, 'w-full appearance-none pr-32')}
+          >
+            {SORT_OPTIONS.map((sortOption) => (
+              <option key={sortOption.value} value={sortOption.value}>
+                {sortOption.label}
+              </option>
+            ))}
+          </select>
+          <Icon
+            icon={ChevronDown}
+            size={16}
+            className="pointer-events-none absolute top-1/2 right-12 -translate-y-1/2 text-text-1"
+          />
+        </div>
         {isMobileFiltersOpen ? (
           <div className="mt-12 w-full rounded-12 border border-line p-16">
             <div className="grid grid-cols-2 gap-16">
@@ -650,43 +657,57 @@ export function ProductListingView({
               <label className="sr-only" htmlFor="sort-products">
                 정렬
               </label>
-              <select
-                id="sort-products"
-                value={sortBy}
-                onChange={(changeEvent) => {
-                  const nextSort = SORT_OPTIONS.find(
-                    (sortOption) => sortOption.value === changeEvent.target.value,
-                  );
-                  if (!nextSort) return;
-                  setSortBy(nextSort.value);
-                  setPage(1);
-                }}
-                className={cx(SELECT_CLASS, 'w-120 lg:w-140')}
-              >
-                {SORT_OPTIONS.map((sortOption) => (
-                  <option key={sortOption.value} value={sortOption.value}>
-                    {sortOption.label}
-                  </option>
-                ))}
-              </select>
+              <div className="relative w-120 lg:w-140">
+                <select
+                  id="sort-products"
+                  value={sortBy}
+                  onChange={(changeEvent) => {
+                    const nextSort = SORT_OPTIONS.find(
+                      (sortOption) => sortOption.value === changeEvent.target.value,
+                    );
+                    if (!nextSort) return;
+                    setSortBy(nextSort.value);
+                    setPage(1);
+                  }}
+                  className={cx(SELECT_CLASS, 'w-full appearance-none pr-32')}
+                >
+                  {SORT_OPTIONS.map((sortOption) => (
+                    <option key={sortOption.value} value={sortOption.value}>
+                      {sortOption.label}
+                    </option>
+                  ))}
+                </select>
+                <Icon
+                  icon={ChevronDown}
+                  size={16}
+                  className="pointer-events-none absolute top-1/2 right-12 -translate-y-1/2 text-text-1"
+                />
+              </div>
               <label className="sr-only" htmlFor="page-size">
                 페이지 상품 수
               </label>
-              <select
-                id="page-size"
-                value={pageSize}
-                onChange={(changeEvent) => {
-                  setPageSize(Number(changeEvent.target.value));
-                  setPage(1);
-                }}
-                className={cx(SELECT_CLASS, 'hidden w-120 sm:block')}
-              >
-                {PAGE_SIZE_OPTIONS.map((pageSizeOption) => (
-                  <option key={pageSizeOption} value={pageSizeOption}>
-                    {pageSizeOption}개씩
-                  </option>
-                ))}
-              </select>
+              <div className="relative hidden w-120 sm:block">
+                <select
+                  id="page-size"
+                  value={pageSize}
+                  onChange={(changeEvent) => {
+                    setPageSize(Number(changeEvent.target.value));
+                    setPage(1);
+                  }}
+                  className={cx(SELECT_CLASS, 'w-full appearance-none pr-32')}
+                >
+                  {PAGE_SIZE_OPTIONS.map((pageSizeOption) => (
+                    <option key={pageSizeOption} value={pageSizeOption}>
+                      {pageSizeOption}개씩
+                    </option>
+                  ))}
+                </select>
+                <Icon
+                  icon={ChevronDown}
+                  size={16}
+                  className="pointer-events-none absolute top-1/2 right-12 -translate-y-1/2 text-text-1"
+                />
+              </div>
               <div
                 role="group"
                 aria-label="보기 방식"
