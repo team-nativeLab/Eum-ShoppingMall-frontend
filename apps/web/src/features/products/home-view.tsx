@@ -23,11 +23,7 @@ import { PageContainer } from '@/components/page-container';
 import { usePrefersReducedMotion } from '@/lib/use-media-query';
 import { filterProductsByCategoryTree } from './best-seller-filter';
 import { CategoryBar, MobileCategoryGrid } from './category-bar';
-import {
-  ProductCarouselTrack,
-  useCarouselPaging,
-  useHomeCarouselLayout,
-} from './product-carousel';
+import { ProductCarouselTrack, useCarouselPaging, useHomeCarouselLayout } from './product-carousel';
 import { useCategoriesQuery } from './use-categories-query';
 import { heroSlideStyle, useHeroSlides } from './use-hero-slides';
 import { useHomeQuery } from './use-home-query';

@@ -100,10 +100,13 @@ describe('useCarouselPaging', () => {
 
 describe('useHomeCarouselLayout', () => {
   it('uses a five-card stride below 1280px and a seven-card stride at 1280px and wider', () => {
-    const { result, rerender } = renderHook(({ isWideDesktop }) => {
-      mediaQueryState.isWideDesktop = isWideDesktop;
-      return useHomeCarouselLayout();
-    }, { initialProps: { isWideDesktop: false } });
+    const { result, rerender } = renderHook(
+      ({ isWideDesktop }) => {
+        mediaQueryState.isWideDesktop = isWideDesktop;
+        return useHomeCarouselLayout();
+      },
+      { initialProps: { isWideDesktop: false } },
+    );
 
     expect(HOME_WIDE_DESKTOP_QUERY).toBe('(min-width: 80rem)');
     expect(result.current).toEqual(HOME_CAROUSEL_LAYOUTS.desktop);
@@ -119,25 +122,23 @@ describe('ProductCarouselTrack responsive layouts', () => {
   it('keeps the shared recommendation track at five cards and 24px gaps', () => {
     mediaQueryState.isDesktop = true;
     render(
-      <ProductCarouselTrack
-        products={products}
-        pageIndex={1}
-        direction="next"
-        label="추천 상품"
-      />,
+      <ProductCarouselTrack products={products} pageIndex={1} direction="next" label="추천 상품" />,
     );
 
     const track = screen.getByRole('list', { name: '추천 상품' });
     const cards = within(track).getAllByRole('listitem');
     expect(track).toHaveClass('lg:auto-cols-[calc((100%-96px)/5)]', 'lg:gap-x-24');
     expect(track).toHaveStyle({ '--carousel-page': '1' });
-    expect(cards.slice(0, DESKTOP_CAROUSEL_PAGE_SIZE).every((card) => card.hasAttribute('inert'))).toBe(
-      true,
-    );
     expect(
-      cards.slice(DESKTOP_CAROUSEL_PAGE_SIZE).some((card) => card.hasAttribute('inert')),
-    ).toBe(false);
-    expect(within(track).getAllByRole('article')[0]).toHaveAttribute('data-card-variant', 'default');
+      cards.slice(0, DESKTOP_CAROUSEL_PAGE_SIZE).every((card) => card.hasAttribute('inert')),
+    ).toBe(true);
+    expect(cards.slice(DESKTOP_CAROUSEL_PAGE_SIZE).some((card) => card.hasAttribute('inert'))).toBe(
+      false,
+    );
+    expect(within(track).getAllByRole('article')[0]).toHaveAttribute(
+      'data-card-variant',
+      'default',
+    );
   });
 
   it.each([
@@ -170,7 +171,9 @@ describe('ProductCarouselTrack responsive layouts', () => {
         '--home-carousel-gap': '16px',
         '--carousel-page-translate': expectedTranslate,
       });
-      expect(cards.slice(0, layout.pageSize).every((card) => card.hasAttribute('inert'))).toBe(true);
+      expect(cards.slice(0, layout.pageSize).every((card) => card.hasAttribute('inert'))).toBe(
+        true,
+      );
       expect(cards.slice(layout.pageSize).some((card) => card.hasAttribute('inert'))).toBe(false);
       expect(within(track).getAllByRole('article')[0]).toHaveAttribute(
         'data-card-variant',

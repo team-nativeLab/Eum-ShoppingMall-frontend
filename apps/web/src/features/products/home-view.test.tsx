@@ -25,11 +25,7 @@ vi.mock('./product-carousel', async (importOriginal) => {
       pageIndex: number;
       desktopLayout?: { pageSize: number };
     }) => (
-      <ul
-        aria-label={label}
-        data-page-index={pageIndex}
-        data-page-size={desktopLayout?.pageSize}
-      />
+      <ul aria-label={label} data-page-index={pageIndex} data-page-size={desktopLayout?.pageSize} />
     ),
     useHomeCarouselLayout: () => ({
       pageSize: 7,

@@ -145,8 +145,8 @@ export function ProductCarouselTrack({
           'grid auto-cols-[calc((100%-12px)/2)] grid-flow-col gap-x-12 gap-y-16',
           isMobileGrid ? 'grid-rows-2' : 'grid-rows-1',
           desktopLayout
-            ? 'lg:auto-cols-[var(--home-carousel-card-width)] lg:grid-rows-1 lg:gap-x-[var(--home-carousel-gap)] lg:translate-x-[var(--carousel-page-translate)]'
-            : 'lg:auto-cols-[calc((100%-96px)/5)] lg:grid-rows-1 lg:gap-x-24 lg:translate-x-[calc(var(--carousel-page)*(-100%_-_24px))]',
+            ? 'lg:translate-x-[var(--carousel-page-translate)] lg:auto-cols-[var(--home-carousel-card-width)] lg:grid-rows-1 lg:gap-x-[var(--home-carousel-gap)]'
+            : 'lg:translate-x-[calc(var(--carousel-page)*(-100%_-_24px))] lg:auto-cols-[calc((100%-96px)/5)] lg:grid-rows-1 lg:gap-x-24',
           // 감속 모드에서는 transition을 붙이지 않아 즉시 이동합니다.
           'lg:motion-safe:transition-[translate] lg:motion-safe:duration-500 lg:motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]',
         )}
