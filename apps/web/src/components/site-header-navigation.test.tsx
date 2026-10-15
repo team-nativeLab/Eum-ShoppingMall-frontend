@@ -161,6 +161,7 @@ describe('SiteHeader product and brand navigation', () => {
   });
 
   it('keeps the compact desktop header and removes scroll listeners on unmount', () => {
+    navigationMocks.pathname = '/about';
     const originalInnerWidth = Object.getOwnPropertyDescriptor(window, 'innerWidth');
     const originalScrollY = Object.getOwnPropertyDescriptor(window, 'scrollY');
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
@@ -173,6 +174,15 @@ describe('SiteHeader product and brand navigation', () => {
     const desktopNavigationRow = header.querySelector('[class~="h-64"]');
     expect(desktopNavigationRow).toBeInTheDocument();
     expect(header).toHaveClass('shadow-1');
+
+    const primaryNavigation = screen.getByRole('navigation', { name: '주요 메뉴' });
+    const aboutLink = within(primaryNavigation).getByRole('link', { name: '회사소개' });
+    expect(primaryNavigation).toHaveClass('h-full');
+    for (const navigationLink of within(primaryNavigation).getAllByRole('link')) {
+      expect(navigationLink).toHaveClass('h-full');
+    }
+    expect(aboutLink).toHaveAttribute('aria-current', 'page');
+    expect(aboutLink).toHaveClass('after:-bottom-4');
 
     const scrollHandler = addEventListener.mock.calls.find(
       ([eventName]) => eventName === 'scroll',
