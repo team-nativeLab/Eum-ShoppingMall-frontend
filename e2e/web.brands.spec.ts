@@ -13,7 +13,7 @@ test('GNB 브랜드에서 브랜드 목록 → 상세 → 브랜드 제품 목�
     // 모바일은 GNB 대신 전체 메뉴의 「전체 브랜드」로 들어갑니다.
     await page.getByRole('button', { name: '전체 메뉴 열기' }).click();
     await page
-      .getByRole('dialog', { name: '전체 메뉴' })
+      .getByRole('navigation', { name: '전체 메뉴' })
       .getByRole('link', { name: '전체 브랜드' })
       .click();
   }
