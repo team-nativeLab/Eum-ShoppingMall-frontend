@@ -247,18 +247,29 @@ export function createMockApi(config: ApiConfig): ShopApi {
         const pageSize = Math.max(1, params.pageSize ?? DEFAULT_PAGE_SIZE);
         const allItems = await respondList(filteredProducts, options);
         const sortedItems = [...allItems];
-        if (params.sortBy === 'priceAsc' || params.sortBy === 'priceDesc') {
-          const direction = params.sortBy === 'priceAsc' ? 1 : -1;
-          sortedItems.sort((left, right) => {
+        sortedItems.sort((left, right) => {
+          const leftIsSoldOut = left.stockStatus === 'soldOut';
+          const rightIsSoldOut = right.stockStatus === 'soldOut';
+          if (leftIsSoldOut !== rightIsSoldOut) return leftIsSoldOut ? 1 : -1;
+
+          if (params.sortBy === 'priceAsc' || params.sortBy === 'priceDesc') {
+            const direction = params.sortBy === 'priceAsc' ? 1 : -1;
             const leftPrice = left.priceVisible ? left.price : null;
             const rightPrice = right.priceVisible ? right.price : null;
             if (leftPrice === null) return rightPrice === null ? 0 : 1;
             if (rightPrice === null) return -1;
             return (leftPrice - rightPrice) * direction;
-          });
-        } else if (params.sortBy === 'newest') {
-          sortedItems.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
-        }
+          }
+          if (params.sortBy === 'newest') {
+            return right.createdAt.localeCompare(left.createdAt);
+          }
+          if (params.sortBy === 'ratingDesc') {
+            if (left.rating === null) return right.rating === null ? 0 : 1;
+            if (right.rating === null) return -1;
+            return right.rating - left.rating;
+          }
+          return 0;
+        });
         return {
           items: sortedItems.slice((page - 1) * pageSize, page * pageSize).map(toBuyerProduct),
           page,

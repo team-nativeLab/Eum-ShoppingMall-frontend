@@ -19,7 +19,13 @@ describe('formatKrw', () => {
 describe('getPriceDisplay — 금액 표시 토글', () => {
   it('금액 표시 상품은 가격을 보여 줍니다', () => {
     const priceDisplay = getPriceDisplay(buildProduct({ price: 18000 }));
-    expect(priceDisplay).toEqual({ isPriceVisible: true, text: '₩18,000', listPriceText: null });
+    expect(priceDisplay).toEqual({
+      isPriceVisible: true,
+      text: '₩18,000',
+      listPriceText: null,
+      discountRate: null,
+      discountRateLabel: null,
+    });
   });
 
   it('금액 표시 상품의 가격이 0이어도 ₩0을 보여 줍니다', () => {
@@ -32,6 +38,8 @@ describe('getPriceDisplay — 금액 표시 토글', () => {
       isPriceVisible: false,
       text: PRICE_HIDDEN_LABEL,
       listPriceText: null,
+      discountRate: null,
+      discountRateLabel: null,
     });
     expect(PRICE_HIDDEN_LABEL).toBe('구매 불가');
   });
@@ -43,12 +51,37 @@ describe('getPriceDisplay — 금액 표시 토글', () => {
   });
 
   it('정가가 판매가보다 높을 때만 정가를 보여 줍니다', () => {
-    expect(getPriceDisplay(buildProduct({ price: 18000, listPrice: 22000 })).listPriceText).toBe(
-      '₩22,000',
-    );
+    expect(getPriceDisplay(buildProduct({ price: 18000, listPrice: 22000 }))).toMatchObject({
+      listPriceText: '₩22,000',
+      discountRate: 18,
+      discountRateLabel: '18%',
+    });
+    expect(getPriceDisplay(buildProduct({ price: 18000, listPrice: 18000 }))).toMatchObject({
+      listPriceText: null,
+      discountRate: null,
+      discountRateLabel: null,
+    });
+  });
+
+  it('할인율은 정수로 내림하고 가격 비공개 상품에는 제공하지 않습니다', () => {
+    expect(getPriceDisplay(buildProduct({ price: 10560, listPrice: 20900 })).discountRate).toBe(49);
     expect(
-      getPriceDisplay(buildProduct({ price: 18000, listPrice: 18000 })).listPriceText,
+      getPriceDisplay(buildProduct({ price: 10560, listPrice: 20900 })).discountRateLabel,
+    ).toBe('49%');
+    expect(
+      getPriceDisplay(buildProduct({ price: 10560, listPrice: 20900, priceVisible: false }))
+        .discountRate,
     ).toBeNull();
+  });
+
+  it('labels a positive discount below one percent without displaying a false zero percent', () => {
+    const priceDisplay = getPriceDisplay(buildProduct({ price: 9999, listPrice: 10000 }));
+
+    expect(priceDisplay.discountRate).toBe(0);
+    expect(priceDisplay.discountRateLabel).toBe('<1%');
+    expect(getPriceDisplay(buildProduct({ price: 9900, listPrice: 10000 })).discountRateLabel).toBe(
+      '1%',
+    );
   });
 });
 

@@ -31,7 +31,7 @@ export interface ProductListParams {
   brand?: string[];
   certification?: string[];
   excludeSoldOut?: boolean;
-  sortBy?: 'recommended' | 'priceAsc' | 'priceDesc' | 'newest';
+  sortBy?: 'recommended' | 'priceAsc' | 'priceDesc' | 'newest' | 'ratingDesc';
   page?: number;
   pageSize?: number;
 }

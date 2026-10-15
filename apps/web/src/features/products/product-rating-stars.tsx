@@ -29,7 +29,7 @@ export function ProductRatingStars({
             aria-hidden="true"
             strokeWidth={1.5}
             fill={isFilled ? 'currentColor' : 'none'}
-            className={cx('size-14 lg:size-16', isFilled ? 'text-text-1' : 'text-line-control')}
+            className={cx('size-14 lg:size-16', isFilled ? 'text-warning' : 'text-line-control')}
           />
         );
       })}
