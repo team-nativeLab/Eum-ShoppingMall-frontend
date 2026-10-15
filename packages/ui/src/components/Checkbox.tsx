@@ -4,17 +4,22 @@ import { Check } from 'lucide-react';
 import { useEffect, useRef, type InputHTMLAttributes, type ReactNode } from 'react';
 import { cx } from '../lib/cx';
 
-export interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
+export interface CheckboxProps extends Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  'type' | 'size'
+> {
   /** 보이는 라벨. 없으면 aria-label을 꼭 넘깁니다(예: 표의 행 선택). */
   children?: ReactNode;
   /** 일부만 선택된 상태(전체 선택 체크박스). 네이티브 indeterminate로 알립니다. */
   isIndeterminate?: boolean;
+  /** 상품 facet처럼 밀집된 목록에만 16px 상자를 사용합니다. 기본은 20px입니다. */
+  size?: 'default' | 'small';
 }
 
 // 상태별 상자 모양. 비활성 규칙은 :checked/:indeterminate와 겹치지 않게 조건을 나눠
 // CSS 생성 순서와 상관없이 비활성+체크에서도 체크 표시가 보이게 합니다.
-const BOX_CLASS = cx(
-  'relative inline-flex size-20 shrink-0 items-center justify-center rounded-4 border-[1.5px] border-line-control bg-bg text-inverse',
+const BOX_BASE_CLASS = cx(
+  'relative inline-flex shrink-0 items-center justify-center rounded-4 border-[1.5px] border-line-control bg-bg text-inverse',
   'peer-[:checked:enabled]:border-text-1 peer-[:checked:enabled]:bg-text-1',
   'peer-[:indeterminate:enabled]:border-text-1 peer-[:indeterminate:enabled]:bg-text-1',
   // Figma Disabled(꺼짐): surface-2 채움. 비활성+체크·일부 선택은 같은 채움에 회색 표시
@@ -31,6 +36,7 @@ const BOX_CLASS = cx(
 export function Checkbox({
   children,
   isIndeterminate = false,
+  size = 'default',
   className,
   disabled,
   ...inputProps
@@ -57,8 +63,15 @@ export function Checkbox({
         className="peer sr-only"
         {...inputProps}
       />
-      <span aria-hidden="true" className={BOX_CLASS}>
-        <Check className="checkbox-check hidden" size={14} strokeWidth={2} />
+      <span
+        aria-hidden="true"
+        className={cx(BOX_BASE_CLASS, size === 'small' ? 'size-16' : 'size-20')}
+      >
+        <Check
+          className="checkbox-check hidden"
+          size={size === 'small' ? 12 : 14}
+          strokeWidth={2}
+        />
         <span className="checkbox-dash hidden h-2 w-10 rounded-[1px] bg-current" />
       </span>
       {children}

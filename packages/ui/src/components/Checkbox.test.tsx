@@ -30,4 +30,23 @@ describe('Checkbox', () => {
     expect(agreeCheckbox).toBeChecked();
     expect(agreeCheckbox).toBeDisabled();
   });
+
+  it('작은 facet 체크박스만 16px 상자를 쓰고 기본 체크박스는 20px를 유지합니다', () => {
+    const { container } = render(
+      <>
+        <Checkbox size="small" className="h-32">
+          브랜드 필터
+        </Checkbox>
+        <Checkbox>기본 체크박스</Checkbox>
+      </>,
+    );
+
+    const visibleBoxes = container.querySelectorAll('span[aria-hidden="true"]');
+    expect(visibleBoxes[0]).toHaveClass('size-16');
+    expect(visibleBoxes[1]).toHaveClass('size-20');
+    expect(visibleBoxes[0]).toHaveClass('peer-focus-visible:outline-2');
+    expect(screen.getByRole('checkbox', { name: '브랜드 필터' }).closest('label')).toHaveClass(
+      'h-32',
+    );
+  });
 });
