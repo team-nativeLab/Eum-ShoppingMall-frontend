@@ -273,11 +273,12 @@ export function AdminOrderDetailPage() {
       <Modal
         isOpen={isCancelConfirmOpen}
         onClose={closeCancelConfirm}
-        title="취소 요청 확인"
+        title="주문을 취소할까요?"
+        description="취소하면 결제 금액이 환불되고 고객에게 취소 안내가 발송됩니다. 되돌릴 수 없습니다."
         actions={
           <>
             <Button variant="secondary" onClick={closeCancelConfirm}>
-              닫기
+              취소
             </Button>
             <Button
               disabled={!cancelReason}
@@ -288,7 +289,7 @@ export function AdminOrderDetailPage() {
                 closeCancelConfirm();
               }}
             >
-              확인 미리보기
+              주문 취소 미리보기
             </Button>
           </>
         }
@@ -298,15 +299,20 @@ export function AdminOrderDetailPage() {
             요청을 확인하면 실제 처리에서는 주문 취소와 결제 취소·환불이 진행될 수 있습니다. 이
             데모는 해당 작업을 수행하지 않습니다.
           </AdminNotice>
-          <p>사유를 선택해야 미리보기를 진행할 수 있습니다.</p>
+          <dl className="grid grid-cols-[1fr_auto] gap-x-12 gap-y-10 rounded-8 bg-surface px-12 py-12 text-body-s">
+            <dt className="text-text-3">환불 금액</dt>
+            <dd className="text-right font-medium">{formatAdminCurrency(order.paymentTotal)}</dd>
+            <dt className="text-text-3">환불 수단</dt>
+            <dd className="text-right">결제 수단과 동일</dd>
+          </dl>
           <label className="grid gap-6">
-            확인 사유
+            취소 사유 <span className="text-danger">*</span>
             <select
               value={cancelReason}
               onChange={(event) => setCancelReason(event.target.value)}
               className="h-40 rounded-8 border border-line-control bg-bg px-12"
             >
-              <option value="">사유 선택</option>
+              <option value="">사유를 선택해 주세요</option>
               <option value="요청 내용 확인">요청 내용 확인</option>
               <option value="고객 연락 확인">고객 연락 확인</option>
             </select>

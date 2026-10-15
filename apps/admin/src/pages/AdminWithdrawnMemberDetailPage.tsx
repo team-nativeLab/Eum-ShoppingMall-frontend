@@ -57,8 +57,14 @@ export function AdminWithdrawnMemberDetailPage() {
           <dd>{member.processedBy}</dd>
           <dt>보관 종료 예정</dt>
           <dd>{member.retentionUntil}</dd>
+          <dt>재가입 가능 예정일</dt>
+          <dd>{member.rejoinEligibleAt}</dd>
         </dl>
       </AdminPanel>
+      <AdminNotice className="mt-12" tone="warning">
+        재가입 가능일은 Figma 화면 확인을 위한 합성 예시이며 실제 회원 정책이나 API 응답값이
+        아닙니다.
+      </AdminNotice>
       <div className="mt-16 grid gap-16 lg:grid-cols-[1.5fr_1fr]">
         <div className="grid gap-16">
           <AdminPanel title={`주문 이력 (${member.orders.length})`} bodyClassName="overflow-hidden">

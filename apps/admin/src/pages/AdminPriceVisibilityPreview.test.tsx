@@ -11,6 +11,7 @@ import {
 } from '@/lib/admin-price-visibility-preview';
 import { AdminProductFormPage } from './AdminProductFormPage';
 import { AdminProductsPage } from './AdminProductsPage';
+import { AdminProductExposurePreviewProvider } from '@/lib/admin-product-exposure-preview';
 
 const apiMocks = vi.hoisted(() => ({
   getShopApi: vi.fn(),
@@ -112,10 +113,12 @@ function renderAdminApp(initialEntry = '/products') {
     <MemoryRouter initialEntries={[initialEntry]}>
       <QueryClientProvider client={queryClient}>
         <AdminPriceVisibilityPreviewProvider>
-          <Routes>
-            <Route path="/products" element={<AdminProductsPage />} />
-            <Route path="/products/:productId" element={<AdminProductFormPage />} />
-          </Routes>
+          <AdminProductExposurePreviewProvider>
+            <Routes>
+              <Route path="/products" element={<AdminProductsPage />} />
+              <Route path="/products/:productId" element={<AdminProductFormPage />} />
+            </Routes>
+          </AdminProductExposurePreviewProvider>
         </AdminPriceVisibilityPreviewProvider>
       </QueryClientProvider>
     </MemoryRouter>,
@@ -386,5 +389,30 @@ describe('admin price visibility previews', () => {
     );
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('keeps exposure state and its undo separate from price visibility', async () => {
+    const user = userEvent.setup();
+    renderAdminApp();
+    const productRow = await screen.findByRole('row', { name: /상품 A/ });
+    const priceSwitch = within(productRow).getByRole('switch', { name: '상품 A 금액 표시' });
+    const exposureSwitch = within(productRow).getByRole('switch', { name: '상품 A 상품 노출' });
+
+    await user.click(exposureSwitch);
+    await user.click(within(productRow).getByRole('checkbox', { name: '상품 A 선택' }));
+    await user.click(screen.getByRole('button', { name: '금액 미표시' }));
+    await user.click(screen.getByRole('button', { name: '금액 미표시 미리보기' }));
+    expect(exposureSwitch).toHaveAttribute('aria-checked', 'false');
+    expect(priceSwitch).toHaveAttribute('aria-checked', 'false');
+
+    const undoButtons = screen.getAllByRole('button', { name: '되돌리기' });
+    expect(undoButtons).toHaveLength(2);
+    const priceUndoButton = undoButtons[0];
+    if (!priceUndoButton) throw new Error('가격 미리보기 되돌리기 버튼이 없습니다.');
+    await user.click(priceUndoButton);
+    expect(priceSwitch).toHaveAttribute('aria-checked', 'true');
+    expect(exposureSwitch).toHaveAttribute('aria-checked', 'false');
+    await user.click(screen.getByRole('button', { name: '되돌리기' }));
+    expect(exposureSwitch).toHaveAttribute('aria-checked', 'true');
   });
 });
