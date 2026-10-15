@@ -39,7 +39,11 @@ export function BrandLogo({
   );
 }
 
-/** 브랜드 히어로 사진. 장식용이라 alt를 비웁니다(브랜드 이름은 옆 제목이 읽어 줍니다). */
+/**
+ * 브랜드 히어로 사진. 첫 화면에서 보이므로 eager/high로 요청합니다.
+ * 호출하는 히어로 영역이 높이를 예약하며, 실제 이미지 비율은 영역에 맞춰 자릅니다.
+ * 장식용이라 alt를 비웁니다(브랜드 이름은 옆 제목이 읽어 줍니다).
+ */
 export function BrandCover({
   coverImageUrl,
   className,
@@ -52,7 +56,9 @@ export function BrandCover({
     <img
       src={coverImageUrl}
       alt=""
-      loading="lazy"
+      loading="eager"
+      fetchPriority="high"
+      decoding="async"
       className={cx('size-full object-cover', className)}
     />
   );

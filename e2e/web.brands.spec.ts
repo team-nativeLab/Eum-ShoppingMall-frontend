@@ -52,15 +52,97 @@ test('브랜드 색인은 키보드로 고른 묶음까지 펼치고 그 제목�
     'true',
   );
 
+  const allKey = brandIndex.getByRole('link', { name: '전체' });
+  await allKey.focus();
+  await page.keyboard.press('Enter');
+  const directoryList = page.locator('#brand-directory-list');
+  await expect(directoryList).toBeFocused();
+  await expect(directoryList).toHaveCSS('outline-style', 'solid');
+  await expect(directoryList).toHaveCSS('outline-width', '2px');
+
   const latinKey = brandIndex.getByRole('link', { name: 'A–Z' });
   await latinKey.focus();
   await page.keyboard.press('Enter');
 
   const latinHeading = page.getByRole('heading', { level: 3, name: /A–Z/ });
   await expect(latinHeading).toBeFocused();
+  await expect(latinHeading).toHaveCSS('outline-style', 'solid');
+  await expect(latinHeading).toHaveCSS('outline-width', '2px');
   await expect(latinHeading).toBeInViewport();
   await expect(page.getByRole('link', { name: /^Duraguard, 제품 \d+개$/ })).toBeVisible();
   await expect(latinKey).toHaveAttribute('aria-current', 'location');
+});
+
+test('브랜드 상세 주소로 바로 진입한 뒤 새로고침해도 유지합니다', async ({ page }) => {
+  await page.goto('/brands/brd-workfit');
+  await expect(page).toHaveURL(/\/brands\/brd-workfit$/);
+  await expect(page.getByRole('heading', { level: 1, name: '워크핏' })).toBeVisible();
+  await expect(page.getByRole('link', { name: /^제품 \d+개 보기$/ })).toBeVisible();
+
+  await page.reload();
+
+  await expect(page).toHaveURL(/\/brands\/brd-workfit$/);
+  await expect(page.getByRole('heading', { level: 1, name: '워크핏' })).toBeVisible();
+  await expect(page.getByRole('link', { name: /^제품 \d+개 보기$/ })).toBeVisible();
+});
+
+test('이달의 브랜드 긴 무공백 문구는 모바일과 데스크톱에서 넘치지 않습니다', async ({ page }) => {
+  await page.goto('/brands');
+  await expect(page.getByRole('region', { name: '이달의 브랜드' })).toBeVisible();
+
+  const metrics = await page.evaluate(() => {
+    const spotlight = document.querySelector('[aria-label="이달의 브랜드"]');
+    if (!spotlight) throw new Error('이달의 브랜드 영역을 찾지 못했습니다.');
+
+    const longText = 'WORKFITLONG'.repeat(32);
+    const mobileLink = spotlight.querySelector('a.lg\\:hidden');
+    const desktopContainer = spotlight.querySelector('div.hidden.lg\\:flex');
+    const mobileCopy = mobileLink?.querySelector('span.flex.min-w-0');
+    const desktopTitle = desktopContainer?.querySelector('h2');
+    const desktopSubline = desktopTitle?.parentElement?.querySelector('p');
+    const desktopTagline = desktopContainer?.querySelector('p.line-clamp-2');
+    const mobileName = mobileCopy?.children.item(1);
+    const mobileTagline = mobileCopy?.children.item(2);
+
+    for (const element of [
+      mobileName,
+      mobileTagline,
+      desktopTitle,
+      desktopSubline,
+      desktopTagline,
+    ]) {
+      if (element) element.textContent = longText;
+    }
+
+    const visibleElements = [
+      mobileName,
+      mobileTagline,
+      desktopTitle,
+      desktopSubline,
+      desktopTagline,
+    ].filter((element): element is Element =>
+      Boolean(element && element.getBoundingClientRect().width > 0),
+    );
+
+    return {
+      elements: visibleElements.map((element) => ({
+        text: element.textContent,
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+      })),
+      documentClientWidth: document.documentElement.clientWidth,
+      documentScrollWidth: document.documentElement.scrollWidth,
+    };
+  });
+
+  expect(metrics.elements.length).toBeGreaterThan(0);
+  for (const element of metrics.elements) {
+    expect(element.clientWidth, `${element.text?.slice(0, 16)} clientWidth`).toBeGreaterThan(0);
+    expect(element.scrollWidth, `${element.text?.slice(0, 16)} scrollWidth`).toBeLessThanOrEqual(
+      element.clientWidth,
+    );
+  }
+  expect(metrics.documentScrollWidth).toBeLessThanOrEqual(metrics.documentClientWidth);
 });
 
 test('잘못된 브랜드 주소는 찾을 수 없음 안내와 목록 링크를 보여 줍니다', async ({ page }) => {
