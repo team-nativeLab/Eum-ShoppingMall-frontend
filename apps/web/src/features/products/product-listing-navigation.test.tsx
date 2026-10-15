@@ -96,64 +96,35 @@ describe('ProductListingView brand navigation', () => {
     }
   });
 
-  it('restores the selected brand from route state and opens the mobile brand group', async () => {
-    render(
-      <ProductListingView initialKeyword="glove" initialBrands={['3M']} initialBrowseBrands />,
-      { wrapper: createWrapper() },
-    );
+  it('restores the selected brand from route state and opens filters on request', async () => {
+    const user = userEvent.setup();
+    render(<ProductListingView initialKeyword="glove" initialBrands={['3M']} />, {
+      wrapper: createWrapper(),
+    });
 
-    expect(screen.getByRole('button', { name: '필터' })).toHaveAttribute('aria-expanded', 'true');
+    const filterButton = screen.getByRole('button', { name: '필터' });
+    expect(filterButton).toHaveAttribute('aria-expanded', 'false');
+    await user.click(filterButton);
     const brandHeading = screen.getByRole('heading', { name: '브랜드', level: 2 });
     expect(brandHeading).toBeVisible();
     const brandGroup = screen.getByRole('group', { name: '브랜드' });
     expect(brandGroup).toHaveAttribute('aria-labelledby', brandHeading.id);
-    expect(brandGroup).not.toHaveClass('focus-visible:outline-2');
     const selectedBrandChip = await within(brandGroup).findByRole('button', { name: '3M' });
     expect(selectedBrandChip).toHaveAttribute('aria-pressed', 'true');
-    await waitFor(() => expect(selectedBrandChip).toHaveFocus());
-    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({
-      behavior: 'auto',
-      block: 'nearest',
-    });
   });
 
-  it('moves focus into the brand chips when retrying mobile brand browsing succeeds', async () => {
-    const user = userEvent.setup();
-    apiMocks.listFacets
-      .mockRejectedValueOnce(new Error('temporary facet failure'))
-      .mockResolvedValueOnce({
-        totalCount: 0,
-        keywordTotalCount: 10,
-        categories: [],
-        brands: [{ value: '3M', count: 4 }],
-        certifications: [],
-      });
-
-    render(<ProductListingView initialBrowseBrands />, { wrapper: createWrapper() });
-
-    const [retryButton] = await screen.findAllByRole('button', { name: '다시 시도' });
-    if (!retryButton) throw new Error('모바일 필터 재시도 버튼을 찾을 수 없습니다.');
-    const brandGroup = screen.getByRole('group', { name: '브랜드' });
-    await waitFor(() => expect(brandGroup).toHaveFocus());
-
-    retryButton.focus();
-    await user.keyboard('{Enter}');
-
-    const brandChip = await within(brandGroup).findByRole('button', { name: '3M' });
-    await waitFor(() => expect(brandChip).toHaveFocus());
-  });
-
-  it('pushes a brand selection into the URL without dropping the query or browse intent', async () => {
+  it('pushes a brand selection into the URL without dropping the query', async () => {
     const user = userEvent.setup();
     render(
       <ProductListingView
         initialKeyword="glove"
         initialBrands={[]}
-        initialBrowseBrands
-        initialSearchParams="q=glove&browse=brands"
+        initialSearchParams="q=glove"
       />,
       { wrapper: createWrapper() },
     );
+
+    await user.click(screen.getByRole('button', { name: '필터' }));
 
     await user.click(
       await within(screen.getByRole('group', { name: '브랜드' })).findByRole('button', {
@@ -161,28 +132,18 @@ describe('ProductListingView brand navigation', () => {
       }),
     );
 
-    expect(navigationMocks.push).toHaveBeenCalledWith('/search?q=glove&browse=brands&brand=3M');
+    expect(navigationMocks.push).toHaveBeenCalledWith('/search?q=glove&brand=3M');
   });
 
   it('restores the selected brand from updated route props after browser history navigation', () => {
     const view = render(
-      <ProductListingView
-        initialBrands={['3M']}
-        initialSearchParams="brand=3M&browse=brands"
-        initialBrowseBrands
-      />,
+      <ProductListingView initialBrands={['3M']} initialSearchParams="brand=3M&browse=brands" />,
       { wrapper: createWrapper() },
     );
 
     expect(screen.getByRole('button', { name: '3M 삭제' })).toBeInTheDocument();
 
-    view.rerender(
-      <ProductListingView
-        initialBrands={[]}
-        initialSearchParams="browse=brands"
-        initialBrowseBrands
-      />,
-    );
+    view.rerender(<ProductListingView initialBrands={[]} initialSearchParams="browse=brands" />);
 
     expect(screen.queryByRole('button', { name: '3M 삭제' })).not.toBeInTheDocument();
   });
