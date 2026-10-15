@@ -7,7 +7,7 @@ import { Icon } from '@eum/ui/components/Icon';
 import { Radio } from '@eum/ui/components/Radio';
 import { TextField } from '@eum/ui/components/TextField';
 import { cx } from '@eum/ui/lib/cx';
-import { Check, ChevronRight, Upload, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Upload, X } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState, type FormEvent } from 'react';
@@ -108,7 +108,7 @@ function InquiryProductsPanel({
   return (
     <section
       aria-labelledby="inquiry-products-title"
-      className="flex flex-col gap-16 rounded-12 border border-line bg-bg-subtle p-16 md:gap-24 md:p-24"
+      className="flex flex-col gap-16 rounded-12 border border-line bg-bg-subtle p-16 lg:gap-12 lg:p-20"
     >
       <div className="flex flex-col gap-12 sm:flex-row sm:items-center sm:justify-between">
         <h2 id="inquiry-products-title" className="text-label-l">
@@ -118,20 +118,30 @@ function InquiryProductsPanel({
           <label className="sr-only" htmlFor="quote-product-select">
             상품 선택
           </label>
-          <select
-            id="quote-product-select"
-            value={selectedProductId}
-            onChange={(event) => onSelectedProductChange(event.currentTarget.value)}
-            disabled={products.length === 0}
-            className="min-w-0 flex-1 rounded-8 border border-line-strong bg-bg px-12 py-8 text-body-s focus-ring sm:max-w-220"
-          >
-            <option value="">상품을 선택해 주세요</option>
-            {products.map((product) => (
-              <option key={product.id} value={product.id}>
-                {product.name}
-              </option>
-            ))}
-          </select>
+          <div className="relative min-w-0 flex-1 sm:max-w-220">
+            <select
+              id="quote-product-select"
+              value={selectedProductId}
+              onChange={(event) => onSelectedProductChange(event.currentTarget.value)}
+              disabled={products.length === 0}
+              className="w-full min-w-0 appearance-none rounded-8 border border-line-strong bg-bg px-12 py-8 pr-40 text-body-s focus-ring"
+            >
+              <option value="">상품을 선택해 주세요</option>
+              {products.map((product) => (
+                <option key={product.id} value={product.id}>
+                  {product.name}
+                </option>
+              ))}
+            </select>
+            <Icon
+              icon={ChevronDown}
+              size={20}
+              className={cx(
+                'pointer-events-none absolute top-1/2 right-14 -translate-y-1/2',
+                products.length === 0 ? 'text-text-disabled' : 'text-text-1',
+              )}
+            />
+          </div>
           <Button
             type="button"
             variant="ghost"
@@ -321,7 +331,7 @@ function QuoteFormVisual({
   return (
     <section id="quote-form" aria-label="견적 문의 입력" className="min-w-0 scroll-mt-80">
       <form
-        className="flex flex-col gap-32"
+        className="flex flex-col gap-32 lg:gap-24"
         onSubmit={handleSubmit}
         onReset={() => {
           setSelectedProducts([]);
@@ -392,8 +402,8 @@ function QuoteFormVisual({
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-16">
-          <fieldset className="flex flex-col gap-8">
+        <div className="flex flex-col gap-16 lg:contents">
+          <fieldset className="flex flex-col gap-8 lg:gap-12">
             <legend className="text-label-m">문의 유형 *</legend>
             <div className="flex flex-wrap gap-x-24 gap-y-12">
               <Radio name="inquiryType" value="custom" defaultChecked>
@@ -598,7 +608,7 @@ function SolutionsPageContentInner() {
   return (
     <PageContainer className="pt-48 pb-64 max-[600px]:px-16 lg:pt-64 lg:pb-120">
       <div className="flex flex-col gap-48 lg:gap-64">
-        <section aria-labelledby="solutions-title" className="flex flex-col gap-32">
+        <section aria-labelledby="solutions-title" className="flex flex-col gap-32 lg:gap-40">
           <div className="flex flex-col gap-12">
             <p className="text-overline tracking-[0.16em] text-text-3">Safety Solution</p>
             <h1 id="solutions-title" className="text-h1 lg:text-[36px] lg:leading-[48px]">
