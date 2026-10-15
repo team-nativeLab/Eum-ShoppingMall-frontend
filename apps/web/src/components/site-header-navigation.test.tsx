@@ -182,7 +182,7 @@ describe('SiteHeader product and brand navigation', () => {
       expect(navigationLink).toHaveClass('h-full');
     }
     expect(aboutLink).toHaveAttribute('aria-current', 'page');
-    expect(aboutLink).toHaveClass('after:-bottom-4');
+    expect(aboutLink).toHaveClass('after:bottom-0');
 
     const scrollHandler = addEventListener.mock.calls.find(
       ([eventName]) => eventName === 'scroll',
