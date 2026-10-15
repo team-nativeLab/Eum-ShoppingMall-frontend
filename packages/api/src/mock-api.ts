@@ -154,18 +154,18 @@ function normalizeLimit(limit: number | undefined): number {
   return Math.max(1, Math.floor(limit ?? DEFAULT_COLLECTION_LIMIT));
 }
 
-/** 브랜드의 상품 수. 기존 상품 목록의 브랜드 이름 필터와 같은 기준으로 셉니다. */
+/** 브랜드의 구매자 노출 상품 수. 상품 목록의 브랜드 필터(이름 일치)와 같은 기준으로 셉니다. */
 function countBrandProducts(brandName: string): number {
   return mockProducts.filter((product) => product.brand === brandName).length;
 }
 
-/** 관리자 설정 필드를 제외하고 상품 수를 붙여 구매자 상세 응답으로 바꿉니다. */
+/** 관리자 설정 필드(isVisible·isFeatured)를 빼고 상품 수를 붙여 구매자 상세 응답으로 바꾸는 함수 */
 function toBuyerBrand(brandRecord: MockBrandRecord): Brand {
   const { isVisible: _isVisible, isFeatured: _isFeatured, ...brandFields } = brandRecord;
   return { ...brandFields, productCount: countBrandProducts(brandRecord.name) };
 }
 
-/** 구매자 목록 항목으로 줄입니다. */
+/** 구매자 목록 항목으로 줄이는 함수 */
 function toBrandSummary(brandRecord: MockBrandRecord): BrandSummary {
   return {
     id: brandRecord.id,
@@ -177,7 +177,7 @@ function toBrandSummary(brandRecord: MockBrandRecord): BrandSummary {
   };
 }
 
-/** 구매자에게 노출하는 브랜드만 반환합니다. */
+/** 구매자에게 노출하는 브랜드만 */
 function getVisibleBrands(): MockBrandRecord[] {
   return mockBrands.filter((brandRecord) => brandRecord.isVisible);
 }
@@ -278,18 +278,29 @@ export function createMockApi(config: ApiConfig): ShopApi {
         const pageSize = Math.max(1, params.pageSize ?? DEFAULT_PAGE_SIZE);
         const allItems = await respondList(filteredProducts, options);
         const sortedItems = [...allItems];
-        if (params.sortBy === 'priceAsc' || params.sortBy === 'priceDesc') {
-          const direction = params.sortBy === 'priceAsc' ? 1 : -1;
-          sortedItems.sort((left, right) => {
+        sortedItems.sort((left, right) => {
+          const leftIsSoldOut = left.stockStatus === 'soldOut';
+          const rightIsSoldOut = right.stockStatus === 'soldOut';
+          if (leftIsSoldOut !== rightIsSoldOut) return leftIsSoldOut ? 1 : -1;
+
+          if (params.sortBy === 'priceAsc' || params.sortBy === 'priceDesc') {
+            const direction = params.sortBy === 'priceAsc' ? 1 : -1;
             const leftPrice = left.priceVisible ? left.price : null;
             const rightPrice = right.priceVisible ? right.price : null;
             if (leftPrice === null) return rightPrice === null ? 0 : 1;
             if (rightPrice === null) return -1;
             return (leftPrice - rightPrice) * direction;
-          });
-        } else if (params.sortBy === 'newest') {
-          sortedItems.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
-        }
+          }
+          if (params.sortBy === 'newest') {
+            return right.createdAt.localeCompare(left.createdAt);
+          }
+          if (params.sortBy === 'ratingDesc') {
+            if (left.rating === null) return right.rating === null ? 0 : 1;
+            if (right.rating === null) return -1;
+            return right.rating - left.rating;
+          }
+          return 0;
+        });
         return {
           items: sortedItems.slice((page - 1) * pageSize, page * pageSize).map(toBuyerProduct),
           page,

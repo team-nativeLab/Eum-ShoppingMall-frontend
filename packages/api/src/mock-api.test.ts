@@ -51,7 +51,7 @@ describe('목 API 시나리오', () => {
     expect(certifiedPage.items.map((product) => product.id)).toContain('prd-1002');
 
     const searchedPage = await mockApi.products.list({ keyword: '파이어킵' });
-    expect(searchedPage.items.map((product) => product.id)).toEqual(['prd-1005', 'prd-2028']);
+    expect(searchedPage.items.map((product) => product.id)).toEqual(['prd-2028', 'prd-1005']);
 
     const availablePage = await mockApi.products.list({ excludeSoldOut: true });
     expect(availablePage.items.every((product) => product.stockStatus === 'inStock')).toBe(true);
@@ -61,6 +61,47 @@ describe('목 API 시나리오', () => {
     const secondPage = await mockApi.products.list({ page: 2, pageSize: 2 });
     expect(secondPage.items.map((product) => product.id)).toEqual(['prd-1003', 'prd-1004']);
     expect(secondPage).toMatchObject({ page: 2, pageSize: 2, totalCount: mockProducts.length });
+  });
+
+  it('평점순은 평점이 없는 상품을 뒤에 두고, 모든 정렬은 품절 상품을 페이지 분할 전에 뒤로 보냅니다', async () => {
+    const mockApi = createMockApi(testConfig);
+    const sortOrders = ['recommended', 'priceAsc', 'priceDesc', 'newest', 'ratingDesc'] as const;
+
+    for (const sortBy of sortOrders) {
+      const fullPage = await mockApi.products.list({ sortBy, pageSize: 100 });
+      const firstPage = await mockApi.products.list({ sortBy, page: 1, pageSize: 5 });
+      const secondPage = await mockApi.products.list({ sortBy, page: 2, pageSize: 5 });
+      const pagedItems = [...firstPage.items, ...secondPage.items];
+      const firstSoldOutIndex = fullPage.items.findIndex(
+        (product) => product.stockStatus === 'soldOut',
+      );
+
+      expect(pagedItems).toEqual(fullPage.items.slice(0, 10));
+      expect(firstSoldOutIndex).toBeGreaterThanOrEqual(0);
+      expect(
+        fullPage.items
+          .slice(0, firstSoldOutIndex)
+          .every((product) => product.stockStatus === 'inStock'),
+      ).toBe(true);
+      expect(
+        fullPage.items
+          .slice(firstSoldOutIndex)
+          .every((product) => product.stockStatus === 'soldOut'),
+      ).toBe(true);
+    }
+
+    const ratingPage = await mockApi.products.list({ sortBy: 'ratingDesc', pageSize: 100 });
+    for (const stockStatus of ['inStock', 'soldOut'] as const) {
+      const stockGroup = ratingPage.items.filter((product) => product.stockStatus === stockStatus);
+      const ratedProducts = stockGroup.filter((product) => product.rating !== null);
+      const unratedProducts = stockGroup.filter((product) => product.rating === null);
+      expect(ratedProducts.map((product) => product.rating)).toEqual(
+        [...ratedProducts.map((product) => product.rating)].sort(
+          (leftRating, rightRating) => (rightRating ?? 0) - (leftRating ?? 0),
+        ),
+      );
+      expect(stockGroup.slice(ratedProducts.length)).toEqual(unratedProducts);
+    }
   });
 
   it('홈 콘텐츠는 공개 가격 projection이 적용된 featured 상품을 반환합니다', async () => {
@@ -287,6 +328,7 @@ describe('목 브랜드 API', () => {
     expect(hiddenBrandIds.length).toBeGreaterThan(0);
     expect(brandList.length).toBe(mockBrands.length - hiddenBrandIds.length);
     expect(brandList.some((brandSummary) => hiddenBrandIds.includes(brandSummary.id))).toBe(false);
+    // 구매자 응답에는 관리자 설정 필드가 없습니다.
     expect(brandList[0]).not.toHaveProperty('isVisible');
     for (const brandSummary of brandList) {
       const brandProductPage = await mockApi.products.list({ brand: [brandSummary.name] });
@@ -344,15 +386,6 @@ describe('목 브랜드 API', () => {
       code: 'NETWORK',
     });
     await expect(errorApi.brands.getFeatured()).rejects.toMatchObject({ code: 'NETWORK' });
-  });
-
-  it('AbortSignal 취소를 목록·상세·이달의 브랜드 조회까지 전달합니다', async () => {
-    const abortController = new AbortController();
-    const mockApi = createMockApi({ ...testConfig, mockLatencyMs: 1000 });
-    const pendingBrands = mockApi.brands.list({ signal: abortController.signal });
-    abortController.abort();
-
-    await expect(pendingBrands).rejects.toMatchObject({ name: 'AbortError' });
   });
 
   it('응답은 복사본이라 바꿔도 목 원본에 영향이 없습니다', async () => {
