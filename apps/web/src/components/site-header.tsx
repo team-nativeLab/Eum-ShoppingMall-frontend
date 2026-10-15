@@ -59,7 +59,7 @@ function PrimaryNavigation({
   return (
     <nav
       aria-label="주요 메뉴"
-      className="flex shrink-0 items-center gap-24 min-[1440px]:gap-40 xl:gap-32"
+      className="flex h-full shrink-0 items-center gap-24 min-[1440px]:gap-40 xl:gap-32"
     >
       {getPrimaryNavigationItems().map((navigationItem) => {
         const isActive = isPrimaryNavigationItemActive(
@@ -75,9 +75,9 @@ function PrimaryNavigation({
             href={navigationItem.href}
             aria-current={isActive ? 'page' : undefined}
             className={cx(
-              'relative inline-flex h-72 items-center text-label-l whitespace-nowrap text-text-1 focus-ring',
+              'relative inline-flex h-full items-center text-label-l whitespace-nowrap text-text-1 focus-ring',
               isActive
-                ? 'after:absolute after:inset-x-0 after:bottom-0 after:h-2 after:bg-text-1'
+                ? 'after:absolute after:inset-x-0 after:-bottom-4 after:h-2 after:bg-text-1'
                 : 'hover:text-text-2',
             )}
           >
