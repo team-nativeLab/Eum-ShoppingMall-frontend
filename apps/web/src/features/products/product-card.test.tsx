@@ -56,7 +56,7 @@ describe('ProductCard', () => {
 
     expect(screen.getByRole('img', { name: '평점 4.7점' })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '평점 4.7점' }).querySelector('svg')).toHaveClass(
-      'text-warning',
+      'text-rating-star-stroke',
     );
     expect(screen.getByText('4.7')).toBeInTheDocument();
     expect(screen.getByLabelText('리뷰 6개')).toHaveTextContent('(6)');

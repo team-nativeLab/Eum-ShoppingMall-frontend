@@ -46,6 +46,14 @@ function createWrapper() {
   };
 }
 
+async function choosePriceOption(
+  user: ReturnType<typeof userEvent.setup>,
+  select: HTMLElement,
+  value: string,
+) {
+  await user.selectOptions(select, value);
+}
+
 describe('ProductListingView brand navigation', () => {
   beforeEach(() => {
     navigationMocks.pathname = '/search';
@@ -381,7 +389,7 @@ describe('ProductListingView listing toolbar', () => {
     await waitFor(() => expect(categoryCount).toHaveTextContent('5개'));
   });
 
-  it('keeps the applied KRW range when selecting a search category', async () => {
+  it('keeps the selected KRW bounds when selecting a search category', async () => {
     const user = userEvent.setup();
     apiMocks.listCategories.mockResolvedValue([
       {
@@ -402,11 +410,11 @@ describe('ProductListingView listing toolbar', () => {
     render(<ProductListingView />, { wrapper: createWrapper() });
     await screen.findByRole('heading', { name: '전체 상품' });
     const priceGroup = screen.getByRole('group', { name: '데스크톱 가격 구간' });
-    await user.click(within(priceGroup).getByRole('button', { name: '1~3만원' }));
-    await user.click(screen.getByRole('button', { name: '데스크톱 가격 적용' }));
+    await choosePriceOption(user, within(priceGroup).getByLabelText('최소 가격대'), '10000');
+    await choosePriceOption(user, within(priceGroup).getByLabelText('최대 가격대'), '30000');
     await waitFor(() =>
       expect(apiMocks.listProducts.mock.calls.at(-1)?.[0]).toEqual(
-        expect.objectContaining({ minPrice: 10000, maxPrice: 29999 }),
+        expect.objectContaining({ minPrice: 10000, maxPrice: 30000 }),
       ),
     );
 
@@ -417,7 +425,7 @@ describe('ProductListingView listing toolbar', () => {
         expect.objectContaining({
           categoryId: 'category-ppe',
           minPrice: 10000,
-          maxPrice: 29999,
+          maxPrice: 30000,
         }),
       ),
     );
@@ -466,93 +474,199 @@ describe('ProductListingView listing toolbar', () => {
     );
   });
 
-  it('shares single-select KRW ranges across mobile and desktop and applies half-open boundaries as API bounds', async () => {
+  it('applies inclusive price bounds immediately and shares them across mobile and desktop', async () => {
     const user = userEvent.setup();
+    apiMocks.listProducts.mockImplementation(
+      async (params: { page: number; pageSize: number }) => ({
+        items: [],
+        page: params.page,
+        pageSize: params.pageSize,
+        totalCount: 80,
+      }),
+    );
     render(<ProductListingView />, { wrapper: createWrapper() });
     await screen.findByText('등록된 상품이 없습니다');
 
     const desktopPriceGroup = screen.getByRole('group', { name: '데스크톱 가격 구간' });
-    await user.click(within(desktopPriceGroup).getByRole('button', { name: '1~3만원' }));
-    await user.click(screen.getByRole('button', { name: '데스크톱 가격 적용' }));
+    const desktopMinPrice = within(desktopPriceGroup).getByLabelText('최소 가격대');
+    const desktopMaxPrice = within(desktopPriceGroup).getByLabelText('최대 가격대');
+    expect(within(desktopPriceGroup).getAllByRole('combobox')).toHaveLength(2);
+    expect(within(desktopPriceGroup).queryByRole('textbox')).not.toBeInTheDocument();
+    expect(
+      within(desktopPriceGroup).queryByRole('option', { name: '직접 입력' }),
+    ).not.toBeInTheDocument();
+    expect(desktopMinPrice).toHaveAttribute('id', 'desktop-min-price');
+    expect(desktopMaxPrice).toHaveAttribute('id', 'desktop-max-price');
+    expect(
+      desktopPriceGroup.querySelector('select#desktop-min-price option[value="10000"]'),
+    ).toHaveTextContent('1만원');
+    expect(desktopPriceGroup).toHaveClass('lg:gap-4');
+    expect(desktopMinPrice).toHaveClass('h-40', 'w-full', 'appearance-none', 'pr-32');
+    desktopMinPrice.focus();
+    expect(desktopMinPrice).toHaveFocus();
+    expect(screen.queryByRole('button', { name: /가격 적용/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '적용' })).not.toBeInTheDocument();
 
+    await user.click(await screen.findByRole('button', { name: '2페이지' }));
     await waitFor(() =>
       expect(apiMocks.listProducts.mock.calls.at(-1)?.[0]).toEqual(
-        expect.objectContaining({ minPrice: 10000, maxPrice: 29999 }),
+        expect.objectContaining({ page: 2 }),
       ),
     );
+
+    await choosePriceOption(user, desktopMinPrice, '10000');
+    await choosePriceOption(user, desktopMaxPrice, '50000');
+    await waitFor(() =>
+      expect(apiMocks.listProducts.mock.calls.at(-1)?.[0]).toEqual(
+        expect.objectContaining({ minPrice: 10000, maxPrice: 50000, page: 1 }),
+      ),
+    );
+    expect(screen.getByRole('button', { name: '10,000원 ~ 50,000원 삭제' })).toBeInTheDocument();
+
+    await user.selectOptions(desktopMaxPrice, '');
+    await waitFor(() =>
+      expect(apiMocks.listProducts.mock.calls.at(-1)?.[0]).toEqual(
+        expect.objectContaining({ minPrice: 10000, maxPrice: undefined }),
+      ),
+    );
+    expect(screen.getByRole('button', { name: '10,000원 이상 삭제' })).toBeInTheDocument();
+    await choosePriceOption(user, desktopMaxPrice, '50000');
+
     await user.click(screen.getByRole('button', { name: '필터' }));
     const mobilePriceGroup = screen.getByRole('group', { name: '모바일 가격 구간' });
-    expect(within(mobilePriceGroup).getByRole('button', { name: '1~3만원' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    const mobileFilterPanel = mobilePriceGroup.closest('div.rounded-12');
+    if (!(mobileFilterPanel instanceof HTMLElement)) {
+      throw new Error('모바일 필터 패널을 찾을 수 없습니다.');
+    }
+    const mobileMinPrice = within(mobilePriceGroup).getByLabelText('최소 가격대');
+    const mobileMaxPrice = within(mobilePriceGroup).getByLabelText('최대 가격대');
+    expect(within(mobilePriceGroup).getAllByRole('combobox')).toHaveLength(2);
+    expect(within(mobilePriceGroup).queryByRole('textbox')).not.toBeInTheDocument();
+    expect(
+      within(mobilePriceGroup).queryByRole('option', { name: '직접 입력' }),
+    ).not.toBeInTheDocument();
+    expect(mobileMinPrice).toHaveAttribute('id', 'mobile-min-price');
+    expect(mobileMaxPrice).toHaveAttribute('id', 'mobile-max-price');
+    expect(mobileMinPrice).toHaveClass('h-40', 'w-full', 'appearance-none', 'pr-32');
+    expect(within(mobileFilterPanel).getByRole('button', { name: '초기화' })).toBeInTheDocument();
+    expect(
+      within(mobileFilterPanel).queryByRole('button', { name: '적용' }),
+    ).not.toBeInTheDocument();
+    expect(mobileMinPrice).toHaveValue('10000');
+    expect(mobileMaxPrice).toHaveValue('50000');
+    expect(
+      mobilePriceGroup.querySelector('select#mobile-min-price option[value="10000"]'),
+    ).toHaveTextContent('1만원');
 
-    await user.click(within(mobilePriceGroup).getByRole('button', { name: '500만원 이상' }));
-    await user.click(screen.getByRole('button', { name: '모바일 가격 적용' }));
+    await choosePriceOption(user, mobileMinPrice, '100000');
     await waitFor(() =>
       expect(apiMocks.listProducts.mock.calls.at(-1)?.[0]).toEqual(
-        expect.objectContaining({ minPrice: 5000000, maxPrice: undefined }),
+        expect.objectContaining({ minPrice: 100000, maxPrice: undefined }),
       ),
     );
-    expect(within(desktopPriceGroup).getByRole('button', { name: '500만원 이상' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(mobileMaxPrice).toHaveValue('');
+    expect(desktopMinPrice).toHaveValue('100000');
+    expect(desktopMaxPrice).toHaveValue('');
+  });
 
-    await user.click(screen.getByRole('button', { name: '500만원 이상 삭제' }));
+  it('clears the opposite price bound when bounds conflict and allows equal values', async () => {
+    const user = userEvent.setup();
+    render(<ProductListingView />, { wrapper: createWrapper() });
+    await screen.findByText('등록된 상품이 없습니다');
+
+    const priceGroup = screen.getByRole('group', { name: '데스크톱 가격 구간' });
+    const minPrice = within(priceGroup).getByLabelText('최소 가격대');
+    const maxPrice = within(priceGroup).getByLabelText('최대 가격대');
+
+    await choosePriceOption(user, maxPrice, '50000');
+    await choosePriceOption(user, minPrice, '100000');
+    await waitFor(() =>
+      expect(apiMocks.listProducts.mock.calls.at(-1)?.[0]).toEqual(
+        expect.objectContaining({ minPrice: 100000, maxPrice: undefined }),
+      ),
+    );
+    expect(maxPrice).toHaveValue('');
+
+    await choosePriceOption(user, maxPrice, '50000');
+    await waitFor(() =>
+      expect(apiMocks.listProducts.mock.calls.at(-1)?.[0]).toEqual(
+        expect.objectContaining({ minPrice: undefined, maxPrice: 50000 }),
+      ),
+    );
+    expect(minPrice).toHaveValue('');
+
+    await choosePriceOption(user, minPrice, '50000');
+    await waitFor(() =>
+      expect(apiMocks.listProducts.mock.calls.at(-1)?.[0]).toEqual(
+        expect.objectContaining({ minPrice: 50000, maxPrice: 50000 }),
+      ),
+    );
+  });
+
+  it('clears bounds from bounded price chips and the filter reset action', async () => {
+    const user = userEvent.setup();
+    render(<ProductListingView />, { wrapper: createWrapper() });
+    await screen.findByText('등록된 상품이 없습니다');
+
+    const priceGroup = screen.getByRole('group', { name: '데스크톱 가격 구간' });
+    await choosePriceOption(user, within(priceGroup).getByLabelText('최소 가격대'), '10000');
+    await choosePriceOption(user, within(priceGroup).getByLabelText('최대 가격대'), '50000');
+    await user.click(screen.getByRole('button', { name: '10,000원 ~ 50,000원 삭제' }));
     await waitFor(() =>
       expect(apiMocks.listProducts.mock.calls.at(-1)?.[0]).toEqual(
         expect.objectContaining({ minPrice: undefined, maxPrice: undefined }),
       ),
     );
-    expect(within(desktopPriceGroup).getByRole('button', { name: '전체' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
 
-    await user.click(within(desktopPriceGroup).getByRole('button', { name: '30~100만원' }));
-    await user.click(screen.getByRole('button', { name: '데스크톱 가격 적용' }));
+    await choosePriceOption(user, within(priceGroup).getByLabelText('최대 가격대'), '50000');
+    expect(screen.getByRole('button', { name: '50,000원 이하 삭제' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '50,000원 이하 삭제' }));
     await waitFor(() =>
       expect(apiMocks.listProducts.mock.calls.at(-1)?.[0]).toEqual(
-        expect.objectContaining({ minPrice: 300000, maxPrice: 999999 }),
+        expect.objectContaining({ minPrice: undefined, maxPrice: undefined }),
       ),
     );
+
+    await choosePriceOption(user, within(priceGroup).getByLabelText('최소 가격대'), '30000');
+    await choosePriceOption(user, within(priceGroup).getByLabelText('최대 가격대'), '100000');
     await user.click(screen.getByRole('button', { name: '전체 해제' }));
     await waitFor(() =>
       expect(apiMocks.listProducts.mock.calls.at(-1)?.[0]).toEqual(
         expect.objectContaining({ minPrice: undefined, maxPrice: undefined }),
       ),
     );
-    expect(within(mobilePriceGroup).getByRole('button', { name: '전체' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(within(priceGroup).getByLabelText('최소 가격대')).toHaveValue('');
+    expect(within(priceGroup).getByLabelText('최대 가격대')).toHaveValue('');
   });
 
-  it('maps the expanded upper price ranges without overlapping their integer bounds', async () => {
+  it('provides the requested KRW threshold options as inclusive price bounds', async () => {
     const user = userEvent.setup();
     render(<ProductListingView />, { wrapper: createWrapper() });
     await screen.findByText('등록된 상품이 없습니다');
 
-    const desktopPriceGroup = screen.getByRole('group', { name: '데스크톱 가격 구간' });
-    const ranges = [
-      ['1만원 미만', undefined, 9999],
-      ['1~3만원', 10000, 29999],
-      ['3~5만원', 30000, 49999],
-      ['5~10만원', 50000, 99999],
-      ['10~30만원', 100000, 299999],
-      ['30~100만원', 300000, 999999],
-      ['100~300만원', 1000000, 2999999],
-      ['300~500만원', 3000000, 4999999],
-      ['500만원 이상', 5000000, undefined],
+    const priceGroup = screen.getByRole('group', { name: '데스크톱 가격 구간' });
+    const minPrice = within(priceGroup).getByLabelText('최소 가격대');
+    const maxPrice = within(priceGroup).getByLabelText('최대 가격대');
+    const priceOptions = [
+      ['10000', '1만원'],
+      ['30000', '3만원'],
+      ['50000', '5만원'],
+      ['100000', '10만원'],
+      ['300000', '30만원'],
+      ['1000000', '100만원'],
+      ['3000000', '300만원'],
+      ['5000000', '500만원'],
     ] as const;
 
-    for (const [label, minPrice, maxPrice] of ranges) {
-      await user.click(within(desktopPriceGroup).getByRole('button', { name: label }));
-      await user.click(screen.getByRole('button', { name: '데스크톱 가격 적용' }));
+    for (const [priceValue, priceLabel] of priceOptions) {
+      expect(
+        priceGroup.querySelector(`select#desktop-min-price option[value="${priceValue}"]`),
+      ).toHaveTextContent(priceLabel);
+      await choosePriceOption(user, minPrice, priceValue);
+      await choosePriceOption(user, maxPrice, priceValue);
       await waitFor(() =>
         expect(apiMocks.listProducts.mock.calls.at(-1)?.[0]).toEqual(
-          expect.objectContaining({ minPrice, maxPrice }),
+          expect.objectContaining({ minPrice: Number(priceValue), maxPrice: Number(priceValue) }),
         ),
       );
     }
