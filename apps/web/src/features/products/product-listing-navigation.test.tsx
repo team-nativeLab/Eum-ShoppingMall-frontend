@@ -219,11 +219,19 @@ describe('ProductListingView listing toolbar', () => {
     const gridToggle = within(viewToggleGroup).getByRole('button', { name: '그리드 보기' });
     const listToggle = within(viewToggleGroup).getByRole('button', { name: '목록 보기' });
 
-    expect(mobileSort).toHaveClass('sm:hidden');
-    expect(mobileSort).toHaveClass('h-40', 'w-140');
-    expect(desktopSort).toHaveClass('h-40', 'w-120', 'lg:w-140');
-    expect(pageSize).toHaveClass('h-40', 'hidden', 'w-120', 'sm:block');
-    expect(desktopSort.parentElement).toHaveClass('items-center', 'gap-8', 'sm:flex');
+    expect(mobileSort.parentElement).toHaveClass('relative', 'w-140', 'sm:hidden');
+    expect(mobileSort).toHaveClass('h-40', 'w-full', 'appearance-none', 'pr-32', 'focus-ring');
+    expect(desktopSort.parentElement).toHaveClass('relative', 'w-120', 'lg:w-140');
+    expect(desktopSort).toHaveClass('h-40', 'w-full', 'appearance-none', 'pr-32', 'focus-ring');
+    expect(pageSize.parentElement).toHaveClass('relative', 'hidden', 'w-120', 'sm:block');
+    expect(pageSize).toHaveClass('h-40', 'w-full', 'appearance-none', 'pr-32', 'focus-ring');
+    expect(desktopSort.parentElement?.parentElement).toHaveClass(
+      'items-center',
+      'gap-8',
+      'sm:flex',
+    );
+    expect(within(mobileSort).getByRole('option', { name: '낮은 가격순' })).toBeInTheDocument();
+    expect(within(pageSize).getByRole('option', { name: '24개씩' })).toBeInTheDocument();
     expect(viewToggleGroup).toHaveClass('h-40', 'w-80', 'lg:w-78', 'items-center', 'gap-2');
     expect(
       desktopSort.compareDocumentPosition(pageSize) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -254,7 +262,7 @@ describe('ProductListingView listing toolbar', () => {
     await screen.findByText('등록된 상품이 없습니다');
 
     const desktopSort = screen.getByLabelText('정렬', { selector: '#sort-products' });
-    const toolbar = desktopSort.parentElement?.parentElement;
+    const toolbar = desktopSort.parentElement?.parentElement?.parentElement;
     const productResults = toolbar?.nextElementSibling;
     const listingGrid = toolbar?.parentElement?.parentElement;
     expect(toolbar).toHaveClass('min-h-0', 'sm:min-h-48');
@@ -289,7 +297,7 @@ describe('ProductListingView listing toolbar', () => {
     await screen.findByText('등록된 상품이 없습니다');
 
     const desktopSort = screen.getByLabelText('정렬', { selector: '#sort-products' });
-    const toolbar = desktopSort.parentElement?.parentElement;
+    const toolbar = desktopSort.parentElement?.parentElement?.parentElement;
     expect(toolbar).toHaveClass('min-h-0', 'sm:min-h-48');
     expect(toolbar?.nextElementSibling).toHaveClass('mt-8', 'sm:mt-16');
   });
