@@ -98,6 +98,41 @@ beforeEach(() => {
 });
 
 describe('quote request preview', () => {
+  it('uses the success selection state and keeps the disabled add action visible', async () => {
+    const user = userEvent.setup();
+    renderWithQueryClient(<SolutionsPageContent />);
+
+    const productsPanel = await screen.findByRole('region', { name: '문의 상품' });
+    const addButton = screen.getByRole('button', { name: '상품 추가' });
+    expect(productsPanel).toHaveClass('border-line-strong', 'bg-bg');
+    expect(addButton).toBeDisabled();
+    expect(addButton).toHaveClass('disabled:bg-surface', 'disabled:text-text-3');
+
+    const selectedInterest = screen.getByRole('checkbox', { name: '개인보호장비' });
+    expect(selectedInterest).toBeChecked();
+    const selectedChip = selectedInterest
+      .closest('label')
+      ?.querySelector('span:not([aria-hidden="true"])');
+    expect(selectedChip).toHaveClass(
+      'min-h-44',
+      'peer-checked:bg-success-tint',
+      'peer-checked:text-success',
+    );
+    expect(selectedInterest.closest('label')?.querySelector('[aria-hidden="true"]')).toHaveClass(
+      'hidden',
+      'peer-checked:inline-flex',
+    );
+
+    await screen.findByRole('option', { name: '안전모' });
+    await user.selectOptions(screen.getByRole('combobox', { name: '상품 선택' }), product.id);
+    expect(addButton).toBeEnabled();
+    await user.click(addButton);
+
+    const selectedProductRow = screen.getByText('안전모', { selector: 'p' }).closest('li');
+    expect(selectedProductRow).toHaveClass('border-success', 'bg-success-tint');
+    expect(addButton).toBeDisabled();
+  });
+
   it('견적 폼 정보를 정해진 순서로 보여 주고 전체 수량 도움말을 연결합니다', async () => {
     renderWithQueryClient(<SolutionsPageContent />);
     await screen.findByRole('combobox', { name: '상품 선택' });
