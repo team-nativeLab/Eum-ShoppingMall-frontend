@@ -77,7 +77,7 @@ function PrimaryNavigation({
             className={cx(
               'relative inline-flex h-full items-center text-label-l whitespace-nowrap text-text-1 focus-ring',
               isActive
-                ? 'after:absolute after:inset-x-0 after:-bottom-4 after:h-2 after:bg-text-1'
+                ? 'after:absolute after:inset-x-0 after:bottom-0 after:h-2 after:bg-text-1'
                 : 'hover:text-text-2',
             )}
           >
