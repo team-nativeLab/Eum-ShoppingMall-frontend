@@ -15,7 +15,7 @@ import { cx } from '@eum/ui/lib/cx';
 import { ChevronDown, LayoutGrid, List, Plus, RotateCcw, SearchX } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { PageContainer } from '@/components/page-container';
 import { getScrollBehavior, usePrefersReducedMotion } from '@/lib/use-media-query';
 import { buildBrandSelectionHref, getBrandFilterValues } from './product-navigation';
@@ -83,13 +83,11 @@ export function ProductListingView({
   categorySlug,
   initialKeyword = '',
   initialBrands = [],
-  initialBrowseBrands = false,
   initialSearchParams = '',
 }: {
   categorySlug?: string;
   initialKeyword?: string;
   initialBrands?: string[];
-  initialBrowseBrands?: boolean;
   initialSearchParams?: string;
 }) {
   const pathname = usePathname();
@@ -121,14 +119,7 @@ export function ProductListingView({
   const [selectedCertifications, setSelectedCertifications] = useState<string[]>([]);
   const [excludeSoldOut, setExcludeSoldOut] = useState(false);
   const [layout, setLayout] = useState<'grid' | 'list'>('grid');
-  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(initialBrowseBrands);
-  const [syncedBrowseIntent, setSyncedBrowseIntent] = useState(initialBrowseBrands);
-  if (syncedBrowseIntent !== initialBrowseBrands) {
-    setSyncedBrowseIntent(initialBrowseBrands);
-    setIsMobileFiltersOpen(initialBrowseBrands);
-  }
-  const mobileBrandGroupRef = useRef<HTMLDivElement>(null);
-  const hasFocusedBrandBrowseRef = useRef(false);
+  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
   const prefersReducedMotion = usePrefersReducedMotion();
 
   const updateSelectedBrands = (nextBrands: string[]) => {
@@ -187,33 +178,6 @@ export function ProductListingView({
     : facetsQuery.data
       ? 'success'
       : 'pending';
-  useEffect(() => {
-    if (!initialBrowseBrands) {
-      hasFocusedBrandBrowseRef.current = false;
-      return;
-    }
-    if (
-      !isMobileFiltersOpen ||
-      hasFocusedBrandBrowseRef.current ||
-      !window.matchMedia('(max-width: 1023px)').matches
-    ) {
-      return;
-    }
-    const brandGroup = mobileBrandGroupRef.current;
-    if (!brandGroup) return;
-    const brandChip =
-      brandGroup.querySelector<HTMLButtonElement>('button[aria-pressed="true"]') ??
-      brandGroup.querySelector<HTMLButtonElement>('button:not(:disabled)');
-    if (!brandChip && facetsStatus === 'pending') return;
-    const focusTarget = brandChip ?? brandGroup;
-    focusTarget.focus({ preventScroll: true });
-    brandGroup.scrollIntoView({
-      behavior: getScrollBehavior(prefersReducedMotion),
-      block: 'nearest',
-    });
-    // Group-only focus on an error must not block a later successful retry from focusing a chip.
-    if (brandChip || facetsStatus !== 'error') hasFocusedBrandBrowseRef.current = true;
-  }, [facetsStatus, initialBrowseBrands, isMobileFiltersOpen, prefersReducedMotion]);
   const retryFacets = () => void facetsQuery.refetch();
 
   const activeFilters: ActiveFilter[] = [];
@@ -493,7 +457,6 @@ export function ProductListingView({
               브랜드
             </h2>
             <div
-              ref={mobileBrandGroupRef}
               role="group"
               aria-labelledby="mobile-brand-filter-heading"
               tabIndex={-1}

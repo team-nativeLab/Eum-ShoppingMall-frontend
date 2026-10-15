@@ -22,6 +22,34 @@ export interface Category {
   iconKey: string | null;
 }
 
+/** 브랜드 목록 항목(W-32 디렉터리·전체 메뉴). 구매자에게 노출하는 브랜드만 내려옵니다. */
+export interface BrandSummary {
+  id: string;
+  name: string;
+  /** 영문 표기. 없으면 null */
+  englishName: string | null;
+  /** 로고 이미지 URL. 아직 없으면 null(플레이스홀더 표시) */
+  logoUrl: string | null;
+  /** 한 줄 소개(관리자 입력 텍스트). 없으면 null */
+  tagline: string | null;
+  /** 구매자에게 노출되는 이 브랜드 상품 수 */
+  productCount: number;
+}
+
+/** 브랜드 상세(W-33). 관리자 입력 텍스트는 화면에서 텍스트 노드로만 그립니다. */
+export interface Brand extends BrandSummary {
+  /** 히어로 사진 URL. 없으면 null(로고 패널로 대체) */
+  coverImageUrl: string | null;
+  /** 주력 분야. 없으면 null */
+  mainField: string | null;
+  /** 원산지. 없으면 null */
+  originCountry: string | null;
+  /** 주요 인증 표시 문구. 없으면 null */
+  certification: string | null;
+  /** 브랜드 스토리. 등록하지 않았으면 null */
+  story: { title: string; body: string } | null;
+}
+
 /** 상품 */
 export interface Product {
   id: string;

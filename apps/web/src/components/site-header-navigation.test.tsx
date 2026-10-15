@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,6 +15,7 @@ const navigationMocks = vi.hoisted(() => ({
 const apiMocks = vi.hoisted(() => ({
   getShopApi: vi.fn(),
   listProducts: vi.fn(),
+  listBrands: vi.fn(),
   listCategories: vi.fn(),
 }));
 
@@ -61,84 +62,73 @@ describe('SiteHeader product and brand navigation', () => {
     navigationMocks.back.mockReset();
     apiMocks.getShopApi.mockResolvedValue({
       products: { list: apiMocks.listProducts },
+      brands: { list: apiMocks.listBrands },
       categories: { list: apiMocks.listCategories },
     });
-    apiMocks.listProducts.mockResolvedValue({
-      items: [{ brand: '3M' }],
-      page: 1,
-      pageSize: 100,
-      totalCount: 1,
-    });
+    apiMocks.listProducts.mockReset();
+    apiMocks.listBrands.mockReset();
+    apiMocks.listBrands.mockResolvedValue([
+      {
+        id: 'brd-3m',
+        name: '3M',
+        englishName: null,
+        logoUrl: null,
+        tagline: null,
+        productCount: 1,
+      },
+    ]);
     apiMocks.listCategories.mockResolvedValue([]);
   });
 
-  it('links Product to the full listing and Brand to the brand browser while both stay inactive at home', () => {
+  it('links Product to the full listing and Brand to /brands while both stay inactive at home', () => {
     render(<SiteHeader />, { wrapper: createWrapper() });
     const primaryNavigation = screen.getByRole('navigation', { name: '주요 메뉴' });
     const productsLink = within(primaryNavigation).getByRole('link', { name: '제품' });
     const brandsLink = within(primaryNavigation).getByRole('link', { name: '브랜드' });
 
     expect(productsLink).toHaveAttribute('href', '/search');
-    expect(brandsLink).toHaveAttribute('href', '/search?browse=brands');
+    expect(brandsLink).toHaveAttribute('href', '/brands');
     expect(productsLink).not.toHaveAttribute('aria-current');
     expect(brandsLink).not.toHaveAttribute('aria-current');
   });
 
-  it('activates Brand only when the search URL contains a selected brand filter', async () => {
-    navigationMocks.pathname = '/search';
-    navigationMocks.search = 'brand=3M&browse=brands';
+  it.each(['/brands', '/brands/brd-3m'])('activates only Brand on %s', (pathname) => {
+    navigationMocks.pathname = pathname;
     render(<SiteHeader />, { wrapper: createWrapper() });
     const primaryNavigation = screen.getByRole('navigation', { name: '주요 메뉴' });
 
-    await waitFor(() => {
-      expect(within(primaryNavigation).getByRole('link', { name: '브랜드' })).toHaveAttribute(
-        'aria-current',
-        'page',
-      );
-    });
+    expect(within(primaryNavigation).getByRole('link', { name: '브랜드' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
     expect(within(primaryNavigation).getByRole('link', { name: '제품' })).not.toHaveAttribute(
       'aria-current',
     );
   });
 
-  it('activates only Brand when the search URL opens the brand browser without a selected filter', async () => {
-    navigationMocks.pathname = '/search';
-    navigationMocks.search = 'browse=brands';
+  it.each([
+    ['/search', 'brand=3M'],
+    ['/category/gloves', 'brand=3M'],
+  ])('keeps Product active on %s?%s with a brand filter', (pathname, search) => {
+    navigationMocks.pathname = pathname;
+    navigationMocks.search = search;
     render(<SiteHeader />, { wrapper: createWrapper() });
     const primaryNavigation = screen.getByRole('navigation', { name: '주요 메뉴' });
 
-    await waitFor(() => {
-      expect(within(primaryNavigation).getByRole('link', { name: '브랜드' })).toHaveAttribute(
-        'aria-current',
-        'page',
-      );
-    });
-    expect(within(primaryNavigation).getByRole('link', { name: '제품' })).not.toHaveAttribute(
+    expect(within(primaryNavigation).getByRole('link', { name: '제품' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(within(primaryNavigation).getByRole('link', { name: '브랜드' })).not.toHaveAttribute(
       'aria-current',
     );
   });
 
-  it('activates only Brand when a selected brand filter is applied to a category route', async () => {
-    navigationMocks.pathname = '/category/gloves';
-    navigationMocks.search = 'brand=3M';
-    render(<SiteHeader />, { wrapper: createWrapper() });
-    const primaryNavigation = screen.getByRole('navigation', { name: '주요 메뉴' });
-
-    await waitFor(() => {
-      expect(within(primaryNavigation).getByRole('link', { name: '브랜드' })).toHaveAttribute(
-        'aria-current',
-        'page',
-      );
-    });
-    expect(within(primaryNavigation).getByRole('link', { name: '제품' })).not.toHaveAttribute(
-      'aria-current',
-    );
-  });
-
-  it('uses brand filters for all products and brand-specific mobile menu links', async () => {
+  it('loads brand detail links from the brand API inside the existing modal menu', async () => {
     const user = userEvent.setup();
     render(<SiteHeader />, { wrapper: createWrapper() });
 
+    expect(apiMocks.listBrands).not.toHaveBeenCalled();
     const menuButtons = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
     expect(menuButtons).toHaveLength(2);
     const mobileMenuButton = menuButtons[1];
@@ -152,12 +142,14 @@ describe('SiteHeader product and brand navigation', () => {
     );
     expect(within(menu).getByRole('link', { name: '전체 브랜드' })).toHaveAttribute(
       'href',
-      '/search?browse=brands',
+      '/brands',
     );
     expect(await within(menu).findByRole('link', { name: '3M' })).toHaveAttribute(
       'href',
-      '/search?brand=3M&browse=brands',
+      '/brands/brd-3m',
     );
+    expect(apiMocks.listBrands).toHaveBeenCalledTimes(1);
+    expect(apiMocks.listProducts).not.toHaveBeenCalled();
   });
 
   it('keeps the compact desktop header and removes scroll listeners on unmount', () => {

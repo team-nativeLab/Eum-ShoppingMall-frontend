@@ -4,6 +4,7 @@ import { assertMockAllowed, type ApiConfig } from './config';
 import { ApiError } from './errors';
 import { mockAddresses } from './mock/addresses';
 import { mockCoupons, mockPoints } from './mock/benefits';
+import { mockBrands, type MockBrandRecord } from './mock/brands';
 import { mockCategories } from './mock/categories';
 import { mockCheckoutOptions } from './mock/checkout';
 import { mockCompanyInfo } from './mock/company';
@@ -22,6 +23,8 @@ import { mockFaqs, mockInquiries, mockNotices, mockQuotes } from './mock/support
 import type { ProductFacetParams, RequestOptions, ShopApi } from './shop-api';
 import type {
   AdminProduct,
+  Brand,
+  BrandSummary,
   CheckoutOptions,
   CreateOrderInput,
   FacetCount,
@@ -149,6 +152,34 @@ function selectRecommendedProducts(limit: number): AdminProduct[] {
 /** 개수 조건을 1 이상의 정수로 맞추는 함수 */
 function normalizeLimit(limit: number | undefined): number {
   return Math.max(1, Math.floor(limit ?? DEFAULT_COLLECTION_LIMIT));
+}
+
+/** 브랜드의 상품 수. 기존 상품 목록의 브랜드 이름 필터와 같은 기준으로 셉니다. */
+function countBrandProducts(brandName: string): number {
+  return mockProducts.filter((product) => product.brand === brandName).length;
+}
+
+/** 관리자 설정 필드를 제외하고 상품 수를 붙여 구매자 상세 응답으로 바꿉니다. */
+function toBuyerBrand(brandRecord: MockBrandRecord): Brand {
+  const { isVisible: _isVisible, isFeatured: _isFeatured, ...brandFields } = brandRecord;
+  return { ...brandFields, productCount: countBrandProducts(brandRecord.name) };
+}
+
+/** 구매자 목록 항목으로 줄입니다. */
+function toBrandSummary(brandRecord: MockBrandRecord): BrandSummary {
+  return {
+    id: brandRecord.id,
+    name: brandRecord.name,
+    englishName: brandRecord.englishName,
+    logoUrl: brandRecord.logoUrl,
+    tagline: brandRecord.tagline,
+    productCount: countBrandProducts(brandRecord.name),
+  };
+}
+
+/** 구매자에게 노출하는 브랜드만 반환합니다. */
+function getVisibleBrands(): MockBrandRecord[] {
+  return mockBrands.filter((brandRecord) => brandRecord.isVisible);
 }
 
 // 취소 신호를 fetch와 같은 AbortError로 바꾸는 함수
@@ -329,6 +360,26 @@ export function createMockApi(config: ApiConfig): ShopApi {
           pageSize,
           totalCount: productReviews.length,
         };
+      },
+    },
+    brands: {
+      list: (options) => respondList(getVisibleBrands().map(toBrandSummary), options),
+      async getById(brandId, options): Promise<Brand> {
+        const brandRecord = await respondOne(
+          getVisibleBrands().find((visibleBrand) => visibleBrand.id === brandId),
+          '브랜드',
+          options,
+        );
+        return toBuyerBrand(brandRecord);
+      },
+      async getFeatured(options): Promise<Brand | null> {
+        await wait(config.mockLatencyMs, options?.signal);
+        if (config.mockScenario === 'error') {
+          throw new ApiError('NETWORK', '목 API 오류 시나리오입니다.');
+        }
+        if (config.mockScenario === 'empty') return null;
+        const featuredBrand = getVisibleBrands().find((visibleBrand) => visibleBrand.isFeatured);
+        return featuredBrand ? structuredClone(toBuyerBrand(featuredBrand)) : null;
       },
     },
     search: {
