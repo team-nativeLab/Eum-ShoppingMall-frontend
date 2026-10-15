@@ -217,11 +217,11 @@ function BrandHero({
               {brand.name}
             </h1>
             {subline ? (
-              <p className="text-label-s text-inverse-2 lg:text-label-m">{subline}</p>
+              <p className="text-label-s break-words text-inverse-2 lg:text-label-m">{subline}</p>
             ) : null}
           </div>
           {brand.tagline ? (
-            <p className="line-clamp-3 text-body-m whitespace-pre-line text-inverse-2 lg:line-clamp-2 lg:max-w-560 lg:text-web-body-xl">
+            <p className="line-clamp-3 text-body-m break-words whitespace-pre-line text-inverse-2 lg:line-clamp-2 lg:max-w-560 lg:text-web-body-xl">
               {brand.tagline}
             </p>
           ) : null}
@@ -303,7 +303,7 @@ function BrandStory({ brand }: { brand: Brand }) {
               <p className="text-label-s text-text-3">브랜드 스토리</p>
               <h2
                 id="brand-story-heading"
-                className="text-h2 whitespace-pre-line lg:line-clamp-3 lg:text-web-h2"
+                className="text-h2 break-words whitespace-pre-line lg:line-clamp-3 lg:text-web-h2"
               >
                 {brand.story.title}
               </h2>
@@ -366,7 +366,7 @@ function StoryBody({ body }: { body: string }) {
         ref={bodyRef}
         id={bodyId}
         className={cx(
-          'text-body-m whitespace-pre-line text-text-2 lg:line-clamp-none lg:max-w-720 lg:text-web-body-xl',
+          'text-body-m break-words whitespace-pre-line text-text-2 lg:line-clamp-none lg:max-w-720 lg:text-web-body-xl',
           !isExpanded && 'line-clamp-6',
         )}
       >

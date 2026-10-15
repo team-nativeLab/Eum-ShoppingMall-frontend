@@ -45,11 +45,11 @@ const INTEREST_ITEMS = [
 
 function InterestItemChoices() {
   return (
-    <fieldset className="flex flex-col gap-12">
+    <fieldset className="flex flex-col gap-16">
       <legend className="text-label-m">관심 품목</legend>
       <div className="flex flex-wrap gap-8">
         {INTEREST_ITEMS.map((interestItem, index) => (
-          <label key={interestItem} className="cursor-pointer">
+          <label key={interestItem} className="relative cursor-pointer">
             <input
               type="checkbox"
               name="interestItems"
@@ -58,9 +58,15 @@ function InterestItemChoices() {
               className="peer sr-only"
             />
             <span
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-12 hidden -translate-y-1/2 text-success peer-checked:inline-flex"
+            >
+              <Icon icon={Check} size={14} />
+            </span>
+            <span
               className={cx(
-                'inline-flex h-36 items-center rounded-capsule border border-line-strong bg-bg px-14 text-label-m text-text-2 transition-colors',
-                'peer-checked:border-text-1 peer-checked:bg-text-1 peer-checked:text-inverse',
+                'inline-flex min-h-44 items-center rounded-capsule border border-line-strong bg-bg px-14 text-label-m text-text-2 transition-colors peer-checked:pl-32',
+                'peer-checked:border-success peer-checked:bg-success-tint peer-checked:text-success',
                 'peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-text-1',
               )}
             >
@@ -108,7 +114,7 @@ function InquiryProductsPanel({
   return (
     <section
       aria-labelledby="inquiry-products-title"
-      className="flex flex-col gap-16 rounded-12 border border-line bg-bg-subtle p-16 lg:gap-12 lg:p-20"
+      className="flex flex-col gap-16 rounded-12 border border-line-strong bg-bg p-16 lg:gap-12 lg:p-20"
     >
       <div className="flex flex-col gap-12 sm:flex-row sm:items-center sm:justify-between">
         <h2 id="inquiry-products-title" className="text-label-l">
@@ -124,7 +130,7 @@ function InquiryProductsPanel({
               value={selectedProductId}
               onChange={(event) => onSelectedProductChange(event.currentTarget.value)}
               disabled={products.length === 0}
-              className="w-full min-w-0 appearance-none rounded-8 border border-line-strong bg-bg px-12 py-8 pr-40 text-body-s focus-ring"
+              className="w-full min-w-0 appearance-none rounded-8 border border-line-strong bg-bg px-12 py-8 pr-40 text-body-s focus-ring focus-visible:border-success focus-visible:outline-success"
             >
               <option value="">상품을 선택해 주세요</option>
               {products.map((product) => (
@@ -148,6 +154,7 @@ function InquiryProductsPanel({
             size="s"
             onClick={onAddProduct}
             disabled={!selectedProductId}
+            className="disabled:bg-surface disabled:text-text-3"
           >
             상품 추가
           </Button>
@@ -158,18 +165,21 @@ function InquiryProductsPanel({
           선택한 상품이 여기에 표시됩니다.
         </p>
       ) : (
-        <ul className="divide-y divide-line">
+        <ul className="flex flex-col gap-8">
           {selectedProducts.map((selection) => {
             const product = products.find((item) => item.id === selection.productId);
             if (!product) return null;
             return (
-              <li key={product.id} className="flex flex-col gap-12 py-12 first:pt-0 last:pb-0">
+              <li
+                key={product.id}
+                className="flex flex-col gap-12 rounded-8 border border-success bg-success-tint p-12"
+              >
                 <div className="flex min-w-0 flex-wrap items-center gap-12">
                   <div className="flex min-w-0 flex-1 items-center gap-12">
                     <span aria-hidden="true" className="size-48 shrink-0 rounded-6 bg-surface" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-body-s-medium break-words">{product.name}</p>
-                      <p className="mt-2 text-caption text-text-3">{product.brand}</p>
+                      <p className="text-body-s-medium break-words text-success">{product.name}</p>
+                      <p className="mt-2 text-caption text-success">{product.brand}</p>
                     </div>
                   </div>
                   <label className="flex shrink-0 items-center gap-6 text-caption text-text-2">
@@ -211,7 +221,7 @@ function InquiryProductsPanel({
                       onChange={(event) =>
                         onChangeOption(product.id, productOption.id, event.currentTarget.value)
                       }
-                      className="min-w-0 flex-1 rounded-8 border border-line-control bg-bg px-12 py-8 text-body-s focus-ring"
+                      className="min-w-0 flex-1 rounded-8 border border-line-control bg-bg px-12 py-8 text-body-s focus-ring focus-visible:border-success focus-visible:outline-success"
                     >
                       <option value="">
                         {productOption.required ? '옵션을 선택해 주세요' : '선택 사항'}

@@ -154,9 +154,11 @@ function FeaturedBrandContent({ brand }: { brand: Brand }) {
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-4">
           <span className="text-label-s text-inverse-2">이달의 브랜드</span>
-          <span className="truncate text-h3 text-inverse">{brand.name}</span>
+          <span className="line-clamp-2 text-h3 break-words text-inverse">{brand.name}</span>
           {brand.tagline ? (
-            <span className="truncate text-body-s text-inverse-2">{brand.tagline}</span>
+            <span className="line-clamp-2 text-body-s break-words text-inverse-2">
+              {brand.tagline}
+            </span>
           ) : null}
         </span>
         <Icon icon={ChevronRight} size={24} className="shrink-0" />
@@ -168,11 +170,13 @@ function FeaturedBrandContent({ brand }: { brand: Brand }) {
             <BrandLogo logoUrl={brand.logoUrl} brandName={brand.name} className="h-40 w-120" />
           </div>
           <div className="flex min-w-0 flex-col gap-8">
-            <h2 className="truncate text-web-h2 text-inverse">{brand.name}</h2>
-            {subline ? <p className="text-label-m text-inverse-2">{subline}</p> : null}
+            <h2 className="line-clamp-2 text-web-h2 break-words text-inverse">{brand.name}</h2>
+            {subline ? (
+              <p className="line-clamp-2 text-label-m break-words text-inverse-2">{subline}</p>
+            ) : null}
           </div>
           {brand.tagline ? (
-            <p className="line-clamp-2 max-w-560 text-web-body-xl whitespace-pre-line text-inverse-2">
+            <p className="line-clamp-2 max-w-560 text-web-body-xl break-words whitespace-pre-line text-inverse-2">
               {brand.tagline}
             </p>
           ) : null}
@@ -327,7 +331,7 @@ function BrandDirectory({ brands }: { brands: BrandSummary[] }) {
           ref={directoryListRef}
           id={DIRECTORY_LIST_ID}
           tabIndex={-1}
-          className="flex scroll-mt-64 flex-col gap-32 pt-24 outline-none lg:scroll-mt-80 lg:gap-64 lg:pt-48"
+          className="flex scroll-mt-64 flex-col gap-32 pt-24 focus-ring lg:scroll-mt-80 lg:gap-64 lg:pt-48"
         >
           {positionedGroups.map((indexGroup) => {
             const visibleBrands = indexGroup.brands.slice(
@@ -345,7 +349,7 @@ function BrandDirectory({ brands }: { brands: BrandSummary[] }) {
                 <h3
                   id={`${indexGroup.anchorId}-heading`}
                   tabIndex={-1}
-                  className="flex scroll-mt-64 items-baseline gap-8 border-b border-line-strong pb-8 outline-none lg:scroll-mt-80 lg:gap-12 lg:pb-16"
+                  className="flex scroll-mt-64 items-baseline gap-8 border-b border-line-strong pb-8 focus-ring lg:scroll-mt-80 lg:gap-12 lg:pb-16"
                 >
                   <span className="text-h2 lg:text-web-h2">{indexGroup.label}</span>
                   <span className="text-label-s text-text-3">{indexGroup.brands.length}개</span>

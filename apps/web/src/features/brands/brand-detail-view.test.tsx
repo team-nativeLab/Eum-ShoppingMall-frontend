@@ -194,4 +194,59 @@ describe('BrandDetailView', () => {
     expect(screen.queryByText('주요 인증')).not.toBeInTheDocument();
     expect(screen.getByRole('img', { name: '테스트 & 브랜드 로고' })).toBeInTheDocument();
   });
+
+  it('wraps long unbroken names and admin-entered brand text', async () => {
+    const longBrandName = `브랜드${'가나다'.repeat(60)}`;
+    const longEnglishName = `EN${'GLISH'.repeat(60)}`;
+    const longMainField = `분야${'산업용'.repeat(60)}`;
+    const longTagline = `소개${'안전용품'.repeat(60)}`;
+    const longStoryTitle = `스토리${'현장보호'.repeat(60)}`;
+    const longStoryBody = `본문${'작업환경안전'.repeat(60)}`;
+    apiMocks.getBrand.mockResolvedValue({
+      ...testBrand,
+      name: longBrandName,
+      englishName: longEnglishName,
+      mainField: longMainField,
+      tagline: longTagline,
+      story: { title: longStoryTitle, body: longStoryBody },
+    });
+    render(<BrandDetailView brandId="brd-long-text" />, { wrapper: createWrapper() });
+
+    expect(await screen.findByRole('heading', { level: 1, name: longBrandName })).toHaveClass(
+      'break-words',
+    );
+    expect(screen.getByText(`${longEnglishName} · ${longMainField}`)).toHaveClass('break-words');
+    expect(screen.getByText(longTagline)).toHaveClass('break-words');
+    expect(screen.getByRole('heading', { level: 2, name: longStoryTitle })).toHaveClass(
+      'break-words',
+    );
+    expect(screen.getByText(longStoryBody)).toHaveClass('break-words');
+    expect(screen.getByText('주력 분야').parentElement?.querySelector('dd')).toHaveClass(
+      'break-words',
+    );
+  });
+
+  it('loads the top-of-page cover eagerly and reserves its responsive hero height', async () => {
+    apiMocks.getBrand.mockResolvedValue({
+      ...testBrand,
+      coverImageUrl: 'data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22/%3E',
+    });
+    const { container } = render(<BrandDetailView brandId="brd-cover" />, {
+      wrapper: createWrapper(),
+    });
+
+    await screen.findByRole('heading', { level: 1, name: '테스트 & 브랜드' });
+    const coverImages = container.querySelectorAll(
+      'section[aria-labelledby="brand-name-heading"] img[alt=""]',
+    );
+    expect(coverImages).toHaveLength(2);
+    for (const coverImage of coverImages) {
+      expect(coverImage).toHaveAttribute('loading', 'eager');
+      expect(coverImage).toHaveAttribute('fetchpriority', 'high');
+      expect(coverImage).toHaveAttribute('decoding', 'async');
+      expect(coverImage).toHaveClass('size-full', 'object-cover');
+    }
+    expect(coverImages.item(0).parentElement).toHaveClass('h-220');
+    expect(coverImages.item(1).parentElement).toHaveClass('h-352');
+  });
 });
