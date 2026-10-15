@@ -184,7 +184,7 @@ export function MyPageShell({
 
         {dashboardTop}
 
-        <div className="grid gap-24 lg:grid-cols-[192px_minmax(0,1fr)] lg:gap-24">
+        <div className="grid gap-24 lg:grid-cols-[196px_minmax(0,1fr)] lg:gap-24">
           <aside aria-label="마이페이지 메뉴" className="hidden lg:block">
             <Link
               href="/mypage"

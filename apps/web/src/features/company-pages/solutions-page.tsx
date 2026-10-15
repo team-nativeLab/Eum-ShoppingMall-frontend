@@ -123,7 +123,7 @@ function InquiryProductsPanel({
             value={selectedProductId}
             onChange={(event) => onSelectedProductChange(event.currentTarget.value)}
             disabled={products.length === 0}
-            className="min-w-0 flex-1 rounded-8 border border-line-control bg-bg px-12 py-8 text-body-s focus-ring sm:max-w-220"
+            className="min-w-0 flex-1 rounded-8 border border-line-strong bg-bg px-12 py-8 text-body-s focus-ring sm:max-w-220"
           >
             <option value="">상품을 선택해 주세요</option>
             {products.map((product) => (

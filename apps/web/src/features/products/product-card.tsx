@@ -23,11 +23,14 @@ export function ProductCard({
   className,
   layout = 'grid',
   mobileVariant = 'full',
+  cardVariant = 'default',
 }: {
   product: Product;
   className?: string;
   layout?: 'grid' | 'list';
   mobileVariant?: 'full' | 'compact';
+  /** 홈 베스트 셀러: overlay border를 써서 158px frame 안에서 p-8의 142px 콘텐츠 폭을 유지합니다. */
+  cardVariant?: 'default' | 'home-carousel';
 }) {
   const router = useRouter();
   const { addToCart } = useCart();
@@ -36,6 +39,7 @@ export function ProductCard({
   const isWishlisted = wishlistIds.includes(product.id);
   const isSoldOut = product.stockStatus === 'soldOut';
   const isCompactOnMobile = mobileVariant === 'compact';
+  const isHomeCarouselCard = cardVariant === 'home-carousel';
   const hasRequiredOptions = product.options.some((productOption) => productOption.required);
   const productHref = `/products/${encodeURIComponent(product.id)}`;
   const [cartAnnouncement, setCartAnnouncement] = useState('');
@@ -55,6 +59,8 @@ export function ProductCard({
         'group flex min-w-0 rounded-8 border border-line bg-bg p-8 transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-1',
         layout === 'list' ? 'flex-row gap-16' : 'flex-col',
         isCompactOnMobile && 'gap-10 pb-10 lg:gap-0 lg:pb-8',
+        isHomeCarouselCard &&
+          'lg:relative lg:h-[var(--home-carousel-card-height)] lg:border-0 lg:before:pointer-events-none lg:before:absolute lg:before:inset-0 lg:before:rounded-8 lg:before:border lg:before:border-line lg:hover:before:border-line-strong',
         className,
       )}
     >

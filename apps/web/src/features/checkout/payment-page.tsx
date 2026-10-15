@@ -257,7 +257,7 @@ export function PaymentPageView() {
         결제 수단은 화면 확인용 선택입니다. 카드 정보는 받지 않으며 실제 주문이나 결제는 처리되지
         않습니다.
       </MockOnlyNotice>
-      <div className="mt-24 grid items-start gap-24 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="mt-24 grid items-start gap-24 lg:grid-cols-[minmax(0,1fr)_416px]">
         <div className="flex min-w-0 flex-col gap-20">
           <CheckoutSection
             title={`주문 상품 (${selectedItems.length})`}

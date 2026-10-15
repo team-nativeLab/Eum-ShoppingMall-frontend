@@ -690,7 +690,7 @@ export function ProductListingView({
               <div
                 role="group"
                 aria-label="보기 방식"
-                className="hidden h-40 w-80 items-center justify-center gap-2 rounded-8 bg-surface p-2 sm:flex"
+                className="hidden h-40 w-80 items-center justify-center gap-2 rounded-8 bg-surface p-2 sm:flex lg:w-78"
               >
                 <ViewToggleButton
                   label="그리드 보기"

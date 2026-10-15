@@ -8,6 +8,7 @@ import { Chip } from '@eum/ui/components/Chip';
 import { Icon } from '@eum/ui/components/Icon';
 import { Pagination } from '@eum/ui/components/Pagination';
 import { SelectField, TextField } from '@eum/ui/components/TextField';
+import { cx } from '@eum/ui/lib/cx';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronUp, FileText, Search } from 'lucide-react';
 import { useId, useMemo, useState, type FormEvent } from 'react';
@@ -90,11 +91,16 @@ function LoadingState({ label }: { label: string }) {
 
 function NoticeTableRow({ notice, number }: { notice: Notice; number: number }) {
   return (
-    <tr className={notice.isPinned ? 'bg-surface' : ''}>
-      <td className="px-12 py-22 text-center text-body-s text-text-3">
+    <tr className={cx(notice.isPinned && 'h-48 bg-surface')}>
+      <td
+        className={cx(
+          'px-12 text-center text-body-s text-text-3',
+          notice.isPinned ? 'py-12' : 'py-22',
+        )}
+      >
         {notice.isPinned ? '고정' : number}
       </td>
-      <td className="min-w-0 px-16 py-22">
+      <td className={cx('min-w-0 px-16', notice.isPinned ? 'py-12' : 'py-22')}>
         <details>
           <summary className="flex cursor-pointer list-none items-center gap-8 rounded-4 text-body-s font-medium focus-ring">
             {notice.isPinned ? (
@@ -107,10 +113,22 @@ function NoticeTableRow({ notice, number }: { notice: Notice; number: number }) 
           <p className="mt-12 text-body-s whitespace-pre-line text-text-2">{notice.body}</p>
         </details>
       </td>
-      <td className="px-12 py-22 text-center text-body-s text-text-3">
+      <td
+        className={cx(
+          'px-12 text-center text-body-s text-text-3',
+          notice.isPinned ? 'py-12' : 'py-22',
+        )}
+      >
         {formatDate(notice.publishedAt)}
       </td>
-      <td className="px-12 py-22 text-center text-body-s text-text-3">{notice.viewCount ?? '—'}</td>
+      <td
+        className={cx(
+          'px-12 text-center text-body-s text-text-3',
+          notice.isPinned ? 'py-12' : 'py-22',
+        )}
+      >
+        {notice.viewCount ?? '—'}
+      </td>
     </tr>
   );
 }

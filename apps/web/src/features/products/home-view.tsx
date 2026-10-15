@@ -24,9 +24,9 @@ import { usePrefersReducedMotion } from '@/lib/use-media-query';
 import { filterProductsByCategoryTree } from './best-seller-filter';
 import { CategoryBar, MobileCategoryGrid } from './category-bar';
 import {
-  DESKTOP_CAROUSEL_PAGE_SIZE,
   ProductCarouselTrack,
   useCarouselPaging,
+  useHomeCarouselLayout,
 } from './product-carousel';
 import { useCategoriesQuery } from './use-categories-query';
 import { heroSlideStyle, useHeroSlides } from './use-hero-slides';
@@ -113,10 +113,6 @@ function HomeContentView({ content }: { content: HomeContent }) {
         </>
       )}
 
-      <PageContainer className="hidden lg:block">
-        <ServiceBenefits benefits={content.serviceBenefits} />
-      </PageContainer>
-
       <PromoBannerSection banners={content.promoBanners} />
 
       <BestSellerSection products={content.featuredProducts} categories={categories} />
@@ -126,6 +122,10 @@ function HomeContentView({ content }: { content: HomeContent }) {
           <QuoteBanner ctaBand={content.ctaBand} />
         </PageContainer>
       ) : null}
+
+      <PageContainer className="hidden lg:block">
+        <ServiceBenefits benefits={content.serviceBenefits} />
+      </PageContainer>
     </div>
   );
 }
@@ -382,7 +382,7 @@ function ServiceBenefits({ benefits }: { benefits: HomeContent['serviceBenefits'
   return (
     <ul
       aria-label="서비스 안내"
-      className="mt-48 flex items-center rounded-12 border border-line px-8 py-20"
+      className="mt-64 flex items-center rounded-12 border border-line px-8 py-20"
     >
       {benefits.map((benefit, benefitIndex) => (
         <li key={benefit.id} className="flex min-w-0 flex-1 items-center">
@@ -402,14 +402,14 @@ function PromoBannerSection({ banners }: { banners: HomeContent['promoBanners'] 
   if (banners.length === 0) return null;
   return (
     <section aria-label="안전 솔루션 프로모션" className="mt-48 lg:mt-24">
-      <PageContainer className="flex snap-x snap-mandatory scroll-px-20 [scrollbar-width:none] gap-12 overflow-x-auto motion-safe:scroll-smooth lg:grid lg:grid-cols-3 lg:gap-24 lg:overflow-visible">
+      <PageContainer className="flex snap-x snap-mandatory scroll-px-20 [scrollbar-width:none] gap-12 overflow-x-auto motion-safe:scroll-smooth lg:grid lg:grid-cols-3 lg:gap-16 lg:overflow-visible">
         {banners.map((banner) => {
           const isLight = banner.tone === 'light';
           return (
             <Link
               key={banner.id}
               href={banner.destination}
-              className="group relative isolate flex h-216 w-300 shrink-0 snap-start flex-col overflow-hidden rounded-12 bg-surface px-32 py-24 focus-ring lg:w-auto"
+              className="group relative isolate flex h-216 w-300 shrink-0 snap-start flex-col overflow-hidden rounded-12 bg-surface px-32 py-24 focus-ring lg:h-184 lg:w-auto"
             >
               {banner.imageUrl ? (
                 // CMS가 제공한 배너 이미지 URL을 직접 사용합니다. 첫 화면 아래라 지연 로드합니다.
@@ -462,7 +462,7 @@ function PromoBannerSection({ banners }: { banners: HomeContent['promoBanners'] 
 }
 
 /**
- * 베스트 셀러. 데스크톱은 카테고리 탭 + 5열 캐러셀(이전/다음 버튼으로 가로 슬라이드),
+ * 베스트 셀러. 데스크톱은 카테고리 탭 + 홈 전용 카드 캐러셀(1024px대 5장, 1280px부터 7장 이동),
  * 모바일은 칩 + 2×2 카드 페이지를 스와이프로 넘기고 하단 "전체 보기" 버튼을 둡니다(W-01m).
  * 카테고리를 불러오지 못하면 "전체" 탭만 보여 줍니다.
  */
@@ -474,6 +474,7 @@ function BestSellerSection({
   categories: Category[];
 }) {
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
+  const desktopLayout = useHomeCarouselLayout();
   const topLevelCategories = useMemo(
     () => categories.filter((category) => category.parentId === null),
     [categories],
@@ -483,7 +484,8 @@ function BestSellerSection({
     [activeCategoryId, categories, products],
   );
   const carouselPaging = useCarouselPaging(
-    Math.ceil(filteredProducts.length / DESKTOP_CAROUSEL_PAGE_SIZE),
+    Math.ceil(filteredProducts.length / desktopLayout.pageSize),
+    desktopLayout.pageSize,
   );
   const categoryOptions = [
     { id: null, name: '전체' },
@@ -497,7 +499,7 @@ function BestSellerSection({
   };
 
   return (
-    <PageContainer className="mt-48 lg:mt-96">
+    <PageContainer className="mt-48 lg:mt-64">
       <section aria-labelledby="best-sellers-heading">
         <div className="flex items-center gap-32">
           <h2 id="best-sellers-heading" className="shrink-0 text-h2 lg:text-h1">
@@ -554,13 +556,14 @@ function BestSellerSection({
         </div>
 
         {filteredProducts.length > 0 ? (
-          <div className="relative mt-16 lg:mt-48">
+          <div className="relative mt-16 lg:mt-24">
             <ProductCarouselTrack
               key={activeCategoryId ?? 'all'}
               products={filteredProducts}
               pageIndex={carouselPaging.pageIndex}
               direction={carouselPaging.direction}
               mobileLayout="grid"
+              desktopLayout={desktopLayout}
               label="베스트 상품"
             />
             {carouselPaging.pageCount > 1 ? (
@@ -615,7 +618,7 @@ function QuoteBanner({ ctaBand }: { ctaBand: HomeCtaBand }) {
   return (
     <section
       aria-labelledby="quote-banner-heading"
-      className="mt-96 flex items-center justify-between gap-24 rounded-12 bg-text-1 px-48 py-40"
+      className="mt-64 flex items-center justify-between gap-24 rounded-12 bg-text-1 px-48 py-40"
     >
       <div className="min-w-0">
         <p className="text-overline text-inverse-2">{ctaBand.eyebrow}</p>

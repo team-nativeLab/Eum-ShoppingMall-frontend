@@ -151,6 +151,12 @@ export function MoneyRow({
   );
 }
 
-export function CheckoutPageShell({ children }: { children: ReactNode }) {
-  return <PageContainer className="py-40 lg:py-48">{children}</PageContainer>;
+export function CheckoutPageShell({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return <PageContainer className={cx('py-40 lg:py-48', className)}>{children}</PageContainer>;
 }

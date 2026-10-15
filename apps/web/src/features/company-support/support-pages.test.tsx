@@ -142,6 +142,12 @@ describe('company support routes', () => {
   it('공지 목록은 열 행씩 페이지 이동하고 검색 후 첫 페이지로 돌아옵니다', async () => {
     renderWithQuery(<NoticesPage />);
     await screen.findAllByText('공지 1');
+    const tableRows = within(screen.getByRole('table')).getAllByRole('row').slice(1);
+    expect(tableRows[0]).toHaveClass('h-48');
+    expect(within(tableRows[0]!).getAllByRole('cell')[0]).toHaveClass('py-12');
+    expect(tableRows[2]).not.toHaveClass('h-48');
+    expect(within(tableRows[2]!).getAllByRole('cell')[0]).toHaveClass('py-22');
+
     const desktopPagination = within(getPageNavigations().desktop);
     fireEvent.click(desktopPagination.getByRole('button', { name: '2페이지' }));
     await screen.findAllByText('공지 12');
