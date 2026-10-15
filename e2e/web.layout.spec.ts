@@ -44,10 +44,11 @@ test('헤더·푸터·전체 메뉴의 모든 내부 링크는 404가 아닌 화
   await menuTrigger.click();
   const allMenu = page.locator('#site-header-all-menu');
   await expect(allMenu).toBeVisible();
-  await expect(allMenu.getByRole('link', { name: '전체 브랜드' })).toHaveAttribute(
-    'href',
-    '/brands',
-  );
+  const allBrandsLink = allMenu.getByRole('link', { name: '전체 브랜드' });
+  if (!(await allBrandsLink.isVisible())) {
+    await allMenu.locator('summary').filter({ hasText: '브랜드' }).click();
+  }
+  await expect(allBrandsLink).toHaveAttribute('href', '/brands');
   const menuPaths = await collectInternalPaths(page, '#site-header-all-menu');
 
   const uniquePaths = [...new Set([...headerAndFooterPaths, ...menuPaths])].sort();
