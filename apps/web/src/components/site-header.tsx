@@ -30,7 +30,7 @@ import {
   type FocusEvent,
   type FormEvent,
   type KeyboardEvent,
-  type CSSProperties,
+  type TransitionEvent as ReactTransitionEvent,
 } from 'react';
 import { CartLink } from './cart-link';
 import { PageContainer } from './page-container';
@@ -44,7 +44,7 @@ import {
 } from '@/features/products/product-navigation';
 
 const ALL_MENU_ID = 'site-header-all-menu';
-const MENU_EXIT_DURATION_MS = 160;
+const MENU_TRANSITION_DURATION_MS = 160;
 
 /** 데스크톱 GNB 주요 메뉴. 활성 메뉴는 경로만으로 정하므로 쿼리(useSearchParams)·Suspense가 필요 없습니다. */
 function PrimaryNavigation({ pathname, onNavigate }: { pathname: string; onNavigate: () => void }) {
@@ -148,6 +148,8 @@ export function SiteHeader() {
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMenuMounted, setIsMenuMounted] = useState(false);
+  const [isMenuMotionOpen, setIsMenuMotionOpen] = useState(false);
+  const [isMenuInteractive, setIsMenuInteractive] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const isMenuOpenRef = useRef(false);
   const menuUnmountTimerRef = useRef<number | null>(null);
@@ -163,6 +165,8 @@ export function SiteHeader() {
 
     isMenuOpenRef.current = false;
     setIsMenuOpen(false);
+    setIsMenuMotionOpen(false);
+    setIsMenuInteractive(false);
     setIsMobileSearchOpen(false);
     if (menuUnmountTimerRef.current !== null) {
       window.clearTimeout(menuUnmountTimerRef.current);
@@ -170,7 +174,7 @@ export function SiteHeader() {
     menuUnmountTimerRef.current = window.setTimeout(() => {
       setIsMenuMounted(false);
       menuUnmountTimerRef.current = null;
-    }, MENU_EXIT_DURATION_MS);
+    }, MENU_TRANSITION_DURATION_MS);
     shouldRestoreMenuFocusRef.current = restoreFocus;
     if (!restoreFocus) menuTriggerRef.current = null;
   }, []);
@@ -180,6 +184,9 @@ export function SiteHeader() {
       return;
     }
 
+    const prefersReducedMotion =
+      window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
+    const isReopeningDuringExit = menuUnmountTimerRef.current !== null;
     if (menuUnmountTimerRef.current !== null) {
       window.clearTimeout(menuUnmountTimerRef.current);
       menuUnmountTimerRef.current = null;
@@ -188,6 +195,8 @@ export function SiteHeader() {
     menuTriggerRef.current = trigger;
     isMenuOpenRef.current = true;
     setIsMenuOpen(true);
+    setIsMenuMotionOpen(prefersReducedMotion || isReopeningDuringExit);
+    setIsMenuInteractive(prefersReducedMotion);
     setIsMenuMounted(true);
     setIsMobileSearchOpen(false);
   };
@@ -217,6 +226,43 @@ export function SiteHeader() {
     menuTriggerRef.current = null;
     menuTrigger?.focus();
   }, [isMenuVisible]);
+
+  // Mount first in the closed visual state, then start the entrance on the next frame.
+  useLayoutEffect(() => {
+    if (!isMenuMounted || !isMenuVisible || isMenuMotionOpen) return;
+
+    let entranceFrame: number | null = null;
+    const initialFrame = window.requestAnimationFrame(() => {
+      entranceFrame = window.requestAnimationFrame(() => setIsMenuMotionOpen(true));
+    });
+    return () => {
+      window.cancelAnimationFrame(initialFrame);
+      if (entranceFrame !== null) window.cancelAnimationFrame(entranceFrame);
+    };
+  }, [isMenuMounted, isMenuMotionOpen, isMenuVisible]);
+
+  // Keep the entering menu out of the accessibility tree and inactive until its transition completes.
+  useEffect(() => {
+    if (!isMenuMounted || !isMenuVisible || !isMenuMotionOpen || isMenuInteractive) return;
+
+    const duration = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+      ? 0
+      : MENU_TRANSITION_DURATION_MS;
+    const interactionTimer = window.setTimeout(() => setIsMenuInteractive(true), duration);
+    return () => window.clearTimeout(interactionTimer);
+  }, [isMenuInteractive, isMenuMounted, isMenuMotionOpen, isMenuVisible]);
+
+  const handleMenuTransitionEnd = (transitionEvent: ReactTransitionEvent<HTMLDivElement>) => {
+    if (
+      !isMenuVisible ||
+      !isMenuMotionOpen ||
+      transitionEvent.target !== transitionEvent.currentTarget ||
+      transitionEvent.propertyName !== 'opacity'
+    ) {
+      return;
+    }
+    setIsMenuInteractive(true);
+  };
 
   // 데스크톱 GNB는 첫 8px 스크롤부터 Figma의 compact 높이로 전환합니다.
   // 높이 변경으로 브라우저가 scrollY를 8px 보정해도 임계점에서 반복 전환되지 않도록 복귀점은 4px로 둡니다.
@@ -343,7 +389,8 @@ export function SiteHeader() {
     <>
       <header
         className={cx(
-          'sticky top-0 z-30 border-line bg-bg transition-[box-shadow] duration-200 ease-[cubic-bezier(.2,0,0,1)] motion-reduce:transition-none lg:border-b',
+          'sticky top-0 border-line bg-bg transition-[box-shadow] duration-200 ease-[cubic-bezier(.2,0,0,1)] motion-reduce:transition-none lg:border-b',
+          isMenuMounted ? 'z-50' : 'z-30',
           isScrolled && 'shadow-1',
           isProductDetail && 'border-b',
         )}
@@ -457,17 +504,20 @@ export function SiteHeader() {
         <div
           ref={menuPanelRef}
           id={ALL_MENU_ID}
-          aria-hidden={!isMenuVisible}
-          inert={!isMenuVisible}
+          aria-hidden={!isMenuVisible || !isMenuInteractive}
+          inert={!isMenuVisible || !isMenuInteractive}
           hidden={!isMenuMounted}
           data-state={isMenuVisible ? 'open' : 'closed'}
-          style={{ '--menu-header-height': isScrolled ? '64px' : '72px' } as CSSProperties}
+          data-menu-motion-state={isMenuMotionOpen ? 'open' : 'closed'}
+          onTransitionEnd={handleMenuTransitionEnd}
+          style={{
+            translate: isMenuMotionOpen ? '-50% -50%' : '-50% calc(-50% - 8px)',
+            transitionDuration: `${MENU_TRANSITION_DURATION_MS}ms`,
+          }}
           className={cx(
-            'absolute top-full left-0 z-50 max-h-[calc(100dvh-56px)] w-full overflow-y-auto border-y border-line-strong bg-bg shadow-2 transition-[opacity,transform] duration-[160ms] ease-out motion-reduce:translate-y-0 motion-reduce:transition-none lg:max-h-[calc(100dvh-var(--menu-header-height))]',
-            isMenuMounted ? 'visible' : 'invisible',
-            isMenuVisible
-              ? 'translate-y-0 opacity-100'
-              : 'pointer-events-none translate-y-8 opacity-0',
+            'fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-32px)] w-[calc(100%_-_32px)] max-w-[1200px] overflow-x-hidden overflow-y-auto rounded-8 border border-line-strong bg-bg shadow-2 transition-[opacity,translate] ease-out motion-reduce:transition-none lg:max-h-[calc(100dvh-48px)] lg:w-[calc(100%_-_48px)]',
+            (!isMenuVisible || !isMenuInteractive) && 'pointer-events-none',
+            isMenuMotionOpen ? 'opacity-100' : 'opacity-0',
           )}
         >
           {isMenuMounted ? (
@@ -832,13 +882,7 @@ function AllMenuDropdown({
   return (
     <nav aria-label="전체 메뉴">
       <div className="border-b border-line">
-        <PageContainer className="flex h-56 items-center justify-between lg:h-64">
-          <h2
-            id="all-menu-heading"
-            className="inline-flex items-center rounded-8 bg-success-tint px-12 py-8 text-label-m text-success"
-          >
-            전체 메뉴
-          </h2>
+        <div className="flex h-56 items-center justify-end px-16 lg:h-64 lg:px-24">
           <button
             type="button"
             onClick={onClose}
@@ -847,9 +891,9 @@ function AllMenuDropdown({
           >
             <Icon icon={X} size={20} />
           </button>
-        </PageContainer>
+        </div>
       </div>
-      <PageContainer className="grid grid-cols-1 content-start gap-x-16 gap-y-8 py-12 lg:grid-cols-5 lg:gap-x-24 lg:gap-y-0 lg:py-24">
+      <div className="grid grid-cols-1 content-start gap-x-16 gap-y-8 px-16 py-12 lg:grid-cols-5 lg:gap-x-24 lg:gap-y-0 lg:px-24 lg:py-24">
         {menuSections.map((menuSection) => (
           <MenuColumn
             key={menuSection.title}
@@ -859,18 +903,6 @@ function AllMenuDropdown({
             onNavigate={onNavigate}
           />
         ))}
-      </PageContainer>
-      <div className="border-t border-line">
-        <PageContainer className="flex min-h-52 items-center gap-12 text-body-s text-text-2">
-          <span>고객센터</span>
-          <Link
-            href="/support/faq"
-            onClick={onNavigate}
-            className="text-label-m text-text-1 focus-ring"
-          >
-            이용 안내
-          </Link>
-        </PageContainer>
       </div>
     </nav>
   );
@@ -890,13 +922,25 @@ function MenuColumn({
   const isCurrentSection = currentItem ? items.includes(currentItem) : false;
   const [isExpanded, setIsExpanded] = useState(false);
   const desktopViewportRef = useRef<boolean | null>(null);
+  const isExpandedRef = useRef(false);
+  const disclosureButtonRef = useRef<HTMLButtonElement>(null);
+  const sectionContentRef = useRef<HTMLDivElement>(null);
+  const sectionContentId = useId();
 
-  // SSR와 hydration 모두 닫힌 details로 시작하고, popup mount 시 layout 전에 viewport 기본값을 맞춥니다.
+  // SSR와 hydration은 닫힌 상태로 시작하고 popup mount 시 viewport 기본값을 맞춥니다.
   useLayoutEffect(() => {
     const syncViewport = () => {
       const isDesktopViewport = window.innerWidth >= 1024;
       if (desktopViewportRef.current === isDesktopViewport) return;
       desktopViewportRef.current = isDesktopViewport;
+      if (
+        !isDesktopViewport &&
+        isExpandedRef.current &&
+        sectionContentRef.current?.contains(document.activeElement)
+      ) {
+        disclosureButtonRef.current?.focus();
+      }
+      isExpandedRef.current = isDesktopViewport;
       setIsExpanded(isDesktopViewport);
     };
 
@@ -905,46 +949,71 @@ function MenuColumn({
     return () => window.removeEventListener('resize', syncViewport);
   }, []);
 
+  // Moving focus first keeps collapsed content from retaining keyboard focus.
+  const toggleDisclosure = () => {
+    const shouldExpand = !isExpanded;
+    if (!shouldExpand && sectionContentRef.current?.contains(document.activeElement)) {
+      disclosureButtonRef.current?.focus();
+    }
+    isExpandedRef.current = shouldExpand;
+    setIsExpanded(shouldExpand);
+  };
+
   return (
     <section aria-label={title}>
-      <details
-        open={isExpanded}
-        onToggle={(toggleEvent) => setIsExpanded(toggleEvent.currentTarget.open)}
-        className="group"
-      >
-        <summary
+      <h2>
+        <button
+          ref={disclosureButtonRef}
+          type="button"
+          aria-expanded={isExpanded}
+          aria-controls={sectionContentId}
+          onClick={toggleDisclosure}
           className={cx(
-            'flex min-h-44 cursor-pointer list-none items-center justify-between border-b pr-4 text-label-l focus-ring [&::-webkit-details-marker]:hidden',
+            'flex min-h-44 w-full items-center justify-between border-b pr-4 text-left text-label-l focus-ring',
             isCurrentSection ? 'border-success text-success' : 'border-line text-text-1',
           )}
         >
-          <h3>{title}</h3>
+          <span>{title}</span>
           <Icon
             icon={ChevronDown}
             size={16}
-            className="transition-transform group-open:rotate-180 motion-reduce:transition-none"
+            className={cx(
+              'transition-transform duration-[180ms] ease-out motion-reduce:transition-none',
+              isExpanded && 'rotate-180',
+            )}
           />
-        </summary>
-        <ul className="mt-8 space-y-4">
-          {items.map((menuItem) => (
-            <li key={menuItem.href + '-' + menuItem.label}>
-              <Link
-                href={menuItem.href}
-                onClick={onNavigate}
-                aria-current={menuItem === currentItem ? 'page' : undefined}
-                className={cx(
-                  'inline-flex min-h-44 w-full items-center rounded-8 px-8 text-body-s focus-ring transition-colors',
-                  menuItem === currentItem
-                    ? 'bg-success-tint text-label-m text-success underline decoration-success underline-offset-4 hover:bg-success-tint hover:text-success active:bg-success-tint'
-                    : 'text-text-2 hover:bg-surface hover:text-text-1 active:bg-surface-2',
-                )}
-              >
-                {menuItem.label}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </details>
+        </button>
+      </h2>
+      <div
+        ref={sectionContentRef}
+        id={sectionContentId}
+        aria-hidden={!isExpanded}
+        inert={!isExpanded}
+        className="grid transition-[grid-template-rows] duration-[180ms] ease-out motion-reduce:transition-none"
+        style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <ul className="space-y-4 pt-8">
+            {items.map((menuItem) => (
+              <li key={menuItem.href + '-' + menuItem.label}>
+                <Link
+                  href={menuItem.href}
+                  onClick={onNavigate}
+                  aria-current={menuItem === currentItem ? 'page' : undefined}
+                  className={cx(
+                    'inline-flex min-h-44 w-full items-center rounded-8 px-8 text-body-s focus-ring transition-colors',
+                    menuItem === currentItem
+                      ? 'text-label-m text-success underline decoration-success underline-offset-4 hover:text-success active:text-success'
+                      : 'text-text-2 hover:bg-surface hover:text-text-1 active:bg-surface-2',
+                  )}
+                >
+                  {menuItem.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
     </section>
   );
 }

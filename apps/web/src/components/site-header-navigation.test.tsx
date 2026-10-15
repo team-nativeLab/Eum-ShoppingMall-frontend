@@ -1,9 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { MouseEventHandler, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SiteHeader } from './site-header';
+
+const MENU_TRANSITION_DURATION_MS = 160;
 
 const navigationMocks = vi.hoisted(() => ({
   pathname: '/',
@@ -138,6 +140,7 @@ describe('SiteHeader product and brand navigation', () => {
   });
 
   it('lists brand detail links from the brands API in the dropdown and keeps All brands', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
     const user = userEvent.setup();
     render(<SiteHeader />, { wrapper: createWrapper() });
 
@@ -167,7 +170,7 @@ describe('SiteHeader product and brand navigation', () => {
     expect(apiMocks.listProducts).not.toHaveBeenCalled();
   });
 
-  it('shows one current menu link with a success tint when multiple links share its route', async () => {
+  it('shows one current menu link without a success tint when multiple links share its route', async () => {
     navigationMocks.pathname = '/about';
     const user = userEvent.setup();
     render(<SiteHeader />, { wrapper: createWrapper() });
@@ -178,10 +181,17 @@ describe('SiteHeader product and brand navigation', () => {
     const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
     const currentLinks = within(menu).getAllByRole('link', { current: 'page' });
 
-    expect(within(menu).getByRole('heading', { name: '전체 메뉴' })).toBeVisible();
+    expect(within(menu).queryByRole('heading', { name: '전체 메뉴' })).not.toBeInTheDocument();
+    expect(within(menu).queryByText('고객센터')).not.toBeInTheDocument();
+    expect(within(menu).queryByRole('link', { name: '이용 안내' })).not.toBeInTheDocument();
     expect(currentLinks).toHaveLength(1);
     expect(currentLinks[0]).toHaveAccessibleName('개요');
-    expect(currentLinks[0]).toHaveClass('bg-success-tint', 'text-success');
+    expect(currentLinks[0]).toHaveClass('text-success', 'underline');
+    expect(currentLinks[0]).not.toHaveClass('bg-success-tint');
+    const inactiveLink = within(menu).getByRole('link', { name: '사업분야' });
+    expect(inactiveLink).not.toHaveAttribute('aria-current');
+    expect(inactiveLink).toHaveClass('text-text-2');
+    expect(inactiveLink).not.toHaveClass('bg-success-tint');
     expect(within(menu).getByRole('button', { name: '전체 메뉴 닫기' })).toHaveClass('size-44');
   });
 
@@ -216,7 +226,8 @@ describe('SiteHeader product and brand navigation', () => {
     const ancestorCategoryLink = within(menu).getByRole('link', { name: '보안·감시' });
     expect(ancestorCategoryLink).toHaveAttribute('href', '/category/security-monitoring');
     expect(ancestorCategoryLink).toHaveAttribute('aria-current', 'page');
-    expect(ancestorCategoryLink).toHaveClass('bg-success-tint', 'text-success');
+    expect(ancestorCategoryLink).toHaveClass('text-success', 'underline');
+    expect(ancestorCategoryLink).not.toHaveClass('bg-success-tint');
     expect(within(menu).getAllByRole('link', { current: 'page' })).toHaveLength(1);
   });
 
@@ -240,9 +251,12 @@ describe('SiteHeader product and brand navigation', () => {
       expect(menuPanel).not.toHaveAttribute('aria-modal');
       expect(document.body).not.toHaveAttribute('inert');
       expect(document.body.style.overflow).not.toBe('hidden');
-      const menuLink = screen.getByRole('link', { name: '이용 안내' });
-      menuLink.focus();
-      expect(menuLink).toHaveFocus();
+      const closeButton = within(screen.getByRole('navigation', { name: '전체 메뉴' })).getByRole(
+        'button',
+        { name: '전체 메뉴 닫기' },
+      );
+      closeButton.focus();
+      expect(closeButton).toHaveFocus();
 
       await user.keyboard('{Escape}');
 
@@ -267,6 +281,161 @@ describe('SiteHeader product and brand navigation', () => {
     expect(desktopMenuButton).toHaveFocus();
   });
 
+  it('keeps the panel mounted when it reopens before the exit animation ends', () => {
+    vi.useFakeTimers();
+    const { unmount } = render(<SiteHeader />, { wrapper: createWrapper() });
+
+    try {
+      const [desktopMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
+      if (!desktopMenuButton) throw new Error('데스크톱 메뉴 버튼을 찾을 수 없습니다.');
+      fireEvent.click(desktopMenuButton);
+      const menuPanel = document.getElementById('site-header-all-menu');
+      if (!menuPanel) throw new Error('전체 메뉴 패널을 찾을 수 없습니다.');
+
+      act(() => vi.advanceTimersByTime(32));
+      act(() => vi.advanceTimersByTime(MENU_TRANSITION_DURATION_MS));
+      expect(menuPanel).toHaveAttribute('aria-hidden', 'false');
+
+      fireEvent.click(desktopMenuButton);
+      expect(menuPanel).toHaveAttribute('aria-hidden', 'true');
+      expect(menuPanel).toHaveAttribute('inert');
+      expect(menuPanel).toHaveClass('opacity-0');
+      expect(menuPanel).toHaveStyle({ translate: '-50% calc(-50% - 8px)' });
+      fireEvent.click(desktopMenuButton);
+      expect(menuPanel).toHaveAttribute('aria-hidden', 'true');
+
+      act(() => vi.advanceTimersByTime(MENU_TRANSITION_DURATION_MS - 1));
+      expect(menuPanel).toBeInTheDocument();
+      expect(menuPanel).not.toHaveAttribute('hidden');
+      expect(menuPanel).toHaveAttribute('aria-hidden', 'true');
+
+      act(() => vi.advanceTimersByTime(1));
+      expect(menuPanel).toBeInTheDocument();
+      expect(menuPanel).not.toHaveAttribute('hidden');
+      expect(menuPanel).toHaveAttribute('aria-hidden', 'false');
+    } finally {
+      unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the entering popup hidden and inactive until its motion completes', () => {
+    vi.useFakeTimers();
+    const { unmount } = render(<SiteHeader />, { wrapper: createWrapper() });
+
+    try {
+      const [desktopMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
+      if (!desktopMenuButton) throw new Error('데스크톱 메뉴 버튼을 찾을 수 없습니다.');
+      desktopMenuButton.focus();
+      fireEvent.click(desktopMenuButton);
+
+      const menuPanel = document.getElementById('site-header-all-menu');
+      if (!menuPanel) throw new Error('전체 메뉴 패널을 찾을 수 없습니다.');
+
+      expect(desktopMenuButton).toHaveFocus();
+      expect(menuPanel).toHaveAttribute('aria-hidden', 'true');
+      expect(menuPanel).toHaveAttribute('inert');
+      expect(menuPanel).toHaveClass('pointer-events-none');
+      expect(screen.queryByRole('navigation', { name: '전체 메뉴' })).not.toBeInTheDocument();
+
+      act(() => vi.advanceTimersByTime(32));
+      expect(menuPanel).toHaveAttribute('data-menu-motion-state', 'open');
+      expect(menuPanel).toHaveAttribute('aria-hidden', 'true');
+      expect(menuPanel).toHaveAttribute('inert');
+
+      act(() => vi.advanceTimersByTime(MENU_TRANSITION_DURATION_MS - 1));
+      expect(menuPanel).toHaveAttribute('aria-hidden', 'true');
+      act(() => vi.advanceTimersByTime(1));
+      expect(menuPanel).toHaveAttribute('aria-hidden', 'false');
+      expect(menuPanel).not.toHaveAttribute('inert');
+      expect(menuPanel).not.toHaveClass('pointer-events-none');
+      expect(screen.getByRole('navigation', { name: '전체 메뉴' })).toBeInTheDocument();
+    } finally {
+      unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it('opens immediately without entry motion when reduced motion is preferred', () => {
+    vi.useFakeTimers();
+    const originalMatchMedia = Object.getOwnPropertyDescriptor(window, 'matchMedia');
+    const matchMedia = vi.fn((query: string) => ({
+      matches: query.includes('prefers-reduced-motion'),
+    }));
+    Object.defineProperty(window, 'matchMedia', { configurable: true, value: matchMedia });
+    const requestAnimationFrame = vi.spyOn(window, 'requestAnimationFrame');
+    const { unmount } = render(<SiteHeader />, { wrapper: createWrapper() });
+    requestAnimationFrame.mockClear();
+
+    try {
+      const [desktopMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
+      if (!desktopMenuButton) throw new Error('데스크톱 메뉴 버튼을 찾을 수 없습니다.');
+      fireEvent.click(desktopMenuButton);
+
+      const menuPanel = document.getElementById('site-header-all-menu');
+      if (!menuPanel) throw new Error('전체 메뉴 패널을 찾을 수 없습니다.');
+      expect(matchMedia).toHaveBeenCalledWith('(prefers-reduced-motion: reduce)');
+      expect(requestAnimationFrame).not.toHaveBeenCalled();
+      expect(menuPanel).toHaveAttribute('data-menu-motion-state', 'open');
+      expect(menuPanel).toHaveAttribute('aria-hidden', 'false');
+      expect(menuPanel).not.toHaveAttribute('inert');
+      expect(menuPanel).not.toHaveClass('pointer-events-none');
+      expect(menuPanel).toHaveClass('opacity-100');
+      expect(menuPanel).toHaveStyle({ translate: '-50% -50%' });
+      expect(screen.getByRole('navigation', { name: '전체 메뉴' })).toBeInTheDocument();
+    } finally {
+      unmount();
+      requestAnimationFrame.mockRestore();
+      if (originalMatchMedia) {
+        Object.defineProperty(window, 'matchMedia', originalMatchMedia);
+      } else {
+        Reflect.deleteProperty(window, 'matchMedia');
+      }
+      vi.useRealTimers();
+    }
+  });
+
+  it('enables the popup as soon as a mid-close reverse transition ends', () => {
+    vi.useFakeTimers();
+    const { unmount } = render(<SiteHeader />, { wrapper: createWrapper() });
+
+    try {
+      const [desktopMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
+      if (!desktopMenuButton) throw new Error('데스크톱 메뉴 버튼을 찾을 수 없습니다.');
+      fireEvent.click(desktopMenuButton);
+      const menuPanel = document.getElementById('site-header-all-menu');
+      if (!menuPanel) throw new Error('전체 메뉴 패널을 찾을 수 없습니다.');
+
+      act(() => vi.advanceTimersByTime(32));
+      fireEvent.transitionEnd(menuPanel, { propertyName: 'opacity' });
+      expect(menuPanel).toHaveAttribute('aria-hidden', 'false');
+
+      fireEvent.click(desktopMenuButton);
+      expect(menuPanel).toHaveAttribute('aria-hidden', 'true');
+      act(() => vi.advanceTimersByTime(MENU_TRANSITION_DURATION_MS / 2));
+      fireEvent.click(desktopMenuButton);
+      expect(menuPanel).toHaveAttribute('data-menu-motion-state', 'open');
+      expect(menuPanel).toHaveAttribute('aria-hidden', 'true');
+      expect(menuPanel).toHaveAttribute('inert');
+
+      const menuNavigation = menuPanel.querySelector('nav');
+      if (!menuNavigation) throw new Error('전체 메뉴 탐색 영역을 찾을 수 없습니다.');
+      fireEvent.transitionEnd(menuNavigation, { propertyName: 'opacity' });
+      expect(menuPanel).toHaveAttribute('aria-hidden', 'true');
+
+      fireEvent.transitionEnd(menuPanel, { propertyName: 'opacity' });
+      expect(menuPanel).toHaveAttribute('aria-hidden', 'false');
+      expect(menuPanel).not.toHaveAttribute('inert');
+
+      act(() => vi.advanceTimersByTime(MENU_TRANSITION_DURATION_MS));
+      expect(menuPanel).toBeInTheDocument();
+      expect(menuPanel).toHaveAttribute('aria-hidden', 'false');
+    } finally {
+      unmount();
+      vi.useRealTimers();
+    }
+  });
+
   it('does not trap focus and closes the dropdown after choosing a link', async () => {
     const user = userEvent.setup();
     render(<SiteHeader />, { wrapper: createWrapper() });
@@ -281,7 +450,8 @@ describe('SiteHeader product and brand navigation', () => {
     firstLink.focus();
     await user.tab({ shift: true });
     expect(firstLink).not.toHaveFocus();
-    expect(within(menu).getByRole('link', { name: '이용 안내' })).toBeInTheDocument();
+    expect(within(menu).getByRole('link', { name: 'FAQ' })).toBeInTheDocument();
+    expect(within(menu).queryByText('고객센터')).not.toBeInTheDocument();
 
     await user.click(within(menu).getByRole('link', { name: '전체 브랜드' }));
 
@@ -324,15 +494,37 @@ describe('SiteHeader product and brand navigation', () => {
     const menuPanel = document.getElementById('site-header-all-menu');
     if (!menuPanel) throw new Error('전체 메뉴 패널을 찾을 수 없습니다.');
     expect(menuPanel).toHaveAttribute('data-state', 'open');
+    const menuMotion = menuPanel;
+    await waitFor(() => expect(menuMotion).toHaveAttribute('data-menu-motion-state', 'open'));
+    expect(menuMotion).toHaveClass('opacity-100');
+    expect(menuMotion).toHaveStyle({ translate: '-50% -50%' });
     expect(menu.querySelector('[class~="lg:grid-cols-5"]')).toBeInTheDocument();
-    expect(menu.querySelector('details')).toHaveAttribute('open');
+    for (const sectionTitle of ['제품', '브랜드', '안전 솔루션', '고객지원', '회사소개']) {
+      expect(within(menu).getByRole('button', { name: sectionTitle })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+    }
     expect(menuPanel).toHaveClass(
-      'absolute',
-      'top-full',
-      'w-full',
-      'duration-[160ms]',
+      'fixed',
+      'top-1/2',
+      'left-1/2',
+      'w-[calc(100%_-_32px)]',
+      'max-w-[1200px]',
+      'max-h-[calc(100dvh-32px)]',
+    );
+    expect(menuPanel.classList.contains('lg:w-[calc(100%_-_48px)]')).toBe(true);
+    expect(menuPanel).toHaveClass('lg:max-h-[calc(100dvh-48px)]');
+    expect(menuPanel).toHaveStyle({ translate: '-50% -50%' });
+    expect(menuPanel).toHaveClass(
+      'transition-[opacity,translate]',
+      'ease-out',
       'motion-reduce:transition-none',
     );
+    expect(menuPanel).toHaveStyle({
+      transitionDuration: '160ms',
+    });
+    expect(menuPanel.closest('header')).toHaveClass('z-50');
     expect(desktopMenuButton).toHaveAttribute('aria-expanded', 'true');
 
     await user.click(desktopMenuButton);
@@ -361,25 +553,111 @@ describe('SiteHeader product and brand navigation', () => {
     expect(menuPanel).toHaveAttribute('data-state', 'open');
     expect(mobileMenuButton).toHaveAttribute('aria-expanded', 'true');
     expect(menu.querySelector('[class~="grid-cols-1"]')).toBeInTheDocument();
+    expect(menuPanel).toHaveClass(
+      'fixed',
+      'top-1/2',
+      'left-1/2',
+      'w-[calc(100%_-_32px)]',
+      'max-h-[calc(100dvh-32px)]',
+    );
+    const sectionTitles = ['제품', '브랜드', '안전 솔루션', '고객지원', '회사소개'];
+    for (const sectionTitle of sectionTitles) {
+      expect(within(menu).getByRole('button', { name: sectionTitle })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+    }
+
     const productColumn = within(menu).getByRole('region', { name: '제품' });
-    const productDisclosure = productColumn.querySelector('details');
-    const productSummary = productColumn.querySelector('summary');
-    expect(productDisclosure).not.toHaveAttribute('open');
-    expect(productSummary).toHaveClass('min-h-44');
-    if (!productSummary || !productDisclosure) throw new Error('제품 메뉴 disclosure가 없습니다.');
-    await user.click(productSummary);
-    await waitFor(() => expect(productDisclosure).toHaveAttribute('open'));
+    const productDisclosure = within(productColumn).getByRole('button', { name: '제품' });
+    const productContents = document.getElementById(
+      productDisclosure.getAttribute('aria-controls') ?? '',
+    );
+    if (!productContents) throw new Error('제품 메뉴 콘텐츠를 찾을 수 없습니다.');
+    expect(productDisclosure).toHaveClass('min-h-44');
+    expect(productContents).toHaveAttribute('aria-hidden', 'true');
+    expect(productContents).toHaveAttribute('inert');
+    await user.click(productDisclosure);
+    await waitFor(() => expect(productDisclosure).toHaveAttribute('aria-expanded', 'true'));
     expect(within(productColumn).getByRole('link', { name: '전체 제품' })).toBeVisible();
+    expect(productContents).toHaveClass(
+      'transition-[grid-template-rows]',
+      'duration-[180ms]',
+      'ease-out',
+      'motion-reduce:transition-none',
+    );
 
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 });
     fireEvent.resize(window);
-    expect(productDisclosure).toHaveAttribute('open');
+    expect(productDisclosure).toHaveAttribute('aria-expanded', 'true');
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
     fireEvent.resize(window);
-    await waitFor(() => expect(productDisclosure).toHaveAttribute('open'));
+    await waitFor(() => expect(productDisclosure).toHaveAttribute('aria-expanded', 'true'));
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
     fireEvent.resize(window);
-    await waitFor(() => expect(productDisclosure).not.toHaveAttribute('open'));
+    await waitFor(() => expect(productDisclosure).toHaveAttribute('aria-expanded', 'false'));
+    expect(productContents).toHaveAttribute('aria-hidden', 'true');
+    expect(productContents).toHaveAttribute('inert');
+    expect(within(productColumn).queryByRole('link', { name: '전체 제품' })).toBeNull();
+  });
+
+  it.each(['제품', '브랜드', '안전 솔루션', '고객지원', '회사소개'])(
+    'toggles the %s category with accessible animated content',
+    async (sectionTitle) => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+      const user = userEvent.setup();
+      render(<SiteHeader />, { wrapper: createWrapper() });
+      const [, mobileMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
+      if (!mobileMenuButton) throw new Error('모바일 메뉴 버튼을 찾을 수 없습니다.');
+      await user.click(mobileMenuButton);
+      const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
+      const section = within(menu).getByRole('region', { name: sectionTitle });
+      const disclosureButton = within(section).getByRole('button', { name: sectionTitle });
+      const sectionContentId = disclosureButton.getAttribute('aria-controls');
+      if (!sectionContentId) throw new Error(`${sectionTitle} 메뉴 콘텐츠 ID가 없습니다.`);
+      const sectionContent = document.getElementById(sectionContentId);
+      if (!sectionContent) throw new Error(`${sectionTitle} 메뉴 콘텐츠를 찾을 수 없습니다.`);
+
+      expect(disclosureButton).toHaveAttribute('aria-expanded', 'false');
+      expect(sectionContent).toHaveAttribute('aria-hidden', 'true');
+      expect(sectionContent).toHaveAttribute('inert');
+      await user.click(disclosureButton);
+      expect(disclosureButton).toHaveAttribute('aria-expanded', 'true');
+      expect(sectionContent).toHaveAttribute('aria-hidden', 'false');
+      expect(within(section).getAllByRole('link').length).toBeGreaterThan(0);
+      await user.click(disclosureButton);
+      expect(disclosureButton).toHaveAttribute('aria-expanded', 'false');
+      expect(sectionContent).toHaveAttribute('aria-hidden', 'true');
+      expect(within(section).queryAllByRole('link')).toHaveLength(0);
+    },
+  );
+
+  it('keeps collapsed category links out of focus and the accessibility tree', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    const user = userEvent.setup();
+    render(<SiteHeader />, { wrapper: createWrapper() });
+    const [, mobileMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
+    if (!mobileMenuButton) throw new Error('모바일 메뉴 버튼을 찾을 수 없습니다.');
+    await user.click(mobileMenuButton);
+    const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
+    const supportSection = within(menu).getByRole('region', { name: '고객지원' });
+    const supportToggle = within(supportSection).getByRole('button', { name: '고객지원' });
+    const supportContentId = supportToggle.getAttribute('aria-controls');
+    if (!supportContentId) throw new Error('고객지원 메뉴 콘텐츠 ID가 없습니다.');
+    const supportContent = document.getElementById(supportContentId);
+
+    await user.click(supportToggle);
+    const faqLink = within(supportSection).getByRole('link', { name: 'FAQ' });
+    faqLink.focus();
+    expect(faqLink).toHaveFocus();
+
+    fireEvent.click(supportToggle);
+
+    expect(supportToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(supportToggle).toHaveFocus();
+    expect(supportContent).toHaveAttribute('aria-hidden', 'true');
+    expect(supportContent).toHaveAttribute('inert');
+    expect(within(supportSection).queryByRole('link', { name: 'FAQ' })).toBeNull();
   });
 
   it('closes the popup on outside click', async () => {
