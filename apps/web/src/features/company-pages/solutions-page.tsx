@@ -405,7 +405,7 @@ function QuoteFormVisual({
         <div className="flex flex-col gap-16 lg:contents">
           <fieldset className="flex flex-col gap-8 lg:gap-12">
             <legend className="text-label-m">문의 유형 *</legend>
-            <div className="flex flex-wrap gap-x-24 gap-y-12">
+            <div className="flex flex-wrap gap-x-24 gap-y-12 [&>label>span]:size-16 [&>label>span>span]:size-8">
               <Radio name="inquiryType" value="custom" defaultChecked>
                 맞춤 제작
               </Radio>

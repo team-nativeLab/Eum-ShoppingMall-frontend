@@ -1,5 +1,6 @@
 import type { CompanyInfo, Member, Product } from '@eum/api/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import userEvent from '@testing-library/user-event';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -109,7 +110,10 @@ describe('quote request preview', () => {
     );
     const companyNameInput = screen.getByLabelText('회사명 *');
     const quantityInput = screen.getByRole('spinbutton', { name: '현장 전체 예상 수량' });
-    const deliveryDateInput = screen.getByLabelText('희망 납기');
+    const deliveryDateButton = screen.getByRole('button', {
+      name: '희망 납기 날짜를 선택해 주세요',
+    });
+    const deliveryDateInput = form.querySelector('input[name="deliveryDate"]');
     const deliveryLocationInput = screen.getByLabelText('납품 지역');
     const interestLegend = screen.getByText('관심 품목');
     const detailsLabel = screen.getByText('상세 내용');
@@ -126,12 +130,13 @@ describe('quote request preview', () => {
     };
 
     expect(form).toContainElement(productsHeading);
+    expect(screen.getByRole('radio', { name: '맞춤 제작' })).toBeChecked();
     expectBefore(productsHeading, inquiryTypeLegend);
     expectBefore(inquiryTypeLegend, memberPrefillNote);
     expectBefore(memberPrefillNote, companyNameInput);
     expectBefore(companyNameInput, quantityInput);
-    expectBefore(quantityInput, deliveryDateInput);
-    expectBefore(deliveryDateInput, deliveryLocationInput);
+    expectBefore(quantityInput, deliveryDateButton);
+    expectBefore(deliveryDateButton, deliveryLocationInput);
     expectBefore(deliveryLocationInput, interestLegend);
     expectBefore(interestLegend, detailsLabel);
     expectBefore(detailsLabel, attachmentGroup);
@@ -141,6 +146,8 @@ describe('quote request preview', () => {
     expect(quantityInput).toHaveAccessibleDescription(
       '이 문의로 필요한 전체 수량을 입력해 주세요.',
     );
+    expect(deliveryDateInput).toHaveAttribute('type', 'date');
+    expect(deliveryDateInput).toHaveAttribute('name', 'deliveryDate');
   });
 
   it('상품·옵션·수량을 선택하고 접수 후 입력 내용을 저장하지 않는 완료 미리보기를 표시합니다', async () => {
@@ -157,6 +164,7 @@ describe('quote request preview', () => {
       target: { value: '12' },
     });
     fireEvent.click(screen.getByRole('radio', { name: '대량 구매' }));
+    expect(screen.getByRole('radio', { name: '대량 구매' })).toBeChecked();
     fireEvent.change(screen.getByLabelText('회사명 *'), { target: { value: '테스트 회사' } });
     fireEvent.click(screen.getByRole('button', { name: '회원 정보로 미리 채우기' }));
     fireEvent.click(screen.getByRole('checkbox', { name: '[필수] 개인정보 수집·이용 동의' }));
@@ -187,6 +195,68 @@ describe('quote request preview', () => {
     navigationMock.search = 'productId=p-quote';
     renderWithQueryClient(<SolutionsPageContent />);
     expect(await screen.findByRole('spinbutton', { name: '안전모 수량' })).toHaveValue(1);
+  });
+
+  it('날짜 버튼을 키보드로 열고 날짜 폼 값을 유지하며 취소 후 초기화합니다', async () => {
+    const user = userEvent.setup();
+    renderWithQueryClient(<SolutionsPageContent />);
+    await screen.findByRole('combobox', { name: '상품 선택' });
+
+    const form = screen.getByRole('region', { name: '견적 문의 입력' }).querySelector('form');
+    expect(form).not.toBeNull();
+    const dateInput = form?.querySelector<HTMLInputElement>('input[name="deliveryDate"]');
+    expect(dateInput).not.toBeNull();
+    if (!dateInput) throw new Error('deliveryDate input was not rendered');
+
+    const dateButton = screen.getByRole('button', {
+      name: '희망 납기 날짜를 선택해 주세요',
+    });
+    expect(dateButton).toHaveAttribute('type', 'button');
+    expect(dateButton).toHaveAccessibleName('희망 납기 날짜를 선택해 주세요');
+
+    const showPicker = vi.fn();
+    Object.defineProperty(dateInput, 'showPicker', {
+      configurable: true,
+      value: showPicker,
+    });
+    dateButton.focus();
+    await user.keyboard('{Enter}');
+    expect(showPicker).toHaveBeenCalledTimes(1);
+    await user.keyboard(' ');
+    expect(showPicker).toHaveBeenCalledTimes(2);
+
+    fireEvent.change(dateInput, { target: { value: '2026-11-30' } });
+    expect(dateInput).toHaveValue('2026-11-30');
+    expect(dateButton).toHaveAccessibleName('희망 납기 2026-11-30');
+    expect(dateButton).toHaveTextContent('2026-11-30');
+    expect(new FormData(form as HTMLFormElement).get('deliveryDate')).toBe('2026-11-30');
+
+    await user.click(screen.getByRole('button', { name: '취소' }));
+    expect(
+      screen.getByRole('button', { name: '희망 납기 날짜를 선택해 주세요' }),
+    ).toBeInTheDocument();
+    expect(form?.querySelector<HTMLInputElement>('input[name="deliveryDate"]')).toHaveValue('');
+    expect(new FormData(form as HTMLFormElement).get('deliveryDate')).toBe('');
+  });
+
+  it('showPicker를 사용할 수 없으면 네이티브 날짜 입력 click으로 대체합니다', async () => {
+    const user = userEvent.setup();
+    renderWithQueryClient(<SolutionsPageContent />);
+    await screen.findByRole('combobox', { name: '상품 선택' });
+
+    const dateInput = screen
+      .getByRole('region', { name: '견적 문의 입력' })
+      .querySelector<HTMLInputElement>('input[name="deliveryDate"]');
+    expect(dateInput).not.toBeNull();
+    if (!dateInput) throw new Error('deliveryDate input was not rendered');
+    Object.defineProperty(dateInput, 'showPicker', {
+      configurable: true,
+      value: undefined,
+    });
+    const click = vi.spyOn(dateInput, 'click');
+
+    await user.click(screen.getByRole('button', { name: '희망 납기 날짜를 선택해 주세요' }));
+    expect(click).toHaveBeenCalledOnce();
   });
 
   it('견적 담당자 이메일을 회사 정보 응답에서 표시합니다', async () => {
