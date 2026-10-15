@@ -38,12 +38,17 @@ test('헤더·푸터·전체 메뉴의 모든 내부 링크는 404가 아닌 화
 
   const headerAndFooterPaths = await collectInternalPaths(page, 'header, footer');
   await page.getByRole('button', { name: '전체 메뉴 열기' }).click();
-  const allMenu = page.getByRole('dialog', { name: '전체 메뉴' });
-  await expect(allMenu.getByRole('link', { name: '전체 브랜드' })).toBeVisible();
-  const menuPaths = await collectInternalPaths(page, '[role="dialog"]');
+  const allMenu = page.getByRole('navigation', { name: '전체 메뉴' });
+  await expect(allMenu.getByRole('link', { name: '전체 브랜드' })).toHaveAttribute(
+    'href',
+    '/brands',
+  );
+  const menuPaths = await collectInternalPaths(page, '#site-header-all-menu');
 
   const uniquePaths = [...new Set([...headerAndFooterPaths, ...menuPaths])].sort();
-  expect(uniquePaths).toEqual(expect.arrayContaining(['/about', '/cart', '/support/faq']));
+  expect(uniquePaths).toEqual(
+    expect.arrayContaining(['/about', '/brands', '/cart', '/support/faq']),
+  );
   for (const linkPath of uniquePaths) {
     const linkResponse = await page.request.get(linkPath);
     expect(linkResponse.status(), `${linkPath} 응답 상태`).toBe(200);
@@ -67,32 +72,31 @@ test('목 모드에서는 데모 안내 띠를 표시합니다', async ({ page }
   );
 });
 
-test('전체 메뉴는 포커스를 가두고, 닫으면 연 버튼으로 포커스를 돌려줍니다', async ({ page }) => {
+test('전체 메뉴는 nonmodal 팝업이고 Escape로 닫으면 연 버튼으로 포커스를 돌려줍니다', async ({
+  page,
+}) => {
   await page.goto('/');
   const openMenuButton = page
     .getByRole('button', { name: '전체 메뉴 열기' })
     .locator('visible=true');
   await openMenuButton.click();
 
-  const allMenu = page.getByRole('dialog', { name: '전체 메뉴' });
+  const allMenu = page.getByRole('navigation', { name: '전체 메뉴' });
+  const menuPanel = page.locator('#site-header-all-menu');
   const closeMenuButton = allMenu.getByRole('button', { name: '전체 메뉴 닫기' });
-  await expect(closeMenuButton).toBeFocused();
-  // 배경(본문)은 inert로 막혀 보조기기·키보드가 닿지 않습니다.
-  await expect
-    .poll(() =>
-      page.evaluate(() => document.querySelector('#main-content')?.closest('[inert]') !== null),
-    )
-    .toBe(true);
-
-  // 첫 요소(로고)에서 Shift+Tab하면 마지막 요소로, 마지막 요소에서 Tab하면 첫 요소로 돌아옵니다.
-  const firstMenuLink = allMenu.getByRole('link', { name: '이음산업건설' });
   const lastMenuLink = allMenu.getByRole('link', { name: '이용 안내' });
-  await page.keyboard.press('Shift+Tab');
-  await expect(firstMenuLink).toBeFocused();
-  await page.keyboard.press('Shift+Tab');
-  await expect(lastMenuLink).toBeFocused();
+  await expect(openMenuButton).toBeFocused();
+  await expect(closeMenuButton).toBeVisible();
+  await expect(menuPanel).not.toHaveAttribute('aria-modal');
+  await expect(page.locator('body')).not.toHaveAttribute('inert');
+  expect(
+    await page.locator('body').evaluate((element) => (element as HTMLElement).style.overflow),
+  ).not.toBe('hidden');
+
+  // 마지막 메뉴 링크 다음에는 문서의 다음 항목으로 이동할 수 있어 focus trap이 없습니다.
+  await lastMenuLink.focus();
   await page.keyboard.press('Tab');
-  await expect(firstMenuLink).toBeFocused();
+  await expect(lastMenuLink).not.toBeFocused();
 
   await page.keyboard.press('Escape');
   await expect(allMenu).toBeHidden();
