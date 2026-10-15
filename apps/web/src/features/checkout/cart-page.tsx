@@ -161,10 +161,10 @@ export function CartPageView() {
           {options ? (
             <section
               aria-label="무료 배송 혜택"
-              className="mb-16 rounded-12 border border-line bg-bg-subtle p-24"
+              className="mb-16 rounded-12 border border-success bg-success-tint p-24"
             >
               <div className="flex flex-wrap items-center justify-between gap-8">
-                <strong className="text-h3">
+                <strong className="text-h3 text-success">
                   {remaining === 0
                     ? '무료 배송 기준을 충족했습니다.'
                     : `${formatKrw(remaining)} 더 담으면 무료배송!`}
@@ -180,10 +180,10 @@ export function CartPageView() {
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={Math.round(progress)}
-                className="mt-12 h-8 overflow-hidden rounded-capsule bg-surface-2"
+                className="mt-12 h-8 overflow-hidden rounded-capsule bg-bg"
               >
                 <div
-                  className="h-full rounded-capsule bg-text-1 transition-[width]"
+                  className="h-full rounded-capsule bg-success transition-[width]"
                   style={{ width: `${progress}%` }}
                 />
               </div>
