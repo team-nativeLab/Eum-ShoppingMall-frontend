@@ -76,9 +76,7 @@ test('전체 메뉴는 nonmodal 팝업이고 Escape로 닫으면 연 버튼으�
   page,
 }) => {
   await page.goto('/');
-  const openMenuButton = page
-    .getByRole('button', { name: '전체 메뉴 열기' })
-    .locator('visible=true');
+  const openMenuButton = page.getByRole('button', { name: '전체 메뉴 열기' });
   await openMenuButton.click();
 
   const allMenu = page.getByRole('navigation', { name: '전체 메뉴' });
@@ -86,6 +84,7 @@ test('전체 메뉴는 nonmodal 팝업이고 Escape로 닫으면 연 버튼으�
   const closeMenuButton = allMenu.getByRole('button', { name: '전체 메뉴 닫기' });
   const lastMenuLink = allMenu.getByRole('link', { name: '이용 안내' });
   await expect(openMenuButton).toBeFocused();
+  await expect(openMenuButton).toHaveAttribute('aria-expanded', 'true');
   await expect(closeMenuButton).toBeVisible();
   await expect(menuPanel).not.toHaveAttribute('aria-modal');
   await expect(page.locator('body')).not.toHaveAttribute('inert');
@@ -100,6 +99,7 @@ test('전체 메뉴는 nonmodal 팝업이고 Escape로 닫으면 연 버튼으�
 
   await page.keyboard.press('Escape');
   await expect(allMenu).toBeHidden();
+  await expect(openMenuButton).toHaveAttribute('aria-expanded', 'false');
   await expect(openMenuButton).toBeFocused();
 });
 

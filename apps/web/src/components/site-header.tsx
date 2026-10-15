@@ -152,6 +152,7 @@ export function SiteHeader() {
   const isMenuOpenRef = useRef(false);
   const menuUnmountTimerRef = useRef<number | null>(null);
   const menuTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const shouldRestoreMenuFocusRef = useRef(false);
   const desktopMenuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const menuPanelRef = useRef<HTMLDivElement>(null);
@@ -170,8 +171,8 @@ export function SiteHeader() {
       setIsMenuMounted(false);
       menuUnmountTimerRef.current = null;
     }, MENU_EXIT_DURATION_MS);
-    if (restoreFocus) menuTriggerRef.current?.focus();
-    menuTriggerRef.current = null;
+    shouldRestoreMenuFocusRef.current = restoreFocus;
+    if (!restoreFocus) menuTriggerRef.current = null;
   }, []);
   const toggleMenu = (trigger: HTMLButtonElement) => {
     if (isMenuOpenRef.current) {
@@ -183,6 +184,7 @@ export function SiteHeader() {
       window.clearTimeout(menuUnmountTimerRef.current);
       menuUnmountTimerRef.current = null;
     }
+    shouldRestoreMenuFocusRef.current = false;
     menuTriggerRef.current = trigger;
     isMenuOpenRef.current = true;
     setIsMenuOpen(true);
@@ -205,6 +207,16 @@ export function SiteHeader() {
     closeMenu();
     router.push('/search?q=' + encodeURIComponent(keyword));
   };
+
+  // 닫힌 상태의 inert/aria-hidden DOM이 반영된 뒤 trigger로 포커스를 돌립니다.
+  useLayoutEffect(() => {
+    if (isMenuVisible || !shouldRestoreMenuFocusRef.current) return;
+
+    shouldRestoreMenuFocusRef.current = false;
+    const menuTrigger = menuTriggerRef.current;
+    menuTriggerRef.current = null;
+    menuTrigger?.focus();
+  }, [isMenuVisible]);
 
   // 데스크톱 GNB는 첫 8px 스크롤부터 Figma의 compact 높이로 전환합니다.
   // 높이 변경으로 브라우저가 scrollY를 8px 보정해도 임계점에서 반복 전환되지 않도록 복귀점은 4px로 둡니다.

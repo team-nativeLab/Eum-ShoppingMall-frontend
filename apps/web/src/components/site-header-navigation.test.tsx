@@ -220,26 +220,36 @@ describe('SiteHeader product and brand navigation', () => {
     expect(within(menu).getAllByRole('link', { current: 'page' })).toHaveLength(1);
   });
 
-  it('closes the popup with Escape and restores focus without modal behavior', async () => {
-    const user = userEvent.setup();
-    render(<SiteHeader />, { wrapper: createWrapper() });
+  it.each([
+    ['desktop', 1280, 0],
+    ['mobile', 390, 1],
+  ] as const)(
+    'closes the popup with Escape and restores the %s trigger focus',
+    async (_viewport, width, triggerIndex) => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+      const user = userEvent.setup();
+      render(<SiteHeader />, { wrapper: createWrapper() });
 
-    const [desktopMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
-    if (!desktopMenuButton) throw new Error('메뉴 버튼을 찾을 수 없습니다.');
-    await user.click(desktopMenuButton);
-    await screen.findByRole('navigation', { name: '전체 메뉴' });
-    const menuPanel = document.getElementById('site-header-all-menu');
-    if (!menuPanel) throw new Error('전체 메뉴 패널을 찾을 수 없습니다.');
-    expect(desktopMenuButton).toHaveFocus();
-    expect(menuPanel).not.toHaveAttribute('aria-modal');
-    expect(document.body).not.toHaveAttribute('inert');
-    expect(document.body.style.overflow).not.toBe('hidden');
+      const menuTriggers = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
+      const menuTrigger = menuTriggers[triggerIndex];
+      if (!menuTrigger) throw new Error('메뉴 버튼을 찾을 수 없습니다.');
+      await user.click(menuTrigger);
+      await screen.findByRole('navigation', { name: '전체 메뉴' });
+      const menuPanel = document.getElementById('site-header-all-menu');
+      if (!menuPanel) throw new Error('전체 메뉴 패널을 찾을 수 없습니다.');
+      expect(menuPanel).not.toHaveAttribute('aria-modal');
+      expect(document.body).not.toHaveAttribute('inert');
+      expect(document.body.style.overflow).not.toBe('hidden');
+      const menuLink = screen.getByRole('link', { name: '이용 안내' });
+      menuLink.focus();
+      expect(menuLink).toHaveFocus();
 
-    await user.keyboard('{Escape}');
+      await user.keyboard('{Escape}');
 
-    await waitFor(() => expect(menuPanel).toHaveAttribute('aria-hidden', 'true'));
-    expect(desktopMenuButton).toHaveFocus();
-  });
+      await waitFor(() => expect(menuPanel).toHaveAttribute('aria-hidden', 'true'));
+      expect(menuTrigger).toHaveFocus();
+    },
+  );
 
   it('closes the popup from its X control and restores focus to its opener', async () => {
     const user = userEvent.setup();
