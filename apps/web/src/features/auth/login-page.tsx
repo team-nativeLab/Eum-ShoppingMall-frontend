@@ -57,9 +57,6 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
           <p className="text-h3 text-text-3">이음산업건설</p>
           <h1 className="text-h1">로그인</h1>
           <p className="text-body-s text-text-2">이음산업건설 계정으로 로그인하세요.</p>
-          <p className="text-caption text-text-3">
-            목 로그인은 화면 흐름 확인용이며 실제 인증은 처리되지 않습니다.
-          </p>
         </header>
         <form
           className="flex flex-col gap-24"
@@ -180,6 +177,9 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
             목 데모에서는 외부 간편로그인을 사용할 수 없습니다.
           </p>
         </div>
+        <p className="text-caption text-text-3">
+          목 로그인은 화면 흐름 확인용이며 실제 인증은 처리되지 않습니다.
+        </p>
       </section>
     </PageContainer>
   );

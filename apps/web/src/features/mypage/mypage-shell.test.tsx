@@ -70,6 +70,9 @@ describe('MyPageShell logout', () => {
   it('clears member-owned caches and navigates to login', async () => {
     const queryClient = renderPage();
     await screen.findByText(member.id);
+    const mypageShell = screen.getByText(member.id).closest('[data-mypage-shell]');
+    const desktopLayout = mypageShell?.querySelector(':scope > div > div.grid');
+    expect(desktopLayout).toHaveClass('lg:grid-cols-[196px_minmax(0,1fr)]', 'lg:gap-24');
     fireEvent.click(screen.getByRole('button', { name: '회원 캐시 설정' }));
 
     const mobileMenu = screen.getByRole('navigation', { name: '모바일 마이페이지 메뉴' });

@@ -224,7 +224,7 @@ describe('ProductListingView listing toolbar', () => {
     expect(desktopSort).toHaveClass('h-40', 'w-120', 'lg:w-140');
     expect(pageSize).toHaveClass('h-40', 'hidden', 'w-120', 'sm:block');
     expect(desktopSort.parentElement).toHaveClass('items-center', 'gap-8', 'sm:flex');
-    expect(viewToggleGroup).toHaveClass('h-40', 'w-80', 'items-center', 'gap-2');
+    expect(viewToggleGroup).toHaveClass('h-40', 'w-80', 'lg:w-78', 'items-center', 'gap-2');
     expect(
       desktopSort.compareDocumentPosition(pageSize) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();

@@ -189,10 +189,6 @@ export function SignupPageView({ rawRedirect }: { rawRedirect?: string }) {
           <p className="text-body-s text-text-2">
             안전한 현장을 위한 이음산업건설 회원이 되어 보세요.
           </p>
-          <p className="text-caption text-text-3">
-            목 가입과 이메일·휴대폰 확인은 화면 흐름용이며 실제 계정이나 인증 문자는 생성되지
-            않습니다.
-          </p>
         </header>
         <form
           className="mt-24 flex flex-col gap-16"
@@ -408,6 +404,10 @@ export function SignupPageView({ rawRedirect }: { rawRedirect?: string }) {
           >
             로그인
           </Link>
+        </p>
+        <p className="mt-20 text-caption text-text-3">
+          목 가입과 이메일·휴대폰 확인은 화면 흐름용이며 실제 계정이나 인증 문자는 생성되지
+          않습니다.
         </p>
       </section>
     </PageContainer>

@@ -36,8 +36,8 @@ export function CompletionPageView() {
   }
 
   return (
-    <CheckoutPageShell>
-      <section className="rounded-16 mx-auto max-w-720 border border-line p-24 sm:p-40">
+    <CheckoutPageShell className="lg:pt-80">
+      <section className="rounded-16 mx-auto max-w-720 border border-line p-24 sm:p-40 lg:max-w-640">
         <div className="text-center">
           <CircleCheck
             aria-hidden="true"
