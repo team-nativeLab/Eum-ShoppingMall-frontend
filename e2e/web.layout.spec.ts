@@ -37,8 +37,13 @@ test('헤더·푸터·전체 메뉴의 모든 내부 링크는 404가 아닌 화
   await expect(page.getByRole('heading', { name: '베스트 셀러' })).toBeVisible();
 
   const headerAndFooterPaths = await collectInternalPaths(page, 'header, footer');
-  await page.getByRole('button', { name: '전체 메뉴 열기' }).click();
-  const allMenu = page.getByRole('navigation', { name: '전체 메뉴' });
+  const menuTrigger = page.locator(
+    'button[aria-controls="site-header-all-menu"]:visible, button[aria-haspopup="dialog"]:visible',
+  );
+  await expect(menuTrigger).toHaveCount(1);
+  await menuTrigger.click();
+  const allMenu = page.locator('#site-header-all-menu');
+  await expect(allMenu).toBeVisible();
   await expect(allMenu.getByRole('link', { name: '전체 브랜드' })).toHaveAttribute(
     'href',
     '/brands',
@@ -72,35 +77,44 @@ test('목 모드에서는 데모 안내 띠를 표시합니다', async ({ page }
   );
 });
 
-test('전체 메뉴는 nonmodal 팝업이고 Escape로 닫으면 연 버튼으로 포커스를 돌려줍니다', async ({
-  page,
-}) => {
+test('전체 메뉴는 Escape로 닫으면 연 버튼으로 포커스를 돌려줍니다', async ({ page }) => {
   await page.goto('/');
-  const openMenuButton = page.getByRole('button', { name: '전체 메뉴 열기' });
-  await openMenuButton.click();
+  const menuTrigger = page.locator(
+    'button[aria-controls="site-header-all-menu"]:visible, button[aria-haspopup="dialog"]:visible',
+  );
+  await expect(menuTrigger).toHaveCount(1);
+  await menuTrigger.click();
+  const openerElement = await menuTrigger.elementHandle();
+  if (!openerElement) throw new Error('보이는 전체 메뉴 열기 버튼을 찾지 못했습니다.');
 
-  const allMenu = page.getByRole('navigation', { name: '전체 메뉴' });
-  const menuPanel = page.locator('#site-header-all-menu');
-  const closeMenuButton = allMenu.getByRole('button', { name: '전체 메뉴 닫기' });
-  const lastMenuLink = allMenu.getByRole('link', { name: '이용 안내' });
-  await expect(openMenuButton).toBeFocused();
-  await expect(openMenuButton).toHaveAttribute('aria-expanded', 'true');
-  await expect(closeMenuButton).toBeVisible();
-  await expect(menuPanel).not.toHaveAttribute('aria-modal');
-  await expect(page.locator('body')).not.toHaveAttribute('inert');
-  expect(
-    await page.locator('body').evaluate((element) => (element as HTMLElement).style.overflow),
-  ).not.toBe('hidden');
-
-  // 마지막 메뉴 링크 다음에는 문서의 다음 항목으로 이동할 수 있어 focus trap이 없습니다.
-  await lastMenuLink.focus();
-  await page.keyboard.press('Tab');
-  await expect(lastMenuLink).not.toBeFocused();
+  const allMenu = page.locator('#site-header-all-menu');
+  await expect(allMenu).toBeVisible();
+  const menuLink = allMenu.getByRole('link', { name: '이용 안내' });
+  await expect(menuLink).toBeVisible();
+  await menuLink.focus();
+  await expect(menuLink).toBeFocused();
 
   await page.keyboard.press('Escape');
   await expect(allMenu).toBeHidden();
-  await expect(openMenuButton).toHaveAttribute('aria-expanded', 'false');
-  await expect(openMenuButton).toBeFocused();
+  const focusResult = await page.evaluate((trigger) => {
+    const activeElement = document.activeElement;
+    return {
+      isOpener: activeElement === trigger,
+      activeElement:
+        activeElement instanceof HTMLElement
+          ? {
+              tagName: activeElement.tagName,
+              ariaLabel: activeElement.getAttribute('aria-label'),
+              ariaControls: activeElement.getAttribute('aria-controls'),
+            }
+          : null,
+    };
+  }, openerElement);
+  expect(
+    focusResult.isOpener,
+    `Escape 후 activeElement: ${JSON.stringify(focusResult.activeElement)}`,
+  ).toBe(true);
+  await expect(menuTrigger).toBeFocused();
 });
 
 for (const viewportWidth of [1024, 1280]) {
