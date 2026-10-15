@@ -8,18 +8,13 @@ export interface PrimaryNavigationItem {
   href: string;
 }
 
-/** Parse brand filters from repeated App Router search parameters. */
+/** 반복된 URL 브랜드 필터를 중복 없이 정리합니다. */
 export function getBrandFilterValues(value: SearchParamValue): string[] {
   const values = Array.isArray(value) ? value : value ? [value] : [];
   return [...new Set(values.map((brand) => brand.trim()).filter(Boolean))];
 }
 
-/** Brand browse is a temporary UI intent used to open the existing brand filter on entry. */
-export function isBrandBrowseMode(value: SearchParamValue): boolean {
-  return (Array.isArray(value) ? value : [value]).includes('brands');
-}
-
-/** Serialize page search parameters without dropping repeated values. */
+/** 페이지의 검색 매개변수를 반복 값까지 보존해 직렬화합니다. */
 export function serializeSearchParams(searchParams: Record<string, SearchParamValue>): string {
   const params = new URLSearchParams();
   Object.entries(searchParams).forEach(([key, value]) => {
@@ -32,15 +27,19 @@ export function serializeSearchParams(searchParams: Record<string, SearchParamVa
   return params.toString();
 }
 
-/** Build the all-brand or brand-specific destination used by both desktop and mobile menus. */
-export function buildBrandBrowseHref(brand?: string): string {
+/** 브랜드 목록 또는 상세 화면 경로를 만듭니다. */
+export function buildBrandHref(brandId?: string): string {
+  return brandId ? '/brands/' + encodeURIComponent(brandId) : '/brands';
+}
+
+/** 상세 화면의 전체 제품 CTA가 기존 이름 기반 제품 필터를 엽니다. */
+export function buildBrandProductsHref(brandName: string): string {
   const params = new URLSearchParams();
-  if (brand) params.set('brand', brand);
-  params.set('browse', 'brands');
+  params.set('brand', brandName);
   return '/search?' + params.toString();
 }
 
-/** Keep the current route filters and keyword when a user adds or removes selected brands. */
+/** 현재 상품 목록의 필터와 검색어를 보존하면서 브랜드 선택을 갱신합니다. */
 export function buildBrandSelectionHref(
   pathname: string,
   currentSearchParams: string,
@@ -53,40 +52,33 @@ export function buildBrandSelectionHref(
   return query ? pathname + '?' + query : pathname;
 }
 
-/** Primary links share one product listing and treat selected brands as the brand browsing state. */
+/** 주요 GNB 항목. 브랜드는 분리된 디렉터리로 이동합니다. */
 export function getPrimaryNavigationItems(): PrimaryNavigationItem[] {
   return [
     { key: 'products', label: '제품', href: '/search' },
-    { key: 'brands', label: '브랜드', href: buildBrandBrowseHref() },
+    { key: 'brands', label: '브랜드', href: buildBrandHref() },
     { key: 'solutions', label: '안전 솔루션', href: '/solutions' },
     { key: 'support', label: '고객지원', href: '/support/notices' },
     { key: 'about', label: '회사소개', href: '/about' },
   ];
 }
 
-/** Determine the active primary item from the route and selected brand filters. */
+/** 경로가 기준 경로 또는 그 하위 경로인지 확인합니다. */
+function isPathWithin(pathname: string, pathPrefix: string): boolean {
+  return pathname === pathPrefix || pathname.startsWith(pathPrefix + '/');
+}
+
+/** 경로만으로 현재 GNB 항목을 정합니다. 상품 브랜드 필터는 제품 목록 상태입니다. */
 export function isPrimaryNavigationItemActive(
   item: PrimaryNavigationItem,
   pathname: string,
-  selectedBrands: readonly string[],
-  searchParamsReady = true,
-  brandBrowseIntent = false,
 ): boolean {
-  const isProductListingRoute = pathname === '/search' || pathname.startsWith('/category/');
-  const isBrandBrowsing = isProductListingRoute && (selectedBrands.length > 0 || brandBrowseIntent);
-
-  if (item.key === 'products') {
-    if (isBrandBrowsing) return false;
-    if (pathname.startsWith('/category/') || pathname.startsWith('/products/')) return true;
-    return pathname === '/search' && searchParamsReady;
-  }
-  if (item.key === 'brands') {
-    return isBrandBrowsing;
-  }
-  const activePathPrefixes: Partial<Record<PrimaryNavigationKey, string[]>> = {
+  const activePathPrefixes: Record<PrimaryNavigationKey, string[]> = {
+    products: ['/search', '/category', '/products'],
+    brands: ['/brands'],
     solutions: ['/solutions'],
     support: ['/support'],
     about: ['/about'],
   };
-  return (activePathPrefixes[item.key] ?? []).some((pathPrefix) => pathname.startsWith(pathPrefix));
+  return activePathPrefixes[item.key].some((pathPrefix) => isPathWithin(pathname, pathPrefix));
 }

@@ -34,41 +34,23 @@ import { createPortal } from 'react-dom';
 import { CartLink } from './cart-link';
 import { PageContainer } from './page-container';
 import { useCategoriesQuery } from '@/features/products/use-categories-query';
-import { useProductsQuery } from '@/features/products/use-products-query';
+import { useBrandsQuery } from '@/features/brands/use-brands-query';
 import { useProductSuggestionsQuery } from '@/features/products/use-product-suggestions-query';
 import {
-  buildBrandBrowseHref,
-  isBrandBrowseMode,
-  getBrandFilterValues,
+  buildBrandHref,
   getPrimaryNavigationItems,
   isPrimaryNavigationItemActive,
 } from '@/features/products/product-navigation';
 
-/** URL-dependent active state stays below Suspense because the header lives in the root layout. */
-function PrimaryNavigation({
-  pathname,
-  selectedBrands,
-  brandBrowseIntent = false,
-  searchParamsReady = true,
-}: {
-  pathname: string;
-  selectedBrands: readonly string[];
-  brandBrowseIntent?: boolean;
-  searchParamsReady?: boolean;
-}) {
+/** 주요 GNB 항목은 URL 경로만으로 현재 상태를 정합니다. */
+function PrimaryNavigation({ pathname }: { pathname: string }) {
   return (
     <nav
       aria-label="주요 메뉴"
       className="flex h-full shrink-0 items-center gap-24 min-[1440px]:gap-40 xl:gap-32"
     >
       {getPrimaryNavigationItems().map((navigationItem) => {
-        const isActive = isPrimaryNavigationItemActive(
-          navigationItem,
-          pathname,
-          selectedBrands,
-          searchParamsReady,
-          brandBrowseIntent,
-        );
+        const isActive = isPrimaryNavigationItemActive(navigationItem, pathname);
         return (
           <Link
             key={navigationItem.key}
@@ -86,20 +68,6 @@ function PrimaryNavigation({
         );
       })}
     </nav>
-  );
-}
-
-/** Brand filter state controls whether Product or Brand is active. */
-function UrlAwarePrimaryNavigation({ pathname }: { pathname: string }) {
-  const searchParams = useSearchParams();
-  const selectedBrands = getBrandFilterValues(searchParams.getAll('brand'));
-  const brandBrowseIntent = isBrandBrowseMode(searchParams.getAll('browse'));
-  return (
-    <PrimaryNavigation
-      pathname={pathname}
-      selectedBrands={selectedBrands}
-      brandBrowseIntent={brandBrowseIntent}
-    />
   );
 }
 
@@ -342,17 +310,7 @@ export function SiteHeader() {
               이음산업건설
             </Link>
           </div>
-          <Suspense
-            fallback={
-              <PrimaryNavigation
-                pathname={pathname}
-                selectedBrands={[]}
-                searchParamsReady={false}
-              />
-            }
-          >
-            <UrlAwarePrimaryNavigation pathname={pathname} />
-          </Suspense>
+          <PrimaryNavigation pathname={pathname} />
           <div className="flex min-w-0 flex-1 justify-end pl-24">
             <UrlKeywordHeaderSearch
               onSearchKeyword={searchKeyword}
@@ -706,7 +664,7 @@ function HeaderSearch({
   );
 }
 
-/** W-16 전체 메뉴 오버레이. 브랜드 목록용 상품 조회는 메뉴가 열려 있을 때만 실행합니다. */
+/** W-16 전체 메뉴 오버레이. 브랜드 목록은 ShopApi를 통해 메뉴가 열릴 때 조회합니다. */
 function AllMenuDialog({
   categories,
   onClose,
@@ -717,8 +675,8 @@ function AllMenuDialog({
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   // 이 컴포넌트는 메뉴가 열렸을 때만 마운트되므로 조회도 그때만 실행됩니다.
-  const brandsQuery = useProductsQuery({ pageSize: 100 });
-  const brandList = [...new Set((brandsQuery.data?.items ?? []).map((product) => product.brand))];
+  const brandsQuery = useBrandsQuery();
+  const brandList = brandsQuery.data ?? [];
 
   useMenuDialog(onClose, dialogRef, closeButtonRef);
 
@@ -766,11 +724,11 @@ function AllMenuDialog({
         <MenuColumn
           title="브랜드"
           items={[
-            ...brandList.map((brand) => ({
-              label: brand,
-              href: buildBrandBrowseHref(brand),
+            ...brandList.map((brandSummary) => ({
+              label: brandSummary.name,
+              href: buildBrandHref(brandSummary.id),
             })),
-            { label: '전체 브랜드', href: buildBrandBrowseHref() },
+            { label: '전체 브랜드', href: buildBrandHref() },
           ]}
           onNavigate={onClose}
         />

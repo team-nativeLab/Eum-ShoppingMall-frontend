@@ -420,6 +420,9 @@ const GENERATED_PRODUCT_SEEDS: GeneratedProductSeed[] = [
   ['소화기 거치대 (벽걸이)', '파이어킵', 'cat-fire', 18000, null, []],
   ['구급함 (현장용)', '그립원', 'cat-industrial', 42000, null, []],
   ['CCTV 작동 중 표지판', '사인랩', 'cat-sign', 7000, null, []],
+  // 영문 브랜드(W-32 A–Z 색인 확인용)
+  ['Duraguard 내충격 안전모', 'Duraguard', 'cat-head', 32000, null, ['KCs 안전인증']],
+  ['Duraguard 코팅 장갑 5켤레', 'Duraguard', 'cat-hand', 11000, null, []],
 ];
 
 /** 시드를 관리자 목 상품으로 바꾸는 함수. 7번째마다 금액 미표시, 9번째마다 품절로 상태를 섞습니다. */

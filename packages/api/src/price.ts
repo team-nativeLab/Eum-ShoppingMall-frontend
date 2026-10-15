@@ -13,8 +13,20 @@ export function formatKrw(amount: number): string {
 
 /** 가격 자리에 무엇을 보여 줄지 */
 export type PriceDisplay =
-  | { isPriceVisible: true; text: string; listPriceText: string | null }
-  | { isPriceVisible: false; text: typeof PRICE_HIDDEN_LABEL; listPriceText: null };
+  | {
+      isPriceVisible: true;
+      text: string;
+      listPriceText: string | null;
+      discountRate: number | null;
+      discountRateLabel: string | null;
+    }
+  | {
+      isPriceVisible: false;
+      text: typeof PRICE_HIDDEN_LABEL;
+      listPriceText: null;
+      discountRate: null;
+      discountRateLabel: null;
+    };
 
 type PricedProduct = Pick<Product, 'price' | 'listPrice' | 'priceVisible'>;
 
@@ -24,13 +36,27 @@ type PricedProduct = Pick<Product, 'price' | 'listPrice' | 'priceVisible'>;
  */
 export function getPriceDisplay(product: PricedProduct): PriceDisplay {
   if (!product.priceVisible || product.price === null) {
-    return { isPriceVisible: false, text: PRICE_HIDDEN_LABEL, listPriceText: null };
+    return {
+      isPriceVisible: false,
+      text: PRICE_HIDDEN_LABEL,
+      listPriceText: null,
+      discountRate: null,
+      discountRateLabel: null,
+    };
   }
   const hasDiscount = product.listPrice !== null && product.listPrice > product.price;
+  const discountRate =
+    hasDiscount && product.listPrice !== null
+      ? Math.floor(((product.listPrice - product.price) / product.listPrice) * 100)
+      : null;
+  const discountRateLabel =
+    discountRate === null ? null : discountRate === 0 ? '<1%' : `${discountRate}%`;
   return {
     isPriceVisible: true,
     text: formatKrw(product.price),
     listPriceText: hasDiscount && product.listPrice !== null ? formatKrw(product.listPrice) : null,
+    discountRate,
+    discountRateLabel,
   };
 }
 
