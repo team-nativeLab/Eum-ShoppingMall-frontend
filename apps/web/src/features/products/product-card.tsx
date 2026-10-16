@@ -30,7 +30,7 @@ export function ProductCard({
   className?: string;
   layout?: 'grid' | 'list';
   mobileVariant?: 'full' | 'compact';
-  /** 홈 베스트 셀러: 모바일 프레임·하단 여백과 데스크톱 158px 카드 테두리 규격을 제어합니다. */
+  /** 홈 베스트 셀러: 중앙 정렬한 좁은 2:3 프레임과 전용 카드 여백·데스크톱 규격을 제어합니다. */
   cardVariant?: 'default' | 'home-carousel';
 }) {
   const router = useRouter();
@@ -73,7 +73,7 @@ export function ProductCard({
           layout === 'list'
             ? 'aspect-square w-144'
             : isCompactOnMobile && isHomeCarouselCard
-              ? 'mx-auto aspect-[2/3] min-h-[133.333333cqw] w-[calc(100%_-_16px)] max-w-full lg:mx-0 lg:aspect-[3/4] lg:min-h-0 lg:w-full lg:max-w-none'
+              ? 'mx-auto aspect-[2/3] min-h-[133.333333cqw] w-[calc(100%_-_16px)] max-w-full'
               : 'aspect-[3/4]',
         )}
       >

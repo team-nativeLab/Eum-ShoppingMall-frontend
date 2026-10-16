@@ -86,7 +86,7 @@ describe('ProductCard', () => {
     expect(screen.queryByText('0%')).not.toBeInTheDocument();
   });
 
-  it('keeps the home mobile image height while narrowing the frame and adding 14px below the card', () => {
+  it('keeps the narrowed 2:3 image frame centered at desktop and mobile while increasing card height', () => {
     render(
       <ProductCard
         product={createProduct({ stockStatus: 'soldOut', priceVisible: false })}
@@ -97,6 +97,7 @@ describe('ProductCard', () => {
 
     const card = screen.getByRole('article');
     expect(card).toHaveClass('@container', 'pb-24', 'lg:pb-8');
+    expect(card).toHaveClass('lg:h-[var(--home-carousel-card-height)]');
     const imageFrame = card.firstElementChild;
     if (!(imageFrame instanceof HTMLElement)) throw new Error('Expected a product image frame.');
 
@@ -107,6 +108,8 @@ describe('ProductCard', () => {
       'aspect-[2/3]',
       'min-h-[133.333333cqw]',
       'overflow-hidden',
+    );
+    expect(imageFrame).not.toHaveClass(
       'lg:mx-0',
       'lg:w-full',
       'lg:max-w-none',

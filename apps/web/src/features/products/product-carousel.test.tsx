@@ -149,11 +149,21 @@ describe('ProductCarouselTrack responsive layouts', () => {
   });
 
   it.each([
-    { name: '1024px', layout: HOME_CAROUSEL_LAYOUTS.desktop, expectedTranslate: '-870px' },
-    { name: '1280px+', layout: HOME_CAROUSEL_LAYOUTS.wideDesktop, expectedTranslate: '-1218px' },
+    {
+      name: '1024px',
+      layout: HOME_CAROUSEL_LAYOUTS.desktop,
+      expectedPageSize: 5,
+      expectedTranslate: '-870px',
+    },
+    {
+      name: '1280px+',
+      layout: HOME_CAROUSEL_LAYOUTS.wideDesktop,
+      expectedPageSize: 7,
+      expectedTranslate: '-1218px',
+    },
   ])(
     'uses the home-only $name card geometry, stride, and inert range',
-    ({ layout, expectedTranslate }) => {
+    ({ layout, expectedPageSize, expectedTranslate }) => {
       mediaQueryState.isDesktop = true;
       render(
         <ProductCarouselTrack
@@ -174,10 +184,11 @@ describe('ProductCarouselTrack responsive layouts', () => {
       );
       expect(track).toHaveStyle({
         '--home-carousel-card-width': '158px',
-        '--home-carousel-card-height': '368px',
+        '--home-carousel-card-height': '384px',
         '--home-carousel-gap': '16px',
         '--carousel-page-translate': expectedTranslate,
       });
+      expect(layout.pageSize).toBe(expectedPageSize);
       expect(cards.slice(0, layout.pageSize).every((card) => card.hasAttribute('inert'))).toBe(
         true,
       );
