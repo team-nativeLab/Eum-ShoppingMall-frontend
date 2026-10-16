@@ -185,6 +185,46 @@ describe('SiteHeader product and brand navigation', () => {
     expect(within(menu).getByRole('button', { name: '전체 메뉴 닫기' })).toHaveClass('size-44');
   });
 
+  it('keeps the current FAQ link green and underlined without a green background', async () => {
+    navigationMocks.pathname = '/support/faq';
+    const user = userEvent.setup();
+    render(<SiteHeader />, { wrapper: createWrapper() });
+
+    const [desktopMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
+    if (!desktopMenuButton) throw new Error('메뉴 버튼을 찾을 수 없습니다.');
+    await user.click(desktopMenuButton);
+
+    const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
+    const supportSection = within(menu).getByRole('region', { name: '고객지원' });
+    const supportHeading = within(supportSection).getByRole('heading', { name: '고객지원' });
+    const supportSummary = supportHeading.closest('summary');
+    if (!supportSummary) throw new Error('고객지원 섹션 제목을 찾을 수 없습니다.');
+    expect(supportSummary).toHaveClass('border-success', 'text-success');
+
+    const faqLink = within(supportSection).getByRole('link', { name: 'FAQ' });
+    expect(faqLink).toHaveAttribute('href', '/support/faq');
+    expect(faqLink).toHaveAttribute('aria-current', 'page');
+    expect(faqLink).toHaveClass('focus-ring');
+    expect(faqLink).toHaveClass('text-success');
+    expect(faqLink).toHaveClass('underline', 'decoration-success', 'underline-offset-4');
+    expect(faqLink).not.toHaveClass('bg-success-tint');
+    expect(faqLink).not.toHaveClass('hover:bg-success-tint');
+    expect(faqLink).not.toHaveClass('active:bg-success-tint');
+    faqLink.focus();
+    expect(faqLink).toHaveFocus();
+
+    for (const label of ['공지사항', '1:1 문의']) {
+      const inactiveLink = within(supportSection).getByRole('link', { name: label });
+      expect(inactiveLink).not.toHaveAttribute('aria-current');
+      expect(inactiveLink).toHaveClass(
+        'text-text-2',
+        'hover:bg-surface',
+        'hover:text-text-1',
+        'active:bg-surface-2',
+      );
+    }
+  });
+
   it('activates the top-level category link for a nested category route', async () => {
     navigationMocks.pathname = '/category/safety-signs';
     apiMocks.listCategories.mockResolvedValue([
