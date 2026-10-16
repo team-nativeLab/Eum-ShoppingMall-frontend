@@ -160,13 +160,20 @@ describe('HomeView desktop section layout', () => {
     expect(promoSection.firstElementChild).toHaveClass('lg:grid-cols-3', 'lg:gap-16');
     const promoCards = within(promoSection).getAllByRole('link');
     expect(promoCards).toHaveLength(3);
-    expect(promoCards[0]).toHaveClass('h-216', 'lg:h-184');
+    expect(promoCards[0]).toHaveClass('h-216', 'lg:h-auto', 'lg:min-h-204');
     for (const promoCard of promoCards) {
       expect(promoCard).toHaveAttribute('href', '/about');
       expect(promoCard.querySelector('a, button, input, select, textarea, [tabindex]')).toBeNull();
       const promoCta = promoCard.querySelector('span[aria-hidden="true"]');
       expect(promoCta).not.toBeNull();
-      expect(promoCta).toHaveClass('size-56', 'rounded-capsule');
+      expect(promoCta).toHaveClass(
+        'mt-auto',
+        'size-48',
+        'shrink-0',
+        'translate-y-[5px]',
+        'rounded-capsule',
+      );
+      expect(promoCta?.querySelector('svg')).toHaveAttribute('width', '16');
       expect(promoCard).toHaveClass('focus-ring');
     }
     expect(promoCards[0]?.querySelector('span[aria-hidden="true"]')).toHaveClass('text-inverse');

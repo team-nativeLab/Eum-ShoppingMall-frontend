@@ -47,9 +47,12 @@ function InterestItemChoices() {
   return (
     <fieldset className="flex flex-col gap-16">
       <legend className="text-label-m">관심 품목</legend>
-      <div className="flex flex-wrap gap-8">
+      <div className="flex flex-wrap gap-8 pt-[3px]">
         {INTEREST_ITEMS.map((interestItem, index) => (
-          <label key={interestItem} className="relative cursor-pointer">
+          <label
+            key={interestItem}
+            className="relative inline-flex min-h-44 cursor-pointer items-center"
+          >
             <input
               type="checkbox"
               name="interestItems"
@@ -59,13 +62,13 @@ function InterestItemChoices() {
             />
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-12 hidden -translate-y-1/2 text-success peer-checked:inline-flex"
+              className="pointer-events-none absolute top-1/2 left-8 hidden -translate-y-1/2 text-success peer-checked:inline-flex"
             >
-              <Icon icon={Check} size={14} />
+              <Icon icon={Check} size={12} />
             </span>
             <span
               className={cx(
-                'inline-flex min-h-44 items-center rounded-capsule border border-line-strong bg-bg px-14 text-label-m text-text-2 transition-colors peer-checked:pl-32',
+                'inline-flex h-36 items-center rounded-capsule border border-line-strong bg-bg px-[11px] text-label-m text-text-2 transition-colors peer-checked:pl-[26px]',
                 'peer-checked:border-success peer-checked:bg-success-tint peer-checked:text-success',
                 'peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-text-1',
               )}
