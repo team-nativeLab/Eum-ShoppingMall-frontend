@@ -1,5 +1,6 @@
 'use client';
 
+import { resolveCartOption } from '@eum/api/cart';
 import type { Product } from '@eum/api/types';
 import { Checkbox } from '@eum/ui/components/Checkbox';
 import { Button } from '@eum/ui/components/Button';
@@ -10,7 +11,15 @@ import { cx } from '@eum/ui/lib/cx';
 import { Check, ChevronDown, ChevronRight, Upload, X } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useRef, useState, type FormEvent } from 'react';
+import {
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type FormEvent,
+} from 'react';
 import { PageContainer } from '@/components/page-container';
 import { useMemberSession } from '@/features/auth/member-session';
 import { useProductsQuery } from '@/features/products/use-products-query';
@@ -74,14 +83,26 @@ function InterestItemChoices() {
 }
 
 interface QuoteProductSelection {
+  selectionId: string;
   productId: string;
   quantity: number;
   optionChoiceIds: Record<string, string>;
 }
 
+interface InitialQuoteSelection {
+  productId: string;
+  optionId: string | null;
+  quantity: number;
+}
+
 interface QuotePreviewReceipt {
   inquiryNumber: string;
   inquiryType: string;
+}
+
+interface LocalAttachmentName {
+  id: number;
+  name: string;
 }
 
 function InquiryProductsPanel({
@@ -100,9 +121,9 @@ function InquiryProductsPanel({
   selectedProductId: string;
   onSelectedProductChange: (productId: string) => void;
   onAddProduct: () => void;
-  onRemoveProduct: (productId: string) => void;
-  onChangeQuantity: (productId: string, quantity: number) => void;
-  onChangeOption: (productId: string, optionId: string, choiceId: string) => void;
+  onRemoveProduct: (selectionId: string) => void;
+  onChangeQuantity: (selectionId: string, quantity: number) => void;
+  onChangeOption: (selectionId: string, optionId: string, choiceId: string) => void;
   errorMessage?: string;
 }) {
   return (
@@ -153,17 +174,26 @@ function InquiryProductsPanel({
           </Button>
         </div>
       </div>
-      {selectedProducts.length === 0 ? (
-        <p className="rounded-8 bg-surface px-12 py-16 text-body-s text-text-3">
-          선택한 상품이 여기에 표시됩니다.
-        </p>
-      ) : (
+      {selectedProducts.length > 0 ? (
         <ul className="divide-y divide-line">
-          {selectedProducts.map((selection) => {
+          {selectedProducts.map((selection, index) => {
             const product = products.find((item) => item.id === selection.productId);
             if (!product) return null;
+            const productSelectionCount = selectedProducts.filter(
+              (item) => item.productId === selection.productId,
+            ).length;
+            const productSelectionNumber = selectedProducts
+              .slice(0, index + 1)
+              .filter((item) => item.productId === selection.productId).length;
+            const accessibleProductName =
+              productSelectionCount > 1
+                ? `${product.name} 선택 ${productSelectionNumber}`
+                : product.name;
             return (
-              <li key={product.id} className="flex flex-col gap-12 py-12 first:pt-0 last:pb-0">
+              <li
+                key={selection.selectionId}
+                className="flex flex-col gap-12 py-12 first:pt-0 last:pb-0"
+              >
                 <div className="flex min-w-0 flex-wrap items-center gap-12">
                   <div className="flex min-w-0 flex-1 items-center gap-12">
                     <span aria-hidden="true" className="size-48 shrink-0 rounded-6 bg-surface" />
@@ -175,21 +205,21 @@ function InquiryProductsPanel({
                   <label className="flex shrink-0 items-center gap-6 text-caption text-text-2">
                     수량
                     <input
-                      aria-label={`${product.name} 수량`}
+                      aria-label={`${accessibleProductName} 수량`}
                       type="number"
                       min={1}
                       max={9999}
                       value={selection.quantity}
                       onChange={(event) =>
-                        onChangeQuantity(product.id, Number(event.currentTarget.value))
+                        onChangeQuantity(selection.selectionId, Number(event.currentTarget.value))
                       }
                       className="w-72 rounded-4 border border-line-control px-8 py-6 text-center text-body-s focus-ring"
                     />
                   </label>
                   <button
                     type="button"
-                    onClick={() => onRemoveProduct(product.id)}
-                    aria-label={`${product.name} 삭제`}
+                    onClick={() => onRemoveProduct(selection.selectionId)}
+                    aria-label={`${accessibleProductName} 삭제`}
                     className="inline-flex size-32 shrink-0 items-center justify-center rounded-4 focus-ring"
                   >
                     <Icon icon={X} size={16} />
@@ -205,11 +235,15 @@ function InquiryProductsPanel({
                       {productOption.required ? ' *' : ''}
                     </span>
                     <select
-                      aria-label={`${product.name} ${productOption.label}`}
+                      aria-label={`${accessibleProductName} ${productOption.label}`}
                       required={productOption.required}
                       value={selection.optionChoiceIds[productOption.id] ?? ''}
                       onChange={(event) =>
-                        onChangeOption(product.id, productOption.id, event.currentTarget.value)
+                        onChangeOption(
+                          selection.selectionId,
+                          productOption.id,
+                          event.currentTarget.value,
+                        )
                       }
                       className="min-w-0 flex-1 rounded-8 border border-line-control bg-bg px-12 py-8 text-body-s focus-ring"
                     >
@@ -228,7 +262,7 @@ function InquiryProductsPanel({
             );
           })}
         </ul>
-      )}
+      ) : null}
       {errorMessage ? (
         <p role="alert" className="text-body-s text-danger">
           {errorMessage}
@@ -262,10 +296,10 @@ function CustomItemsPanel() {
 }
 
 function QuoteFormVisual({
-  initialProductIds,
+  initialSelections,
   onComplete,
 }: {
-  initialProductIds: string[];
+  initialSelections: InitialQuoteSelection[];
   onComplete: (receipt: QuotePreviewReceipt) => void;
 }) {
   const { member } = useMemberSession();
@@ -278,20 +312,50 @@ function QuoteFormVisual({
   const [contactName, setContactName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [attachments, setAttachments] = useState<LocalAttachmentName[]>([]);
+  const [attachmentAnnouncement, setAttachmentAnnouncement] = useState('');
+  const [isAttachmentDropActive, setIsAttachmentDropActive] = useState(false);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const attachmentChooseButtonRef = useRef<HTMLButtonElement>(null);
+  const attachmentRemoveButtonRefs = useRef(new Map<number, HTMLButtonElement>());
+  const pendingAttachmentFocusId = useRef<number | null | undefined>(undefined);
+  const nextAttachmentId = useRef(0);
   const appliedInitialProductKey = useRef('');
-  const initialProductKey = initialProductIds.join(',');
+  const nextSelectionId = useRef(0);
+  const initialProductKey = JSON.stringify(initialSelections);
 
   useEffect(() => {
-    if (!productsQuery.isSuccess || !initialProductKey) return;
+    if (!productsQuery.isSuccess || initialSelections.length === 0) return;
     if (appliedInitialProductKey.current === initialProductKey) return;
     appliedInitialProductKey.current = initialProductKey;
-    const availableProductIds = new Set(productsQuery.data.items.map((product) => product.id));
+    const productsById = new Map(productsQuery.data.items.map((product) => [product.id, product]));
     setSelectedProducts(
-      [...new Set(initialProductIds)]
-        .filter((productId) => availableProductIds.has(productId))
-        .map((productId) => ({ productId, quantity: 1, optionChoiceIds: {} })),
+      initialSelections.flatMap((selection, index) => {
+        const product = productsById.get(selection.productId);
+        if (!product) return [];
+        const optionIsValid = resolveCartOption(product, selection.optionId).isAvailable;
+        return [
+          {
+            selectionId: `initial-${index}-${product.id}`,
+            productId: product.id,
+            quantity: selection.quantity,
+            optionChoiceIds: optionIsValid ? parseOptionChoiceIds(selection.optionId) : {},
+          },
+        ];
+      }),
     );
-  }, [initialProductIds, initialProductKey, productsQuery.data, productsQuery.isSuccess]);
+  }, [initialSelections, initialProductKey, productsQuery.data, productsQuery.isSuccess]);
+
+  useEffect(() => {
+    const targetAttachmentId = pendingAttachmentFocusId.current;
+    if (targetAttachmentId === undefined) return;
+    pendingAttachmentFocusId.current = undefined;
+    if (targetAttachmentId === null) {
+      attachmentChooseButtonRef.current?.focus();
+      return;
+    }
+    attachmentRemoveButtonRefs.current.get(targetAttachmentId)?.focus();
+  }, [attachments]);
 
   function handleAddProduct() {
     const product = (productsQuery.data?.items ?? []).find((item) => item.id === selectedProductId);
@@ -302,10 +366,55 @@ function QuoteFormVisual({
     }
     setSelectedProducts((current) => [
       ...current,
-      { productId: product.id, quantity: 1, optionChoiceIds: {} },
+      {
+        selectionId: `manual-${nextSelectionId.current++}`,
+        productId: product.id,
+        quantity: 1,
+        optionChoiceIds: {},
+      },
     ]);
     setProductError('');
     setSelectedProductId('');
+  }
+
+  function handleAttachmentFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const nextAttachments = Array.from(files, (file) => ({
+      id: nextAttachmentId.current++,
+      name: file.name,
+    }));
+    setAttachments((current) => [...current, ...nextAttachments]);
+    setAttachmentAnnouncement(
+      `선택한 파일 ${nextAttachments.length}개가 화면에만 표시됩니다. 파일은 문의와 함께 전송되지 않습니다.`,
+    );
+  }
+
+  function handleAttachmentInputChange(changeEvent: ChangeEvent<HTMLInputElement>) {
+    handleAttachmentFiles(changeEvent.currentTarget.files);
+    changeEvent.currentTarget.value = '';
+  }
+
+  function handleAttachmentDrop(dropEvent: DragEvent<HTMLDivElement>) {
+    dropEvent.preventDefault();
+    setIsAttachmentDropActive(false);
+    handleAttachmentFiles(dropEvent.dataTransfer.files);
+  }
+
+  function handleRemoveAttachment(attachmentId: number) {
+    const attachmentIndex = attachments.findIndex((item) => item.id === attachmentId);
+    if (attachmentIndex < 0) return;
+    const attachment = attachments[attachmentIndex];
+    if (!attachment) return;
+    pendingAttachmentFocusId.current =
+      attachments[attachmentIndex + 1]?.id ?? attachments[attachmentIndex - 1]?.id ?? null;
+    setAttachments((current) => current.filter((item) => item.id !== attachmentId));
+    setAttachmentAnnouncement(`${attachment.name} 파일을 제거했습니다.`);
+  }
+
+  function handleAttachmentDragLeave(dragEvent: DragEvent<HTMLDivElement>) {
+    const nextTarget = dragEvent.relatedTarget;
+    if (nextTarget instanceof Node && dragEvent.currentTarget.contains(nextTarget)) return;
+    setIsAttachmentDropActive(false);
   }
 
   function handleSubmit(submitEvent: FormEvent<HTMLFormElement>) {
@@ -341,6 +450,11 @@ function QuoteFormVisual({
           setContactName('');
           setPhone('');
           setEmail('');
+          setAttachments([]);
+          setAttachmentAnnouncement('선택한 파일 목록을 초기화했습니다.');
+          setIsAttachmentDropActive(false);
+          pendingAttachmentFocusId.current = undefined;
+          if (attachmentInputRef.current) attachmentInputRef.current.value = '';
           setResetVersion((version) => version + 1);
         }}
       >
@@ -351,24 +465,24 @@ function QuoteFormVisual({
             selectedProductId={selectedProductId}
             onSelectedProductChange={setSelectedProductId}
             onAddProduct={handleAddProduct}
-            onRemoveProduct={(productId) =>
+            onRemoveProduct={(selectionId) =>
               setSelectedProducts((current) =>
-                current.filter((selection) => selection.productId !== productId),
+                current.filter((selection) => selection.selectionId !== selectionId),
               )
             }
-            onChangeQuantity={(productId, quantity) =>
+            onChangeQuantity={(selectionId, quantity) =>
               setSelectedProducts((current) =>
                 current.map((selection) =>
-                  selection.productId === productId
+                  selection.selectionId === selectionId
                     ? { ...selection, quantity: Math.max(1, Math.min(9999, quantity || 1)) }
                     : selection,
                 ),
               )
             }
-            onChangeOption={(productId, optionId, choiceId) =>
+            onChangeOption={(selectionId, optionId, choiceId) =>
               setSelectedProducts((current) =>
                 current.map((selection) =>
-                  selection.productId === productId
+                  selection.selectionId === selectionId
                     ? {
                         ...selection,
                         optionChoiceIds: { ...selection.optionChoiceIds, [optionId]: choiceId },
@@ -510,15 +624,79 @@ function QuoteFormVisual({
 
         <div
           role="group"
-          aria-disabled="true"
-          aria-label="파일 첨부 영역. 파일 업로드 기능은 준비 중입니다."
-          className="flex h-120 flex-col items-center justify-center gap-8 rounded-12 border border-dashed border-line-control text-center"
+          aria-label="견적 파일 첨부"
+          onDragEnter={(dragEvent) => {
+            dragEvent.preventDefault();
+            setIsAttachmentDropActive(true);
+          }}
+          onDragOver={(dragEvent) => {
+            dragEvent.preventDefault();
+            setIsAttachmentDropActive(true);
+          }}
+          onDragLeave={handleAttachmentDragLeave}
+          onDrop={handleAttachmentDrop}
+          className={cx(
+            'flex min-h-120 flex-col items-center justify-center gap-8 rounded-12 border border-dashed border-line-control px-16 py-20 text-center',
+            isAttachmentDropActive && 'border-text-1 bg-surface',
+          )}
         >
           <Icon icon={Upload} size={24} className="text-text-2" />
-          <p className="px-12 text-body-s text-text-2">
-            파일 첨부 기능을 준비 중입니다. (도면·이미지)
+          <p className="text-body-s text-text-2">파일을 끌어 놓거나 버튼을 눌러 선택해 주세요.</p>
+          <button
+            ref={attachmentChooseButtonRef}
+            type="button"
+            aria-controls="quote-attachment-input"
+            aria-describedby="quote-attachment-description"
+            onClick={() => attachmentInputRef.current?.click()}
+            className="inline-flex min-h-40 items-center justify-center rounded-8 border border-line-strong bg-bg px-12 text-label-s text-text-1 focus-ring hover:bg-surface"
+          >
+            파일 선택
+          </button>
+          <input
+            ref={attachmentInputRef}
+            id="quote-attachment-input"
+            type="file"
+            multiple
+            aria-label="첨부할 파일 선택"
+            tabIndex={-1}
+            className="sr-only"
+            onChange={handleAttachmentInputChange}
+          />
+          <p id="quote-attachment-description" className="text-caption text-text-3">
+            선택한 파일은 현재 화면에만 표시되며 문의와 함께 전송되지 않습니다.
           </p>
-          <p className="text-caption text-text-3">허용 형식·용량 안내는 기능 연결 후 제공됩니다.</p>
+          {attachments.length > 0 ? (
+            <ul
+              aria-label="선택한 파일"
+              className="flex w-full max-w-560 flex-col divide-y divide-line text-left"
+            >
+              {attachments.map((attachment, index) => (
+                <li
+                  key={attachment.id}
+                  className="flex min-w-0 items-center justify-between gap-12 py-8 first:pt-0 last:pb-0"
+                >
+                  <span className="min-w-0 flex-1 text-body-s break-all text-text-2">
+                    {attachment.name}
+                  </span>
+                  <button
+                    ref={(element) => {
+                      if (element) attachmentRemoveButtonRefs.current.set(attachment.id, element);
+                      else attachmentRemoveButtonRefs.current.delete(attachment.id);
+                    }}
+                    type="button"
+                    aria-label={`${attachment.name} 항목 ${index + 1} 제거`}
+                    onClick={() => handleRemoveAttachment(attachment.id)}
+                    className="inline-flex size-32 shrink-0 items-center justify-center rounded-4 text-text-2 focus-ring hover:bg-surface"
+                  >
+                    <Icon icon={X} size={16} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+            {attachmentAnnouncement}
+          </p>
         </div>
 
         <div className="flex flex-col gap-12">
@@ -542,10 +720,39 @@ function QuoteFormVisual({
   );
 }
 
+function parseQuoteQuantity(value: string | undefined) {
+  const quantity = Number(value);
+  return Number.isSafeInteger(quantity) && quantity >= 1 && quantity <= 9999 ? quantity : 1;
+}
+
+function parseOptionChoiceIds(optionId: string | null): Record<string, string> {
+  if (!optionId) return {};
+  return Object.fromEntries(
+    optionId.split('|').flatMap((pair) => {
+      const separatorIndex = pair.indexOf(':');
+      return separatorIndex > 0
+        ? [[pair.slice(0, separatorIndex), pair.slice(separatorIndex + 1)]]
+        : [];
+    }),
+  );
+}
+
 /** 안전 솔루션 문의 과정을 소개하고 입력 화면을 보여 줍니다. */
 function SolutionsPageContentInner() {
   const searchParams = useSearchParams();
-  const initialProductIds = searchParams.getAll('productId');
+  const optionIds = searchParams.getAll('optionId');
+  const quantities = searchParams.getAll('quantity');
+  const initialSelections = searchParams.getAll('productId').flatMap((productId, index) => {
+    if (!productId.trim()) return [];
+    return [
+      {
+        productId,
+        optionId: optionIds[index] || null,
+        quantity: parseQuoteQuantity(quantities[index]),
+      },
+    ];
+  });
+  const initialSelectionKey = JSON.stringify(initialSelections);
   const [receipt, setReceipt] = useState<QuotePreviewReceipt | null>(null);
 
   if (receipt) {
@@ -561,6 +768,9 @@ function SolutionsPageContentInner() {
         <h1 className="mt-8 text-h1">견적 문의가 접수되었습니다</h1>
         <p className="mt-12 max-w-560 text-body-s text-text-2">
           현재는 화면 확인용 미리보기입니다. 입력값은 서버로 전송되거나 저장되지 않았습니다.
+        </p>
+        <p className="mt-8 max-w-560 text-caption text-text-3">
+          선택한 파일은 현재 화면에만 표시되며 문의와 함께 전송되지 않았습니다.
         </p>
         <dl className="mt-32 grid w-full max-w-560 grid-cols-[120px_minmax(0,1fr)] gap-x-16 gap-y-12 text-left text-body-s">
           <dt className="text-text-3">문의번호</dt>
@@ -648,8 +858,8 @@ function SolutionsPageContentInner() {
           </aside>
 
           <QuoteFormVisual
-            key={initialProductIds.join('|')}
-            initialProductIds={initialProductIds}
+            key={initialSelectionKey}
+            initialSelections={initialSelections}
             onComplete={setReceipt}
           />
         </div>

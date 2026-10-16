@@ -1,7 +1,7 @@
 'use client';
 
 import { queryKeys } from '@eum/api/query-keys';
-import type { Faq, Notice, Order } from '@eum/api/types';
+import type { Faq, Inquiry, Notice, Order } from '@eum/api/types';
 import { Button } from '@eum/ui/components/Button';
 import { Checkbox } from '@eum/ui/components/Checkbox';
 import { Chip } from '@eum/ui/components/Chip';
@@ -511,9 +511,9 @@ function InquiryForm({ memberId }: { memberId: string | null }) {
           <p className="text-caption text-text-3">첨부 파일 업로드는 현재 지원하지 않습니다.</p>
         </div>
         <div className="space-y-8">
-          <Checkbox>개인정보 수집·이용 안내에 동의합니다</Checkbox>
-          <p className="text-caption text-text-3">
-            동의 여부는 화면 확인에만 쓰이며 실제 수집·저장이나 전송은 하지 않습니다.
+          <Checkbox aria-describedby="inquiry-notification-note">답변 등록 시 알림 받기</Checkbox>
+          <p id="inquiry-notification-note" className="text-caption text-text-3">
+            알림 선택은 화면 미리보기용입니다. 실제로 저장되지 않으며 답변 알림도 발송되지 않습니다.
           </p>
         </div>
         <div className="flex flex-col gap-12 border-t border-line pt-16 sm:flex-row sm:items-center sm:justify-between">
@@ -552,7 +552,70 @@ function InquiryForm({ memberId }: { memberId: string | null }) {
   );
 }
 
-/** 고객 문의 작성 폼을 렌더링합니다. 회원 문의 내역은 마이페이지에서 확인합니다. */
+function MemberInquiryHistory({ memberId }: { memberId: string }) {
+  const inquiriesQuery = useQuery({
+    queryKey: queryKeys.inquiries.byMember(memberId),
+    queryFn: async ({ signal }): Promise<Inquiry[]> => {
+      const inquiries = await (await getShopApi()).inquiries.listByMember(memberId, { signal });
+      return inquiries
+        .filter((inquiry) => inquiry.memberId === memberId)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    },
+  });
+
+  return (
+    <section aria-labelledby="member-inquiries-heading" className="mb-24">
+      <div className="mb-12 flex flex-wrap items-center justify-between gap-12">
+        <h2 id="member-inquiries-heading" className="text-h4">
+          내 문의 내역
+        </h2>
+        <Link
+          href="#inquiry-form-heading"
+          className="inline-flex min-h-40 items-center justify-center rounded-8 bg-text-1 px-16 text-label-s text-inverse focus-ring"
+        >
+          문의 작성
+        </Link>
+      </div>
+      {inquiriesQuery.isPending ? <LoadingState label="문의 내역을 불러오는 중입니다." /> : null}
+      {inquiriesQuery.isError ? (
+        <SupportQueryError
+          message="문의 내역을 불러오지 못했습니다."
+          onRetry={() => void inquiriesQuery.refetch()}
+        />
+      ) : null}
+      {inquiriesQuery.isSuccess ? (
+        inquiriesQuery.data.length === 0 ? (
+          <p className="border-y border-line py-24 text-center text-body-s text-text-3">
+            등록된 문의가 없습니다.
+          </p>
+        ) : (
+          <ul className="divide-y divide-line border-y border-line">
+            {inquiriesQuery.data.map((inquiry) => (
+              <li key={inquiry.id} className="py-16">
+                <div className="mb-8 flex items-center justify-between gap-8">
+                  <span className="rounded-capsule border border-line-strong px-10 py-4 text-caption text-text-2">
+                    {inquiry.status === 'answered' ? '답변완료' : '답변대기'}
+                  </span>
+                  <time className="text-caption text-text-3" dateTime={inquiry.createdAt}>
+                    {formatDate(inquiry.createdAt)}
+                  </time>
+                </div>
+                <Link
+                  href={`/mypage/inquiries/${encodeURIComponent(inquiry.id)}`}
+                  className="block rounded-4 text-body-s break-words focus-ring hover:underline"
+                >
+                  {inquiry.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : null}
+    </section>
+  );
+}
+
+/** 고객 문의 작성 폼과 회원 문의 내역을 렌더링합니다. */
 export function InquiryPage() {
   const { member, status: memberStatus, refreshMember } = useMemberSession();
   return (
@@ -566,18 +629,14 @@ export function InquiryPage() {
       ) : null}
       {memberStatus === 'ready' && !member ? (
         <p role="status" className="mb-16 text-body-s text-text-3">
-          문의 내역은 로그인 후 마이페이지에서 확인할 수 있습니다.
+          문의 내역은{' '}
+          <Link href="/login?redirect=%2Fmypage%2Finquiries" className="underline focus-ring">
+            로그인 후
+          </Link>{' '}
+          마이페이지에서 확인할 수 있습니다.
         </p>
       ) : null}
-      {member ? (
-        <p className="mb-16 text-body-s text-text-2">
-          작성한 문의는{' '}
-          <Link href="/mypage/inquiries" className="underline focus-ring">
-            마이페이지 문의 내역
-          </Link>
-          에서 확인할 수 있습니다.
-        </p>
-      ) : null}
+      {memberStatus === 'ready' && member ? <MemberInquiryHistory memberId={member.id} /> : null}
       <InquiryForm memberId={member?.id ?? null} />
     </SupportShell>
   );

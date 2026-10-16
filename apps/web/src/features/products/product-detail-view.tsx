@@ -540,7 +540,15 @@ function ProductDetailContent({
                 {notice?.message}
               </p>
               <Link
-                href={buildQuoteInquiryHref([product.id])}
+                href={buildQuoteInquiryHref(
+                  purchaseLines.length > 0
+                    ? purchaseLines.map((line) => ({
+                        productId: product.id,
+                        optionId: line.optionId,
+                        quantity: line.quantity,
+                      }))
+                    : [{ productId: product.id }],
+                )}
                 className="mt-16 inline-flex rounded-4 text-label-m underline underline-offset-2 focus-ring hover:text-text-2"
               >
                 대량 구매는 견적 문의 →
