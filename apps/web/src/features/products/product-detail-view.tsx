@@ -204,6 +204,9 @@ function ProductDetailContent({
   const isSoldOut = product.stockStatus === 'soldOut';
   const isPurchasable = canBuyNow(product);
   const isAddable = canAddToCart(product);
+  const selectedPurchaseLines = purchaseLines.filter(
+    (line) => product.options.length > 0 || line.lineId !== BASE_LINE_ID || line.quantity !== 1,
+  );
   const totalQuantity = purchaseLines.reduce((quantitySum, line) => quantitySum + line.quantity, 0);
   const galleryImages: GalleryImage[] =
     product.images.length > 0
@@ -571,7 +574,17 @@ function ProductDetailContent({
                 {notice?.message}
               </p>
               <Link
-                href={buildQuoteInquiryHref([product.id])}
+                href={
+                  selectedPurchaseLines.length > 0
+                    ? buildQuoteInquiryHref(
+                        selectedPurchaseLines.map((line) => ({
+                          productId: product.id,
+                          optionId: line.optionId,
+                          quantity: line.quantity,
+                        })),
+                      )
+                    : `/solutions?productId=${encodeURIComponent(product.id)}`
+                }
                 className="mt-16 inline-flex rounded-4 text-label-m focus-ring hover:text-text-2 hover:underline hover:underline-offset-2 focus-visible:underline focus-visible:underline-offset-2"
               >
                 대량 구매는 견적 문의 →

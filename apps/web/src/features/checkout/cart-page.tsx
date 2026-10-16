@@ -334,7 +334,11 @@ export function CartPageView() {
           {orderableIds.length === 0 ? (
             <Link
               href={buildQuoteInquiryHref(
-                groups.unorderableItems.map((item) => item.cartItem.productId),
+                groups.unorderableItems.map(({ cartItem }) => ({
+                  productId: cartItem.productId,
+                  optionId: cartItem.optionId,
+                  quantity: cartItem.quantity,
+                })),
               )}
               className={cx(
                 buttonClassName({ variant: 'secondary', size: 'l', isFullWidth: true }),
@@ -477,7 +481,9 @@ function CartLine({
         {linePrice}
         {unavailableReason === 'priceHidden' ? (
           <Link
-            href={buildQuoteInquiryHref([item.productId])}
+            href={buildQuoteInquiryHref([
+              { productId: item.productId, optionId: item.optionId, quantity: item.quantity },
+            ])}
             className="mt-4 block text-caption text-text-1 underline focus-ring"
           >
             견적 문의 →

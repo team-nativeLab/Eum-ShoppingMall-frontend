@@ -17,6 +17,8 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
   const { setMember } = useMemberSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const [rememberLogin, setRememberLogin] = useState(false);
   const [helpMessage, setHelpMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -26,6 +28,32 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
   const handleSubmit = async (submitEvent: FormEvent<HTMLFormElement>) => {
     submitEvent.preventDefault();
     setError('');
+
+    const emailInput =
+      submitEvent.currentTarget.querySelector<HTMLInputElement>('input[name="email"]');
+    const passwordInput =
+      submitEvent.currentTarget.querySelector<HTMLInputElement>('input[name="password"]');
+
+    if (!emailInput || !passwordInput) return;
+
+    const nextEmailError = emailInput.validity.valueMissing
+      ? '이메일을 입력해 주세요.'
+      : emailInput.validity.typeMismatch
+        ? '올바른 이메일 형식으로 입력해 주세요.'
+        : '';
+    const nextPasswordError = passwordInput.validity.valueMissing
+      ? '비밀번호를 입력해 주세요.'
+      : '';
+
+    setEmailError(nextEmailError);
+    setPasswordError(nextPasswordError);
+
+    if (nextEmailError || nextPasswordError) {
+      const firstInvalidInput = nextEmailError ? emailInput : passwordInput;
+      window.requestAnimationFrame(() => firstInvalidInput.focus());
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const memberAuth = await getMemberAuth();
@@ -61,6 +89,7 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
         <form
           className="flex flex-col gap-24"
           onSubmit={(submitEvent) => void handleSubmit(submitEvent)}
+          noValidate
         >
           <div className="flex flex-col gap-16">
             <TextField
@@ -71,7 +100,11 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
               placeholder="example@email.com"
               required
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              errorMessage={emailError || undefined}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                setEmailError('');
+              }}
             />
             <div className="flex flex-col gap-12">
               <TextField
@@ -82,7 +115,11 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
                 placeholder="비밀번호를 입력해 주세요"
                 required
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                errorMessage={passwordError || undefined}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  setPasswordError('');
+                }}
               />
               <Checkbox
                 checked={rememberLogin}

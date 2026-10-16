@@ -1,5 +1,5 @@
 import type { Product, ProductOption } from '@eum/api/types';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -203,6 +203,32 @@ describe('ProductDetailView content layout', () => {
       'focus-visible:underline',
       'focus-visible:underline-offset-2',
     );
+  });
+
+  it('passes each selected option and quantity to the quote inquiry link', async () => {
+    const user = userEvent.setup();
+    detailMocks.productQuery.mockReturnValue({
+      data: { ...testProduct, options: [sizeOption] },
+      isPending: false,
+      isError: false,
+    });
+    render(<ProductDetailView productId="product-test" />);
+
+    const sizeSelect = screen.getByLabelText('사이즈');
+    await user.selectOptions(sizeSelect, 'medium');
+    await user.selectOptions(sizeSelect, 'large');
+
+    const mediumQuantity = screen.getByRole('group', { name: '사이즈: M 수량' });
+    const largeQuantity = screen.getByRole('group', { name: '사이즈: L 수량' });
+    await user.click(within(mediumQuantity).getByRole('button', { name: '수량 늘리기' }));
+    await user.click(within(mediumQuantity).getByRole('button', { name: '수량 늘리기' }));
+    await user.click(within(largeQuantity).getByRole('button', { name: '수량 늘리기' }));
+
+    const quoteLink = screen.getByRole('link', { name: '대량 구매는 견적 문의 →' });
+    const query = new URLSearchParams(quoteLink.getAttribute('href')?.split('?')[1] ?? '');
+    expect(query.getAll('productId')).toEqual(['product-test', 'product-test']);
+    expect(query.getAll('optionId')).toEqual(['size:medium', 'size:large']);
+    expect(query.getAll('quantity')).toEqual(['3', '2']);
   });
 
   it('does not show a false zero discount in the purchase summary', () => {

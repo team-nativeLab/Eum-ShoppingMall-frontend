@@ -22,13 +22,20 @@ vi.mock('./product-card', () => ({
   ProductCard: ({
     product,
     className,
+    mobileVariant,
     cardVariant,
   }: {
     product: Product;
     className?: string;
+    mobileVariant?: 'full' | 'compact';
     cardVariant?: 'default' | 'home-carousel';
   }) => (
-    <article data-product-id={product.id} data-card-variant={cardVariant} className={className} />
+    <article
+      data-product-id={product.id}
+      data-mobile-variant={mobileVariant}
+      data-card-variant={cardVariant}
+      className={className}
+    />
   ),
 }));
 
@@ -182,10 +189,10 @@ describe('ProductCarouselTrack responsive layouts', () => {
     },
   );
 
-  it('retains the mobile two-column grid while home layout is opted in', () => {
+  it('uses compact home cards in a two-column grid and keeps a partial last row within the track', () => {
     render(
       <ProductCarouselTrack
-        products={products}
+        products={products.slice(0, 3)}
         pageIndex={0}
         direction="none"
         mobileLayout="grid"
@@ -195,6 +202,25 @@ describe('ProductCarouselTrack responsive layouts', () => {
     );
 
     const track = screen.getByRole('list', { name: '베스트 상품' });
-    expect(track).toHaveClass('grid-rows-2');
+    expect(track).toHaveClass(
+      'grid-rows-2',
+      'auto-cols-[calc((100%-12px)/2)]',
+      'gap-x-12',
+      'gap-y-16',
+    );
+    expect(screen.getByTestId('product-carousel')).toHaveClass('overflow-x-auto');
+    const cards = within(track).getAllByRole('article');
+    expect(cards).toHaveLength(3);
+    for (const card of cards) {
+      expect(card).toHaveClass('h-full');
+      expect(card).toHaveAttribute('data-mobile-variant', 'compact');
+      expect(card).toHaveAttribute('data-card-variant', 'home-carousel');
+    }
+    const items = within(track).getAllByRole('listitem');
+    expect(items).toHaveLength(3);
+    expect(items[0]).toHaveClass('min-w-0', 'snap-start');
+    expect(items[0]).toHaveStyle({ '--mobile-column': '1', '--mobile-row': '1' });
+    expect(items[1]).toHaveStyle({ '--mobile-column': '2', '--mobile-row': '1' });
+    expect(items[2]).toHaveStyle({ '--mobile-column': '1', '--mobile-row': '2' });
   });
 });
