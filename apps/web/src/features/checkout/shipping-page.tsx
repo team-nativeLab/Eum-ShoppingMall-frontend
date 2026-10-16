@@ -19,6 +19,7 @@ import {
   CheckoutSection,
   MockOnlyNotice,
 } from './checkout-common';
+import { calculateShippingFee, resolveCheckoutOptions } from './checkout-utils';
 import { useAddressesQuery, useCheckoutOptionsQuery } from './use-checkout-queries';
 
 interface ShippingFields {
@@ -45,6 +46,10 @@ export function ShippingPageView() {
   const checkout = useCheckout();
   const addressesQuery = useAddressesQuery();
   const optionsQuery = useCheckoutOptionsQuery();
+  const resolvedOptions = optionsQuery.isError ? null : resolveCheckoutOptions(optionsQuery.data);
+  const options = resolvedOptions?.options;
+  const hasOptionsError = optionsQuery.isError || (optionsQuery.isSuccess && !resolvedOptions);
+  const amountsStatus = hasOptionsError ? 'error' : options ? 'ready' : 'loading';
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(checkout.shippingAddress);
   const [fields, setFields] = useState<ShippingFields>(
     checkout.shippingAddress ?? EMPTY_SHIPPING_FIELDS,
@@ -72,6 +77,7 @@ export function ShippingPageView() {
   }, [checkout.isSelectionReady, hasRestored, member, memberStatus, router]);
 
   const handleContinue = () => {
+    if (!options) return;
     const nextAddress: Address | null =
       addressMode === 'saved'
         ? selectedShipping
@@ -147,18 +153,13 @@ export function ShippingPageView() {
   }
 
   const orderItems = cartItems.filter((item) => selectedIds.includes(item.id));
-  const options = optionsQuery.isError ? undefined : optionsQuery.data;
-  const amountsStatus = optionsQuery.isError ? 'error' : options ? 'ready' : 'loading';
   const productTotal = calculateCartTotals(cartItems, new Set(selectedIds)).productTotal;
-  const shippingFee =
-    options && productTotal > 0 && productTotal < options.freeShippingThreshold
-      ? options.shippingFee
-      : 0;
+  const shippingFee = options ? calculateShippingFee(productTotal, options) : 0;
   const shippingFeeLabel = options
     ? shippingFee === 0
       ? '무료'
       : formatKrw(shippingFee)
-    : optionsQuery.isError
+    : hasOptionsError
       ? '운임 확인 필요'
       : '운임 확인 중';
   const updateField = (field: keyof ShippingFields, value: string) =>
@@ -171,10 +172,10 @@ export function ShippingPageView() {
         배송지와 주문은 이 화면의 데모 입력으로만 처리됩니다. 실제 주문이나 결제는 진행되지
         않습니다.
       </MockOnlyNotice>
-      {optionsQuery.isError ? (
+      {hasOptionsError ? (
         <div className="mt-16 flex flex-col items-start gap-8 sm:flex-row sm:items-center">
           <NoticeInline tone="danger" role="alert" className="w-full sm:flex-1">
-            배송 및 주문 선택지를 불러오지 못했습니다. 다시 시도해 주세요.
+            배송 및 주문 선택지를 확인할 수 없습니다. 다시 시도해 주세요.
           </NoticeInline>
           <Button
             variant="secondary"
@@ -430,10 +431,7 @@ export function ShippingPageView() {
           amountsStatus={amountsStatus}
           buttonLabel="결제 단계로"
           buttonDisabled={
-            !options ||
-            optionsQuery.isError ||
-            selectedIds.length === 0 ||
-            (addressMode === 'saved' && !selectedShipping)
+            !options || selectedIds.length === 0 || (addressMode === 'saved' && !selectedShipping)
           }
           onSubmit={handleContinue}
           caption="다음 단계에서 약관에 동의한 뒤 결제할 수 있습니다."
