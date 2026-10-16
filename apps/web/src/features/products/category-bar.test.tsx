@@ -33,9 +33,10 @@ describe('category shortcuts', () => {
 
     expect(customOrderLink).toHaveAttribute('href', '/solutions');
     expect(customOrderLink).toHaveTextContent('기업 맞춤 솔루션');
-    expect(
-      within(categoryNavigation).getByRole('link', { name: '개인보호장비' }),
-    ).toHaveAttribute('href', '/category/safety%2Fgear');
+    expect(within(categoryNavigation).getByRole('link', { name: '개인보호장비' })).toHaveAttribute(
+      'href',
+      '/category/safety%2Fgear',
+    );
   });
 
   it('routes the mobile custom-order tile to solutions and preserves other category links', () => {
@@ -46,8 +47,9 @@ describe('category shortcuts', () => {
     expect(
       within(categoryNavigation).getByRole('link', { name: /맞춤 제작\/납품/ }),
     ).toHaveAttribute('href', '/solutions');
-    expect(
-      within(categoryNavigation).getByRole('link', { name: '개인보호장비' }),
-    ).toHaveAttribute('href', '/category/safety%2Fgear');
+    expect(within(categoryNavigation).getByRole('link', { name: '개인보호장비' })).toHaveAttribute(
+      'href',
+      '/category/safety%2Fgear',
+    );
   });
 });
