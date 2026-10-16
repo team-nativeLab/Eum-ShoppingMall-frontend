@@ -424,7 +424,7 @@ function QuoteFormVisual({
                 *
               </span>
             </legend>
-            <div className="flex flex-wrap gap-x-16 gap-y-8">
+            <div className="flex flex-wrap gap-x-16 gap-y-8 [&>label>span]:size-14 [&>label>span>span]:size-7">
               <Radio className="min-h-44" name="inquiryType" value="custom" required defaultChecked>
                 맞춤 제작
               </Radio>
