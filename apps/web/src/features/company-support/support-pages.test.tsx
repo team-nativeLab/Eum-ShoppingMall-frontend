@@ -274,15 +274,24 @@ describe('company support routes', () => {
     mockMemberSession(createMember('mem-001'));
     renderWithQuery(<InquiryPage />);
     expect(await screen.findByRole('heading', { name: '문의 작성' })).toBeInTheDocument();
-    expect(screen.getByLabelText('문의 유형 *')).toBeRequired();
-    expect(screen.getByLabelText('제목 *')).toBeRequired();
+    expect(screen.getByLabelText(/문의 유형/)).toBeRequired();
+    expect(screen.getByLabelText(/제목/)).toBeRequired();
     expect(screen.getByRole('textbox', { name: /문의 내용/ })).toBeRequired();
-    expect(screen.getByLabelText('주문 선택 (선택)')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '주문 선택 (선택)' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '주문 선택 (선택)' })).not.toBeRequired();
     expect(screen.getByText('0 / 1,000')).toBeInTheDocument();
 
-    const inquiryType = screen.getByLabelText('문의 유형 *');
-    const title = screen.getByLabelText('제목 *');
+    const inquiryType = screen.getByLabelText(/문의 유형/);
+    const title = screen.getByLabelText(/제목/);
     const body = screen.getByRole('textbox', { name: /문의 내용/ });
+    expect(screen.getAllByText('*', { selector: 'span[aria-hidden="true"]' })).toHaveLength(4);
+    expect(screen.getByText('*', { selector: 'span.mr-4[aria-hidden="true"]' })).toHaveClass(
+      'mr-4',
+      'text-danger',
+    );
+    expect(inquiryType).toHaveAccessibleName('문의 유형');
+    expect(title).toHaveAccessibleName('제목');
+    expect(body).not.toHaveAccessibleName(/\*/);
     fireEvent.change(inquiryType, { target: { value: 'delivery' } });
     fireEvent.change(title, { target: { value: '작성 중인 제목' } });
     fireEvent.change(body, { target: { value: '작성 중인 내용' } });
@@ -307,8 +316,12 @@ describe('company support routes', () => {
     mockMemberSession(createMember('mem-001'));
     renderWithQuery(<InquiryPage />);
     await screen.findByRole('heading', { name: '문의 작성' });
-    fireEvent.change(screen.getByLabelText('문의 유형 *'), { target: { value: 'delivery' } });
-    fireEvent.change(screen.getByLabelText('제목 *'), { target: { value: '배송 확인' } });
+    fireEvent.change(screen.getByLabelText(/문의 유형/), {
+      target: { value: 'delivery' },
+    });
+    fireEvent.change(screen.getByLabelText(/제목/), {
+      target: { value: '배송 확인' },
+    });
     fireEvent.change(screen.getByRole('textbox', { name: /문의 내용/ }), {
       target: { value: '배송 일정을 확인해 주세요.' },
     });
@@ -319,7 +332,7 @@ describe('company support routes', () => {
     expect(await screen.findByRole('status')).toHaveTextContent(
       '문의가 접수되었습니다. 데모 화면이며 입력값은 전송·저장되지 않았습니다.',
     );
-    expect(screen.getByLabelText('제목 *')).toHaveValue('');
+    expect(screen.getByLabelText(/제목/)).toHaveValue('');
     expect(screen.getByRole('textbox', { name: /문의 내용/ })).toHaveValue('');
     expect(screen.getByText('접수 상태 다시 보기')).toBeInTheDocument();
     const api = await getShopApi();
