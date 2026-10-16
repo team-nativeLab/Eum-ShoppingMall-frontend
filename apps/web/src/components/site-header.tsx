@@ -30,6 +30,7 @@ import {
   type FocusEvent,
   type FormEvent,
   type KeyboardEvent,
+  type RefObject,
   type TransitionEvent as ReactTransitionEvent,
 } from 'react';
 import { CartLink } from './cart-link';
@@ -157,6 +158,7 @@ export function SiteHeader() {
   const shouldRestoreMenuFocusRef = useRef(false);
   const desktopMenuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const productDetailBackButtonRef = useRef<HTMLButtonElement>(null);
   const menuPanelRef = useRef<HTMLDivElement>(null);
   const categoryList = categoriesQuery.data ?? [];
   const isMenuVisible = isMenuOpen;
@@ -217,15 +219,25 @@ export function SiteHeader() {
     router.push('/search?q=' + encodeURIComponent(keyword));
   };
 
-  // 닫힌 상태의 inert/aria-hidden DOM이 반영된 뒤 trigger로 포커스를 돌립니다.
+  // 닫힌 상태를 반영한 뒤 현재 보이는 트리거로 복귀하고, 상세 모바일에서는 이전 화면 버튼을 씁니다.
   useLayoutEffect(() => {
     if (isMenuVisible || !shouldRestoreMenuFocusRef.current) return;
 
     shouldRestoreMenuFocusRef.current = false;
-    const menuTrigger = menuTriggerRef.current;
+    const openedMenuTrigger = menuTriggerRef.current;
     menuTriggerRef.current = null;
-    menuTrigger?.focus();
-  }, [isMenuVisible]);
+    const isDesktopViewport = window.innerWidth >= 1024;
+    const currentMenuFocusTarget = isDesktopViewport
+      ? desktopMenuButtonRef.current
+      : isProductDetail
+        ? productDetailBackButtonRef.current
+        : mobileMenuButtonRef.current;
+    const openedTriggerIsVisible = isDesktopViewport
+      ? openedMenuTrigger === desktopMenuButtonRef.current
+      : !isProductDetail && openedMenuTrigger === mobileMenuButtonRef.current;
+    const focusTarget = openedTriggerIsVisible ? openedMenuTrigger : currentMenuFocusTarget;
+    focusTarget?.focus();
+  }, [isMenuVisible, isProductDetail]);
 
   // Mount first in the closed visual state, then start the entrance on the next frame.
   useLayoutEffect(() => {
@@ -453,7 +465,7 @@ export function SiteHeader() {
         </PageContainer>
 
         {isProductDetail ? (
-          <ProductDetailMobileBar />
+          <ProductDetailMobileBar backButtonRef={productDetailBackButtonRef} />
         ) : (
           <>
             <div className="flex h-56 items-center justify-between px-10 lg:hidden">
@@ -538,7 +550,11 @@ export function SiteHeader() {
  * W-03m 상품 상세 모바일 헤더(뒤로·공유·장바구니). 데스크톱에서는 숨깁니다.
  * 뒤로가기는 이전 기록이 없으면(새 탭으로 바로 연 경우) 홈으로 보냅니다.
  */
-function ProductDetailMobileBar() {
+function ProductDetailMobileBar({
+  backButtonRef,
+}: {
+  backButtonRef: RefObject<HTMLButtonElement | null>;
+}) {
   const router = useRouter();
   const [shareMessage, setShareMessage] = useState('');
 
@@ -579,6 +595,7 @@ function ProductDetailMobileBar() {
     <>
       <PageContainer className="flex h-48 items-center justify-between lg:hidden">
         <button
+          ref={backButtonRef}
           type="button"
           onClick={handleBack}
           aria-label="이전 화면"

@@ -309,6 +309,56 @@ describe('SiteHeader product and brand navigation', () => {
     },
   );
 
+  it('restores focus to the mobile menu trigger after the viewport narrows', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
+    const user = userEvent.setup();
+    render(<SiteHeader />, { wrapper: createWrapper() });
+
+    const [desktopMenuButton, mobileMenuButton] = screen.getAllByRole('button', {
+      name: '전체 메뉴 열기',
+    });
+    if (!desktopMenuButton || !mobileMenuButton) {
+      throw new Error('메뉴 버튼을 찾을 수 없습니다.');
+    }
+    await user.click(desktopMenuButton);
+    await screen.findByRole('navigation', { name: '전체 메뉴' });
+    const menuPanel = document.getElementById('site-header-all-menu');
+    if (!menuPanel) throw new Error('전체 메뉴 패널을 찾을 수 없습니다.');
+
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    fireEvent.resize(window);
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(menuPanel).toHaveAttribute('aria-hidden', 'true'));
+    expect(desktopMenuButton).not.toHaveFocus();
+    expect(mobileMenuButton).toHaveFocus();
+  });
+
+  it('restores focus to the product back button when no mobile menu trigger exists', async () => {
+    navigationMocks.pathname = '/products/product-1';
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
+    const user = userEvent.setup();
+    render(<SiteHeader />, { wrapper: createWrapper() });
+
+    const [desktopMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
+    if (!desktopMenuButton) {
+      throw new Error('데스크톱 메뉴 버튼을 찾을 수 없습니다.');
+    }
+    await user.click(desktopMenuButton);
+    await screen.findByRole('navigation', { name: '전체 메뉴' });
+    const menuPanel = document.getElementById('site-header-all-menu');
+    if (!menuPanel) throw new Error('전체 메뉴 패널을 찾을 수 없습니다.');
+
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    fireEvent.resize(window);
+    const backButton = screen.getByRole('button', { name: '이전 화면' });
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(menuPanel).toHaveAttribute('aria-hidden', 'true'));
+    expect(desktopMenuButton).not.toHaveFocus();
+    expect(backButton).toHaveFocus();
+  });
+
   it('closes the popup from its X control and restores focus to its opener', async () => {
     const user = userEvent.setup();
     render(<SiteHeader />, { wrapper: createWrapper() });
