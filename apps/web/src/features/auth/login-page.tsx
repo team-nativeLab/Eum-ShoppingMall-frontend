@@ -29,12 +29,10 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
     submitEvent.preventDefault();
     setError('');
 
-    const emailInput = submitEvent.currentTarget.querySelector<HTMLInputElement>(
-      'input[name="email"]',
-    );
-    const passwordInput = submitEvent.currentTarget.querySelector<HTMLInputElement>(
-      'input[name="password"]',
-    );
+    const emailInput =
+      submitEvent.currentTarget.querySelector<HTMLInputElement>('input[name="email"]');
+    const passwordInput =
+      submitEvent.currentTarget.querySelector<HTMLInputElement>('input[name="password"]');
 
     if (!emailInput || !passwordInput) return;
 
