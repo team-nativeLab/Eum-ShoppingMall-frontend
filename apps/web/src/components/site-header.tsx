@@ -935,7 +935,9 @@ function MenuColumn({
                 className={cx(
                   'inline-flex min-h-44 w-full items-center rounded-8 px-8 text-body-s focus-ring transition-colors',
                   menuItem === currentItem
-                    ? 'bg-success-tint text-label-m text-success underline decoration-success underline-offset-4 hover:bg-success-tint hover:text-success active:bg-success-tint'
+                    ? menuItem.href === '/support/faq'
+                      ? 'text-label-m text-success underline decoration-success underline-offset-4'
+                      : 'bg-success-tint text-label-m text-success underline decoration-success underline-offset-4 hover:bg-success-tint hover:text-success active:bg-success-tint'
                     : 'text-text-2 hover:bg-surface hover:text-text-1 active:bg-surface-2',
                 )}
               >
