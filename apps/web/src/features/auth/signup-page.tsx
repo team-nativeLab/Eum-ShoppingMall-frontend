@@ -205,7 +205,8 @@ export function SignupPageView({ rawRedirect }: { rawRedirect?: string }) {
           />
           <div className="grid gap-8 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
             <TextField
-              label="이메일 *"
+              label="이메일"
+              showRequiredIndicator
               name="email"
               type="email"
               autoComplete="email"
@@ -231,7 +232,8 @@ export function SignupPageView({ rawRedirect }: { rawRedirect?: string }) {
             </Button>
           </div>
           <TextField
-            label="비밀번호 *"
+            label="비밀번호"
+            showRequiredIndicator
             name="password"
             type="password"
             autoComplete="new-password"
@@ -247,7 +249,8 @@ export function SignupPageView({ rawRedirect }: { rawRedirect?: string }) {
             }
           />
           <TextField
-            label="비밀번호 확인 *"
+            label="비밀번호 확인"
+            showRequiredIndicator
             name="passwordConfirmation"
             type="password"
             autoComplete="new-password"
@@ -267,7 +270,8 @@ export function SignupPageView({ rawRedirect }: { rawRedirect?: string }) {
             }
           />
           <TextField
-            label="이름 *"
+            label="이름"
+            showRequiredIndicator
             name="name"
             autoComplete="name"
             placeholder="이름을 입력해 주세요"
@@ -277,7 +281,8 @@ export function SignupPageView({ rawRedirect }: { rawRedirect?: string }) {
           />
           <div className="grid gap-8 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
             <TextField
-              label="휴대폰 번호 *"
+              label="휴대폰 번호"
+              showRequiredIndicator
               name="phone"
               type="tel"
               inputMode="tel"
@@ -301,9 +306,11 @@ export function SignupPageView({ rawRedirect }: { rawRedirect?: string }) {
           <div className="grid gap-8 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
             <div className="min-w-0">
               <TextField
-                label="인증번호 *"
+                label="인증번호"
                 isLabelHidden
+                showRequiredIndicator
                 name="verificationCode"
+                aria-required="true"
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 maxLength={6}

@@ -212,7 +212,11 @@ function InquiryProductsPanel({
                   >
                     <span className="w-80 shrink-0">
                       {productOption.label}
-                      {productOption.required ? ' *' : ''}
+                      {productOption.required ? (
+                        <span aria-hidden="true" className="ml-4 text-danger">
+                          *
+                        </span>
+                      ) : null}
                     </span>
                     <select
                       aria-label={`${product.name} ${productOption.label}`}
@@ -414,18 +418,23 @@ function QuoteFormVisual({
 
         <div className="flex flex-col gap-16 lg:contents">
           <fieldset className="flex flex-col gap-8 lg:gap-12">
-            <legend className="text-label-m">문의 유형 *</legend>
-            <div className="flex flex-wrap gap-x-24 gap-y-12 [&>label>span]:size-16 [&>label>span>span]:size-8">
-              <Radio name="inquiryType" value="custom" defaultChecked>
+            <legend className="text-label-m">
+              문의 유형
+              <span aria-hidden="true" className="ml-4 text-danger">
+                *
+              </span>
+            </legend>
+            <div className="flex flex-wrap gap-x-16 gap-y-8">
+              <Radio className="min-h-44" name="inquiryType" value="custom" required defaultChecked>
                 맞춤 제작
               </Radio>
-              <Radio name="inquiryType" value="bulk">
+              <Radio className="min-h-44" name="inquiryType" value="bulk" required>
                 대량 구매
               </Radio>
-              <Radio name="inquiryType" value="regular-supply">
+              <Radio className="min-h-44" name="inquiryType" value="regular-supply" required>
                 정기 납품
               </Radio>
-              <Radio name="inquiryType" value="other">
+              <Radio className="min-h-44" name="inquiryType" value="other" required>
                 기타
               </Radio>
             </div>
@@ -454,7 +463,8 @@ function QuoteFormVisual({
 
         <div className="grid grid-cols-1 gap-24 min-[600px]:grid-cols-2">
           <TextField
-            label="회사명 *"
+            label="회사명"
+            showRequiredIndicator
             name="companyName"
             autoComplete="organization"
             placeholder="회사명을 입력해 주세요"
@@ -463,7 +473,8 @@ function QuoteFormVisual({
             onChange={(event) => setCompanyName(event.currentTarget.value)}
           />
           <TextField
-            label="담당자명 *"
+            label="담당자명"
+            showRequiredIndicator
             name="contactName"
             autoComplete="name"
             placeholder="담당자 이름을 입력해 주세요"
@@ -472,7 +483,8 @@ function QuoteFormVisual({
             onChange={(event) => setContactName(event.currentTarget.value)}
           />
           <TextField
-            label="연락처 *"
+            label="연락처"
+            showRequiredIndicator
             name="phone"
             type="tel"
             autoComplete="tel"
@@ -483,7 +495,8 @@ function QuoteFormVisual({
             onChange={(event) => setPhone(event.currentTarget.value)}
           />
           <TextField
-            label="이메일 *"
+            label="이메일"
+            showRequiredIndicator
             name="email"
             type="email"
             autoComplete="email"

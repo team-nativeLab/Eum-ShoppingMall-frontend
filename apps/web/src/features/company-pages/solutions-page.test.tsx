@@ -35,6 +35,12 @@ const product: Product = {
       required: true,
       choices: [{ id: 'white', label: '흰색', priceDelta: 0 }],
     },
+    {
+      id: 'packaging',
+      label: '포장',
+      required: false,
+      choices: [{ id: 'standard', label: '기본 포장', priceDelta: 0 }],
+    },
   ],
   specifications: [],
   certifications: [],
@@ -131,6 +137,16 @@ describe('quote request preview', () => {
     const selectedProductRow = screen.getByText('안전모', { selector: 'p' }).closest('li');
     expect(selectedProductRow).toHaveClass('border-success', 'bg-success-tint');
     expect(addButton).toBeDisabled();
+
+    const requiredOption = screen.getByRole('combobox', { name: '안전모 색상' });
+    const optionalOption = screen.getByRole('combobox', { name: '안전모 포장' });
+    expect(requiredOption).toBeRequired();
+    expect(requiredOption.closest('label')?.querySelector('[aria-hidden="true"]')).toHaveClass(
+      'ml-4',
+      'text-danger',
+    );
+    expect(optionalOption).not.toBeRequired();
+    expect(optionalOption.closest('label')?.querySelector('[aria-hidden="true"]')).toBeNull();
   });
 
   it('견적 폼 정보를 정해진 순서로 보여 주고 전체 수량 도움말을 연결합니다', async () => {
@@ -139,11 +155,11 @@ describe('quote request preview', () => {
 
     const form = screen.getByRole('region', { name: '견적 문의 입력' });
     const productsHeading = screen.getByRole('heading', { name: '문의 상품' });
-    const inquiryTypeLegend = screen.getByText('문의 유형 *');
+    const inquiryTypeLegend = screen.getByText('문의 유형', { selector: 'legend' });
     const memberPrefillNote = screen.getByText(
       '회원 정보를 입력란에 미리 채울 수 있습니다. 입력 후에도 직접 수정할 수 있습니다.',
     );
-    const companyNameInput = screen.getByLabelText('회사명 *');
+    const companyNameInput = screen.getByRole('textbox', { name: '회사명' });
     const quantityInput = screen.getByRole('spinbutton', { name: '현장 전체 예상 수량' });
     const deliveryDateButton = screen.getByRole('button', {
       name: '희망 납기 날짜를 선택해 주세요',
@@ -165,7 +181,23 @@ describe('quote request preview', () => {
     };
 
     expect(form).toContainElement(productsHeading);
+    const inquiryTypeGroup = screen.getByRole('group', { name: '문의 유형' });
+    expect(inquiryTypeGroup).toContainElement(inquiryTypeLegend);
+    expect(inquiryTypeLegend.querySelector('[aria-hidden="true"]')).toHaveClass(
+      'ml-4',
+      'text-danger',
+    );
+    const inquiryTypeRadios = screen.getAllByRole('radio');
+    expect(inquiryTypeRadios).toHaveLength(4);
+    expect(inquiryTypeRadios.every((radio) => radio.hasAttribute('required'))).toBe(true);
     expect(screen.getByRole('radio', { name: '맞춤 제작' })).toBeChecked();
+    for (const label of ['회사명', '담당자명', '연락처', '이메일']) {
+      const requiredInput = screen.getByRole('textbox', { name: label });
+      expect(requiredInput).toBeRequired();
+      expect(
+        requiredInput.closest('div')?.querySelector('label span[aria-hidden="true"]'),
+      ).toHaveClass('ml-4', 'text-danger');
+    }
     expectBefore(productsHeading, inquiryTypeLegend);
     expectBefore(inquiryTypeLegend, memberPrefillNote);
     expectBefore(memberPrefillNote, companyNameInput);
@@ -200,7 +232,9 @@ describe('quote request preview', () => {
     });
     fireEvent.click(screen.getByRole('radio', { name: '대량 구매' }));
     expect(screen.getByRole('radio', { name: '대량 구매' })).toBeChecked();
-    fireEvent.change(screen.getByLabelText('회사명 *'), { target: { value: '테스트 회사' } });
+    fireEvent.change(screen.getByRole('textbox', { name: '회사명' }), {
+      target: { value: '테스트 회사' },
+    });
     fireEvent.click(screen.getByRole('button', { name: '회원 정보로 미리 채우기' }));
     fireEvent.click(screen.getByRole('checkbox', { name: '[필수] 개인정보 수집·이용 동의' }));
     fireEvent.submit(
@@ -220,6 +254,33 @@ describe('quote request preview', () => {
     );
     expect(screen.queryByText('회사명', { selector: 'dt' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '쇼핑 계속하기' })).toHaveAttribute('href', '/');
+  });
+
+  it('문의 유형 라디오는 조밀한 반응형 행에서 라벨·키보드로 선택할 수 있습니다', async () => {
+    const user = userEvent.setup();
+    renderWithQueryClient(<SolutionsPageContent />);
+    await screen.findByRole('combobox', { name: '상품 선택' });
+
+    const inquiryTypeGroup = screen.getByRole('group', { name: '문의 유형' });
+    const choiceRow = inquiryTypeGroup.querySelector('div.flex.flex-wrap');
+    const customRadio = screen.getByRole('radio', { name: '맞춤 제작' });
+    const bulkRadio = screen.getByRole('radio', { name: '대량 구매' });
+    const regularSupplyRadio = screen.getByRole('radio', { name: '정기 납품' });
+
+    expect(choiceRow).toHaveClass('gap-x-16', 'gap-y-8');
+    expect(choiceRow).toHaveClass('flex-wrap');
+    expect(customRadio.closest('label')).toHaveClass('min-h-44');
+    expect(customRadio).toHaveClass('peer', 'sr-only');
+    const radioVisual = customRadio.closest('label')?.querySelector('span[aria-hidden="true"]');
+    expect(radioVisual).toHaveClass('size-20', 'peer-focus-visible:outline-2');
+    expect(radioVisual?.querySelector('span')).toHaveClass('size-10');
+
+    customRadio.focus();
+    await user.keyboard('{ArrowRight}');
+    expect(bulkRadio).toBeChecked();
+
+    await user.click(screen.getByText('정기 납품'));
+    expect(regularSupplyRadio).toBeChecked();
   });
 
   it('direct entry starts empty and an incoming product ID preselects its product', async () => {
