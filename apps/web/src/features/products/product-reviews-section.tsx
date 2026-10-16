@@ -1,12 +1,14 @@
 'use client';
 
 import { getApiFailureKind } from '@eum/api/errors';
+import type { ProductReview } from '@eum/api/types';
 import { EmptyState } from '@eum/ui/components/EmptyState';
+import { Icon } from '@eum/ui/components/Icon';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { Pagination } from '@eum/ui/components/Pagination';
 import { cx } from '@eum/ui/lib/cx';
-import { SearchX } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { SearchX, UserRound } from 'lucide-react';
+import { useId, useRef, useState } from 'react';
 import { getScrollBehavior, usePrefersReducedMotion } from '@/lib/use-media-query';
 import { ProductRatingStars } from './product-rating-stars';
 import { useProductReviewsQuery } from './use-product-reviews-query';
@@ -21,6 +23,49 @@ const REVIEW_DATE_FORMAT = new Intl.DateTimeFormat('ko-KR', {
   timeZone: 'Asia/Seoul',
 });
 
+function ProductReviewCard({ review }: { review: ProductReview }) {
+  const reportDescriptionId = useId();
+  const formattedDate = REVIEW_DATE_FORMAT.format(new Date(review.createdAt));
+
+  return (
+    <li className="flex gap-12 border-b border-line py-24 sm:gap-16">
+      <div
+        aria-hidden="true"
+        className="flex size-40 shrink-0 items-center justify-center rounded-capsule bg-surface-2 text-text-3"
+      >
+        <Icon icon={UserRound} size={20} />
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-12">
+        <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
+          <span className="text-label-m">{review.authorName}</span>
+          <time dateTime={review.createdAt} className="text-caption text-text-3">
+            {formattedDate}
+          </time>
+        </div>
+        <ProductRatingStars rating={review.rating} />
+        <p className="text-body-m whitespace-pre-line">{review.content}</p>
+        {review.optionLabel ? (
+          <p className="text-caption text-text-3">옵션 · {review.optionLabel}</p>
+        ) : null}
+        <div className="flex flex-wrap items-center justify-between gap-8 border-t border-line pt-12">
+          <p id={reportDescriptionId} className="text-caption text-text-3">
+            신고 접수 기능은 준비 중입니다
+          </p>
+          <button
+            type="button"
+            disabled
+            aria-label={`${review.authorName} ${formattedDate} 리뷰 신고하기`}
+            aria-describedby={reportDescriptionId}
+            className="inline-flex min-h-36 shrink-0 items-center justify-center rounded-8 border border-line bg-surface px-12 text-label-m text-text-3 disabled:cursor-not-allowed"
+          >
+            신고하기
+          </button>
+        </div>
+      </div>
+    </li>
+  );
+}
+
 /**
  * 상품 상세 리뷰 섹션. 리뷰 API로 목록을 불러와 로딩·에러·빈 상태를 나눠 보여 줍니다.
  * 빈 상태는 Figma W-03 "아직 작성된 리뷰가 없습니다 / 구매 후 첫 리뷰를 남겨 주세요."입니다.
@@ -31,11 +76,13 @@ export function ProductReviewsSection({
   productId,
   reviewCount,
   sectionId,
+  brand,
 }: {
   productId: string;
   /** 상품 응답의 리뷰 수(제목 표시용). 목록을 불러오면 목록의 전체 수를 씁니다. */
   reviewCount: number;
   sectionId: string;
+  brand: string;
 }) {
   const [page, setPage] = useState(1);
   const sectionRef = useRef<HTMLElement>(null);
@@ -75,6 +122,7 @@ export function ProductReviewsSection({
       <h2 id="reviews-heading" ref={headingRef} tabIndex={-1} className="text-h3 focus-ring">
         리뷰 ({totalCount.toLocaleString('ko-KR')})
       </h2>
+      <p className="-mt-8 text-caption text-text-3">브랜드: {brand}</p>
       {reviewsQuery.isPending ? (
         <div className="flex flex-col gap-12">
           {Array.from({ length: 2 }, (_, skeletonIndex) => (
@@ -104,19 +152,7 @@ export function ProductReviewsSection({
             )}
           >
             {reviewsQuery.data.items.map((review) => (
-              <li key={review.id} className="flex flex-col gap-8 border-b border-line py-20">
-                <div className="flex flex-wrap items-center gap-8">
-                  <ProductRatingStars rating={review.rating} />
-                  <span className="text-caption-medium">{review.authorName}</span>
-                  <time dateTime={review.createdAt} className="text-caption text-text-3">
-                    {REVIEW_DATE_FORMAT.format(new Date(review.createdAt))}
-                  </time>
-                </div>
-                {review.optionLabel ? (
-                  <p className="text-caption text-text-3">{review.optionLabel}</p>
-                ) : null}
-                <p className="text-body-m whitespace-pre-line">{review.content}</p>
-              </li>
+              <ProductReviewCard key={review.id} review={review} />
             ))}
           </ul>
           <Pagination

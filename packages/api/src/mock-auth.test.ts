@@ -16,6 +16,40 @@ const mockConfig = buildMockConfig();
 let signupTestSequence = 0;
 
 describe('일반 회원 목 인증', () => {
+  it('테스트 계정은 중복 가입할 수 없고 로그인 후 userId만 복원합니다', async () => {
+    const testMember = mockMembers.find((member) => member.id === 'mem-003');
+    if (!testMember) {
+      throw new Error('테스트 회원 fixture mem-003이 없습니다.');
+    }
+
+    const fixtureEmail = testMember.email;
+    const sessionStore = createMemoryStore();
+    const memberAuth = createMemberMockAuth(mockConfig, sessionStore);
+
+    expect(await memberAuth.isEmailAvailable(fixtureEmail)).toBe(false);
+    await expect(
+      memberAuth.signup({
+        email: fixtureEmail,
+        password: 'non-empty-placeholder',
+        name: '테스트 가입자',
+        phone: '010-9999-0003',
+        accountType: 'personal',
+      }),
+    ).rejects.toMatchObject({ code: 'VALIDATION' });
+
+    const loggedInMember = await memberAuth.login({
+      email: fixtureEmail,
+      password: 'non-empty-placeholder',
+    });
+
+    expect(loggedInMember.id).toBe(testMember.id);
+    expect((await memberAuth.getCurrentUser())?.id).toBe(testMember.id);
+    expect(JSON.parse(sessionStore.getItem(MEMBER_SESSION_KEY) ?? '')).toEqual({
+      version: 1,
+      userId: testMember.id,
+    });
+  });
+
   it('로그인하면 현재 회원을 돌려주고, 로그아웃하면 null입니다', async () => {
     const memberAuth = createMemberMockAuth(mockConfig, createMemoryStore());
     const loggedInMember = await memberAuth.login({

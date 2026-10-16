@@ -51,7 +51,10 @@ function toCategoryShortcuts(categories: Category[]): CategoryShortcut[] {
       key: category.id,
       label: category.name,
       description: category.description,
-      href: '/category/' + encodeURIComponent(category.slug),
+      href:
+        category.slug === 'custom-order'
+          ? '/solutions'
+          : '/category/' + encodeURIComponent(category.slug),
       icon: getCategoryIcon(category.iconKey),
     }));
   return [...topLevelShortcuts, { key: 'all', ...VIEW_ALL_ITEM, icon: LayoutGrid }];
@@ -71,7 +74,8 @@ function renderWrappableLabel(label: string) {
 }
 
 /**
- * Figma HF/Web/CategoryBar(데스크톱). 카테고리 이름·소개·이동 경로는 카테고리 API에서 받습니다.
+ * Figma HF/Web/CategoryBar(데스크톱).
+ * 카테고리 이름·소개는 API에서 받고, 맞춤 제작/납품은 안전 솔루션으로 연결합니다.
  * hover·키보드 포커스 시 연회색 타일을 보여 주고, 그 타일 양옆 구분선은 숨깁니다.
  */
 export function CategoryBar({ categories }: { categories: Category[] }) {

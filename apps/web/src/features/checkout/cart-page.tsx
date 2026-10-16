@@ -20,6 +20,7 @@ import { buildQuoteInquiryHref } from '@/features/company-pages/quote-inquiry-li
 import { useCart } from '@/features/cart/cart-context';
 import { ProductImage } from '@/features/products/product-image';
 import { useCheckout } from './checkout-context';
+import { calculateShippingFee, resolveCheckoutOptions } from './checkout-utils';
 import { useCheckoutOptionsQuery } from './use-checkout-queries';
 
 /** W-05, W-05h, W-05h2: 주문 가능 상품만 선택·합산하고 숨은 가격·품절을 분리합니다. */
@@ -36,6 +37,9 @@ export function CartPageView() {
     setCartSelection,
   } = useCheckout();
   const optionsQuery = useCheckoutOptionsQuery();
+  const resolvedOptions = optionsQuery.isError ? null : resolveCheckoutOptions(optionsQuery.data);
+  const options = resolvedOptions?.options;
+  const hasOptionsError = optionsQuery.isError || (optionsQuery.isSuccess && !resolvedOptions);
   const groups = useMemo(() => groupCartItems(cartItems), [cartItems]);
   const orderableIds = useMemo(
     () => groups.orderableItems.map((item) => item.id),
@@ -54,7 +58,7 @@ export function CartPageView() {
   const partiallySelected = selectedCount > 0 && !allSelected;
 
   const handleCheckout = () => {
-    if (selectedCount === 0 || memberStatus !== 'ready') return;
+    if (!options || selectedCount === 0 || memberStatus !== 'ready') return;
     beginCheckout([...selectedIds]);
     if (!member) {
       router.push('/login?redirect=' + encodeURIComponent('/checkout/shipping'));
@@ -105,20 +109,24 @@ export function CartPageView() {
     );
   }
 
-  const options = optionsQuery.isError ? undefined : optionsQuery.data;
-  const unresolvedAmountLabel = optionsQuery.isError ? '확인 필요' : '확인 중';
-  const progress =
-    options && options.freeShippingThreshold > 0
-      ? Math.min(100, (selectedTotals.productTotal / options.freeShippingThreshold) * 100)
-      : 0;
+  const unresolvedAmountLabel = hasOptionsError ? '확인 필요' : '확인 중';
+  const progress = options
+    ? options.freeShippingThreshold > 0
+      ? Math.min(
+          100,
+          Math.max(0, (selectedTotals.productTotal / options.freeShippingThreshold) * 100),
+        )
+      : 100
+    : 0;
   const remaining = options
     ? Math.max(0, options.freeShippingThreshold - selectedTotals.productTotal)
     : 0;
-  const shippingFee = options
-    ? selectedTotals.productTotal > 0 && selectedTotals.productTotal < options.freeShippingThreshold
-      ? options.shippingFee
-      : 0
-    : null;
+  const hasFreeShipping =
+    options !== undefined &&
+    (options.freeShippingThreshold <= 0 ||
+      selectedTotals.productTotal >= options.freeShippingThreshold);
+  const shippingFee = options ? calculateShippingFee(selectedTotals.productTotal, options) : null;
+  const showFreeShippingBanner = Boolean(options && resolvedOptions?.hasFreeShippingThreshold);
   const toggleSelected = (itemId: string, checked: boolean) => {
     const next = new Set(selectedIds);
     if (checked) next.add(itemId);
@@ -158,18 +166,23 @@ export function CartPageView() {
       </div>
       <div className="grid items-start gap-24 lg:grid-cols-[minmax(0,1fr)_416px]">
         <div className="min-w-0">
-          {options ? (
+          {showFreeShippingBanner && options ? (
             <section
               aria-label="무료 배송 혜택"
-              className="mb-16 rounded-12 border border-line bg-bg-subtle p-24"
+              className={cx(
+                'mb-16 rounded-12 border p-24',
+                hasFreeShipping ? 'border-success bg-success-tint' : 'border-text-1 bg-bg',
+              )}
             >
               <div className="flex flex-wrap items-center justify-between gap-8">
-                <strong className="text-h3">
+                <strong className={cx('text-h3', hasFreeShipping ? 'text-success' : 'text-text-1')}>
                   {remaining === 0
                     ? '무료 배송 기준을 충족했습니다.'
                     : `${formatKrw(remaining)} 더 담으면 무료배송!`}
                 </strong>
-                <span className="text-caption text-text-3">
+                <span
+                  className={cx('text-caption', hasFreeShipping ? 'text-success' : 'text-text-1')}
+                >
                   {formatKrw(selectedTotals.productTotal)} /{' '}
                   {formatKrw(options.freeShippingThreshold)}
                 </span>
@@ -180,10 +193,16 @@ export function CartPageView() {
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={Math.round(progress)}
-                className="mt-12 h-8 overflow-hidden rounded-capsule bg-surface-2"
+                className={cx(
+                  'mt-12 h-8 overflow-hidden rounded-capsule',
+                  hasFreeShipping ? 'bg-bg' : 'bg-bg-subtle',
+                )}
               >
                 <div
-                  className="h-full rounded-capsule bg-text-1 transition-[width]"
+                  className={cx(
+                    'h-full rounded-capsule transition-[width] duration-300 motion-reduce:transition-none',
+                    hasFreeShipping ? 'bg-success' : 'bg-text-1',
+                  )}
                   style={{ width: `${progress}%` }}
                 />
               </div>
@@ -207,10 +226,10 @@ export function CartPageView() {
               회원 세션을 확인하지 못했습니다. 잠시 후 새로고침해 주세요.
             </NoticeInline>
           ) : null}
-          {optionsQuery.isError ? (
+          {hasOptionsError ? (
             <div className="mb-16 flex flex-col items-start gap-8 sm:flex-row sm:items-center">
               <NoticeInline tone="danger" role="alert" className="w-full sm:flex-1">
-                배송 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.
+                배송 정보를 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.
               </NoticeInline>
               <Button
                 variant="secondary"
@@ -329,9 +348,7 @@ export function CartPageView() {
               isFullWidth
               size="l"
               className="mt-24"
-              disabled={
-                !options || optionsQuery.isError || memberStatus !== 'ready' || selectedCount === 0
-              }
+              disabled={!options || memberStatus !== 'ready' || selectedCount === 0}
               onClick={handleCheckout}
             >
               {formatKrw(selectedTotals.productTotal)} 주문하기 ({selectedCount})

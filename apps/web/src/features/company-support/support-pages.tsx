@@ -431,11 +431,17 @@ function InquiryForm({ memberId }: { memberId: string | null }) {
           <h2 id="inquiry-form-heading" tabIndex={-1} className="text-h4 scroll-mt-96">
             문의 작성
           </h2>
-          <span className="text-caption text-text-3">* 필수 입력 항목</span>
+          <span className="text-caption text-text-3">
+            <span aria-hidden="true" className="mr-4 text-danger">
+              *
+            </span>
+            필수 입력 항목
+          </span>
         </div>
         <div className="grid gap-16 sm:grid-cols-2">
           <SelectField
-            label="문의 유형 *"
+            label="문의 유형"
+            showRequiredIndicator
             defaultValue=""
             required
             aria-required="true"
@@ -476,13 +482,17 @@ function InquiryForm({ memberId }: { memberId: string | null }) {
           </div>
         ) : null}
         <TextField
-          label="제목 *"
+          label="제목"
+          showRequiredIndicator
           placeholder="문의 제목을 입력해 주세요"
           required
           aria-required="true"
         />
         <label className="flex flex-col gap-8 text-label-m">
-          문의 내용 *
+          문의 내용
+          <span aria-hidden="true" className="ml-4 text-danger">
+            *
+          </span>
           <textarea
             required
             aria-required="true"

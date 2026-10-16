@@ -1,5 +1,7 @@
 import type {
   Address,
+  Brand,
+  BrandSummary,
   Category,
   Claim,
   CompanyInfo,
@@ -31,7 +33,7 @@ export interface ProductListParams {
   brand?: string[];
   certification?: string[];
   excludeSoldOut?: boolean;
-  sortBy?: 'recommended' | 'priceAsc' | 'priceDesc' | 'newest';
+  sortBy?: 'recommended' | 'priceAsc' | 'priceDesc' | 'newest' | 'ratingDesc';
   page?: number;
   pageSize?: number;
 }
@@ -83,6 +85,14 @@ export interface ShopApi {
       params?: PageParams,
       options?: RequestOptions,
     ): Promise<PagedResult<ProductReview>>;
+  };
+  /** 구매자에게 노출하는 브랜드. 비노출 브랜드는 목록에서 빠지고 상세는 NOT_FOUND입니다. */
+  brands: {
+    /** W-32 디렉터리용 전체 목록(정렬은 화면이 색인 규칙으로 합니다) */
+    list(options?: RequestOptions): Promise<BrandSummary[]>;
+    getById(brandId: string, options?: RequestOptions): Promise<Brand>;
+    /** W-32 "이달의 브랜드". 지정한 브랜드가 없으면 null */
+    getFeatured(options?: RequestOptions): Promise<Brand | null>;
   };
   /** 검색 결과가 없을 때 보여 줄 추천 검색어 */
   search: { recommendedKeywords(options?: RequestOptions): Promise<string[]> };

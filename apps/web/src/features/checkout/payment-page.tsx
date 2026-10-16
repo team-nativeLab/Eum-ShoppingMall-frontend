@@ -22,7 +22,11 @@ import {
   CheckoutSection,
   MockOnlyNotice,
 } from './checkout-common';
-import { getCouponDiscount } from './checkout-utils';
+import {
+  getCouponDiscount,
+  resolveAvailablePaymentMethod,
+  resolveCheckoutOptions,
+} from './checkout-utils';
 import { useCheckoutOptionsQuery, useCouponsQuery } from './use-checkout-queries';
 
 const REQUIRED_TERMS = ['order', 'privacy', 'payment'] as const;
@@ -38,6 +42,9 @@ export function PaymentPageView() {
   const checkout = useCheckout();
   const optionsQuery = useCheckoutOptionsQuery();
   const couponsQuery = useCouponsQuery();
+  const resolvedOptions = optionsQuery.isError ? null : resolveCheckoutOptions(optionsQuery.data);
+  const options = resolvedOptions?.options;
+  const hasOptionsError = optionsQuery.isError || (optionsQuery.isSuccess && !resolvedOptions);
   const selectedIds = checkout.checkoutStarted
     ? checkout.cartItemIds.filter((id) => cartGroups.orderableItems.some((item) => item.id === id))
     : [];
@@ -57,12 +64,14 @@ export function PaymentPageView() {
   const [isOrdering, setIsOrdering] = useState(false);
   const [error, setError] = useState('');
 
-  const options = optionsQuery.data;
   const availableCoupons = couponsQuery.data?.filter((coupon) => !coupon.isUsed) ?? [];
   const selectedCoupon = availableCoupons.find((coupon) => coupon.id === couponId);
   const productTotal = calculateCartTotals(cartItems, new Set(selectedIds)).productTotal;
   const pointsToUse = Math.min(Math.max(0, Number(pointsInput) || 0), member?.pointBalance ?? 0);
   const areTermsAccepted = REQUIRED_TERMS.every((term) => acceptedTerms[term]);
+  const selectedPaymentMethod = options
+    ? resolveAvailablePaymentMethod(paymentMethod, options.paymentMethods)
+    : null;
 
   const toggleAllTerms = (checked: boolean) =>
     setAcceptedTerms({ order: checked, privacy: checked, payment: checked });
@@ -74,6 +83,7 @@ export function PaymentPageView() {
       !member ||
       !checkout.shippingAddress ||
       !options ||
+      !selectedPaymentMethod ||
       selectedIds.length === 0 ||
       !areTermsAccepted ||
       isOrdering
@@ -83,7 +93,7 @@ export function PaymentPageView() {
     setIsOrdering(true);
     const couponDiscount = selectedCoupon ? getCouponDiscount(selectedCoupon, productTotal) : 0;
     const safePoints = Math.min(pointsToUse, Math.max(0, productTotal - couponDiscount));
-    checkout.setPayment(paymentMethod, couponId, safePoints);
+    checkout.setPayment(selectedPaymentMethod, couponId, safePoints);
     try {
       const receipt = await (
         await getShopApi()
@@ -95,16 +105,16 @@ export function PaymentPageView() {
         })),
         shippingAddress: checkout.shippingAddress,
         deliveryRequest: checkout.deliveryRequest,
-        paymentMethod,
+        paymentMethod: selectedPaymentMethod,
         couponId,
         pointsToUse: safePoints,
       });
       const paymentLabel =
-        options.paymentMethods.find((method) => method.id === paymentMethod)?.label ??
+        options.paymentMethods.find((method) => method.id === selectedPaymentMethod)?.label ??
         '선택한 결제 수단';
       checkout.completeCheckout({
         ...receipt,
-        paymentMethod,
+        paymentMethod: selectedPaymentMethod,
         paymentMethodLabel: paymentLabel,
         shippingAddress: checkout.shippingAddress,
       });
@@ -148,8 +158,7 @@ export function PaymentPageView() {
     memberStatus === 'loading' ||
     !checkout.isSelectionReady ||
     !hasRestored ||
-    optionsQuery.isPending ||
-    couponsQuery.isPending
+    (!hasOptionsError && (optionsQuery.isPending || couponsQuery.isPending))
   ) {
     return (
       <CheckoutPageShell>
@@ -166,15 +175,15 @@ export function PaymentPageView() {
       </CheckoutPageShell>
     );
   }
-  if (optionsQuery.isError || couponsQuery.isError) {
+  if (hasOptionsError || couponsQuery.isError) {
     return (
       <CheckoutPageShell>
         <CheckoutPageTitle>주문/결제</CheckoutPageTitle>
         <div className="flex flex-col items-start gap-12">
-          {optionsQuery.isError ? (
+          {hasOptionsError ? (
             <div className="flex w-full flex-col items-start gap-8 sm:flex-row sm:items-center">
               <NoticeInline tone="danger" role="alert" className="w-full sm:flex-1">
-                주문서 선택지를 불러오지 못했습니다. 다시 시도해 주세요.
+                주문서 선택지를 확인할 수 없습니다. 다시 시도해 주세요.
               </NoticeInline>
               <Button
                 variant="secondary"
@@ -208,7 +217,18 @@ export function PaymentPageView() {
   if (!options) {
     return (
       <CheckoutPageShell>
-        <MockOnlyNotice>결제 선택지를 불러오지 못했습니다.</MockOnlyNotice>
+        <MockOnlyNotice>
+          결제 선택지를 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.
+        </MockOnlyNotice>
+        <Button
+          variant="secondary"
+          size="s"
+          className="mt-16"
+          disabled={optionsQuery.isFetching}
+          onClick={() => void optionsQuery.refetch()}
+        >
+          {optionsQuery.isFetching ? '불러오는 중…' : '다시 시도'}
+        </Button>
       </CheckoutPageShell>
     );
   }
@@ -375,7 +395,7 @@ export function PaymentPageView() {
                     <Radio
                       name="payment-method"
                       value={method.id}
-                      checked={paymentMethod === method.id}
+                      checked={selectedPaymentMethod === method.id}
                       onChange={() => setPaymentMethod(method.id)}
                     />
                     <span className="text-label-m">{method.label}</span>
@@ -484,7 +504,7 @@ export function PaymentPageView() {
             receiptPhoneError ||
             pointsToUse > pointsBalance ||
             isOrdering ||
-            options.paymentMethods.length === 0
+            !selectedPaymentMethod
           }
           isPending={isOrdering}
           onSubmit={() => void handleOrder()}

@@ -19,6 +19,12 @@ export const queryKeys = {
       ['products', 'related', productId, params] as const,
     recommended: (params: ProductLimitParams = {}) => ['products', 'recommended', params] as const,
   },
+  brands: {
+    all: ['brands'] as const,
+    list: ['brands', 'list'] as const,
+    detail: (brandId: string) => ['brands', 'detail', brandId] as const,
+    featured: ['brands', 'featured'] as const,
+  },
   search: { recommendedKeywords: ['search', 'recommended-keywords'] as const },
   checkout: { options: ['checkout', 'options'] as const },
   addresses: {

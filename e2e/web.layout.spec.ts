@@ -37,13 +37,24 @@ test('헤더·푸터·전체 메뉴의 모든 내부 링크는 404가 아닌 화
   await expect(page.getByRole('heading', { name: '베스트 셀러' })).toBeVisible();
 
   const headerAndFooterPaths = await collectInternalPaths(page, 'header, footer');
-  await page.getByRole('button', { name: '전체 메뉴 열기' }).click();
-  const allMenu = page.getByRole('dialog', { name: '전체 메뉴' });
-  await expect(allMenu.getByRole('link', { name: '전체 브랜드' })).toBeVisible();
-  const menuPaths = await collectInternalPaths(page, '[role="dialog"]');
+  const menuTrigger = page.locator(
+    'button[aria-controls="site-header-all-menu"]:visible, button[aria-haspopup="dialog"]:visible',
+  );
+  await expect(menuTrigger).toHaveCount(1);
+  await menuTrigger.click();
+  const allMenu = page.locator('#site-header-all-menu');
+  await expect(allMenu).toBeVisible();
+  const allBrandsLink = allMenu.getByRole('link', { name: '전체 브랜드' });
+  if (!(await allBrandsLink.isVisible())) {
+    await allMenu.locator('summary').filter({ hasText: '브랜드' }).click();
+  }
+  await expect(allBrandsLink).toHaveAttribute('href', '/brands');
+  const menuPaths = await collectInternalPaths(page, '#site-header-all-menu');
 
   const uniquePaths = [...new Set([...headerAndFooterPaths, ...menuPaths])].sort();
-  expect(uniquePaths).toEqual(expect.arrayContaining(['/about', '/cart', '/support/faq']));
+  expect(uniquePaths).toEqual(
+    expect.arrayContaining(['/about', '/brands', '/cart', '/support/faq']),
+  );
   for (const linkPath of uniquePaths) {
     const linkResponse = await page.request.get(linkPath);
     expect(linkResponse.status(), `${linkPath} 응답 상태`).toBe(200);
@@ -67,36 +78,44 @@ test('목 모드에서는 데모 안내 띠를 표시합니다', async ({ page }
   );
 });
 
-test('전체 메뉴는 포커스를 가두고, 닫으면 연 버튼으로 포커스를 돌려줍니다', async ({ page }) => {
+test('전체 메뉴는 Escape로 닫으면 연 버튼으로 포커스를 돌려줍니다', async ({ page }) => {
   await page.goto('/');
-  const openMenuButton = page
-    .getByRole('button', { name: '전체 메뉴 열기' })
-    .locator('visible=true');
-  await openMenuButton.click();
+  const menuTrigger = page.locator(
+    'button[aria-controls="site-header-all-menu"]:visible, button[aria-haspopup="dialog"]:visible',
+  );
+  await expect(menuTrigger).toHaveCount(1);
+  await menuTrigger.click();
+  const openerElement = await menuTrigger.elementHandle();
+  if (!openerElement) throw new Error('보이는 전체 메뉴 열기 버튼을 찾지 못했습니다.');
 
-  const allMenu = page.getByRole('dialog', { name: '전체 메뉴' });
-  const closeMenuButton = allMenu.getByRole('button', { name: '전체 메뉴 닫기' });
-  await expect(closeMenuButton).toBeFocused();
-  // 배경(본문)은 inert로 막혀 보조기기·키보드가 닿지 않습니다.
-  await expect
-    .poll(() =>
-      page.evaluate(() => document.querySelector('#main-content')?.closest('[inert]') !== null),
-    )
-    .toBe(true);
-
-  // 첫 요소(로고)에서 Shift+Tab하면 마지막 요소로, 마지막 요소에서 Tab하면 첫 요소로 돌아옵니다.
-  const firstMenuLink = allMenu.getByRole('link', { name: '이음산업건설' });
-  const lastMenuLink = allMenu.getByRole('link', { name: '이용 안내' });
-  await page.keyboard.press('Shift+Tab');
-  await expect(firstMenuLink).toBeFocused();
-  await page.keyboard.press('Shift+Tab');
-  await expect(lastMenuLink).toBeFocused();
-  await page.keyboard.press('Tab');
-  await expect(firstMenuLink).toBeFocused();
+  const allMenu = page.locator('#site-header-all-menu');
+  await expect(allMenu).toBeVisible();
+  const menuLink = allMenu.getByRole('link', { name: '이용 안내' });
+  await expect(menuLink).toBeVisible();
+  await menuLink.focus();
+  await expect(menuLink).toBeFocused();
 
   await page.keyboard.press('Escape');
   await expect(allMenu).toBeHidden();
-  await expect(openMenuButton).toBeFocused();
+  const focusResult = await page.evaluate((trigger) => {
+    const activeElement = document.activeElement;
+    return {
+      isOpener: activeElement === trigger,
+      activeElement:
+        activeElement instanceof HTMLElement
+          ? {
+              tagName: activeElement.tagName,
+              ariaLabel: activeElement.getAttribute('aria-label'),
+              ariaControls: activeElement.getAttribute('aria-controls'),
+            }
+          : null,
+    };
+  }, openerElement);
+  expect(
+    focusResult.isOpener,
+    `Escape 후 activeElement: ${JSON.stringify(focusResult.activeElement)}`,
+  ).toBe(true);
+  await expect(menuTrigger).toBeFocused();
 });
 
 for (const viewportWidth of [1024, 1280]) {

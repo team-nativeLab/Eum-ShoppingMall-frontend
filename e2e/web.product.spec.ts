@@ -24,13 +24,17 @@ test('필수 옵션 선택 후 장바구니에는 선택값과 상품 ID만 저�
   await page.goto('/products/prd-1001');
   await page.waitForFunction(() => localStorage.getItem('eum.cart.v2') !== null);
 
-  // 옵션을 고르기 전에 담으면 필수 옵션 안내를 보여 줍니다.
+  // 필수 옵션 안내는 셀렉트 바로 아래에 표시하고 해당 셀렉트로 포커스를 옮깁니다.
   await page.getByRole('button', { name: '장바구니 담기', exact: true }).click();
+  const colorSelect = page.getByRole('combobox', { name: '색상' });
+  await expect(colorSelect).toHaveAttribute('aria-invalid', 'true');
   await expect(
-    page.getByRole('status').filter({ hasText: '필수 옵션을 선택해 주세요.' }),
+    colorSelect.locator('xpath=../..').getByText('필수 옵션을 선택해 주세요.'),
   ).toBeVisible();
+  await expect(colorSelect).toBeFocused();
+  await expect(colorSelect).toBeInViewport();
 
-  await page.getByRole('combobox', { name: '색상' }).selectOption('white');
+  await colorSelect.selectOption('white');
   const selectedLines = page.getByRole('list', { name: '선택한 옵션' });
   await expect(selectedLines.getByText('색상: 백색')).toBeVisible();
   await expect(page.getByText('총 금액 (1개)')).toBeVisible();
@@ -158,10 +162,11 @@ test('모바일 하단 바에서 필수 옵션 없이 담으면 알림이 화면
   await page.mouse.wheel(0, 2000);
   await page.getByRole('button', { name: '장바구니 담기', exact: true }).click();
 
-  const optionNotice = page.getByRole('status').filter({ hasText: '필수 옵션을 선택해 주세요.' });
-  await expect(optionNotice).toBeVisible();
-  await expect(optionNotice).toBeInViewport();
   const colorSelect = page.getByRole('combobox', { name: '색상' });
+  await expect(colorSelect).toHaveAttribute('aria-invalid', 'true');
+  await expect(
+    colorSelect.locator('xpath=../..').getByText('필수 옵션을 선택해 주세요.'),
+  ).toBeVisible();
   await expect(colorSelect).toBeFocused();
   await expect(colorSelect).toBeInViewport();
 });

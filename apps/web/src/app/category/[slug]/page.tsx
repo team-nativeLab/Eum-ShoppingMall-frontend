@@ -1,7 +1,6 @@
 import { ProductListingView } from '@/features/products/product-listing-view';
 import {
   getBrandFilterValues,
-  isBrandBrowseMode,
   serializeSearchParams,
   type SearchParamValue,
 } from '@/features/products/product-navigation';
@@ -21,7 +20,6 @@ export default async function CategoryPage({
     <ProductListingView
       categorySlug={routeParams.slug}
       initialBrands={getBrandFilterValues(queryParams.brand)}
-      initialBrowseBrands={isBrandBrowseMode(queryParams.browse)}
       initialSearchParams={serializeSearchParams(queryParams)}
     />
   );

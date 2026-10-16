@@ -12,6 +12,7 @@ import { useState } from 'react';
 import { useCart } from '@/features/cart/cart-context';
 import { useLocalCollections } from './local-collections-context';
 import { ProductImage } from './product-image';
+import { ProductRatingStars } from './product-rating-stars';
 
 /**
  * 공통 상품 카드(Figma HF/Web/ProductCard 240·251, 모바일 HF/ProductCard 169).
@@ -133,6 +134,17 @@ export function ProductCard({
         >
           {product.name}
         </Link>
+        <div className="mt-6 flex items-center gap-4 text-caption text-text-2">
+          <ProductRatingStars rating={product.rating} />
+          {product.rating === null ? (
+            <span>평점 없음</span>
+          ) : (
+            <span className="text-caption-medium text-text-1">{product.rating.toFixed(1)}</span>
+          )}
+          <span role="img" aria-label={`리뷰 ${product.reviewCount.toLocaleString('ko-KR')}개`}>
+            ({product.reviewCount.toLocaleString('ko-KR')})
+          </span>
+        </div>
         <div
           className={cx(
             'mt-auto flex items-end justify-between gap-8',
@@ -149,9 +161,18 @@ export function ProductCard({
             <p
               className={cx(
                 'truncate text-price-m',
-                isSoldOut ? 'text-text-3' : !priceDisplay.isPriceVisible && 'text-text-2',
+                isSoldOut
+                  ? 'text-text-3'
+                  : priceDisplay.discountRateLabel !== null
+                    ? 'text-danger'
+                    : !priceDisplay.isPriceVisible && 'text-text-2',
               )}
             >
+              {priceDisplay.discountRateLabel !== null ? (
+                <span className="mr-4 text-label-m text-danger">
+                  {priceDisplay.discountRateLabel}
+                </span>
+              ) : null}
               {priceDisplay.listPriceText ? <span className="sr-only">판매가 </span> : null}
               {priceDisplay.text}
             </p>
