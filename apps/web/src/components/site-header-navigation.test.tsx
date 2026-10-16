@@ -359,6 +359,29 @@ describe('SiteHeader product and brand navigation', () => {
     expect(backButton).toHaveFocus();
   });
 
+  it('restores focus to the checkout logo when the route changes while the desktop menu is open', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<SiteHeader />, { wrapper: createWrapper() });
+
+    const [desktopMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
+    if (!desktopMenuButton) throw new Error('데스크톱 메뉴 버튼을 찾을 수 없습니다.');
+    await user.click(desktopMenuButton);
+    await screen.findByRole('navigation', { name: '전체 메뉴' });
+
+    navigationMocks.pathname = '/checkout/shipping';
+    rerender(<SiteHeader />);
+    const checkoutLogo = screen.getByRole('link', { name: '이음산업건설' });
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(checkoutLogo).toHaveFocus());
+
+    navigationMocks.pathname = '/';
+    rerender(<SiteHeader />);
+    const [returnedMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
+    if (!returnedMenuButton) throw new Error('메뉴 버튼을 찾을 수 없습니다.');
+    expect(returnedMenuButton).toHaveAttribute('aria-expanded', 'false');
+  });
+
   it('closes the popup from its X control and restores focus to its opener', async () => {
     const user = userEvent.setup();
     render(<SiteHeader />, { wrapper: createWrapper() });

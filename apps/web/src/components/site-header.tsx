@@ -159,6 +159,7 @@ export function SiteHeader() {
   const desktopMenuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const productDetailBackButtonRef = useRef<HTMLButtonElement>(null);
+  const checkoutLogoRef = useRef<HTMLAnchorElement>(null);
   const menuPanelRef = useRef<HTMLDivElement>(null);
   const categoryList = categoriesQuery.data ?? [];
   const isMenuVisible = isMenuOpen;
@@ -219,7 +220,8 @@ export function SiteHeader() {
     router.push('/search?q=' + encodeURIComponent(keyword));
   };
 
-  // 닫힌 상태를 반영한 뒤 현재 보이는 트리거로 복귀하고, 상세 모바일에서는 이전 화면 버튼을 씁니다.
+  // 닫힌 상태를 반영한 뒤 현재 보이는 트리거를 씁니다.
+  // 트리거가 없는 화면에서는 체크아웃 로고나 상세 모바일 뒤로 버튼으로 복귀합니다.
   useLayoutEffect(() => {
     if (isMenuVisible || !shouldRestoreMenuFocusRef.current) return;
 
@@ -227,17 +229,22 @@ export function SiteHeader() {
     const openedMenuTrigger = menuTriggerRef.current;
     menuTriggerRef.current = null;
     const isDesktopViewport = window.innerWidth >= 1024;
-    const currentMenuFocusTarget = isDesktopViewport
-      ? desktopMenuButtonRef.current
-      : isProductDetail
-        ? productDetailBackButtonRef.current
-        : mobileMenuButtonRef.current;
-    const openedTriggerIsVisible = isDesktopViewport
-      ? openedMenuTrigger === desktopMenuButtonRef.current
-      : !isProductDetail && openedMenuTrigger === mobileMenuButtonRef.current;
+    const currentMenuFocusTarget =
+      checkoutStep > 0
+        ? checkoutLogoRef.current
+        : isDesktopViewport
+          ? desktopMenuButtonRef.current
+          : isProductDetail
+            ? productDetailBackButtonRef.current
+            : mobileMenuButtonRef.current;
+    const openedTriggerIsVisible =
+      checkoutStep === 0 &&
+      (isDesktopViewport
+        ? openedMenuTrigger === desktopMenuButtonRef.current
+        : !isProductDetail && openedMenuTrigger === mobileMenuButtonRef.current);
     const focusTarget = openedTriggerIsVisible ? openedMenuTrigger : currentMenuFocusTarget;
     focusTarget?.focus();
-  }, [isMenuVisible, isProductDetail]);
+  }, [checkoutStep, isMenuVisible, isProductDetail]);
 
   // Mount first in the closed visual state, then start the entrance on the next frame.
   useLayoutEffect(() => {
@@ -351,6 +358,7 @@ export function SiteHeader() {
         <PageContainer className="flex min-h-64 flex-col items-stretch gap-8 py-8 sm:flex-row sm:items-center sm:justify-between sm:gap-24 sm:py-0">
           <Link
             href="/"
+            ref={checkoutLogoRef}
             className="self-start rounded-4 text-h3 whitespace-nowrap focus-ring sm:self-auto"
           >
             이음산업건설
