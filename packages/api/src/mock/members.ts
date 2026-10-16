@@ -1,8 +1,7 @@
 import type { AdminUser, Member } from '../types';
 
 /**
- * 목 일반 회원. 비밀번호는 저장하지 않습니다(목 로그인은 계정 존재 여부만 확인).
- * 예시 도메인(example.com)만 씁니다.
+ * 목 일반 회원 목록입니다. 비밀번호는 저장하지 않습니다(목 로그인은 계정 존재 여부만 확인).
  */
 export const mockMembers: Member[] = [
   {
@@ -19,6 +18,14 @@ export const mockMembers: Member[] = [
     name: '이현장',
     phone: '010-0000-0002',
     joinedAt: '2026-05-18T14:30:00+09:00',
+    pointBalance: 0,
+  },
+  {
+    id: 'mem-003',
+    email: 'ttagno4230@gmail.com',
+    name: '데모 회원',
+    phone: '010-0000-0003',
+    joinedAt: '2026-10-01T09:00:00+09:00',
     pointBalance: 0,
   },
 ];

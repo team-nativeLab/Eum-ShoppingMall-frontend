@@ -10,6 +10,8 @@ interface FieldMetaProps {
   label: string;
   /** 라벨을 화면에서 숨기고 스크린리더에만 읽힐 때 */
   isLabelHidden?: boolean;
+  /** 라벨 끝에 시각적인 필수 표시를 추가합니다. 필수 동작은 native required로 지정합니다. */
+  showRequiredIndicator?: boolean;
   helperText?: string;
   /** 값이 있으면 오류 상태(Figma State=Error)로 보여 줍니다 */
   errorMessage?: string;
@@ -41,6 +43,7 @@ function FieldShell({
   helperId,
   label,
   isLabelHidden = false,
+  showRequiredIndicator = false,
   helperText,
   errorMessage,
   successMessage,
@@ -55,6 +58,11 @@ function FieldShell({
         className={cx('text-label-m text-text-1', isLabelHidden && 'sr-only')}
       >
         {label}
+        {showRequiredIndicator ? (
+          <span aria-hidden="true" className="ml-4 text-danger">
+            *
+          </span>
+        ) : null}
       </label>
       {children}
       {helperMessage ? (
@@ -86,6 +94,7 @@ export interface TextFieldProps
 export function TextField({
   label,
   isLabelHidden,
+  showRequiredIndicator,
   helperText,
   errorMessage,
   successMessage,
@@ -104,6 +113,7 @@ export function TextField({
       helperId={helperId}
       label={label}
       isLabelHidden={isLabelHidden}
+      showRequiredIndicator={showRequiredIndicator}
       helperText={helperText}
       errorMessage={errorMessage}
       successMessage={successMessage}
@@ -137,6 +147,7 @@ export interface SelectFieldProps
 export function SelectField({
   label,
   isLabelHidden,
+  showRequiredIndicator,
   helperText,
   errorMessage,
   successMessage,
@@ -156,6 +167,7 @@ export function SelectField({
       helperId={helperId}
       label={label}
       isLabelHidden={isLabelHidden}
+      showRequiredIndicator={showRequiredIndicator}
       helperText={helperText}
       errorMessage={errorMessage}
       successMessage={successMessage}

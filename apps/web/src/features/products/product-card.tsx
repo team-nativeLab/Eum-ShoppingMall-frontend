@@ -12,6 +12,7 @@ import { useState } from 'react';
 import { useCart } from '@/features/cart/cart-context';
 import { useLocalCollections } from './local-collections-context';
 import { ProductImage } from './product-image';
+import { ProductRatingStars } from './product-rating-stars';
 
 /**
  * 공통 상품 카드(Figma HF/Web/ProductCard 240·251, 모바일 HF/ProductCard 169).
@@ -58,7 +59,8 @@ export function ProductCard({
       className={cx(
         'group flex min-w-0 rounded-8 border border-line bg-bg p-8 transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-1',
         layout === 'list' ? 'flex-row gap-16' : 'flex-col',
-        isCompactOnMobile && 'gap-10 pb-10 lg:gap-0 lg:pb-8',
+        isCompactOnMobile && 'pb-10 lg:pb-8',
+        isCompactOnMobile && (layout === 'list' ? 'gap-10 lg:gap-0' : 'gap-16 lg:gap-0'),
         isHomeCarouselCard &&
           'lg:relative lg:h-[var(--home-carousel-card-height)] lg:border-0 lg:before:pointer-events-none lg:before:absolute lg:before:inset-0 lg:before:rounded-8 lg:before:border lg:before:border-line lg:hover:before:border-line-strong',
         className,
@@ -66,8 +68,8 @@ export function ProductCard({
     >
       <div
         className={cx(
-          'relative aspect-square overflow-hidden rounded-6 bg-surface',
-          layout === 'list' && 'w-144 shrink-0',
+          'relative shrink-0 overflow-hidden rounded-6 bg-surface',
+          layout === 'list' ? 'aspect-square w-144' : 'aspect-[3/4]',
         )}
       >
         {/* 이름 링크와 같은 곳으로 가는 중복 링크라 탭 순서·보조기기에서 뺍니다. */}
@@ -96,19 +98,21 @@ export function ProductCard({
           aria-pressed={isWishlisted}
           onClick={() => toggleWishlist(product.id)}
           className={cx(
-            'absolute inline-flex items-center justify-center rounded-capsule text-text-1 focus-ring',
+            'absolute inline-flex items-center justify-center rounded-capsule focus-ring',
+            isWishlisted ? 'text-danger' : 'text-text-1',
             isCompactOnMobile
               ? 'top-0 right-0 size-44 lg:top-4 lg:right-4 lg:size-40'
               : 'top-4 right-4 size-40',
           )}
         >
-          <Icon icon={Heart} size={20} fill={isWishlisted ? 'currentColor' : 'none'} />
+          <Icon icon={Heart} size={16} fill={isWishlisted ? 'currentColor' : 'none'} />
         </button>
       </div>
       <div
         className={cx(
           'flex min-w-0 flex-1 flex-col px-4',
-          isCompactOnMobile ? 'gap-4 lg:gap-0 lg:pt-12' : 'pt-12',
+          isCompactOnMobile ? 'gap-4' : layout === 'list' ? 'pt-12' : 'pt-16',
+          isCompactOnMobile && (layout === 'list' ? 'lg:gap-0 lg:pt-12' : 'lg:gap-0 lg:pt-16'),
         )}
       >
         <p
@@ -131,6 +135,17 @@ export function ProductCard({
         >
           {product.name}
         </Link>
+        <div className="mt-6 flex items-center gap-4 text-caption text-text-2">
+          <ProductRatingStars rating={product.rating} />
+          {product.rating === null ? (
+            <span>평점 없음</span>
+          ) : (
+            <span className="text-caption-medium text-text-1">{product.rating.toFixed(1)}</span>
+          )}
+          <span role="img" aria-label={`리뷰 ${product.reviewCount.toLocaleString('ko-KR')}개`}>
+            ({product.reviewCount.toLocaleString('ko-KR')})
+          </span>
+        </div>
         <div
           className={cx(
             'mt-auto flex items-end justify-between gap-8',
@@ -147,9 +162,18 @@ export function ProductCard({
             <p
               className={cx(
                 'truncate text-price-m',
-                isSoldOut ? 'text-text-3' : !priceDisplay.isPriceVisible && 'text-text-2',
+                isSoldOut
+                  ? 'text-text-3'
+                  : priceDisplay.discountRateLabel !== null
+                    ? 'text-danger'
+                    : !priceDisplay.isPriceVisible && 'text-text-2',
               )}
             >
+              {priceDisplay.discountRateLabel !== null ? (
+                <span className="mr-4 text-label-m text-danger">
+                  {priceDisplay.discountRateLabel}
+                </span>
+              ) : null}
               {priceDisplay.listPriceText ? <span className="sr-only">판매가 </span> : null}
               {priceDisplay.text}
             </p>

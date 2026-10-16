@@ -54,11 +54,14 @@ const INTEREST_ITEMS = [
 
 function InterestItemChoices() {
   return (
-    <fieldset className="flex flex-col gap-12">
+    <fieldset className="flex flex-col gap-16">
       <legend className="text-label-m">관심 품목</legend>
-      <div className="flex flex-wrap gap-8">
+      <div className="flex flex-wrap gap-8 pt-[3px]">
         {INTEREST_ITEMS.map((interestItem, index) => (
-          <label key={interestItem} className="cursor-pointer">
+          <label
+            key={interestItem}
+            className="relative inline-flex min-h-44 cursor-pointer items-center"
+          >
             <input
               type="checkbox"
               name="interestItems"
@@ -67,9 +70,15 @@ function InterestItemChoices() {
               className="peer sr-only"
             />
             <span
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-8 hidden -translate-y-1/2 text-success peer-checked:inline-flex"
+            >
+              <Icon icon={Check} size={12} />
+            </span>
+            <span
               className={cx(
-                'inline-flex h-36 items-center rounded-capsule border border-line-strong bg-bg px-14 text-label-m text-text-2 transition-colors',
-                'peer-checked:border-text-1 peer-checked:bg-text-1 peer-checked:text-inverse',
+                'inline-flex h-36 items-center rounded-capsule border border-line-strong bg-bg px-[11px] text-label-m text-text-2 transition-colors peer-checked:pl-[26px]',
+                'peer-checked:border-success peer-checked:bg-success-tint peer-checked:text-success',
                 'peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-text-1',
               )}
             >
@@ -129,7 +138,7 @@ function InquiryProductsPanel({
   return (
     <section
       aria-labelledby="inquiry-products-title"
-      className="flex flex-col gap-16 rounded-12 border border-line bg-bg-subtle p-16 lg:gap-12 lg:p-20"
+      className="flex flex-col gap-16 rounded-12 border border-line-strong bg-bg p-16 lg:gap-12 lg:p-20"
     >
       <div className="flex flex-col gap-12 sm:flex-row sm:items-center sm:justify-between">
         <h2 id="inquiry-products-title" className="text-label-l">
@@ -145,7 +154,7 @@ function InquiryProductsPanel({
               value={selectedProductId}
               onChange={(event) => onSelectedProductChange(event.currentTarget.value)}
               disabled={products.length === 0}
-              className="w-full min-w-0 appearance-none rounded-8 border border-line-strong bg-bg px-12 py-8 pr-40 text-body-s focus-ring"
+              className="w-full min-w-0 appearance-none rounded-8 border border-line-strong bg-bg px-12 py-8 pr-40 text-body-s focus-ring focus-visible:border-success focus-visible:outline-success"
             >
               <option value="">상품을 선택해 주세요</option>
               {products.map((product) => (
@@ -169,13 +178,14 @@ function InquiryProductsPanel({
             size="s"
             onClick={onAddProduct}
             disabled={!selectedProductId}
+            className="disabled:bg-surface disabled:text-text-3"
           >
             상품 추가
           </Button>
         </div>
       </div>
       {selectedProducts.length > 0 ? (
-        <ul className="divide-y divide-line">
+        <ul className="flex flex-col gap-8">
           {selectedProducts.map((selection, index) => {
             const product = products.find((item) => item.id === selection.productId);
             if (!product) return null;
@@ -192,14 +202,14 @@ function InquiryProductsPanel({
             return (
               <li
                 key={selection.selectionId}
-                className="flex flex-col gap-12 py-12 first:pt-0 last:pb-0"
+                className="flex flex-col gap-12 rounded-8 border border-success bg-success-tint p-12"
               >
                 <div className="flex min-w-0 flex-wrap items-center gap-12">
                   <div className="flex min-w-0 flex-1 items-center gap-12">
                     <span aria-hidden="true" className="size-48 shrink-0 rounded-6 bg-surface" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-body-s-medium break-words">{product.name}</p>
-                      <p className="mt-2 text-caption text-text-3">{product.brand}</p>
+                      <p className="text-body-s-medium break-words text-success">{product.name}</p>
+                      <p className="mt-2 text-caption text-success">{product.brand}</p>
                     </div>
                   </div>
                   <label className="flex shrink-0 items-center gap-6 text-caption text-text-2">
@@ -232,7 +242,11 @@ function InquiryProductsPanel({
                   >
                     <span className="w-80 shrink-0">
                       {productOption.label}
-                      {productOption.required ? ' *' : ''}
+                      {productOption.required ? (
+                        <span aria-hidden="true" className="ml-4 text-danger">
+                          *
+                        </span>
+                      ) : null}
                     </span>
                     <select
                       aria-label={`${accessibleProductName} ${productOption.label}`}
@@ -245,7 +259,7 @@ function InquiryProductsPanel({
                           event.currentTarget.value,
                         )
                       }
-                      className="min-w-0 flex-1 rounded-8 border border-line-control bg-bg px-12 py-8 text-body-s focus-ring"
+                      className="min-w-0 flex-1 rounded-8 border border-line-control bg-bg px-12 py-8 text-body-s focus-ring focus-visible:border-success focus-visible:outline-success"
                     >
                       <option value="">
                         {productOption.required ? '옵션을 선택해 주세요' : '선택 사항'}
@@ -518,18 +532,23 @@ function QuoteFormVisual({
 
         <div className="flex flex-col gap-16 lg:contents">
           <fieldset className="flex flex-col gap-8 lg:gap-12">
-            <legend className="text-label-m">문의 유형 *</legend>
-            <div className="flex flex-wrap gap-x-24 gap-y-12 [&>label>span]:size-16 [&>label>span>span]:size-8">
-              <Radio name="inquiryType" value="custom" defaultChecked>
+            <legend className="text-label-m">
+              문의 유형
+              <span aria-hidden="true" className="ml-4 text-danger">
+                *
+              </span>
+            </legend>
+            <div className="flex flex-wrap gap-x-16 gap-y-8 [&>label>span]:size-14 [&>label>span>span]:size-7">
+              <Radio className="min-h-44" name="inquiryType" value="custom" required defaultChecked>
                 맞춤 제작
               </Radio>
-              <Radio name="inquiryType" value="bulk">
+              <Radio className="min-h-44" name="inquiryType" value="bulk" required>
                 대량 구매
               </Radio>
-              <Radio name="inquiryType" value="regular-supply">
+              <Radio className="min-h-44" name="inquiryType" value="regular-supply" required>
                 정기 납품
               </Radio>
-              <Radio name="inquiryType" value="other">
+              <Radio className="min-h-44" name="inquiryType" value="other" required>
                 기타
               </Radio>
             </div>
@@ -558,7 +577,8 @@ function QuoteFormVisual({
 
         <div className="grid grid-cols-1 gap-24 min-[600px]:grid-cols-2">
           <TextField
-            label="회사명 *"
+            label="회사명"
+            showRequiredIndicator
             name="companyName"
             autoComplete="organization"
             placeholder="회사명을 입력해 주세요"
@@ -567,7 +587,8 @@ function QuoteFormVisual({
             onChange={(event) => setCompanyName(event.currentTarget.value)}
           />
           <TextField
-            label="담당자명 *"
+            label="담당자명"
+            showRequiredIndicator
             name="contactName"
             autoComplete="name"
             placeholder="담당자 이름을 입력해 주세요"
@@ -576,7 +597,8 @@ function QuoteFormVisual({
             onChange={(event) => setContactName(event.currentTarget.value)}
           />
           <TextField
-            label="연락처 *"
+            label="연락처"
+            showRequiredIndicator
             name="phone"
             type="tel"
             autoComplete="tel"
@@ -587,7 +609,8 @@ function QuoteFormVisual({
             onChange={(event) => setPhone(event.currentTarget.value)}
           />
           <TextField
-            label="이메일 *"
+            label="이메일"
+            showRequiredIndicator
             name="email"
             type="email"
             autoComplete="email"

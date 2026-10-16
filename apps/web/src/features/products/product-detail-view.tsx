@@ -17,7 +17,7 @@ import { cx } from '@eum/ui/lib/cx';
 import { Heart, PackageOpen, SearchX, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState, type UIEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type UIEvent } from 'react';
 import { PageContainer } from '@/components/page-container';
 import { useCart } from '@/features/cart/cart-context';
 import { getMemberAuth } from '@/lib/member-auth';
@@ -49,7 +49,7 @@ import { useRelatedProductsQuery } from './use-related-products-query';
 
 /** 함께 구매하면 좋은 제품 최대 수(5열 × 2페이지) */
 const RELATED_PRODUCT_LIMIT = 10;
-/** 금액 미표시 상품 안내(데스크톱 구매 영역·요약 박스·모바일 하단 바 공통) */
+/** 금액 미표시 상품 안내(데스크톱 구매 영역·모바일 하단 바 공통) */
 const PRICE_HIDDEN_NOTICE =
   '금액 미공개 상품이라 바로 구매할 수 없습니다. 장바구니 담기·견적 문의만 가능합니다.';
 /** 상세 탭 순서(스크롤 위치에 따라 현재 탭을 고를 때도 이 순서를 씁니다) */
@@ -185,6 +185,8 @@ function ProductDetailContent({
   const [notice, setNotice] = useState<{ tone: 'success' | 'danger'; message: string } | null>(
     null,
   );
+  const [requiredOptionErrorId, setRequiredOptionErrorId] = useState<string | null>(null);
+  const focusNextRequiredOptionRef = useRef(false);
   // 바로 구매 처리 중(로그인 확인·이동) 연타 방지. ref는 같은 틱 안의 중복 클릭까지 막습니다.
   const [isBuyingNow, setIsBuyingNow] = useState(false);
   const isBuyingNowRef = useRef(false);
@@ -202,6 +204,9 @@ function ProductDetailContent({
   const isSoldOut = product.stockStatus === 'soldOut';
   const isPurchasable = canBuyNow(product);
   const isAddable = canAddToCart(product);
+  const selectedPurchaseLines = purchaseLines.filter(
+    (line) => product.options.length > 0 || line.lineId !== BASE_LINE_ID || line.quantity !== 1,
+  );
   const totalQuantity = purchaseLines.reduce((quantitySum, line) => quantitySum + line.quantity, 0);
   const galleryImages: GalleryImage[] =
     product.images.length > 0
@@ -225,15 +230,9 @@ function ProductDetailContent({
       : purchaseLines.length === 0
         ? '–'
         : formatKrw(totalAmount);
-  const selectionSummary =
-    purchaseLines.length === 0
-      ? '옵션을 선택해 주세요'
-      : purchaseLines.length === 1 && purchaseLines[0]?.optionLabel
-        ? `${purchaseLines[0].optionLabel} · ${totalQuantity}개`
-        : `${totalQuantity}개`;
-
   // 옵션 선택값을 모으고, 필수 옵션이 모두 채워지면(auto) 모은 선택 옵션과 함께 한 줄로 확정하는 함수
   const handleChoiceChange = (productOption: ProductOption, choiceId: string) => {
+    const hadRequiredOptionError = requiredOptionErrorId !== null;
     setNotice(null);
     const nextChoices = { ...pendingChoices, [productOption.id]: choiceId };
     if (optionCommitMode !== 'auto') {
@@ -243,8 +242,15 @@ function ProductDetailContent({
     const lineDraft = buildPurchaseLine(product, nextChoices);
     if (!lineDraft) {
       setPendingChoices(nextChoices);
+      if (hadRequiredOptionError) {
+        const firstMissingOption = getMissingRequiredOptions(product, nextChoices)[0];
+        setRequiredOptionErrorId(firstMissingOption?.id ?? null);
+        focusNextRequiredOptionRef.current = Boolean(firstMissingOption);
+      }
       return;
     }
+    setRequiredOptionErrorId(null);
+    focusNextRequiredOptionRef.current = false;
     setPendingChoices({});
     setPurchaseLines((currentLines) => addPurchaseLine(currentLines, lineDraft));
   };
@@ -258,21 +264,35 @@ function ProductDetailContent({
     setPurchaseLines((currentLines) => addPurchaseLine(currentLines, lineDraft));
   };
 
+  // 옵션 셀렉트로 스크롤하고 포커스를 주는 함수. reduced-motion 설정도 반영합니다.
+  const focusOption = useCallback(
+    (option?: ProductOption) => {
+      if (!option) return;
+      const selectElements = [
+        ...(optionsContainerRef.current?.querySelectorAll<HTMLSelectElement>('select') ?? []),
+      ];
+      const targetIndex = product.options.indexOf(option);
+      const targetSelect = selectElements[Math.max(0, targetIndex)];
+      if (!targetSelect) return;
+      targetSelect.scrollIntoView({
+        behavior: getScrollBehavior(prefersReducedMotion),
+        block: 'center',
+      });
+      targetSelect.focus({ preventScroll: true });
+    },
+    [prefersReducedMotion, product.options],
+  );
+
   // 비어 있는 필수 옵션(없으면 첫 옵션) 셀렉트로 스크롤하고 포커스를 주는 함수
   const focusFirstMissingOption = () => {
-    const missingOption = getMissingRequiredOptions(product, pendingChoices)[0];
-    const selectElements = [
-      ...(optionsContainerRef.current?.querySelectorAll<HTMLSelectElement>('select') ?? []),
-    ];
-    const targetIndex = missingOption ? product.options.indexOf(missingOption) : 0;
-    const targetSelect = selectElements[Math.max(0, targetIndex)];
-    if (!targetSelect) return;
-    targetSelect.scrollIntoView({
-      behavior: getScrollBehavior(prefersReducedMotion),
-      block: 'center',
-    });
-    targetSelect.focus({ preventScroll: true });
+    focusOption(getMissingRequiredOptions(product, pendingChoices)[0] ?? product.options[0]);
   };
+
+  useEffect(() => {
+    if (!focusNextRequiredOptionRef.current) return;
+    focusNextRequiredOptionRef.current = false;
+    focusOption(getMissingRequiredOptions(product, pendingChoices)[0]);
+  }, [focusOption, pendingChoices, product]);
 
   const changeLineQuantity = (lineId: string, quantity: number) => {
     setPurchaseLines((currentLines) =>
@@ -287,16 +307,19 @@ function ProductDetailContent({
   // 선택 줄을 모두 장바구니에 담는 함수. 담을 줄이 없으면 옵션 선택을 안내하고 옵션 셀렉트로 이동합니다.
   const addLinesToCart = (): boolean => {
     if (purchaseLines.length === 0) {
-      setNotice({
-        tone: 'danger',
-        message:
-          optionCommitMode === 'manual'
-            ? '옵션을 고른 뒤 추가 버튼을 눌러 주세요.'
-            : '필수 옵션을 선택해 주세요.',
-      });
-      focusFirstMissingOption();
+      const firstMissingOption = getMissingRequiredOptions(product, pendingChoices)[0];
+      if (firstMissingOption) {
+        setNotice(null);
+        setRequiredOptionErrorId(firstMissingOption.id);
+        focusOption(firstMissingOption);
+      } else {
+        setRequiredOptionErrorId(null);
+        setNotice({ tone: 'danger', message: '옵션을 고른 뒤 추가 버튼을 눌러 주세요.' });
+        focusFirstMissingOption();
+      }
       return false;
     }
+    setRequiredOptionErrorId(null);
     for (const line of purchaseLines) {
       addToCart(product, line.quantity, line.optionId, line.optionLabel);
     }
@@ -387,21 +410,27 @@ function ProductDetailContent({
                 </span>
               </div>
               <div className="mt-12 lg:mt-20">
-                <p
-                  className={cx(
-                    'text-price-l lg:text-web-price-xl',
-                    !priceDisplay.isPriceVisible && 'text-text-2',
-                  )}
-                >
-                  {priceDisplay.listPriceText ? <span className="sr-only">판매가 </span> : null}
-                  {priceDisplay.text}
-                </p>
                 {priceDisplay.listPriceText ? (
-                  <p className="mt-4 text-body-s text-text-3 line-through">
+                  <p className="text-body-s text-text-3 line-through">
                     <span className="sr-only">정가 </span>
                     {priceDisplay.listPriceText}
                   </p>
                 ) : null}
+                <div className="mt-4 flex items-baseline gap-8">
+                  {priceDisplay.discountRateLabel !== null ? (
+                    <span className="text-title text-danger">{priceDisplay.discountRateLabel}</span>
+                  ) : null}
+                  <p
+                    className={cx(
+                      'text-price-l lg:text-web-price-xl',
+                      priceDisplay.discountRateLabel !== null && 'text-danger',
+                      !priceDisplay.isPriceVisible && 'text-text-2',
+                    )}
+                  >
+                    {priceDisplay.listPriceText ? <span className="sr-only">판매가 </span> : null}
+                    {priceDisplay.text}
+                  </p>
+                </div>
               </div>
 
               {/* 모바일(W-03m): 배송·인증·원산지 요약 박스 */}
@@ -438,6 +467,11 @@ function ProductDetailContent({
                     option={productOption}
                     value={pendingChoices[productOption.id] ?? ''}
                     isPriceVisible={isPriceVisible}
+                    errorMessage={
+                      requiredOptionErrorId === productOption.id
+                        ? '필수 옵션을 선택해 주세요.'
+                        : undefined
+                    }
                     onChange={(choiceId) => handleChoiceChange(productOption, choiceId)}
                   />
                 ))}
@@ -540,16 +574,18 @@ function ProductDetailContent({
                 {notice?.message}
               </p>
               <Link
-                href={buildQuoteInquiryHref(
-                  purchaseLines.length > 0
-                    ? purchaseLines.map((line) => ({
-                        productId: product.id,
-                        optionId: line.optionId,
-                        quantity: line.quantity,
-                      }))
-                    : [{ productId: product.id }],
-                )}
-                className="mt-16 inline-flex rounded-4 text-label-m underline underline-offset-2 focus-ring hover:text-text-2"
+                href={
+                  selectedPurchaseLines.length > 0
+                    ? buildQuoteInquiryHref(
+                        selectedPurchaseLines.map((line) => ({
+                          productId: product.id,
+                          optionId: line.optionId,
+                          quantity: line.quantity,
+                        })),
+                      )
+                    : `/solutions?productId=${encodeURIComponent(product.id)}`
+                }
+                className="mt-16 inline-flex rounded-4 text-label-m focus-ring hover:text-text-2 hover:underline hover:underline-offset-2 focus-visible:underline focus-visible:underline-offset-2"
               >
                 대량 구매는 견적 문의 →
               </Link>
@@ -573,181 +609,129 @@ function ProductDetailContent({
           </div>
         </div>
 
-        <div className="mt-40 grid gap-24 lg:mt-96 lg:grid-cols-[minmax(0,856fr)_minmax(0,416fr)]">
-          <div className="min-w-0">
-            <nav
-              aria-label="상품 상세 탭"
-              className="sticky top-56 z-20 -mx-20 grid grid-cols-4 border-b border-line bg-bg lg:top-72 lg:mx-0"
-            >
-              {DETAIL_TABS.map((detailTab) => {
-                const isActive = activeTab === detailTab.id;
-                const reviewSuffix = detailTab.id === 'reviews' ? ` (${product.reviewCount})` : '';
-                return (
-                  <a
-                    key={detailTab.id}
-                    href={'#product-tab-' + detailTab.id}
-                    aria-current={isActive ? 'location' : undefined}
-                    onClick={(clickEvent) => {
-                      clickEvent.preventDefault();
-                      selectTab(detailTab.id);
-                    }}
-                    className={cx(
-                      'inline-flex h-56 min-w-0 items-center justify-center px-4 text-label-l whitespace-nowrap focus-ring lg:px-24',
-                      isActive
-                        ? 'border-b-2 border-text-1 text-text-1'
-                        : 'text-text-3 hover:text-text-1',
-                    )}
-                  >
-                    <span className="truncate lg:hidden">
-                      {detailTab.mobileLabel + reviewSuffix}
-                    </span>
-                    <span className="hidden truncate lg:inline">
-                      {detailTab.label + reviewSuffix}
-                    </span>
-                  </a>
-                );
-              })}
-            </nav>
-
-            <div className="mt-24 flex flex-col gap-48 lg:mt-40 lg:gap-64">
-              <section
-                id="product-tab-description"
-                aria-labelledby="product-description-heading"
-                className="scroll-mt-120 lg:scroll-mt-136"
-              >
-                <h2 id="product-description-heading" className="sr-only">
-                  제품 정보
-                </h2>
-                {product.summary ? (
-                  <p className="mb-20 text-body-m whitespace-pre-line text-text-2">
-                    {product.summary}
-                  </p>
-                ) : null}
-                <div className="aspect-[856/1200] max-h-[1200px] overflow-hidden rounded-12 bg-surface">
-                  <ProductImage
-                    src={galleryImages[0]?.url ?? null}
-                    alt={galleryImages[0]?.alt ?? product.name + ' 상세 이미지'}
-                  />
-                </div>
-              </section>
-
-              {product.specifications.length > 0 ? (
-                <section aria-labelledby="product-spec-heading" className="flex flex-col gap-16">
-                  <h2 id="product-spec-heading" className="text-h3">
-                    제품 사양
-                  </h2>
-                  <dl className="border-t-2 border-text-1">
-                    {product.specifications.map((specification) => (
-                      <div
-                        key={specification.label}
-                        className="grid grid-cols-[120px_minmax(0,1fr)] border-b border-line text-body-s lg:grid-cols-[196px_minmax(0,1fr)]"
-                      >
-                        <dt className="flex min-h-52 items-center bg-surface px-16 text-body-s-medium text-text-2">
-                          {specification.label}
-                        </dt>
-                        <dd className="flex items-center px-16 py-12">{specification.value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </section>
-              ) : null}
-
-              <section
-                id="product-tab-shipping"
-                aria-labelledby="shipping-heading"
-                className="flex scroll-mt-120 flex-col gap-16 lg:scroll-mt-136"
-              >
-                <h2 id="shipping-heading" className="text-h3">
-                  배송/교환/반품 안내
-                </h2>
-                <p className="text-body-m whitespace-pre-line text-text-2">
-                  {product.shipping.policy || product.shipping.estimate}
-                </p>
-              </section>
-
-              <ProductReviewsSection
-                productId={product.id}
-                reviewCount={product.reviewCount}
-                sectionId="product-tab-reviews"
-              />
-
-              <section
-                id="product-tab-questions"
-                aria-labelledby="questions-heading"
-                className="scroll-mt-120 lg:scroll-mt-136"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-12">
-                  <h2 id="questions-heading" className="text-h3">
-                    상품 문의
-                  </h2>
-                  <Link
-                    href={
-                      '/login?redirect=' +
-                      encodeURIComponent('/products/' + encodeURIComponent(product.id))
-                    }
-                    className="rounded-4 text-label-s underline focus-ring"
-                  >
-                    문의하기
-                  </Link>
-                </div>
-                <EmptyState
-                  icon={PackageOpen}
-                  title="등록된 상품 문의가 없습니다"
-                  headingLevel="h3"
-                  className="pt-48"
-                />
-              </section>
-            </div>
-          </div>
-
-          <aside className="hidden lg:block lg:pt-80" aria-label="구매 요약">
-            <div className="sticky top-96 rounded-12 border border-line bg-bg p-24">
-              <p className="text-title">{product.name}</p>
-              <p className="mt-4 text-body-s text-text-3">{selectionSummary}</p>
-              <div className="mt-16 flex items-center justify-between gap-8">
-                <span className="text-body-s text-text-2">총 금액</span>
-                <span
+        <div className="mt-40 min-w-0 lg:mt-96">
+          <nav
+            aria-label="상품 상세 탭"
+            className="sticky top-56 z-20 -mx-20 grid grid-cols-4 border-b border-line bg-bg lg:top-72 lg:mx-0"
+          >
+            {DETAIL_TABS.map((detailTab) => {
+              const isActive = activeTab === detailTab.id;
+              const reviewSuffix = detailTab.id === 'reviews' ? ` (${product.reviewCount})` : '';
+              return (
+                <a
+                  key={detailTab.id}
+                  href={'#product-tab-' + detailTab.id}
+                  aria-current={isActive ? 'location' : undefined}
+                  onClick={(clickEvent) => {
+                    clickEvent.preventDefault();
+                    selectTab(detailTab.id);
+                  }}
                   className={cx(
-                    isPriceVisible ? 'text-price-l' : 'text-price-m text-text-2',
-                    'text-right',
+                    'inline-flex h-56 min-w-0 items-center justify-center px-4 text-label-l whitespace-nowrap focus-ring lg:px-24',
+                    isActive
+                      ? 'border-b-2 border-text-1 text-text-1'
+                      : 'text-text-3 hover:text-text-1',
                   )}
                 >
-                  {totalAmountText}
-                </span>
-              </div>
-              <div className="mt-16 grid grid-cols-[48px_minmax(0,1fr)_minmax(0,1fr)] gap-8">
-                <WishButton
-                  isWishlisted={isWishlisted}
-                  label={wishButtonLabel}
-                  onToggle={() => toggleWishlist(product.id)}
-                  className="size-48"
-                />
-                <Button
-                  variant="primary"
-                  size="m"
-                  disabled={!isAddable}
-                  onClick={handleAddToCart}
-                  aria-label="요약에서 장바구니 담기"
-                >
-                  장바구니
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="m"
-                  disabled={isBuyNowDisabled}
-                  onClick={() => void handleBuyNow()}
-                  aria-label="요약에서 바로 구매"
-                >
-                  바로 구매
-                </Button>
-              </div>
-              {!priceDisplay.isPriceVisible ? (
-                <NoticeInline tone="neutral" className="mt-12">
-                  {PRICE_HIDDEN_NOTICE}
-                </NoticeInline>
+                  <span className="truncate lg:hidden">{detailTab.mobileLabel + reviewSuffix}</span>
+                  <span className="hidden truncate lg:inline">
+                    {detailTab.label + reviewSuffix}
+                  </span>
+                </a>
+              );
+            })}
+          </nav>
+
+          <div className="mt-24 flex flex-col gap-48 lg:mt-40 lg:gap-64">
+            <section
+              id="product-tab-description"
+              aria-labelledby="product-description-heading"
+              className="scroll-mt-120 lg:scroll-mt-136"
+            >
+              <h2 id="product-description-heading" className="sr-only">
+                제품 정보
+              </h2>
+              {product.summary ? (
+                <p className="mb-20 text-body-m whitespace-pre-line text-text-2">
+                  {product.summary}
+                </p>
               ) : null}
-            </div>
-          </aside>
+              <div className="mx-auto aspect-[856/1200] w-full max-w-[856px] overflow-hidden rounded-12 bg-surface">
+                <ProductImage
+                  src={galleryImages[0]?.url ?? null}
+                  alt={galleryImages[0]?.alt ?? product.name + ' 상세 이미지'}
+                />
+              </div>
+            </section>
+
+            {product.specifications.length > 0 ? (
+              <section aria-labelledby="product-spec-heading" className="flex flex-col gap-16">
+                <h2 id="product-spec-heading" className="text-h3">
+                  제품 사양
+                </h2>
+                <dl className="border-t-2 border-text-1">
+                  {product.specifications.map((specification) => (
+                    <div
+                      key={specification.label}
+                      className="grid grid-cols-[120px_minmax(0,1fr)] border-b border-line text-body-s lg:grid-cols-[196px_minmax(0,1fr)]"
+                    >
+                      <dt className="flex min-h-52 items-center bg-surface px-16 text-body-s-medium text-text-2">
+                        {specification.label}
+                      </dt>
+                      <dd className="flex items-center px-16 py-12">{specification.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            ) : null}
+
+            <section
+              id="product-tab-shipping"
+              aria-labelledby="shipping-heading"
+              className="flex scroll-mt-120 flex-col gap-16 lg:scroll-mt-136"
+            >
+              <h2 id="shipping-heading" className="text-h3">
+                배송/교환/반품 안내
+              </h2>
+              <p className="text-body-m whitespace-pre-line text-text-2">
+                {product.shipping.policy || product.shipping.estimate}
+              </p>
+            </section>
+
+            <ProductReviewsSection
+              productId={product.id}
+              reviewCount={product.reviewCount}
+              sectionId="product-tab-reviews"
+              brand={product.brand}
+            />
+
+            <section
+              id="product-tab-questions"
+              aria-labelledby="questions-heading"
+              className="scroll-mt-120 lg:scroll-mt-136"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-12">
+                <h2 id="questions-heading" className="text-h3">
+                  상품 문의
+                </h2>
+                <Link
+                  href={
+                    '/login?redirect=' +
+                    encodeURIComponent('/products/' + encodeURIComponent(product.id))
+                  }
+                  className="rounded-4 text-label-s underline focus-ring"
+                >
+                  문의하기
+                </Link>
+              </div>
+              <EmptyState
+                icon={PackageOpen}
+                title="등록된 상품 문의가 없습니다"
+                headingLevel="h3"
+                className="pt-48"
+              />
+            </section>
+          </div>
         </div>
 
         <ProductCarouselSection
@@ -941,16 +925,19 @@ function OptionSelect({
   option,
   value,
   isPriceVisible,
+  errorMessage,
   onChange,
 }: {
   option: ProductOption;
   value: string;
   isPriceVisible: boolean;
+  errorMessage?: string;
   onChange: (value: string) => void;
 }) {
   return (
     <SelectField
       label={option.label}
+      errorMessage={errorMessage}
       value={value}
       onChange={(changeEvent) => {
         if (changeEvent.target.value) onChange(changeEvent.target.value);
