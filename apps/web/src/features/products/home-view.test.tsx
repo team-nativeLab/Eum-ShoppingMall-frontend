@@ -2,6 +2,7 @@ import type { Category, HomeContent, Product } from '@eum/api/types';
 import type { ShopApi } from '@eum/api/shop-api';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getShopApi } from '@/lib/shop-api';
@@ -162,14 +163,14 @@ describe('HomeView desktop section layout', () => {
     expect(promoCards[0]).toHaveClass('h-216', 'lg:h-184');
     for (const promoCard of promoCards) {
       expect(promoCard).toHaveAttribute('href', '/about');
-      expect(promoCard.querySelector('a, button')).toBeNull();
-      expect(promoCard.querySelector('[aria-hidden="true"]')).toHaveClass(
-        'size-32',
-        'rounded-capsule',
-      );
+      expect(promoCard.querySelector('a, button, input, select, textarea, [tabindex]')).toBeNull();
+      const promoCta = promoCard.querySelector('span[aria-hidden="true"]');
+      expect(promoCta).not.toBeNull();
+      expect(promoCta).toHaveClass('size-56', 'rounded-capsule');
+      expect(promoCard).toHaveClass('focus-ring');
     }
-    expect(promoCards[0]?.querySelector('[aria-hidden="true"]')).toHaveClass('text-inverse');
-    expect(promoCards[1]?.querySelector('[aria-hidden="true"]')).toHaveClass('text-text-1');
+    expect(promoCards[0]?.querySelector('span[aria-hidden="true"]')).toHaveClass('text-inverse');
+    expect(promoCards[1]?.querySelector('span[aria-hidden="true"]')).toHaveClass('text-text-1');
     expect(bestSellerSection.parentElement).toHaveClass('lg:mt-64');
     const productTrack = screen.getByRole('list', { name: '베스트 상품' });
     const productRow = productTrack.parentElement;
@@ -177,6 +178,26 @@ describe('HomeView desktop section layout', () => {
     expect(productTrack).toHaveAttribute('data-page-size', '7');
     expect(quoteSection).toHaveClass('mt-64');
     expect(serviceBenefits).toHaveClass('mt-64');
+  });
+
+  it('keeps the promo card keyboard-focusable as one link with a decorative CTA', async () => {
+    const user = userEvent.setup();
+    render(<HomeView />, { wrapper: createWrapper() });
+
+    const promoSection = await screen.findByRole('region', { name: '안전 솔루션 프로모션' });
+    const promoCard = within(promoSection).getAllByRole('link')[0];
+    if (!promoCard) throw new Error('Expected a promo card link.');
+
+    let tabCount = 0;
+    while (document.activeElement !== promoCard && tabCount < 100) {
+      await user.tab();
+      tabCount += 1;
+    }
+
+    expect(promoCard).toHaveFocus();
+    expect(promoCard).toHaveAttribute('href', '/about');
+    expect(promoCard.querySelector('a, button, input, select, textarea, [tabindex]')).toBeNull();
+    expect(promoCard.querySelector('span[aria-hidden="true"]')).toBeInTheDocument();
   });
 
   it('keeps the hero company link destination and label without a plus icon', async () => {
