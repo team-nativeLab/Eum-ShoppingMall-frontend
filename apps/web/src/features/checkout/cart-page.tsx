@@ -181,7 +181,7 @@ export function CartPageView() {
                     : `${formatKrw(remaining)} 더 담으면 무료배송!`}
                 </strong>
                 <span
-                  className={cx('text-caption', hasFreeShipping ? 'text-text-3' : 'text-text-1')}
+                  className={cx('text-caption', hasFreeShipping ? 'text-success' : 'text-text-1')}
                 >
                   {formatKrw(selectedTotals.productTotal)} /{' '}
                   {formatKrw(options.freeShippingThreshold)}

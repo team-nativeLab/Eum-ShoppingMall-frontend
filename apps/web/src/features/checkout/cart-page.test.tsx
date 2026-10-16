@@ -310,6 +310,9 @@ describe('CartPageView free shipping progress', () => {
 
     expect(shippingBanner).toHaveClass('border-success', 'bg-success-tint');
     expect(screen.getByText('무료 배송 기준을 충족했습니다.')).toHaveClass('text-success');
+    expect(screen.getByText(`₩${amount.toLocaleString('ko-KR')} / ₩50,000`)).toHaveClass(
+      'text-success',
+    );
     expect(getShippingProgress()).toHaveAttribute('aria-valuemin', '0');
     expect(getShippingProgress()).toHaveAttribute('aria-valuemax', '100');
     expect(getShippingProgress()).toHaveAttribute('aria-valuenow', '100');
