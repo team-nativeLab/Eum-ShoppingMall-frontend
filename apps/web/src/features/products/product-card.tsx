@@ -97,13 +97,14 @@ export function ProductCard({
           aria-pressed={isWishlisted}
           onClick={() => toggleWishlist(product.id)}
           className={cx(
-            'absolute inline-flex items-center justify-center rounded-capsule text-text-1 focus-ring',
+            'absolute inline-flex items-center justify-center rounded-capsule focus-ring',
+            isWishlisted ? 'text-danger' : 'text-text-1',
             isCompactOnMobile
               ? 'top-0 right-0 size-44 lg:top-4 lg:right-4 lg:size-40'
               : 'top-4 right-4 size-40',
           )}
         >
-          <Icon icon={Heart} size={20} fill={isWishlisted ? 'currentColor' : 'none'} />
+          <Icon icon={Heart} size={16} fill={isWishlisted ? 'currentColor' : 'none'} />
         </button>
       </div>
       <div

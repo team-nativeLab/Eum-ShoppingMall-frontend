@@ -116,13 +116,18 @@ describe('quote request preview', () => {
 
     const selectedInterest = screen.getByRole('checkbox', { name: '개인보호장비' });
     expect(selectedInterest).toBeChecked();
-    const selectedChip = selectedInterest
-      .closest('label')
-      ?.querySelector('span:not([aria-hidden="true"])');
+    const selectedInterestLabel = selectedInterest.closest('label');
+    expect(selectedInterestLabel).toHaveClass('inline-flex', 'min-h-44', 'items-center');
+    expect(selectedInterestLabel?.parentElement).toHaveClass('pt-[3px]');
+    const selectedChip = selectedInterestLabel?.querySelector('span:not([aria-hidden="true"])');
     expect(selectedChip).toHaveClass(
-      'min-h-44',
+      'h-36',
       'peer-checked:bg-success-tint',
       'peer-checked:text-success',
+    );
+    expect(selectedInterestLabel?.querySelector('[aria-hidden="true"] svg')).toHaveAttribute(
+      'width',
+      '12',
     );
     expect(selectedInterest.closest('label')?.querySelector('[aria-hidden="true"]')).toHaveClass(
       'hidden',
