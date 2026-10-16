@@ -184,7 +184,7 @@ describe('ProductCarouselTrack responsive layouts', () => {
       );
       expect(track).toHaveStyle({
         '--home-carousel-card-width': '158px',
-        '--home-carousel-card-height': '384px',
+        '--home-carousel-card-height': '408px',
         '--home-carousel-gap': '16px',
         '--carousel-page-translate': expectedTranslate,
       });

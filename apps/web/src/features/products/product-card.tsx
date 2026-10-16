@@ -41,9 +41,41 @@ export function ProductCard({
   const isSoldOut = product.stockStatus === 'soldOut';
   const isCompactOnMobile = mobileVariant === 'compact';
   const isHomeCarouselCard = cardVariant === 'home-carousel';
+  const isHomeCarouselCompactCard = isCompactOnMobile && isHomeCarouselCard;
   const hasRequiredOptions = product.options.some((productOption) => productOption.required);
   const productHref = `/products/${encodeURIComponent(product.id)}`;
   const [cartAnnouncement, setCartAnnouncement] = useState('');
+
+  const productBadges = (
+    <>
+      {!priceDisplay.isPriceVisible ? (
+        <Badge tone="outline" className="bg-bg">
+          금액 미표시
+        </Badge>
+      ) : null}
+      {isSoldOut ? <Badge tone="soldout">품절</Badge> : null}
+    </>
+  );
+
+  const favoriteButton = (
+    <button
+      type="button"
+      aria-label={isWishlisted ? `${product.name} 찜 취소` : `${product.name} 찜하기`}
+      aria-pressed={isWishlisted}
+      onClick={() => toggleWishlist(product.id)}
+      className={cx(
+        'absolute inline-flex items-center justify-center rounded-capsule focus-ring',
+        isWishlisted ? 'text-danger' : 'text-text-1',
+        isHomeCarouselCard
+          ? 'top-8 right-4 z-20 size-44'
+          : isCompactOnMobile
+            ? 'top-0 right-0 size-44 lg:top-4 lg:right-4 lg:size-40'
+            : 'top-4 right-4 size-40',
+      )}
+    >
+      <Icon icon={Heart} size={16} fill={isWishlisted ? 'currentColor' : 'none'} />
+    </button>
+  );
 
   const handleCartAction = () => {
     if (hasRequiredOptions) {
@@ -60,10 +92,11 @@ export function ProductCard({
         'group flex min-w-0 rounded-8 border border-line bg-bg p-8 transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-1',
         layout === 'list' ? 'flex-row gap-16' : 'flex-col',
         isCompactOnMobile && (isHomeCarouselCard ? 'pb-24 lg:pb-8' : 'pb-10 lg:pb-8'),
-        isCompactOnMobile && isHomeCarouselCard && '@container',
+        // Keep mobile home cards 16px taller than the former 368px layout without viewport-based sizing.
+        isHomeCarouselCompactCard && 'min-h-[384px] lg:min-h-0',
         isCompactOnMobile && (layout === 'list' ? 'gap-10 lg:gap-0' : 'gap-16 lg:gap-0'),
         isHomeCarouselCard &&
-          'lg:relative lg:h-[var(--home-carousel-card-height)] lg:border-0 lg:before:pointer-events-none lg:before:absolute lg:before:inset-0 lg:before:rounded-8 lg:before:border lg:before:border-line lg:hover:before:border-line-strong',
+          'relative lg:h-[var(--home-carousel-card-height)] lg:border-0 lg:before:pointer-events-none lg:before:absolute lg:before:inset-0 lg:before:rounded-8 lg:before:border lg:before:border-line lg:hover:before:border-line-strong',
         className,
       )}
     >
@@ -72,8 +105,8 @@ export function ProductCard({
           'relative shrink-0 overflow-hidden rounded-6 bg-surface',
           layout === 'list'
             ? 'aspect-square w-144'
-            : isCompactOnMobile && isHomeCarouselCard
-              ? 'mx-auto aspect-[2/3] min-h-[133.333333cqw] w-[calc(100%_-_16px)] max-w-full'
+            : isHomeCarouselCompactCard
+              ? 'mx-auto aspect-[2/3] w-[calc(100%_-_24px)] max-w-[116px]'
               : 'aspect-[3/4]',
         )}
       >
@@ -89,35 +122,19 @@ export function ProductCard({
         >
           <ProductImage src={product.thumbnailUrl} alt={product.name} />
         </Link>
-        <div
-          className={cx(
-            'pointer-events-none absolute top-8 flex flex-wrap gap-4',
-            isCompactOnMobile && isHomeCarouselCard ? 'left-4 lg:left-8' : 'left-8',
-          )}
-        >
-          {!priceDisplay.isPriceVisible ? (
-            <Badge tone="outline" className="bg-bg">
-              금액 미표시
-            </Badge>
-          ) : null}
-          {isSoldOut ? <Badge tone="soldout">품절</Badge> : null}
-        </div>
-        <button
-          type="button"
-          aria-label={isWishlisted ? `${product.name} 찜 취소` : `${product.name} 찜하기`}
-          aria-pressed={isWishlisted}
-          onClick={() => toggleWishlist(product.id)}
-          className={cx(
-            'absolute inline-flex items-center justify-center rounded-capsule focus-ring',
-            isWishlisted ? 'text-danger' : 'text-text-1',
-            isCompactOnMobile
-              ? 'top-0 right-0 size-44 lg:top-4 lg:right-4 lg:size-40'
-              : 'top-4 right-4 size-40',
-          )}
-        >
-          <Icon icon={Heart} size={16} fill={isWishlisted ? 'currentColor' : 'none'} />
-        </button>
+        {!isHomeCarouselCard ? (
+          <div className="pointer-events-none absolute top-8 left-8 flex flex-wrap gap-4">
+            {productBadges}
+          </div>
+        ) : null}
+        {!isHomeCarouselCard ? favoriteButton : null}
       </div>
+      {isHomeCarouselCard ? (
+        <div className="pointer-events-none absolute top-8 right-48 left-12 z-10 flex flex-col items-start gap-4 pr-4">
+          {productBadges}
+        </div>
+      ) : null}
+      {isHomeCarouselCard ? favoriteButton : null}
       <div
         className={cx(
           'flex min-w-0 flex-1 flex-col px-4',
@@ -145,16 +162,35 @@ export function ProductCard({
         >
           {product.name}
         </Link>
-        <div className="mt-6 flex items-center gap-4 text-caption text-text-2">
+        <div
+          className={cx(
+            'mt-6 flex items-center gap-4 text-caption text-text-2',
+            isHomeCarouselCompactCard &&
+              product.rating === null &&
+              'max-lg:flex-col max-lg:items-start max-lg:gap-2',
+          )}
+        >
           <ProductRatingStars rating={product.rating} />
           {product.rating === null ? (
-            <span>평점 없음</span>
+            <span
+              className={cx(
+                'flex items-center gap-4',
+                isHomeCarouselCompactCard && 'max-lg:whitespace-nowrap',
+              )}
+            >
+              <span>평점 없음</span>
+              <span role="img" aria-label={`리뷰 ${product.reviewCount.toLocaleString('ko-KR')}개`}>
+                ({product.reviewCount.toLocaleString('ko-KR')})
+              </span>
+            </span>
           ) : (
             <span className="text-caption-medium text-text-1">{product.rating.toFixed(1)}</span>
           )}
-          <span role="img" aria-label={`리뷰 ${product.reviewCount.toLocaleString('ko-KR')}개`}>
-            ({product.reviewCount.toLocaleString('ko-KR')})
-          </span>
+          {product.rating !== null ? (
+            <span role="img" aria-label={`리뷰 ${product.reviewCount.toLocaleString('ko-KR')}개`}>
+              ({product.reviewCount.toLocaleString('ko-KR')})
+            </span>
+          ) : null}
         </div>
         <div
           className={cx(

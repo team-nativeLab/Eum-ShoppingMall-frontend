@@ -75,6 +75,9 @@ describe('ProductCard', () => {
     expect(screen.getByRole('img', { name: '평점 없음' })).toBeInTheDocument();
     expect(screen.getByText('평점 없음')).toBeInTheDocument();
     expect(screen.getByLabelText('리뷰 0개')).toHaveTextContent('(0)');
+    expect(screen.getByRole('img', { name: '평점 없음' }).parentElement).not.toHaveClass(
+      'max-lg:flex-col',
+    );
     expect(screen.queryByText(/%$/)).not.toBeInTheDocument();
     expect(screen.getByText('₩12,000')).not.toHaveClass('text-danger');
   });
@@ -86,27 +89,32 @@ describe('ProductCard', () => {
     expect(screen.queryByText('0%')).not.toBeInTheDocument();
   });
 
-  it('keeps the narrowed 2:3 image frame centered at desktop and mobile while increasing card height', () => {
+  it('gives home cards responsive image sizing, mobile height, and separate badge and favorite slots', () => {
+    const longProductName = '테스트 현장용 고시인성 장시간 착용 안전화 상품명 길이 확인';
     render(
       <ProductCard
-        product={createProduct({ stockStatus: 'soldOut', priceVisible: false })}
+        product={createProduct({
+          name: longProductName,
+          stockStatus: 'soldOut',
+          priceVisible: false,
+          thumbnailUrl: '/test-placeholder.png',
+        })}
         mobileVariant="compact"
         cardVariant="home-carousel"
       />,
     );
 
     const card = screen.getByRole('article');
-    expect(card).toHaveClass('@container', 'pb-24', 'lg:pb-8');
+    expect(card).toHaveClass('relative', 'pb-24', 'lg:pb-8', 'min-h-[384px]', 'lg:min-h-0');
     expect(card).toHaveClass('lg:h-[var(--home-carousel-card-height)]');
     const imageFrame = card.firstElementChild;
     if (!(imageFrame instanceof HTMLElement)) throw new Error('Expected a product image frame.');
 
     expect(imageFrame).toHaveClass(
       'mx-auto',
-      'w-[calc(100%_-_16px)]',
-      'max-w-full',
+      'w-[calc(100%_-_24px)]',
+      'max-w-[116px]',
       'aspect-[2/3]',
-      'min-h-[133.333333cqw]',
       'overflow-hidden',
     );
     expect(imageFrame).not.toHaveClass(
@@ -116,14 +124,62 @@ describe('ProductCard', () => {
       'lg:aspect-[3/4]',
       'lg:min-h-0',
     );
-    expect(within(imageFrame).getByRole('button', { name: '테스트 안전화 찜하기' })).toHaveClass(
-      'top-0',
-      'right-0',
-      'size-44',
+    expect(imageFrame.querySelector('img')).toHaveClass('object-cover');
+
+    const favoriteButton = within(card).getByRole('button', {
+      name: `${longProductName} 찜하기`,
+    });
+    expect(favoriteButton).toHaveClass('top-8', 'right-4', 'size-44', 'z-20');
+    expect(favoriteButton.parentElement).toBe(card);
+
+    const homeBadgeStack = within(card).getByText('금액 미표시').parentElement;
+    expect(homeBadgeStack).toHaveClass(
+      'absolute',
+      'top-8',
+      'left-12',
+      'right-48',
+      'pr-4',
+      'z-10',
+      'flex-col',
+      'items-start',
+      'gap-4',
     );
-    const homeBadgeContainer = within(imageFrame).getByText('금액 미표시').parentElement;
-    expect(homeBadgeContainer).toHaveClass('left-4', 'lg:left-8');
-    expect(within(imageFrame).getByText('품절')).toBeInTheDocument();
+    expect(homeBadgeStack?.parentElement).toBe(card);
+    expect(homeBadgeStack?.children).toHaveLength(2);
+    expect(within(card).getByText('품절')).toBeInTheDocument();
+
+    const productLink = within(card).getByRole('link', { name: longProductName });
+    expect(productLink).toHaveClass('truncate');
+    expect(productLink.parentElement).toHaveClass('px-4');
+    const priceRow = card.querySelector('div.mt-auto');
+    expect(priceRow).toHaveClass('mt-auto', 'items-end', 'justify-between');
+    expect(priceRow?.parentElement).toHaveClass('px-4');
+    expect(
+      within(card).getByRole('button', {
+        name: `${longProductName} 장바구니 담기`,
+      }),
+    ).toHaveClass('size-36', 'hidden', 'lg:inline-flex');
+  });
+
+  it('stacks home mobile unrated stars above a single-line rating summary', () => {
+    render(
+      <ProductCard
+        product={createProduct({ rating: null, reviewCount: 0 })}
+        mobileVariant="compact"
+        cardVariant="home-carousel"
+      />,
+    );
+
+    const ratingRow = screen.getByRole('img', { name: '평점 없음' }).parentElement;
+    expect(ratingRow).toHaveClass('max-lg:flex-col', 'max-lg:items-start', 'max-lg:gap-2');
+
+    const ratingSummary = screen.getByText('평점 없음').parentElement;
+    if (!(ratingSummary instanceof HTMLElement)) {
+      throw new Error('Expected an unrated home card summary.');
+    }
+    expect(ratingSummary).toHaveClass('max-lg:whitespace-nowrap');
+    expect(ratingSummary.textContent).toContain('(0)');
+    expect(within(ratingSummary).getByLabelText('리뷰 0개')).toHaveTextContent('(0)');
   });
 
   it('keeps default and shared compact card image sizing and spacing unchanged', () => {
@@ -137,8 +193,14 @@ describe('ProductCard', () => {
     expect(imageFrame).toHaveClass('aspect-[3/4]');
     expect(imageFrame).not.toHaveClass('w-[calc(100%_-_16px)]', 'mx-auto');
     expect(card).not.toHaveClass('pb-24');
+    expect(card).not.toHaveClass('min-h-[384px]');
     expect(within(imageFrame).getByText('품절').parentElement).toHaveClass('left-8');
     expect(within(imageFrame).getByText('품절').parentElement).not.toHaveClass('left-4');
+    expect(within(imageFrame).getByRole('button', { name: '테스트 안전화 찜하기' })).toHaveClass(
+      'top-4',
+      'right-4',
+      'size-40',
+    );
 
     rerender(<ProductCard product={soldOutProduct} mobileVariant="compact" />);
 
@@ -146,6 +208,7 @@ describe('ProductCard', () => {
     imageFrame = card.firstElementChild;
     if (!(imageFrame instanceof HTMLElement)) throw new Error('Expected a product image frame.');
     expect(card).not.toHaveClass('@container');
+    expect(card).not.toHaveClass('min-h-[384px]');
     expect(card).toHaveClass('pb-10', 'lg:pb-8');
     expect(imageFrame).toHaveClass('aspect-[3/4]');
     expect(imageFrame).not.toHaveClass('w-[calc(100%_-_16px)]', 'mx-auto');
