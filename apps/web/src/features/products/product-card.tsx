@@ -59,7 +59,8 @@ export function ProductCard({
       className={cx(
         'group flex min-w-0 rounded-8 border border-line bg-bg p-8 transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-1',
         layout === 'list' ? 'flex-row gap-16' : 'flex-col',
-        isCompactOnMobile && 'gap-10 pb-10 lg:gap-0 lg:pb-8',
+        isCompactOnMobile && 'pb-10 lg:pb-8',
+        isCompactOnMobile && (layout === 'list' ? 'gap-10 lg:gap-0' : 'gap-16 lg:gap-0'),
         isHomeCarouselCard &&
           'lg:relative lg:h-[var(--home-carousel-card-height)] lg:border-0 lg:before:pointer-events-none lg:before:absolute lg:before:inset-0 lg:before:rounded-8 lg:before:border lg:before:border-line lg:hover:before:border-line-strong',
         className,
@@ -67,8 +68,8 @@ export function ProductCard({
     >
       <div
         className={cx(
-          'relative aspect-square overflow-hidden rounded-6 bg-surface',
-          layout === 'list' && 'w-144 shrink-0',
+          'relative shrink-0 overflow-hidden rounded-6 bg-surface',
+          layout === 'list' ? 'aspect-square w-144' : 'aspect-[3/4]',
         )}
       >
         {/* 이름 링크와 같은 곳으로 가는 중복 링크라 탭 순서·보조기기에서 뺍니다. */}
@@ -110,7 +111,8 @@ export function ProductCard({
       <div
         className={cx(
           'flex min-w-0 flex-1 flex-col px-4',
-          isCompactOnMobile ? 'gap-4 lg:gap-0 lg:pt-12' : 'pt-12',
+          isCompactOnMobile ? 'gap-4' : layout === 'list' ? 'pt-12' : 'pt-16',
+          isCompactOnMobile && (layout === 'list' ? 'lg:gap-0 lg:pt-12' : 'lg:gap-0 lg:pt-16'),
         )}
       >
         <p

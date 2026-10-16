@@ -31,7 +31,7 @@ vi.mock('./product-carousel', async (importOriginal) => {
     useHomeCarouselLayout: () => ({
       pageSize: 7,
       cardWidth: 158,
-      cardHeight: 284,
+      cardHeight: 368,
       gap: 16,
     }),
   };
