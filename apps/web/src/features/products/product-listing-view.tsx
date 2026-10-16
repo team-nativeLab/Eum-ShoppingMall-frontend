@@ -15,7 +15,7 @@ import { cx } from '@eum/ui/lib/cx';
 import { ChevronDown, LayoutGrid, List, Plus, RotateCcw, SearchX } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ChangeEvent, type ReactNode } from 'react';
 import { PageContainer } from '@/components/page-container';
 import { getScrollBehavior, usePrefersReducedMotion } from '@/lib/use-media-query';
 import { buildBrandSelectionHref, getBrandFilterValues } from './product-navigation';
@@ -37,9 +37,16 @@ type ActiveFilter =
 const SORT_OPTIONS: { value: SortBy; label: string }[] = [
   { value: 'recommended', label: '추천순' },
   { value: 'newest', label: '최신순' },
+  { value: 'ratingDesc', label: '별점순' },
   { value: 'priceAsc', label: '낮은 가격순' },
   { value: 'priceDesc', label: '높은 가격순' },
 ];
+
+const PRICE_BOUND_OPTIONS = [10000, 30000, 50000, 100000, 300000, 1000000, 3000000, 5000000];
+const PRICE_SELECT_OPTIONS = PRICE_BOUND_OPTIONS.map((price) => ({
+  value: String(price),
+  label: `${price / 10000}만원`,
+}));
 
 const PAGE_SIZE_OPTIONS = [12, 24, 48] as const;
 /** Figma W-02 기본 표시 개수(24개씩) */
@@ -49,9 +56,19 @@ const FACET_PREVIEW_COUNT = 5;
 
 const SELECT_CLASS = 'h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s focus-ring';
 
-/** 숫자만 남겨 가격 입력값을 정리하는 함수 */
-function toDigits(inputValue: string): string {
-  return inputValue.replace(/\D/g, '');
+/** 선택한 원화 경계를 원 단위로 표시합니다. */
+function formatKrwPrice(price: number): string {
+  return `${new Intl.NumberFormat('ko-KR').format(price)}원`;
+}
+
+/** 선택한 경계로 활성 가격 칩을 만듭니다. 제한이 없으면 가격 칩이 없습니다. */
+function getPriceRangeLabel(minPrice: number | undefined, maxPrice: number | undefined) {
+  if (minPrice !== undefined && maxPrice !== undefined) {
+    return `${formatKrwPrice(minPrice)} ~ ${formatKrwPrice(maxPrice)}`;
+  }
+  if (minPrice !== undefined) return `${formatKrwPrice(minPrice)} 이상`;
+  if (maxPrice !== undefined) return `${formatKrwPrice(maxPrice)} 이하`;
+  return undefined;
 }
 
 /**
@@ -78,18 +95,104 @@ function getSubcategoryChips(
   };
 }
 
+/** 최소 또는 최대 원화 가격을 선택하는 네이티브 드롭다운입니다. */
+function PriceBoundField({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (nextPrice: string) => void;
+}) {
+  return (
+    <div className="relative min-w-0">
+      <label htmlFor={id} className="sr-only">
+        {label}대
+      </label>
+      <select
+        id={id}
+        value={value}
+        onChange={(changeEvent: ChangeEvent<HTMLSelectElement>) =>
+          onChange(changeEvent.currentTarget.value)
+        }
+        className={cx(
+          SELECT_CLASS,
+          'w-full appearance-none pr-32 lg:pr-28 lg:pl-8 lg:text-caption',
+        )}
+      >
+        <option value="">제한 없음</option>
+        {PRICE_SELECT_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <Icon
+        icon={ChevronDown}
+        size={16}
+        className="pointer-events-none absolute top-1/2 right-12 -translate-y-1/2 text-text-1"
+      />
+    </div>
+  );
+}
+
+/** 최소·최대 가격 경계를 선택하는 모바일·데스크톱 공용 컨트롤입니다. */
+function PriceRangeSelector({
+  groupLabel,
+  idPrefix,
+  minPrice,
+  maxPrice,
+  onMinPriceChange,
+  onMaxPriceChange,
+}: {
+  groupLabel: string;
+  idPrefix: 'mobile' | 'desktop';
+  minPrice: number | undefined;
+  maxPrice: number | undefined;
+  onMinPriceChange: (nextPrice: string) => void;
+  onMaxPriceChange: (nextPrice: string) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={groupLabel}
+      className={cx(
+        'grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-8',
+        idPrefix === 'desktop' && 'lg:gap-4',
+      )}
+    >
+      <PriceBoundField
+        id={`${idPrefix}-min-price`}
+        label="최소 가격"
+        value={minPrice === undefined ? '' : String(minPrice)}
+        onChange={onMinPriceChange}
+      />
+      <span aria-hidden="true" className="text-text-2">
+        ~
+      </span>
+      <PriceBoundField
+        id={`${idPrefix}-max-price`}
+        label="최대 가격"
+        value={maxPrice === undefined ? '' : String(maxPrice)}
+        onChange={onMaxPriceChange}
+      />
+    </div>
+  );
+}
+
 /** W-02 카테고리와 W-04 검색 결과에서 공통 사용하는 필터·목록 레이아웃입니다. */
 export function ProductListingView({
   categorySlug,
   initialKeyword = '',
   initialBrands = [],
-  initialBrowseBrands = false,
   initialSearchParams = '',
 }: {
   categorySlug?: string;
   initialKeyword?: string;
   initialBrands?: string[];
-  initialBrowseBrands?: boolean;
   initialSearchParams?: string;
 }) {
   const pathname = usePathname();
@@ -106,8 +209,6 @@ export function ProductListingView({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [sortBy, setSortBy] = useState<SortBy>('recommended');
-  const [minPriceInput, setMinPriceInput] = useState('');
-  const [maxPriceInput, setMaxPriceInput] = useState('');
   const [minPrice, setMinPrice] = useState<number | undefined>();
   const [maxPrice, setMaxPrice] = useState<number | undefined>();
   const normalizedInitialBrands = getBrandFilterValues(initialBrands);
@@ -121,14 +222,7 @@ export function ProductListingView({
   const [selectedCertifications, setSelectedCertifications] = useState<string[]>([]);
   const [excludeSoldOut, setExcludeSoldOut] = useState(false);
   const [layout, setLayout] = useState<'grid' | 'list'>('grid');
-  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(initialBrowseBrands);
-  const [syncedBrowseIntent, setSyncedBrowseIntent] = useState(initialBrowseBrands);
-  if (syncedBrowseIntent !== initialBrowseBrands) {
-    setSyncedBrowseIntent(initialBrowseBrands);
-    setIsMobileFiltersOpen(initialBrowseBrands);
-  }
-  const mobileBrandGroupRef = useRef<HTMLDivElement>(null);
-  const hasFocusedBrandBrowseRef = useRef(false);
+  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
   const prefersReducedMotion = usePrefersReducedMotion();
 
   const updateSelectedBrands = (nextBrands: string[]) => {
@@ -187,45 +281,11 @@ export function ProductListingView({
     : facetsQuery.data
       ? 'success'
       : 'pending';
-  useEffect(() => {
-    if (!initialBrowseBrands) {
-      hasFocusedBrandBrowseRef.current = false;
-      return;
-    }
-    if (
-      !isMobileFiltersOpen ||
-      hasFocusedBrandBrowseRef.current ||
-      !window.matchMedia('(max-width: 1023px)').matches
-    ) {
-      return;
-    }
-    const brandGroup = mobileBrandGroupRef.current;
-    if (!brandGroup) return;
-    const brandChip =
-      brandGroup.querySelector<HTMLButtonElement>('button[aria-pressed="true"]') ??
-      brandGroup.querySelector<HTMLButtonElement>('button:not(:disabled)');
-    if (!brandChip && facetsStatus === 'pending') return;
-    const focusTarget = brandChip ?? brandGroup;
-    focusTarget.focus({ preventScroll: true });
-    brandGroup.scrollIntoView({
-      behavior: getScrollBehavior(prefersReducedMotion),
-      block: 'nearest',
-    });
-    // Group-only focus on an error must not block a later successful retry from focusing a chip.
-    if (brandChip || facetsStatus !== 'error') hasFocusedBrandBrowseRef.current = true;
-  }, [facetsStatus, initialBrowseBrands, isMobileFiltersOpen, prefersReducedMotion]);
   const retryFacets = () => void facetsQuery.refetch();
 
   const activeFilters: ActiveFilter[] = [];
-  if (minPrice !== undefined || maxPrice !== undefined) {
-    activeFilters.push({
-      key: 'price',
-      label:
-        (minPrice?.toLocaleString('ko-KR') ?? '최소') +
-        ' ~ ' +
-        (maxPrice?.toLocaleString('ko-KR') ?? '최대'),
-    });
-  }
+  const priceRangeLabel = getPriceRangeLabel(minPrice, maxPrice);
+  if (priceRangeLabel) activeFilters.push({ key: 'price', label: priceRangeLabel });
   selectedBrands.forEach((brand) =>
     activeFilters.push({ key: 'brand', value: brand, label: brand }),
   );
@@ -237,26 +297,37 @@ export function ProductListingView({
   const clearFilters = () => {
     setMinPrice(undefined);
     setMaxPrice(undefined);
-    setMinPriceInput('');
-    setMaxPriceInput('');
     updateSelectedBrands([]);
     setSelectedCertifications([]);
     setExcludeSoldOut(false);
     setPage(1);
   };
 
-  const applyPriceRange = () => {
-    setMinPrice(minPriceInput ? Number(minPriceInput) : undefined);
-    setMaxPrice(maxPriceInput ? Number(maxPriceInput) : undefined);
+  const updatePriceBound = (bound: 'min' | 'max', nextPrice: number | undefined) => {
+    if (bound === 'min') {
+      setMinPrice(nextPrice);
+      if (nextPrice !== undefined && maxPrice !== undefined && nextPrice > maxPrice) {
+        setMaxPrice(undefined);
+      }
+    } else {
+      setMaxPrice(nextPrice);
+      if (nextPrice !== undefined && minPrice !== undefined && nextPrice < minPrice) {
+        setMinPrice(undefined);
+      }
+    }
     setPage(1);
+  };
+
+  const selectPriceBound = (bound: 'min' | 'max', rawPrice: string) => {
+    const selectedPrice = rawPrice === '' ? undefined : Number(rawPrice);
+    if (selectedPrice !== undefined && !PRICE_BOUND_OPTIONS.includes(selectedPrice)) return;
+    updatePriceBound(bound, selectedPrice);
   };
 
   const removeFilter = (activeFilter: ActiveFilter) => {
     if (activeFilter.key === 'price') {
       setMinPrice(undefined);
       setMaxPrice(undefined);
-      setMinPriceInput('');
-      setMaxPriceInput('');
     } else if (activeFilter.key === 'brand') {
       updateSelectedBrands(selectedBrands.filter((brand) => brand !== activeFilter.value));
     } else if (activeFilter.key === 'certification') {
@@ -331,14 +402,13 @@ export function ProductListingView({
     { label: selectedCategory?.name ?? '카테고리' },
   ];
   const title = isSearch
-    ? keyword
-      ? '‘' + keyword + '’ 검색 결과'
-      : '전체 상품'
+    ? (categoryNameById.get(selectedSearchCategoryId ?? '') ??
+      (keyword ? '‘' + keyword + '’ 검색 결과' : '전체 상품'))
     : (selectedCategory?.name ?? '카테고리');
   const isLoading = categoriesQuery.isPending || productsQuery.isPending || !isCategoryResolved;
   // 이전 결과를 보여 주며 새 페이지·필터 결과를 받는 중
   const isRefreshing = productsQuery.isPlaceholderData;
-  const totalCount = productsQuery.data?.totalCount;
+  const totalCount = productsQuery.isPlaceholderData ? undefined : productsQuery.data?.totalCount;
   // 페이지 수는 서버가 실제로 적용한 pageSize로 계산합니다(요청 값과 다를 수 있음).
   const pageCount = productsQuery.data
     ? Math.max(
@@ -466,26 +536,21 @@ export function ProductListingView({
         </div>
         {isMobileFiltersOpen ? (
           <div className="mt-12 w-full rounded-12 border border-line p-16">
-            <div className="grid grid-cols-2 gap-16">
-              <label className="text-caption text-text-2">
-                최소 가격
-                <input
-                  inputMode="numeric"
-                  value={minPriceInput}
-                  onChange={(changeEvent) => setMinPriceInput(toDigits(changeEvent.target.value))}
-                  className="mt-4 h-40 w-full rounded-8 border border-line-strong px-8 text-body-s focus-ring"
+            <section aria-labelledby="mobile-price-filter-heading">
+              <h2 id="mobile-price-filter-heading" className="text-label-m">
+                가격
+              </h2>
+              <div className="mt-8">
+                <PriceRangeSelector
+                  groupLabel="모바일 가격 구간"
+                  idPrefix="mobile"
+                  minPrice={minPrice}
+                  maxPrice={maxPrice}
+                  onMinPriceChange={(rawPrice) => selectPriceBound('min', rawPrice)}
+                  onMaxPriceChange={(rawPrice) => selectPriceBound('max', rawPrice)}
                 />
-              </label>
-              <label className="text-caption text-text-2">
-                최대 가격
-                <input
-                  inputMode="numeric"
-                  value={maxPriceInput}
-                  onChange={(changeEvent) => setMaxPriceInput(toDigits(changeEvent.target.value))}
-                  className="mt-4 h-40 w-full rounded-8 border border-line-strong px-8 text-body-s focus-ring"
-                />
-              </label>
-            </div>
+              </div>
+            </section>
             {facetsStatus === 'error' ? (
               <FacetsErrorNotice onRetry={retryFacets} className="mt-12" />
             ) : null}
@@ -493,7 +558,6 @@ export function ProductListingView({
               브랜드
             </h2>
             <div
-              ref={mobileBrandGroupRef}
               role="group"
               aria-labelledby="mobile-brand-filter-heading"
               tabIndex={-1}
@@ -535,9 +599,6 @@ export function ProductListingView({
               <Button variant="secondary" size="s" onClick={clearFilters}>
                 초기화
               </Button>
-              <Button size="s" onClick={applyPriceRange}>
-                적용
-              </Button>
             </div>
           </div>
         ) : null}
@@ -560,42 +621,14 @@ export function ProductListingView({
             <FacetsErrorNotice onRetry={retryFacets} className="mt-16" />
           ) : null}
           <FilterSection title="가격">
-            <div className="flex items-center">
-              <label className="sr-only" htmlFor="minimum-price">
-                최소 가격
-              </label>
-              <input
-                id="minimum-price"
-                inputMode="numeric"
-                value={minPriceInput}
-                onChange={(changeEvent) => setMinPriceInput(toDigits(changeEvent.target.value))}
-                placeholder="최소"
-                className="h-40 w-86 min-w-0 rounded-8 border border-line-control px-12 text-body-s outline-none placeholder:text-text-3 focus:ring-1 focus:ring-text-1"
-              />
-              <span aria-hidden="true" className="w-24 text-center text-body-s text-text-3">
-                ~
-              </span>
-              <label className="sr-only" htmlFor="maximum-price">
-                최대 가격
-              </label>
-              <input
-                id="maximum-price"
-                inputMode="numeric"
-                value={maxPriceInput}
-                onChange={(changeEvent) => setMaxPriceInput(toDigits(changeEvent.target.value))}
-                placeholder="최대"
-                className="h-40 w-86 min-w-0 rounded-8 border border-line-control px-12 text-body-s outline-none placeholder:text-text-3 focus:ring-1 focus:ring-text-1"
-              />
-            </div>
-            <Button
-              variant="secondary"
-              size="s"
-              isFullWidth
-              className="mt-8"
-              onClick={applyPriceRange}
-            >
-              적용
-            </Button>
+            <PriceRangeSelector
+              groupLabel="데스크톱 가격 구간"
+              idPrefix="desktop"
+              minPrice={minPrice}
+              maxPrice={maxPrice}
+              onMinPriceChange={(rawPrice) => selectPriceBound('min', rawPrice)}
+              onMaxPriceChange={(rawPrice) => selectPriceBound('max', rawPrice)}
+            />
           </FilterSection>
           <FilterSection title="브랜드">
             <FacetCheckboxList
@@ -711,8 +744,15 @@ export function ProductListingView({
               <div
                 role="group"
                 aria-label="보기 방식"
-                className="hidden h-40 w-80 items-center justify-center gap-2 rounded-8 bg-surface p-2 sm:flex lg:w-78"
+                className="relative hidden h-40 w-80 items-center justify-center gap-2 rounded-8 bg-surface p-2 sm:flex lg:w-78"
               >
+                <span
+                  aria-hidden="true"
+                  className={cx(
+                    'absolute top-2 left-2 size-36 rounded-6 bg-bg shadow-1 transition-transform duration-150 motion-reduce:transition-none',
+                    layout === 'list' && 'translate-x-[calc(100%+2px)]',
+                  )}
+                />
                 <ViewToggleButton
                   label="그리드 보기"
                   isSelected={layout === 'grid'}
@@ -833,8 +873,8 @@ function ViewToggleButton({
       aria-label={label}
       aria-pressed={isSelected}
       className={cx(
-        'inline-flex size-36 items-center justify-center rounded-6 focus-ring',
-        isSelected ? 'bg-bg shadow-1' : 'text-text-3 hover:text-text-1',
+        'relative z-10 inline-flex size-36 items-center justify-center rounded-6 focus-ring transition-colors duration-150 motion-reduce:transition-none',
+        isSelected ? 'text-text-1' : 'text-text-3 hover:text-text-1',
       )}
     >
       {icon}
@@ -917,6 +957,7 @@ function FacetCheckboxList({
     <div className="flex flex-col items-start gap-4">
       {visibleFacets.map((facet) => (
         <Checkbox
+          size="small"
           key={facet.value}
           checked={selectedValues.includes(facet.value)}
           onChange={() => onToggle(facet.value)}

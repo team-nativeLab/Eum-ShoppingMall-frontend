@@ -87,6 +87,7 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
               <Checkbox
                 checked={rememberLogin}
                 onChange={(event) => setRememberLogin(event.target.checked)}
+                className="min-h-24 [&>span]:size-14 [&>span>svg]:size-10"
               >
                 로그인 상태 유지
               </Checkbox>
