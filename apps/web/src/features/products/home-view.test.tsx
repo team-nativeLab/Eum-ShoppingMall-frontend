@@ -168,7 +168,7 @@ describe('HomeView desktop section layout', () => {
       expect(promoCta).not.toBeNull();
       expect(promoCta).toHaveClass(
         'mt-auto',
-        'size-48',
+        'size-36',
         'shrink-0',
         'translate-y-[5px]',
         'rounded-capsule',

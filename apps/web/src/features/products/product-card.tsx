@@ -30,7 +30,7 @@ export function ProductCard({
   className?: string;
   layout?: 'grid' | 'list';
   mobileVariant?: 'full' | 'compact';
-  /** 홈 베스트 셀러: overlay border를 써서 158px frame 안에서 p-8의 142px 콘텐츠 폭을 유지합니다. */
+  /** 홈 베스트 셀러: 모바일 프레임·하단 여백과 데스크톱 158px 카드 테두리 규격을 제어합니다. */
   cardVariant?: 'default' | 'home-carousel';
 }) {
   const router = useRouter();
@@ -59,7 +59,8 @@ export function ProductCard({
       className={cx(
         'group flex min-w-0 rounded-8 border border-line bg-bg p-8 transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-1',
         layout === 'list' ? 'flex-row gap-16' : 'flex-col',
-        isCompactOnMobile && 'pb-10 lg:pb-8',
+        isCompactOnMobile && (isHomeCarouselCard ? 'pb-24 lg:pb-8' : 'pb-10 lg:pb-8'),
+        isCompactOnMobile && isHomeCarouselCard && '@container',
         isCompactOnMobile && (layout === 'list' ? 'gap-10 lg:gap-0' : 'gap-16 lg:gap-0'),
         isHomeCarouselCard &&
           'lg:relative lg:h-[var(--home-carousel-card-height)] lg:border-0 lg:before:pointer-events-none lg:before:absolute lg:before:inset-0 lg:before:rounded-8 lg:before:border lg:before:border-line lg:hover:before:border-line-strong',
@@ -69,7 +70,11 @@ export function ProductCard({
       <div
         className={cx(
           'relative shrink-0 overflow-hidden rounded-6 bg-surface',
-          layout === 'list' ? 'aspect-square w-144' : 'aspect-[3/4]',
+          layout === 'list'
+            ? 'aspect-square w-144'
+            : isCompactOnMobile && isHomeCarouselCard
+              ? 'mx-auto aspect-[2/3] min-h-[133.333333cqw] w-[calc(100%_-_16px)] max-w-full lg:mx-0 lg:aspect-[3/4] lg:min-h-0 lg:w-full lg:max-w-none'
+              : 'aspect-[3/4]',
         )}
       >
         {/* 이름 링크와 같은 곳으로 가는 중복 링크라 탭 순서·보조기기에서 뺍니다. */}
@@ -84,7 +89,12 @@ export function ProductCard({
         >
           <ProductImage src={product.thumbnailUrl} alt={product.name} />
         </Link>
-        <div className="pointer-events-none absolute top-8 left-8 flex flex-wrap gap-4">
+        <div
+          className={cx(
+            'pointer-events-none absolute top-8 flex flex-wrap gap-4',
+            isCompactOnMobile && isHomeCarouselCard ? 'left-4 lg:left-8' : 'left-8',
+          )}
+        >
           {!priceDisplay.isPriceVisible ? (
             <Badge tone="outline" className="bg-bg">
               금액 미표시

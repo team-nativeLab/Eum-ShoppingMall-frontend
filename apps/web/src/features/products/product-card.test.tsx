@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Product } from '@eum/api/types';
 import { ProductCard } from './product-card';
@@ -84,5 +84,69 @@ describe('ProductCard', () => {
 
     expect(screen.getByText('<1%')).toBeInTheDocument();
     expect(screen.queryByText('0%')).not.toBeInTheDocument();
+  });
+
+  it('keeps the home mobile image height while narrowing the frame and adding 14px below the card', () => {
+    render(
+      <ProductCard
+        product={createProduct({ stockStatus: 'soldOut', priceVisible: false })}
+        mobileVariant="compact"
+        cardVariant="home-carousel"
+      />,
+    );
+
+    const card = screen.getByRole('article');
+    expect(card).toHaveClass('@container', 'pb-24', 'lg:pb-8');
+    const imageFrame = card.firstElementChild;
+    if (!(imageFrame instanceof HTMLElement)) throw new Error('Expected a product image frame.');
+
+    expect(imageFrame).toHaveClass(
+      'mx-auto',
+      'w-[calc(100%_-_16px)]',
+      'max-w-full',
+      'aspect-[2/3]',
+      'min-h-[133.333333cqw]',
+      'overflow-hidden',
+      'lg:mx-0',
+      'lg:w-full',
+      'lg:max-w-none',
+      'lg:aspect-[3/4]',
+      'lg:min-h-0',
+    );
+    expect(within(imageFrame).getByRole('button', { name: '테스트 안전화 찜하기' })).toHaveClass(
+      'top-0',
+      'right-0',
+      'size-44',
+    );
+    const homeBadgeContainer = within(imageFrame).getByText('금액 미표시').parentElement;
+    expect(homeBadgeContainer).toHaveClass('left-4', 'lg:left-8');
+    expect(within(imageFrame).getByText('품절')).toBeInTheDocument();
+  });
+
+  it('keeps default and shared compact card image sizing and spacing unchanged', () => {
+    const soldOutProduct = createProduct({ stockStatus: 'soldOut' });
+    const { rerender } = render(<ProductCard product={soldOutProduct} />);
+
+    let card = screen.getByRole('article');
+    let imageFrame = card.firstElementChild;
+    if (!(imageFrame instanceof HTMLElement)) throw new Error('Expected a product image frame.');
+    expect(card).not.toHaveClass('@container');
+    expect(imageFrame).toHaveClass('aspect-[3/4]');
+    expect(imageFrame).not.toHaveClass('w-[calc(100%_-_16px)]', 'mx-auto');
+    expect(card).not.toHaveClass('pb-24');
+    expect(within(imageFrame).getByText('품절').parentElement).toHaveClass('left-8');
+    expect(within(imageFrame).getByText('품절').parentElement).not.toHaveClass('left-4');
+
+    rerender(<ProductCard product={soldOutProduct} mobileVariant="compact" />);
+
+    card = screen.getByRole('article');
+    imageFrame = card.firstElementChild;
+    if (!(imageFrame instanceof HTMLElement)) throw new Error('Expected a product image frame.');
+    expect(card).not.toHaveClass('@container');
+    expect(card).toHaveClass('pb-10', 'lg:pb-8');
+    expect(imageFrame).toHaveClass('aspect-[3/4]');
+    expect(imageFrame).not.toHaveClass('w-[calc(100%_-_16px)]', 'mx-auto');
+    expect(within(imageFrame).getByText('품절').parentElement).toHaveClass('left-8');
+    expect(within(imageFrame).getByText('품절').parentElement).not.toHaveClass('left-4');
   });
 });
