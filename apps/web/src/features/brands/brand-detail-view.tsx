@@ -1,12 +1,14 @@
 'use client';
 
 import { getApiFailureKind } from '@eum/api/errors';
-import type { Brand } from '@eum/api/types';
+import type { ProductListParams } from '@eum/api/shop-api';
+import type { Brand, Category } from '@eum/api/types';
 import { Breadcrumb } from '@eum/ui/components/Breadcrumb';
 import { Button, buttonClassName } from '@eum/ui/components/Button';
 import { EmptyState } from '@eum/ui/components/EmptyState';
 import { Icon } from '@eum/ui/components/Icon';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
+import { SelectField } from '@eum/ui/components/TextField';
 import { cx } from '@eum/ui/lib/cx';
 import { ArrowRight, ChevronDown, PackageOpen, SearchX, Store } from 'lucide-react';
 import Link from 'next/link';
@@ -14,20 +16,37 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { PageContainer } from '@/components/page-container';
 import { ProductCard } from '@/features/products/product-card';
 import { buildBrandHref, buildBrandProductsHref } from '@/features/products/product-navigation';
+import { DESKTOP_QUERY, useMediaQuery } from '@/lib/use-media-query';
+import { useBrandsQuery } from './use-brands-query';
+import { useCategoriesQuery } from '@/features/products/use-categories-query';
 import { useProductsQuery } from '@/features/products/use-products-query';
 import { BRAND_LOAD_ERROR_COPY } from './brand-load-error';
 import { BrandCover, BrandLogo, BrandLogoPanel, getBrandSubline } from './brand-media';
 import { useBrandQuery } from './use-brand-query';
 
-/** 상세 화면에 보여 줄 브랜드 상품 수(전체는 「제품 00개 보기」로 상품 목록에서 봅니다) */
+/** 상품 API 페이지 요청의 초기 크기. 화면에는 별도 초기 개수만 보여 줍니다. */
 export const BRAND_PRODUCT_PREVIEW_COUNT = 8;
+
+const BRAND_PRODUCT_DISCOVERY_PAGE_SIZE = 24;
+const BRAND_PRODUCT_LOAD_INCREMENT = 24;
+const BRAND_PRODUCT_VISIBLE_COUNT = { desktop: 10, mobile: 6 } as const;
+const BRAND_PRODUCT_SORT_OPTIONS: {
+  value: NonNullable<ProductListParams['sortBy']>;
+  label: string;
+}[] = [
+  { value: 'recommended', label: '추천순' },
+  { value: 'newest', label: '최신순' },
+  { value: 'ratingDesc', label: '별점순' },
+  { value: 'priceAsc', label: '낮은 가격순' },
+  { value: 'priceDesc', label: '높은 가격순' },
+];
 
 // 다크 밴드 위 포커스 표시(home-view QuoteBanner와 같은 방식)
 const INVERSE_FOCUS_CLASS =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-inverse';
 
 /**
- * W-33 브랜드 상세. 브랜드 히어로 + 스토리 + 이 브랜드 상품(상위 8개)으로 구성합니다.
+ * W-33 브랜드 상세. 브랜드 히어로·스토리·필터 가능한 상품 목록·다른 브랜드로 구성합니다.
  * 상품은 브랜드 조회가 끝난 뒤에만 조회해서, 브랜드 이름 없이 전체 상품을 요청하지 않게 합니다.
  */
 export function BrandDetailView({ brandId }: { brandId: string }) {
@@ -76,13 +95,66 @@ export function BrandDetailView({ brandId }: { brandId: string }) {
 }
 
 function BrandDetailContent({ brand }: { brand: Brand }) {
-  // TODO(브랜드 ID 필터): 서버가 brandId 필터를 지원하면 이름 필터 대신 brandId로 조회합니다.
-  // 히어로 CTA와 상품 그리드가 같은 조회 결과(같은 query key)를 함께 씁니다.
-  const productsQuery = useProductsQuery({
+  // 상품 API는 브랜드 ID 대신 이름을 필터로 받으므로 기존 계약을 그대로 씁니다.
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | undefined>();
+  const [sortBy, setSortBy] = useState<NonNullable<ProductListParams['sortBy']>>('recommended');
+  const [extraLoadCount, setExtraLoadCount] = useState(0);
+  const [pageSize, setPageSize] = useState(BRAND_PRODUCT_DISCOVERY_PAGE_SIZE);
+  const sortSelectId = useId();
+  const categoriesQuery = useCategoriesQuery();
+  const discoveryQuery = useProductsQuery({
     brand: [brand.name],
-    pageSize: BRAND_PRODUCT_PREVIEW_COUNT,
+    pageSize: BRAND_PRODUCT_DISCOVERY_PAGE_SIZE,
+    sortBy: 'recommended',
   });
+  const productsQuery = useProductsQuery(
+    {
+      brand: [brand.name],
+      categoryId: selectedCategoryId,
+      pageSize,
+      sortBy,
+    },
+    { shouldKeepPreviousData: true },
+  );
+  const availableCategories = getAvailableBrandCategories(
+    discoveryQuery.data?.items.map((product) => product.categoryId) ?? [],
+    categoriesQuery.data ?? [],
+  );
+  const initialVisibleCount = isDesktop
+    ? BRAND_PRODUCT_VISIBLE_COUNT.desktop
+    : BRAND_PRODUCT_VISIBLE_COUNT.mobile;
+  const loadIncrement = isDesktop
+    ? BRAND_PRODUCT_VISIBLE_COUNT.desktop
+    : BRAND_PRODUCT_VISIBLE_COUNT.mobile;
+  const visibleProductCount = initialVisibleCount + extraLoadCount * loadIncrement;
+  const visibleProducts = productsQuery.data?.items.slice(0, visibleProductCount) ?? [];
   const productTotalCount = productsQuery.data?.totalCount;
+  const hasMoreProducts =
+    productTotalCount !== undefined && visibleProductCount < productTotalCount;
+
+  function handleLoadMore() {
+    const nextVisibleCount = visibleProductCount + loadIncrement;
+    setExtraLoadCount((currentCount) => currentCount + 1);
+    if (nextVisibleCount > (productsQuery.data?.items.length ?? 0)) {
+      const totalCount = productsQuery.data?.totalCount ?? pageSize;
+      setPageSize(Math.min(totalCount, pageSize + BRAND_PRODUCT_LOAD_INCREMENT));
+    }
+  }
+
+  function handleCategoryChange(categoryId: string | undefined) {
+    setSelectedCategoryId(categoryId);
+    setExtraLoadCount(0);
+    setPageSize(BRAND_PRODUCT_DISCOVERY_PAGE_SIZE);
+  }
+
+  function handleSortChange(nextSortBy: string) {
+    const sortOption = BRAND_PRODUCT_SORT_OPTIONS.find((option) => option.value === nextSortBy);
+    if (!sortOption) return;
+    setSortBy(sortOption.value);
+    setExtraLoadCount(0);
+    setPageSize(BRAND_PRODUCT_DISCOVERY_PAGE_SIZE);
+  }
 
   return (
     <>
@@ -100,22 +172,53 @@ function BrandDetailContent({ brand }: { brand: Brand }) {
           )}
         />
       </PageContainer>
-      <BrandHero brand={brand} productTotalCount={productTotalCount} />
+      <BrandHero brand={brand} productTotalCount={brand.productCount} />
       <BrandStory brand={brand} />
       <section aria-labelledby="brand-products-heading">
-        <PageContainer className="flex flex-col gap-16 py-48 lg:gap-32 lg:py-120">
-          <h2
-            id="brand-products-heading"
-            className="flex items-baseline gap-8 text-h3 lg:gap-12 lg:text-web-h2"
+        <PageContainer className="flex flex-col gap-16 py-48 lg:gap-24 lg:py-120">
+          <div className="flex flex-wrap items-center justify-between gap-12">
+            <h2
+              id="brand-products-heading"
+              className="flex items-baseline gap-8 text-h3 lg:gap-12 lg:text-web-h2"
+            >
+              제품
+              {productTotalCount !== undefined ? (
+                <span className="lg:text-body-s-medium lg:text-text-3">{productTotalCount}개</span>
+              ) : null}
+            </h2>
+            <div className="w-136">
+              <SelectField
+                id={sortSelectId}
+                isLabelHidden
+                label="상품 정렬"
+                value={sortBy}
+                onChange={(changeEvent) => handleSortChange(changeEvent.currentTarget.value)}
+                options={BRAND_PRODUCT_SORT_OPTIONS}
+              />
+            </div>
+          </div>
+          <div
+            role="group"
+            aria-label="브랜드 상품 카테고리"
+            className="-mx-16 flex gap-8 overflow-x-auto px-16 pb-4 sm:-mx-20 sm:px-20 lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0"
           >
-            제품
-            {productTotalCount !== undefined ? (
-              <span className="lg:text-body-s-medium lg:text-text-3">{productTotalCount}개</span>
-            ) : null}
-          </h2>
+            <BrandCategoryFilterButton
+              label="전체"
+              isSelected={selectedCategoryId === undefined}
+              onSelect={() => handleCategoryChange(undefined)}
+            />
+            {availableCategories.map((category) => (
+              <BrandCategoryFilterButton
+                key={category.id}
+                label={category.name}
+                isSelected={selectedCategoryId === category.id}
+                onSelect={() => handleCategoryChange(category.id)}
+              />
+            ))}
+          </div>
           {productsQuery.isPending ? (
             <ul aria-busy="true" className={PRODUCT_GRID_CLASS}>
-              {Array.from({ length: BRAND_PRODUCT_PREVIEW_COUNT }, (_, skeletonIndex) => (
+              {Array.from({ length: initialVisibleCount }, (_, skeletonIndex) => (
                 <li key={skeletonIndex} className="aspect-3/4 animate-pulse rounded-8 bg-surface" />
               ))}
             </ul>
@@ -149,31 +252,130 @@ function BrandDetailContent({ brand }: { brand: Brand }) {
             />
           ) : (
             <>
-              <ul className={PRODUCT_GRID_CLASS}>
-                {productsQuery.data.items.map((product) => (
+              <ul
+                className={cx(PRODUCT_GRID_CLASS, productsQuery.isPlaceholderData && 'opacity-60')}
+              >
+                {visibleProducts.map((product) => (
                   <li key={product.id} className="min-w-0">
                     <ProductCard product={product} mobileVariant="compact" />
                   </li>
                 ))}
               </ul>
-              {productsQuery.data.totalCount > productsQuery.data.items.length ? (
+              {hasMoreProducts ? (
                 <div className="flex justify-center pt-16">
-                  <Link
-                    href={buildBrandProductsHref(brand.name)}
-                    className={cx(
-                      buttonClassName({ variant: 'secondary', size: 'm', isFullWidth: true }),
-                      'lg:w-240',
-                    )}
+                  <Button
+                    variant="secondary"
+                    size="m"
+                    className="w-full lg:w-240"
+                    disabled={productsQuery.isPlaceholderData}
+                    onClick={handleLoadMore}
                   >
-                    전체 제품 보기
-                  </Link>
+                    더 보기
+                  </Button>
                 </div>
               ) : null}
             </>
           )}
         </PageContainer>
       </section>
+      <OtherBrandsSection currentBrandId={brand.id} />
     </>
+  );
+}
+
+function BrandCategoryFilterButton({
+  label,
+  isSelected,
+  onSelect,
+}: {
+  label: string;
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={isSelected}
+      onClick={onSelect}
+      className="inline-flex min-h-44 shrink-0 items-center justify-center rounded-capsule focus-ring lg:min-h-36"
+    >
+      <span
+        className={`inline-flex min-h-36 items-center rounded-capsule border px-14 text-label-s ${isSelected ? 'border-text-1 bg-text-1 text-inverse' : 'border-line text-text-2'}`}
+      >
+        {label}
+      </span>
+    </button>
+  );
+}
+
+function getAvailableBrandCategories(
+  productCategoryIds: readonly string[],
+  categories: readonly Category[],
+) {
+  const categoryById = new Map(categories.map((category) => [category.id, category]));
+  const availableCategoryIds = new Set<string>();
+  for (const categoryId of productCategoryIds) {
+    let currentCategory = categoryById.get(categoryId);
+    const visitedIds = new Set<string>();
+    while (currentCategory?.parentId && !visitedIds.has(currentCategory.id)) {
+      visitedIds.add(currentCategory.id);
+      currentCategory = categoryById.get(currentCategory.parentId);
+    }
+    if (currentCategory) availableCategoryIds.add(currentCategory.id);
+  }
+  return categories.filter(
+    (category) => category.parentId === null && availableCategoryIds.has(category.id),
+  );
+}
+
+function OtherBrandsSection({ currentBrandId }: { currentBrandId: string }) {
+  const brandsQuery = useBrandsQuery();
+  const otherBrands = (brandsQuery.data ?? [])
+    .filter((brand) => brand.id !== currentBrandId)
+    .slice(0, 6);
+
+  if (!brandsQuery.isSuccess || otherBrands.length === 0) return null;
+
+  return (
+    <section aria-labelledby="other-brands-heading" className="bg-bg-subtle py-32 lg:py-48">
+      <PageContainer>
+        <div className="mb-16 flex items-center justify-between gap-12 lg:mb-24">
+          <h2 id="other-brands-heading" className="lg:text-web-h3 text-h3">
+            다른 브랜드
+          </h2>
+          <Link
+            href={buildBrandHref()}
+            className="inline-flex min-h-40 items-center gap-4 rounded-4 text-label-s focus-ring"
+          >
+            전체 브랜드 보기 <Icon icon={ArrowRight} size={14} />
+          </Link>
+        </div>
+        <ul className="grid gap-8 lg:grid-cols-6 lg:gap-12">
+          {otherBrands.map((otherBrand, index) => (
+            <li key={otherBrand.id} className={index >= 3 ? 'hidden lg:block' : undefined}>
+              <Link
+                href={buildBrandHref(otherBrand.id)}
+                className="flex min-h-76 items-center gap-12 rounded-8 border border-line bg-bg p-12 focus-ring lg:min-h-112 lg:flex-col lg:items-stretch lg:gap-8"
+              >
+                <span className="flex size-48 shrink-0 items-center justify-center overflow-hidden rounded-4 bg-surface lg:size-full lg:h-56">
+                  <BrandLogo
+                    logoUrl={otherBrand.logoUrl}
+                    brandName={otherBrand.name}
+                    className="size-40 lg:size-48"
+                  />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-label-s">{otherBrand.name}</span>
+                  <span className="mt-4 block text-caption text-text-3">
+                    제품 {otherBrand.productCount.toLocaleString('ko-KR')}개
+                  </span>
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </PageContainer>
+    </section>
   );
 }
 
@@ -243,8 +445,7 @@ const CTA_CLASS =
   'inline-flex h-48 w-full items-center justify-center gap-8 rounded-capsule px-24 text-label-l whitespace-nowrap lg:w-fit';
 
 /**
- * 「제품 00개 보기」. 숫자는 상품 목록 조회의 totalCount를 쓰고, 조회 중에는 숫자를 숨깁니다.
- * 상품이 0개면 이동할 곳이 없으므로 비활성으로 그립니다.
+ * 「제품 00개 보기」. 브랜드 API의 productCount를 쓰고, 상품이 0개면 비활성으로 그립니다.
  */
 function BrandProductsCta({
   brandName,

@@ -23,7 +23,10 @@ function createMockLogo(label: string): string {
   return `data:image/svg+xml,${encodeURIComponent(svgMarkup)}`;
 }
 
-/** 개발용 히어로 사진(무채색 그라데이션 SVG). 실제 사진 대신 씁니다. */
+/** Figma W32/W33 히어로와 같은 기존 창고 사진을 mock 커버로 재사용합니다. */
+const MOCK_WAREHOUSE_COVER = '/assets/web/about-warehouse.png';
+
+/** 사진이 없는 임의 브랜드 상태를 위한 개발용 커버 자리표시자입니다. */
 function createMockCover(startColor: string, endColor: string): string {
   const svgMarkup =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 704">` +
@@ -45,7 +48,7 @@ export const mockBrands: MockBrandRecord[] = [
     englishName: 'SAFEGUARD',
     logoUrl: createMockLogo('SAFEGUARD'),
     tagline: '머리 보호구 한 분야에 집중해 온 안전모 전문 브랜드입니다.',
-    coverImageUrl: createMockCover('#d9d9d9', '#bdbdbd'),
+    coverImageUrl: MOCK_WAREHOUSE_COVER,
     mainField: '개인보호장비',
     originCountry: '대한민국',
     certification: 'KCs 안전인증',

@@ -884,6 +884,7 @@ function AllMenuDropdown({
         { label: '공지사항', href: '/support/notices' },
         { label: 'FAQ', href: '/support/faq' },
         { label: '1:1 문의', href: '/support/inquiry' },
+        { label: '이벤트', href: '/events' },
       ],
     },
     {

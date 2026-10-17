@@ -19,7 +19,7 @@ import { mockClaims, mockOrders } from './mock/orders';
 import { mockProducts } from './mock/products';
 import { mockReviews } from './mock/reviews';
 import { mockRecommendedKeywords } from './mock/search';
-import { mockFaqs, mockInquiries, mockNotices, mockQuotes } from './mock/support';
+import { mockEvents, mockFaqs, mockInquiries, mockNotices, mockQuotes } from './mock/support';
 import type { ProductFacetParams, RequestOptions, ShopApi } from './shop-api';
 import type {
   AdminProduct,
@@ -34,6 +34,7 @@ import type {
   Product,
   ProductFacets,
   ProductReview,
+  ProductReviewSummary,
 } from './types';
 import { canBuyNow } from './price';
 
@@ -372,6 +373,54 @@ export function createMockApi(config: ApiConfig): ShopApi {
           totalCount: productReviews.length,
         };
       },
+      async getReviewSummary(productId, options): Promise<ProductReviewSummary> {
+        const productReviews = await respondList(
+          mockReviews.filter((review) => review.productId === productId),
+          options,
+        );
+        const ratingCounts: ProductReviewSummary['ratingCounts'] = {
+          1: 0,
+          2: 0,
+          3: 0,
+          4: 0,
+          5: 0,
+        };
+        let ratingTotal = 0;
+        for (const review of productReviews) {
+          switch (review.rating) {
+            case 1:
+              ratingCounts[1] += 1;
+              ratingTotal += 1;
+              break;
+            case 2:
+              ratingCounts[2] += 1;
+              ratingTotal += 2;
+              break;
+            case 3:
+              ratingCounts[3] += 1;
+              ratingTotal += 3;
+              break;
+            case 4:
+              ratingCounts[4] += 1;
+              ratingTotal += 4;
+              break;
+            case 5:
+              ratingCounts[5] += 1;
+              ratingTotal += 5;
+              break;
+          }
+        }
+        return {
+          productId,
+          averageRating:
+            productReviews.length === 0
+              ? null
+              : Math.round((ratingTotal / productReviews.length) * 10) / 10,
+          totalCount: productReviews.length,
+          ratingCounts,
+          photoReviewCount: 0,
+        };
+      },
     },
     brands: {
       list: (options) => respondList(getVisibleBrands().map(toBrandSummary), options),
@@ -523,6 +572,16 @@ export function createMockApi(config: ApiConfig): ShopApi {
     addresses: { list: (options) => respondList(mockAddresses, options) },
     quotes: { list: (options) => respondList(mockQuotes, options) },
     notices: { list: (options) => respondList(mockNotices, options) },
+    events: {
+      list: (options) => respondList(mockEvents, options),
+      async getById(eventId, options) {
+        return respondOne(
+          mockEvents.find((shopEvent) => shopEvent.id === eventId),
+          '이벤트',
+          options,
+        );
+      },
+    },
     faqs: { list: (options) => respondList(mockFaqs, options) },
     inquiries: {
       listByMember: (memberId, options) =>

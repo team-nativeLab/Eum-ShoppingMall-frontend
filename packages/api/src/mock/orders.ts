@@ -53,6 +53,7 @@ export const mockClaims: Claim[] = [
     type: 'exchange',
     status: 'processing',
     reason: '사이즈 교환',
+    description: '착용 전 사이즈 확인 중 교환을 요청했습니다.',
     requestedAt: '2026-10-04T11:00:00+09:00',
   },
 ];

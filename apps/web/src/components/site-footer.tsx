@@ -11,7 +11,8 @@ import { PageContainer } from './page-container';
 const FOOTER_LINKS = [
   { label: '이용약관', href: '/terms', isEmphasized: false, isDesktopOnly: false },
   { label: '개인정보처리방침', href: '/privacy', isEmphasized: true, isDesktopOnly: false },
-  { label: '이용안내', href: '/support/faq', isEmphasized: false, isDesktopOnly: true },
+  { label: '이용안내', href: '/guide', isEmphasized: false, isDesktopOnly: true },
+  { label: '이벤트', href: '/events', isEmphasized: false, isDesktopOnly: true },
   { label: '고객센터', href: '/support/notices', isEmphasized: false, isDesktopOnly: false },
 ];
 

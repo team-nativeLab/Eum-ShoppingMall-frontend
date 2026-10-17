@@ -20,8 +20,10 @@ import type {
   Product,
   ProductFacets,
   ProductReview,
+  ProductReviewSummary,
   ProductSuggestion,
   Quote,
+  ShopEvent,
 } from './types';
 
 /** 상품 목록 조회 조건 */
@@ -85,6 +87,8 @@ export interface ShopApi {
       params?: PageParams,
       options?: RequestOptions,
     ): Promise<PagedResult<ProductReview>>;
+    /** 전체 리뷰 화면의 평점·사진 리뷰 요약 */
+    getReviewSummary(productId: string, options?: RequestOptions): Promise<ProductReviewSummary>;
   };
   /** 구매자에게 노출하는 브랜드. 비노출 브랜드는 목록에서 빠지고 상세는 NOT_FOUND입니다. */
   brands: {
@@ -113,6 +117,10 @@ export interface ShopApi {
   addresses: { list(options?: RequestOptions): Promise<Address[]> };
   quotes: { list(options?: RequestOptions): Promise<Quote[]> };
   notices: { list(options?: RequestOptions): Promise<Notice[]> };
+  events: {
+    list(options?: RequestOptions): Promise<ShopEvent[]>;
+    getById(eventId: string, options?: RequestOptions): Promise<ShopEvent>;
+  };
   faqs: { list(options?: RequestOptions): Promise<Faq[]> };
   inquiries: { listByMember(memberId: string, options?: RequestOptions): Promise<Inquiry[]> };
   members: { list(options?: RequestOptions): Promise<Member[]> };

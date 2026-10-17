@@ -696,6 +696,12 @@ function ProductDetailContent({
               <p className="text-body-m whitespace-pre-line text-text-2">
                 {product.shipping.policy || product.shipping.estimate}
               </p>
+              <Link
+                href="/shipping-policy"
+                className="w-fit rounded-4 text-label-s underline focus-ring"
+              >
+                배송·교환·반품 정책 자세히 보기
+              </Link>
             </section>
 
             <ProductReviewsSection
