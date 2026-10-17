@@ -155,6 +155,16 @@ export interface ProductReview {
   createdAt: string;
 }
 
+/** 상품 전체 리뷰 요약 */
+export interface ProductReviewSummary {
+  productId: string;
+  averageRating: number | null;
+  totalCount: number;
+  /** 별점별 작성 건수. 키는 1~5입니다. */
+  ratingCounts: Record<1 | 2 | 3 | 4 | 5, number>;
+  photoReviewCount: number;
+}
+
 /** 목록 필터의 값별 상품 수 */
 export interface FacetCount {
   /** 필터 값(브랜드명, 인증명, 카테고리 ID) */
@@ -370,6 +380,7 @@ export interface Claim {
   type: ClaimType;
   status: ClaimStatus;
   reason: string;
+  description?: string;
   requestedAt: string;
 }
 
@@ -439,6 +450,28 @@ export interface Notice {
   publishedAt: string;
   /** 조회수를 제공하는 API만 전달합니다. 값이 없으면 화면은 미제공으로 표시합니다. */
   viewCount?: number;
+  /** Figma 상세 샘플의 본문 이미지 영역. 이미지가 아직 없으면 자리표시자를 표시합니다. */
+  bodyImage?: { src: string | null; alt: string };
+  /** Figma 상세 샘플의 첨부 행. URL이 없으면 파일 정보만 표시합니다. */
+  attachments?: { id: string; fileName: string; sizeBytes: number; downloadUrl?: string }[];
+}
+
+/** 구매자에게 노출하는 이벤트·기획전 */
+export type ShopEventStatus = 'ongoing' | 'upcoming' | 'ended';
+
+export interface ShopEvent {
+  id: string;
+  title: string;
+  subtitle: string;
+  status: ShopEventStatus;
+  startAt: string;
+  endAt: string;
+  eyebrow: string;
+  heroTitle: string[];
+  heroDescription: string;
+  body: string;
+  sections: { heading: string; body: string }[];
+  searchKeyword: string;
 }
 
 /** 자주 묻는 질문 */

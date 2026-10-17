@@ -67,9 +67,62 @@ beforeEach(() => {
 });
 
 describe('MyPageShell logout', () => {
+  it('renders a single page heading with its optional description and action', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemberSessionProvider>
+          <MyPageShell
+            activeSection="claims"
+            title="신청 상세"
+            titleDescription="신청 정보를 확인합니다."
+            titleAction={<span>처리 중</span>}
+          >
+            <p>신청 내용</p>
+          </MyPageShell>
+        </MemberSessionProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: '신청 상세' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.getByText('신청 정보를 확인합니다.')).toBeInTheDocument();
+    expect(screen.getByText('처리 중')).toBeInTheDocument();
+    expect(screen.getByText('신청 내용')).toBeInTheDocument();
+  });
+
+  it('can hide both navigation menus and render a custom claim breadcrumb trail', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemberSessionProvider>
+          <MyPageShell
+            activeSection="claims"
+            title="신청 상세"
+            hideNavigation
+            breadcrumbTrail={[
+              { label: '취소·반품 내역', href: '/mypage/claims' },
+              { label: '신청 상세' },
+            ]}
+          >
+            <p>신청 내용</p>
+          </MyPageShell>
+        </MemberSessionProvider>
+      </QueryClientProvider>,
+    );
+
+    const breadcrumb = await screen.findByRole('navigation', { name: '현재 위치' });
+    const claimsLink = within(breadcrumb).getByRole('link', { name: '취소·반품 내역' });
+    expect(claimsLink).toHaveAttribute('href', '/mypage/claims');
+    expect(within(breadcrumb).getByText('신청 상세')).toHaveAttribute('aria-current', 'page');
+    expect(breadcrumb.parentElement).toHaveClass('max-w-[1240px]');
+    expect(screen.queryByRole('navigation', { name: '모바일 마이페이지 메뉴' })).toBeNull();
+    expect(screen.queryByRole('complementary', { name: '마이페이지 메뉴' })).toBeNull();
+  });
+
   it('clears member-owned caches and navigates to login', async () => {
     const queryClient = renderPage();
     await screen.findByText(member.id);
+    expect(screen.getByRole('navigation', { name: '모바일 마이페이지 메뉴' })).toBeVisible();
+    expect(screen.getByRole('complementary', { name: '마이페이지 메뉴' })).toBeVisible();
     const mypageShell = screen.getByText(member.id).closest('[data-mypage-shell]');
     const desktopLayout = mypageShell?.querySelector(':scope > div > div.grid');
     expect(desktopLayout).toHaveClass('lg:grid-cols-[196px_minmax(0,1fr)]', 'lg:gap-24');

@@ -191,4 +191,29 @@ describe('ProductReviewsSection', () => {
     expect(screen.getByRole('heading', { name: '리뷰 (6)' })).toHaveFocus();
     await waitFor(() => expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalled());
   });
+
+  it('guards invalid review dates instead of passing them to Intl.DateTimeFormat', () => {
+    reviewMocks.useQuery.mockReturnValueOnce({
+      data: {
+        items: [{ ...firstReview, createdAt: 'not-a-date' }],
+        page: 1,
+        pageSize: 5,
+        totalCount: 1,
+      },
+      isPending: false,
+      isError: false,
+      isPlaceholderData: false,
+    });
+
+    render(
+      <ProductReviewsSection
+        productId="product-test"
+        reviewCount={1}
+        sectionId="reviews"
+        brand="테스트 브랜드"
+      />,
+    );
+
+    expect(screen.getByText('날짜 미제공')).toBeInTheDocument();
+  });
 });

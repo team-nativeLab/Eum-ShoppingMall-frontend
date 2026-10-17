@@ -8,6 +8,7 @@ import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { Pagination } from '@eum/ui/components/Pagination';
 import { cx } from '@eum/ui/lib/cx';
 import { SearchX, UserRound } from 'lucide-react';
+import Link from 'next/link';
 import { useId, useRef, useState } from 'react';
 import { getScrollBehavior, usePrefersReducedMotion } from '@/lib/use-media-query';
 import { ProductRatingStars } from './product-rating-stars';
@@ -23,9 +24,14 @@ const REVIEW_DATE_FORMAT = new Intl.DateTimeFormat('ko-KR', {
   timeZone: 'Asia/Seoul',
 });
 
+function formatReviewDate(value: string) {
+  const parsedDate = new Date(value);
+  return Number.isNaN(parsedDate.getTime()) ? '날짜 미제공' : REVIEW_DATE_FORMAT.format(parsedDate);
+}
+
 function ProductReviewCard({ review }: { review: ProductReview }) {
   const reportDescriptionId = useId();
-  const formattedDate = REVIEW_DATE_FORMAT.format(new Date(review.createdAt));
+  const formattedDate = formatReviewDate(review.createdAt);
 
   return (
     <li className="flex gap-12 border-b border-line py-24 sm:gap-16">
@@ -38,7 +44,12 @@ function ProductReviewCard({ review }: { review: ProductReview }) {
       <div className="flex min-w-0 flex-1 flex-col gap-12">
         <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
           <span className="text-label-m">{review.authorName}</span>
-          <time dateTime={review.createdAt} className="text-caption text-text-3">
+          <time
+            dateTime={
+              Number.isNaN(new Date(review.createdAt).getTime()) ? undefined : review.createdAt
+            }
+            className="text-caption text-text-3"
+          >
             {formattedDate}
           </time>
         </div>
@@ -119,9 +130,17 @@ export function ProductReviewsSection({
       aria-busy={reviewsQuery.isPending || isRefreshing}
       className="flex scroll-mt-120 flex-col gap-16 lg:scroll-mt-136"
     >
-      <h2 id="reviews-heading" ref={headingRef} tabIndex={-1} className="text-h3 focus-ring">
-        리뷰 ({totalCount.toLocaleString('ko-KR')})
-      </h2>
+      <div className="flex flex-wrap items-center justify-between gap-8">
+        <h2 id="reviews-heading" ref={headingRef} tabIndex={-1} className="text-h3 focus-ring">
+          리뷰 ({totalCount.toLocaleString('ko-KR')})
+        </h2>
+        <Link
+          href={`/products/${encodeURIComponent(productId)}/reviews`}
+          className="rounded-4 text-label-s underline focus-ring"
+        >
+          리뷰 전체 보기
+        </Link>
+      </div>
       <p className="-mt-8 text-caption text-text-3">브랜드: {brand}</p>
       {reviewsQuery.isPending ? (
         <div className="flex flex-col gap-12">

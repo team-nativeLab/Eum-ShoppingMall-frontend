@@ -5,6 +5,7 @@ import { formatKrw } from '@eum/api/price';
 import type { CartItem, PaymentMethod } from '@eum/api/types';
 import { Button, buttonClassName } from '@eum/ui/components/Button';
 import { Checkbox } from '@eum/ui/components/Checkbox';
+import { Modal } from '@eum/ui/components/Modal';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { Radio } from '@eum/ui/components/Radio';
 import { TextField } from '@eum/ui/components/TextField';
@@ -63,6 +64,7 @@ export function PaymentPageView() {
   });
   const [isOrdering, setIsOrdering] = useState(false);
   const [error, setError] = useState('');
+  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
 
   const availableCoupons = couponsQuery.data?.filter((coupon) => !coupon.isUsed) ?? [];
   const selectedCoupon = availableCoupons.find((coupon) => coupon.id === couponId);
@@ -469,12 +471,21 @@ export function PaymentPageView() {
               >
                 주문 상품 및 결제 금액을 확인했습니다. (필수)
               </Checkbox>
-              <Checkbox
-                checked={acceptedTerms.privacy}
-                onChange={(event) => toggleTerm('privacy', event.target.checked)}
-              >
-                개인정보 수집·이용에 동의합니다. (필수)
-              </Checkbox>
+              <div className="flex flex-wrap items-center justify-between gap-8">
+                <Checkbox
+                  checked={acceptedTerms.privacy}
+                  onChange={(event) => toggleTerm('privacy', event.target.checked)}
+                >
+                  개인정보 수집·이용에 동의합니다. (필수)
+                </Checkbox>
+                <button
+                  type="button"
+                  onClick={() => setIsPrivacyModalOpen(true)}
+                  className="min-h-40 rounded-4 px-8 text-caption text-text-2 underline focus-ring"
+                >
+                  내용 보기
+                </button>
+              </div>
               <Checkbox
                 checked={acceptedTerms.payment}
                 onChange={(event) => toggleTerm('payment', event.target.checked)}
@@ -485,6 +496,36 @@ export function PaymentPageView() {
             <p className="mt-16 text-caption text-text-3">
               이 데모에서는 약관 선택 상태만 확인하며 실제 주문이나 결제는 처리되지 않습니다.
             </p>
+            <Modal
+              isOpen={isPrivacyModalOpen}
+              onClose={() => setIsPrivacyModalOpen(false)}
+              title="개인정보 수집·이용 동의"
+              description="주문 접수와 배송, 결제 안내를 위해 필요한 정보를 처리합니다."
+              actions={
+                <>
+                  <Link
+                    href="/privacy"
+                    className="inline-flex min-h-36 items-center rounded-8 px-12 text-label-m underline focus-ring"
+                  >
+                    개인정보처리방침
+                  </Link>
+                  <Button onClick={() => setIsPrivacyModalOpen(false)}>확인</Button>
+                </>
+              }
+            >
+              <div className="mt-16 max-h-[60dvh] overflow-y-auto rounded-8 border border-line p-16 text-body-s text-text-2">
+                <p>처리 목적: 주문 확인, 결제 처리, 상품 배송과 고객 문의 응대</p>
+                <p className="mt-12">
+                  처리 항목: 주문자와 수령인 정보, 연락처, 배송지, 주문 상품 정보
+                </p>
+                <p className="mt-12">
+                  보유 기간: 관련 법령에 따른 보관 기간 또는 처리 목적 달성 시까지
+                </p>
+                <p className="mt-12">
+                  이 화면은 목 데모이며 실제 주문과 개인정보 처리는 발생하지 않습니다.
+                </p>
+              </div>
+            </Modal>
           </CheckoutSection>
           {error ? (
             <p role="alert" className="rounded-8 bg-danger-tint p-12 text-body-s text-danger">

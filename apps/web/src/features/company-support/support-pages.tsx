@@ -101,17 +101,17 @@ function NoticeTableRow({ notice, number }: { notice: Notice; number: number }) 
         {notice.isPinned ? '고정' : number}
       </td>
       <td className={cx('min-w-0 px-16', notice.isPinned ? 'py-12' : 'py-22')}>
-        <details>
-          <summary className="flex cursor-pointer list-none items-center gap-8 rounded-4 text-body-s font-medium focus-ring">
-            {notice.isPinned ? (
-              <span className="shrink-0 rounded-4 bg-text-1 px-6 py-2 text-caption text-inverse">
-                공지
-              </span>
-            ) : null}
-            <span className="truncate">{notice.title}</span>
-          </summary>
-          <p className="mt-12 text-body-s whitespace-pre-line text-text-2">{notice.body}</p>
-        </details>
+        <Link
+          href={`/support/notices/${encodeURIComponent(notice.id)}`}
+          className="flex min-h-40 items-center gap-8 rounded-4 text-body-s font-medium focus-ring"
+        >
+          {notice.isPinned ? (
+            <span className="shrink-0 rounded-4 bg-text-1 px-6 py-2 text-caption text-inverse">
+              공지
+            </span>
+          ) : null}
+          <span className="truncate">{notice.title}</span>
+        </Link>
       </td>
       <td
         className={cx(
@@ -135,8 +135,11 @@ function NoticeTableRow({ notice, number }: { notice: Notice; number: number }) 
 
 function NoticeMobileRow({ notice, number }: { notice: Notice; number: number }) {
   return (
-    <details className="border-b border-line py-16">
-      <summary className="flex cursor-pointer list-none items-start gap-10 rounded-4 focus-ring">
+    <div className="border-b border-line py-16">
+      <Link
+        href={`/support/notices/${encodeURIComponent(notice.id)}`}
+        className="flex min-h-48 items-start gap-10 rounded-4 focus-ring"
+      >
         <span className="w-36 shrink-0 pt-2 text-caption text-text-3">
           {notice.isPinned ? '고정' : number}
         </span>
@@ -153,9 +156,8 @@ function NoticeMobileRow({ notice, number }: { notice: Notice; number: number })
             {formatDate(notice.publishedAt)}
           </span>
         </span>
-      </summary>
-      <p className="mt-12 ml-46 text-body-s whitespace-pre-line text-text-2">{notice.body}</p>
-    </details>
+      </Link>
+    </div>
   );
 }
 

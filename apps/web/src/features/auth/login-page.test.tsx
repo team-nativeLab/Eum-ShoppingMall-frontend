@@ -129,4 +129,26 @@ describe('W-09 login form validation', () => {
     expect(authMock.logout).not.toHaveBeenCalled();
     expect(routerMock.replace).toHaveBeenCalledWith('/orders');
   });
+
+  it('preserves a safe redirect while opening account recovery', () => {
+    renderLoginPage('/mypage/claims/clm-001');
+
+    expect(screen.getByRole('link', { name: '이메일 찾기' })).toHaveAttribute(
+      'href',
+      '/account/find-email?redirect=%2Fmypage%2Fclaims%2Fclm-001',
+    );
+    expect(screen.getByRole('link', { name: '비밀번호 찾기' })).toHaveAttribute(
+      'href',
+      '/account/find-password?redirect=%2Fmypage%2Fclaims%2Fclm-001',
+    );
+  });
+
+  it('does not forward an external redirect into recovery links', () => {
+    renderLoginPage('https://attacker.example');
+
+    expect(screen.getByRole('link', { name: '이메일 찾기' })).toHaveAttribute(
+      'href',
+      '/account/find-email?redirect=%2F',
+    );
+  });
 });

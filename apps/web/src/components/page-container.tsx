@@ -10,13 +10,14 @@ import type { ReactNode } from 'react';
 export function PageContainer({
   children,
   className,
+  maxWidth = 'web',
 }: {
   children: ReactNode;
   className?: string;
+  maxWidth?: 'web' | 'web-detail';
 }) {
-  return (
-    <div className={cx('mx-auto w-full max-w-[calc(var(--container-web)+40px)] px-20', className)}>
-      {children}
-    </div>
-  );
+  const maxWidthClassName =
+    maxWidth === 'web-detail' ? 'max-w-[1240px]' : 'max-w-[calc(var(--container-web)+40px)]';
+
+  return <div className={cx('mx-auto w-full px-20', maxWidthClassName, className)}>{children}</div>;
 }

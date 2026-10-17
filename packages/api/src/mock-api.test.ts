@@ -5,7 +5,8 @@ import { mockBrands } from './mock/brands';
 import { mockProducts } from './mock/products';
 import { mockReviews } from './mock/reviews';
 import { mockAddresses } from './mock/addresses';
-import { mockNotices } from './mock/support';
+import { mockClaims } from './mock/orders';
+import { mockEvents, mockNotices } from './mock/support';
 import { buildMockConfig } from './test-fixtures';
 
 const testConfig = buildMockConfig();
@@ -13,6 +14,25 @@ const testConfig = buildMockConfig();
 describe('목 API 시나리오', () => {
   it('공지 목은 Figma pagination 10페이지에 맞춰 100건을 제공합니다', () => {
     expect(mockNotices).toHaveLength(100);
+  });
+
+  it('ntc-001은 Figma 상세 샘플의 본문 이미지 영역과 첨부 행 데이터를 제공합니다', () => {
+    expect(mockNotices.find((notice) => notice.id === 'ntc-001')).toMatchObject({
+      body: '공지 내용이 들어갑니다. 공지 본문은 관리자가 작성한 내용으로 서버에서 받아 보여 줍니다.\n\n공지 내용이 들어갑니다.',
+      bodyImage: { src: null, alt: '공지 본문 이미지' },
+      attachments: [{ id: 'ntc-001-attachment-1', fileName: '파일명.pdf', sizeBytes: 0 }],
+    });
+  });
+
+  it('clm-001은 신청 사유 설명을 제공하고 다른 claim 데이터는 기존 선택 필드로 유지합니다', async () => {
+    const claims = await createMockApi(testConfig).claims.listByMember('mem-001');
+    expect(claims.find((claim) => claim.id === 'clm-001')).toMatchObject({
+      reason: '사이즈 교환',
+      description: '착용 전 사이즈 확인 중 교환을 요청했습니다.',
+    });
+    expect(
+      mockClaims.filter((claim) => claim.id !== 'clm-001').every((claim) => !claim.description),
+    ).toBe(true);
   });
 
   it('normal: 목 상품을 돌려주고 금액 미표시 상품도 포함합니다', async () => {
@@ -230,6 +250,37 @@ describe('목 API 시나리오', () => {
     expect((await mockApi.products.listReviews('prd-1003')).items).toEqual([]);
   });
 
+  it('리뷰 요약은 상품 리뷰에서 별점별 개수를 계산합니다', async () => {
+    const summary = await createMockApi(testConfig).products.getReviewSummary('prd-1001');
+    expect(summary).toMatchObject({
+      productId: 'prd-1001',
+      totalCount: 3,
+      ratingCounts: { 1: 0, 2: 0, 3: 0, 4: 1, 5: 2 },
+      photoReviewCount: 0,
+      averageRating: 4.7,
+    });
+    expect(await createMockApi(testConfig).products.getReviewSummary('prd-1003')).toMatchObject({
+      totalCount: 0,
+      averageRating: null,
+    });
+  });
+
+  it('이벤트는 목 목록과 상세를 제공하고 없는 상세 ID는 NOT_FOUND입니다', async () => {
+    const mockApi = createMockApi(testConfig);
+    expect(await mockApi.events.list()).toHaveLength(mockEvents.length);
+    expect(await mockApi.events.getById('event-safety-week')).toMatchObject({
+      id: 'event-safety-week',
+      status: 'ongoing',
+    });
+    await expect(mockApi.events.getById('event-missing')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    await expect(
+      createMockApi({ ...testConfig, mockScenario: 'error' }).events.list(),
+    ).rejects.toMatchObject({ code: 'NETWORK' });
+    expect(await createMockApi({ ...testConfig, mockScenario: 'empty' }).events.list()).toEqual([]);
+  });
+
   it('추천 검색어를 돌려줍니다', async () => {
     const keywords = await createMockApi(testConfig).search.recommendedKeywords();
     expect(keywords.length).toBeGreaterThan(0);
@@ -348,6 +399,9 @@ describe('목 브랜드 API', () => {
 
   it('상세는 노출 브랜드만 돌려주고, 비노출·없는 브랜드는 NOT_FOUND입니다', async () => {
     const mockApi = createMockApi(testConfig);
+    const safeguardBrand = await mockApi.brands.getById('brd-safeguard');
+    expect(safeguardBrand.coverImageUrl).toBe('/assets/web/about-warehouse.png');
+
     const workfitBrand = await mockApi.brands.getById('brd-workfit');
     expect(workfitBrand).toMatchObject({ id: 'brd-workfit', name: '워크핏' });
     expect(workfitBrand).not.toHaveProperty('isFeatured');

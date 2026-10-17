@@ -15,6 +15,7 @@ export const queryKeys = {
     facets: (params: ProductFacetParams = {}) => ['products', 'facets', params] as const,
     reviews: (productId: string, params: PageParams = {}) =>
       ['products', 'reviews', productId, params] as const,
+    reviewSummary: (productId: string) => ['products', 'review-summary', productId] as const,
     related: (productId: string, params: ProductLimitParams = {}) =>
       ['products', 'related', productId, params] as const,
     recommended: (params: ProductLimitParams = {}) => ['products', 'recommended', params] as const,
@@ -37,6 +38,10 @@ export const queryKeys = {
   company: { info: ['company', 'info'] as const },
   quotes: { all: ['quotes'] as const },
   notices: { all: ['notices'] as const },
+  events: {
+    all: ['events'] as const,
+    detail: (eventId: string) => ['events', 'detail', eventId] as const,
+  },
   faqs: { all: ['faqs'] as const },
   inquiries: {
     all: ['support', 'inquiries'] as const,

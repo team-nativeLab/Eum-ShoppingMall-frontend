@@ -4,6 +4,7 @@ import type { MemberSignupInput } from '@eum/api/auth';
 import { sanitizeRedirectPath } from '@eum/api/redirect';
 import { Button } from '@eum/ui/components/Button';
 import { Checkbox } from '@eum/ui/components/Checkbox';
+import { Modal } from '@eum/ui/components/Modal';
 import { Segmented } from '@eum/ui/components/Segmented';
 import { TextField } from '@eum/ui/components/TextField';
 import Link from 'next/link';
@@ -14,6 +15,7 @@ import { getMemberAuth } from '@/lib/member-auth';
 import { useMemberSession } from './member-session';
 
 type AccountType = MemberSignupInput['accountType'];
+type ConsentDocument = 'terms' | 'privacy' | 'marketing';
 
 /** W-10: 이메일 중복 확인·메모리 휴대폰 코드 확인을 거치는 mock 가입 화면입니다. */
 export function SignupPageView({ rawRedirect }: { rawRedirect?: string }) {
@@ -36,6 +38,7 @@ export function SignupPageView({ rawRedirect }: { rawRedirect?: string }) {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
   const [acceptedMarketing, setAcceptedMarketing] = useState(false);
+  const [consentDocument, setConsentDocument] = useState<ConsentDocument | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const redirectPath = sanitizeRedirectPath(rawRedirect, '/');
@@ -358,12 +361,13 @@ export function SignupPageView({ rawRedirect }: { rawRedirect?: string }) {
               >
                 [필수] 이용약관 동의
               </Checkbox>
-              <Link
-                href="/terms"
-                className="rounded-4 text-caption text-text-2 underline focus-ring"
+              <button
+                type="button"
+                onClick={() => setConsentDocument('terms')}
+                className="min-h-40 rounded-4 px-8 text-caption text-text-2 underline focus-ring"
               >
                 보기
-              </Link>
+              </button>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-8">
               <Checkbox
@@ -372,12 +376,13 @@ export function SignupPageView({ rawRedirect }: { rawRedirect?: string }) {
               >
                 [필수] 개인정보 수집·이용 동의
               </Checkbox>
-              <Link
-                href="/privacy"
-                className="rounded-4 text-caption text-text-2 underline focus-ring"
+              <button
+                type="button"
+                onClick={() => setConsentDocument('privacy')}
+                className="min-h-40 rounded-4 px-8 text-caption text-text-2 underline focus-ring"
               >
                 보기
-              </Link>
+              </button>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-8">
               <Checkbox
@@ -386,7 +391,13 @@ export function SignupPageView({ rawRedirect }: { rawRedirect?: string }) {
               >
                 [선택] 마케팅 정보 수신 동의
               </Checkbox>
-              <span className="text-caption text-text-2 underline">보기</span>
+              <button
+                type="button"
+                onClick={() => setConsentDocument('marketing')}
+                className="min-h-40 rounded-4 px-8 text-caption text-text-2 underline focus-ring"
+              >
+                보기
+              </button>
             </div>
           </fieldset>
           {message ? (
@@ -416,7 +427,52 @@ export function SignupPageView({ rawRedirect }: { rawRedirect?: string }) {
           목 가입과 이메일·휴대폰 확인은 화면 흐름용이며 실제 계정이나 인증 문자는 생성되지
           않습니다.
         </p>
+        <ConsentDocumentModal document={consentDocument} onClose={() => setConsentDocument(null)} />
       </section>
     </PageContainer>
+  );
+}
+
+function ConsentDocumentModal({
+  document,
+  onClose,
+}: {
+  document: ConsentDocument | null;
+  onClose: () => void;
+}) {
+  const title =
+    document === 'terms'
+      ? '[필수] 이용약관'
+      : document === 'privacy'
+        ? '[필수] 개인정보 수집·이용 동의'
+        : '[선택] 마케팅 정보 수신 동의';
+  const body =
+    document === 'terms'
+      ? '회원 가입과 상품 주문, 결제 및 고객지원 서비스 이용에 필요한 내용을 안내합니다. 서비스 이용 시 상품과 주문 화면에 표시되는 안내를 확인해 주세요.'
+      : document === 'privacy'
+        ? '회원 관리와 주문·배송, 고객 문의 처리를 위해 필요한 개인정보를 처리합니다. 항목과 보유 기간은 개인정보처리방침에서 확인해 주세요.'
+        : '이벤트와 상품 소식 등 마케팅 정보를 이메일 또는 문자로 받을 수 있습니다. 동의는 선택 사항이며 언제든지 변경할 수 있습니다.';
+  return (
+    <Modal
+      isOpen={document !== null}
+      onClose={onClose}
+      title={title}
+      actions={
+        <>
+          <Link
+            href={document === 'terms' ? '/terms' : '/privacy'}
+            className="inline-flex min-h-36 items-center rounded-8 px-12 text-label-m underline focus-ring"
+          >
+            전문 보기
+          </Link>
+          <Button onClick={onClose}>닫기</Button>
+        </>
+      }
+    >
+      <div className="mt-16 max-h-[60dvh] overflow-y-auto rounded-8 border border-line p-16 text-body-s text-text-2">
+        <p>{body}</p>
+        <p className="mt-12">가입을 계속하기 전에 동의 항목과 처리 목적을 확인해 주세요.</p>
+      </div>
+    </Modal>
   );
 }

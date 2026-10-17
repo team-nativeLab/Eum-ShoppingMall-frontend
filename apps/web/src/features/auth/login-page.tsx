@@ -20,10 +20,10 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [rememberLogin, setRememberLogin] = useState(false);
-  const [helpMessage, setHelpMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const redirectPath = sanitizeRedirectPath(rawRedirect, '/');
+  const recoveryRedirectQuery = `?redirect=${encodeURIComponent(redirectPath)}`;
 
   const handleSubmit = async (submitEvent: FormEvent<HTMLFormElement>) => {
     submitEvent.preventDefault();
@@ -143,29 +143,19 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
               aria-label="계정 도움말"
               className="flex flex-wrap items-center justify-center gap-12 text-body-s text-text-2"
             >
-              <button
-                type="button"
-                onClick={() =>
-                  setHelpMessage('이메일 찾기는 실제 계정 조회 없이 데모 문의 안내만 제공합니다.')
-                }
-                aria-controls="account-help-message"
-                aria-expanded={Boolean(helpMessage)}
+              <Link
+                href={`/account/find-email${recoveryRedirectQuery}`}
                 className="rounded-4 underline focus-ring"
               >
                 이메일 찾기
-              </button>
+              </Link>
               <span aria-hidden="true">|</span>
-              <button
-                type="button"
-                onClick={() =>
-                  setHelpMessage('비밀번호 찾기는 실제 재설정 없이 데모 문의 안내만 제공합니다.')
-                }
-                aria-controls="account-help-message"
-                aria-expanded={Boolean(helpMessage)}
+              <Link
+                href={`/account/find-password${recoveryRedirectQuery}`}
                 className="rounded-4 underline focus-ring"
               >
                 비밀번호 찾기
-              </button>
+              </Link>
               <span aria-hidden="true">|</span>
               <Link
                 href={`/signup?redirect=${encodeURIComponent(redirectPath)}`}
@@ -174,13 +164,6 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
                 회원가입
               </Link>
             </nav>
-            <p
-              id="account-help-message"
-              role="status"
-              className="text-center text-caption text-text-2"
-            >
-              {helpMessage}
-            </p>
           </div>
         </form>
         <div className="flex flex-col gap-16">

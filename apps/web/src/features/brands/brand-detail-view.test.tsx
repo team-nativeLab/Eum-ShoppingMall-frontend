@@ -1,5 +1,5 @@
 import { ApiError } from '@eum/api/errors';
-import type { Brand, PagedResult, Product } from '@eum/api/types';
+import type { Brand, Category, PagedResult, Product } from '@eum/api/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -11,9 +11,15 @@ const apiMocks = vi.hoisted(() => ({
   getShopApi: vi.fn(),
   getBrand: vi.fn(),
   listProducts: vi.fn(),
+  listBrands: vi.fn(),
+  listCategories: vi.fn(),
 }));
 
 vi.mock('@/lib/shop-api', () => ({ getShopApi: apiMocks.getShopApi }));
+vi.mock('@/lib/use-media-query', () => ({
+  DESKTOP_QUERY: '(min-width: 1024px)',
+  useMediaQuery: () => false,
+}));
 // 상품 카드는 장바구니·찜 컨텍스트가 필요해 이름만 그리는 대역으로 바꿉니다.
 vi.mock('@/features/products/product-card', () => ({
   ProductCard: ({ product }: { product: Product }) => <article>{product.name}</article>,
@@ -46,6 +52,23 @@ const testBrand: Brand = {
   originCountry: '대한민국',
   certification: null,
   story: { title: '스토리 제목', body: '스토리 본문입니다.' },
+};
+
+const testCategory: Category = {
+  id: 'cat-test',
+  slug: 'test-category',
+  name: '안전용품',
+  parentId: null,
+  description: null,
+  iconKey: null,
+};
+const otherBrand = {
+  id: 'brd-other',
+  name: '다른 브랜드',
+  englishName: null,
+  logoUrl: null,
+  tagline: null,
+  productCount: 3,
 };
 
 // 테스트용 상품(카드 대역은 이름만 씁니다)
@@ -100,12 +123,17 @@ describe('BrandDetailView', () => {
   beforeEach(() => {
     apiMocks.getBrand.mockReset();
     apiMocks.listProducts.mockReset();
+    apiMocks.listBrands.mockReset();
+    apiMocks.listCategories.mockReset();
     apiMocks.getShopApi.mockResolvedValue({
-      brands: { getById: apiMocks.getBrand },
+      brands: { getById: apiMocks.getBrand, list: apiMocks.listBrands },
+      categories: { list: apiMocks.listCategories },
       products: { list: apiMocks.listProducts },
     });
     apiMocks.getBrand.mockResolvedValue(testBrand);
     apiMocks.listProducts.mockResolvedValue(buildProductPage(8, 23));
+    apiMocks.listBrands.mockResolvedValue([testBrand, otherBrand]);
+    apiMocks.listCategories.mockResolvedValue([testCategory]);
   });
 
   it('shows the not-found state with a link back to the brand list', async () => {
@@ -151,26 +179,77 @@ describe('BrandDetailView', () => {
       '/search?brand=%ED%85%8C%EC%8A%A4%ED%8A%B8+%26+%EB%B8%8C%EB%9E%9C%EB%93%9C',
     );
     expect(apiMocks.listProducts).toHaveBeenCalledWith(
-      { brand: ['테스트 & 브랜드'], pageSize: 8 },
+      expect.objectContaining({
+        brand: ['테스트 & 브랜드'],
+        pageSize: 24,
+        sortBy: 'recommended',
+      }),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     const productsSection = screen.getByRole('region', { name: /제품/ });
-    expect(within(productsSection).getAllByRole('article')).toHaveLength(8);
+    await screen.findByText('상품 1');
+    expect(within(productsSection).getAllByRole('article')).toHaveLength(6);
     expect(within(productsSection).getByRole('heading', { level: 2 })).toHaveTextContent(
       '제품23개',
     );
-    expect(within(productsSection).getByRole('link', { name: '전체 제품 보기' })).toBeVisible();
+    expect(within(productsSection).getByRole('button', { name: '더 보기' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: '다른 브랜드' })).toBeVisible();
+    expect(screen.getByRole('link', { name: /다른 브랜드/ })).toHaveAttribute(
+      'href',
+      '/brands/brd-other',
+    );
   });
 
-  it('hides the CTA count while products are loading', async () => {
+  it('filters only categories present in this brand product data and submits the selected sort', async () => {
+    const user = userEvent.setup();
+    render(<BrandDetailView brandId="brd-test" />, { wrapper: createWrapper() });
+
+    const categoryFilter = await screen.findByRole('button', { name: '안전용품' });
+    const categoryGroup = screen.getByRole('group', { name: '브랜드 상품 카테고리' });
+    expect(within(categoryGroup).getByRole('button', { name: '안전용품' })).toBe(categoryFilter);
+    expect(categoryFilter).toHaveClass('min-h-44', 'lg:min-h-36');
+    expect(within(categoryFilter).getByText('안전용품')).toHaveClass('min-h-36');
+    await user.click(categoryFilter);
+    await user.selectOptions(screen.getByLabelText('상품 정렬'), 'newest');
+
+    await waitFor(() =>
+      expect(apiMocks.listProducts).toHaveBeenCalledWith(
+        expect.objectContaining({
+          brand: ['테스트 & 브랜드'],
+          categoryId: 'cat-test',
+          sortBy: 'newest',
+        }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      ),
+    );
+    expect(screen.queryByRole('button', { name: '없는 카테고리' })).not.toBeInTheDocument();
+  });
+
+  it('reveals additional products using only products returned by the API', async () => {
+    const user = userEvent.setup();
+    apiMocks.listProducts.mockImplementation(async (params: { pageSize?: number }) =>
+      buildProductPage(Math.min(params.pageSize ?? 8, 23), 23),
+    );
+    render(<BrandDetailView brandId="brd-test" />, { wrapper: createWrapper() });
+
+    await screen.findByRole('heading', { level: 2, name: '제품' });
+    const productsSection = screen.getByRole('region', { name: /제품/ });
+    await screen.findByRole('button', { name: '더 보기' });
+    await screen.findByText('상품 1');
+    expect(within(productsSection).getAllByRole('article')).toHaveLength(6);
+    await user.click(screen.getByRole('button', { name: '더 보기' }));
+    expect(within(productsSection).getAllByRole('article')).toHaveLength(12);
+  });
+
+  it('uses the brand API count while products are loading', async () => {
     apiMocks.listProducts.mockReturnValue(new Promise<never>(() => {}));
     render(<BrandDetailView brandId="brd-test" />, { wrapper: createWrapper() });
 
-    expect(await screen.findByRole('link', { name: '제품 보기' })).toBeInTheDocument();
-    expect(screen.queryByText(/제품 \d+개 보기/)).not.toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: '제품 23개 보기' })).toBeInTheDocument();
   });
 
   it('shows an empty product state and disables the CTA when the brand has no products', async () => {
+    apiMocks.getBrand.mockResolvedValue({ ...testBrand, productCount: 0 });
     apiMocks.listProducts.mockResolvedValue(buildProductPage(0, 0));
     render(<BrandDetailView brandId="brd-test" />, { wrapper: createWrapper() });
 

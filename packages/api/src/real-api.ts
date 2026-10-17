@@ -22,6 +22,7 @@ export function createRealApi(_config: ApiConfig): ShopApi {
       suggest: notImplemented('products.suggest'),
       facets: notImplemented('products.facets'),
       listReviews: notImplemented('products.listReviews'),
+      getReviewSummary: notImplemented('products.getReviewSummary'),
       listRelated: notImplemented('products.listRelated'),
       listRecommended: notImplemented('products.listRecommended'),
     },
@@ -46,6 +47,10 @@ export function createRealApi(_config: ApiConfig): ShopApi {
     addresses: { list: notImplemented('addresses.list') },
     quotes: { list: notImplemented('quotes.list') },
     notices: { list: notImplemented('notices.list') },
+    events: {
+      list: notImplemented('events.list'),
+      getById: notImplemented('events.getById'),
+    },
     faqs: { list: notImplemented('faqs.list') },
     inquiries: { listByMember: notImplemented('inquiries.listByMember') },
     members: { list: notImplemented('members.list') },

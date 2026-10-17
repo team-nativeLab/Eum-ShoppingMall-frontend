@@ -77,6 +77,7 @@ import {
   TabBar,
   type LocalNotice,
 } from './mypage-ui';
+import { PasswordChangeDemoModal } from './password-change-demo-modal';
 
 type OrderTab = OrderStatus | 'all';
 type ClaimTab = ClaimType | 'all';
@@ -921,7 +922,6 @@ function ClaimsView({ claims, orders }: { claims: Claim[]; orders: Order[] }) {
   }));
   const [tab, setTab] = useState<ClaimTab>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedClaim, setSelectedClaim] = useState<Claim | null>(null);
   const pageSize = 8;
   const labels: Record<ClaimType, string> = { cancel: '취소', return: '반품', exchange: '교환' };
   const dateFilteredClaims = claims.filter((claim) => {
@@ -1118,9 +1118,12 @@ function ClaimsView({ claims, orders }: { claims: Claim[]; orders: Order[] }) {
                     <StatusBadge {...CLAIM_STATUS_META[claim.status]} />
                   </div>
                   <div className="lg:justify-self-center">
-                    <Button size="s" variant="secondary" onClick={() => setSelectedClaim(claim)}>
+                    <Link
+                      href={`/mypage/claims/${encodeURIComponent(claim.id)}`}
+                      className="inline-flex min-h-44 items-center justify-center rounded-8 border border-line-strong px-12 text-label-m focus-ring"
+                    >
                       신청 상세
-                    </Button>
+                    </Link>
                   </div>
                 </li>
               );
@@ -1135,29 +1138,6 @@ function ClaimsView({ claims, orders }: { claims: Claim[]; orders: Order[] }) {
           onPageChange={setCurrentPage}
         />
       ) : null}
-      <Modal
-        isOpen={selectedClaim !== null}
-        onClose={() => setSelectedClaim(null)}
-        title="신청 상세"
-        actions={<Button onClick={() => setSelectedClaim(null)}>확인</Button>}
-      >
-        {selectedClaim ? (
-          <dl className="mt-20 space-y-12 text-body-s">
-            <div className="flex justify-between gap-12">
-              <dt className="text-text-3">신청 구분</dt>
-              <dd>{labels[selectedClaim.type]}</dd>
-            </div>
-            <div className="flex justify-between gap-12">
-              <dt className="text-text-3">상태</dt>
-              <dd>{CLAIM_STATUS_META[selectedClaim.status].label}</dd>
-            </div>
-            <div>
-              <dt className="text-text-3">신청 사유</dt>
-              <dd className="mt-4">{selectedClaim.reason}</dd>
-            </div>
-          </dl>
-        ) : null}
-      </Modal>
     </div>
   );
 }
@@ -2154,6 +2134,7 @@ function ProfileView({
   const [smsOptIn, setSmsOptIn] = useState(true);
   const [emailOptIn, setEmailOptIn] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
   const [notice, setNotice] = useState<LocalNotice>(null);
   if (!editable)
     return (
@@ -2163,15 +2144,18 @@ function ProfileView({
         </div>
         <h2 className="mt-12 text-center text-h3">비밀번호를 다시 입력해 주세요</h2>
         <p className="mt-8 text-center text-body-s text-text-2">
-          회원님의 정보를 확인하기 위한 화면 확인 단계입니다.
+          데모 화면 확인 단계입니다. 실제 본인 확인은 진행되지 않습니다.
         </p>
         <form
           className="mt-24 space-y-16"
           onSubmit={(event) => {
             event.preventDefault();
             setReauthError(
-              password ? '인증 확인 기능이 연결되어 있지 않습니다.' : '비밀번호를 입력해 주세요.',
+              password
+                ? '데모 화면입니다. 실제 인증은 진행되지 않았습니다.'
+                : '비밀번호를 입력해 주세요.',
             );
+            setPassword('');
           }}
         >
           <TextField label="이메일" type="email" value={member.email} disabled />
@@ -2193,7 +2177,7 @@ function ProfileView({
         </form>
         {!reauthError ? (
           <p className="mt-16 text-center text-caption text-text-3">
-            실제 인증은 연결되어 있지 않습니다.
+            이 화면에서는 실제 계정 인증을 하지 않습니다.
           </p>
         ) : null}
       </div>
@@ -2221,7 +2205,7 @@ function ProfileView({
               value={phone}
               onChange={(event) => setPhone(event.target.value)}
             />
-            <Button variant="secondary" disabled>
+            <Button variant="secondary" onClick={() => setIsPhoneModalOpen(true)}>
               변경
             </Button>
           </div>
@@ -2302,25 +2286,79 @@ function ProfileView({
         </Button>
       </div>
       <div className="flex justify-end">
-        <Button
-          variant="ghost"
-          size="s"
-          onClick={() =>
-            setNotice({ tone: 'warning', message: '회원 탈퇴 기능은 현재 연결되어 있지 않습니다.' })
-          }
-        >
+        <Button variant="ghost" size="s" onClick={() => router.push('/mypage/withdrawal')}>
           회원 탈퇴
         </Button>
       </div>
       <NoticeResult notice={notice} />
-      <Modal
+      <PasswordChangeDemoModal
         isOpen={isPasswordModalOpen}
         onClose={() => setIsPasswordModalOpen(false)}
-        title="비밀번호 변경"
-        description="비밀번호 변경 API가 연결되어 있지 않습니다."
-        actions={<Button onClick={() => setIsPasswordModalOpen(false)}>확인</Button>}
       />
+      <PhoneChangeDemoModal isOpen={isPhoneModalOpen} onClose={() => setIsPhoneModalOpen(false)} />
     </div>
+  );
+}
+
+function PhoneChangeDemoModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const [phoneInput, setPhoneInput] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  function closeModal() {
+    setPhoneInput('');
+    setMessage('');
+    setError('');
+    onClose();
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const digits = phoneInput.replace(/\D/g, '');
+    if (digits.length < 10 || digits.length > 11) {
+      setError('휴대폰 번호 형식을 확인해 주세요.');
+      return;
+    }
+    setPhoneInput('');
+    setError('');
+    setMessage('데모 입력을 확인했습니다. 실제 문자 인증이나 번호 변경은 진행되지 않았습니다.');
+  }
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={closeModal}
+      title="휴대폰 번호 변경"
+      description="데모 전용 화면입니다. 실제 문자를 보내거나 번호를 인증·변경하지 않습니다."
+      actions={
+        message ? (
+          <Button onClick={closeModal}>확인</Button>
+        ) : (
+          <Button type="submit" form="phone-change-demo-form">
+            데모 확인
+          </Button>
+        )
+      }
+    >
+      {message ? (
+        <p role="status" className="mt-20 rounded-8 bg-info-tint p-12 text-body-s text-info">
+          {message}
+        </p>
+      ) : (
+        <form id="phone-change-demo-form" onSubmit={handleSubmit} className="mt-20 space-y-12">
+          <TextField
+            label="새 휴대폰 번호"
+            type="tel"
+            inputMode="tel"
+            autoComplete="off"
+            value={phoneInput}
+            onChange={(event) => setPhoneInput(event.target.value)}
+            errorMessage={error || undefined}
+            required
+          />
+        </form>
+      )}
+    </Modal>
   );
 }
 

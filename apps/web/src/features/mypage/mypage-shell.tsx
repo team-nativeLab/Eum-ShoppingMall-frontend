@@ -67,6 +67,11 @@ export type MyPageSection =
 
 type MyPageShellSection = MyPageSection | 'inquiries' | 'inquiry-detail';
 
+interface MyPageBreadcrumb {
+  label: string;
+  href?: string;
+}
+
 const SECTION_NAV_KEY: Record<MyPageShellSection, string> = {
   dashboard: 'dashboard',
   orders: 'orders',
@@ -89,14 +94,20 @@ const SECTION_NAV_KEY: Record<MyPageShellSection, string> = {
 export function MyPageShell({
   activeSection,
   title,
+  titleDescription,
   titleAction,
   dashboardTop,
+  breadcrumbTrail,
+  hideNavigation = false,
   children,
 }: {
   activeSection: MyPageShellSection;
   title: string;
+  titleDescription?: ReactNode;
   titleAction?: ReactNode;
   dashboardTop?: ReactNode;
+  breadcrumbTrail?: MyPageBreadcrumb[];
+  hideNavigation?: boolean;
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -109,6 +120,7 @@ export function MyPageShell({
     { key: 'dashboard', label: '마이페이지', href: '/mypage' },
     ...MYPAGE_NAV_GROUPS.flatMap((group) => group.links),
   ];
+  const breadcrumbs = breadcrumbTrail ?? (activeSection === 'dashboard' ? [] : [{ label: title }]);
 
   async function handleLogout() {
     try {
@@ -121,7 +133,10 @@ export function MyPageShell({
 
   return (
     <div data-mypage-shell="">
-      <PageContainer className="pt-20 pb-56 lg:pt-24 lg:pb-80">
+      <PageContainer
+        maxWidth={hideNavigation ? 'web-detail' : 'web'}
+        className="pt-20 pb-56 lg:pt-24 lg:pb-80"
+      >
         <nav aria-label="현재 위치" className="mb-24 hidden lg:block">
           <ol className="flex items-center gap-8 text-caption text-text-3">
             <li>
@@ -137,112 +152,137 @@ export function MyPageShell({
                 마이페이지
               </Link>
             </li>
-            {activeSection !== 'dashboard' ? (
-              <>
-                <li aria-hidden="true">
+            {breadcrumbs.map((breadcrumb, index) => {
+              const isCurrent = index === breadcrumbs.length - 1 && !breadcrumb.href;
+              return [
+                <li key={`breadcrumb-divider-${index}`} aria-hidden="true">
                   <ChevronRight size={14} />
-                </li>
-                <li aria-current="page" className="text-text-1">
-                  {title}
-                </li>
-              </>
-            ) : null}
+                </li>,
+                <li
+                  key={`breadcrumb-${index}-${breadcrumb.href ?? 'current'}`}
+                  aria-current={isCurrent ? 'page' : undefined}
+                  className={isCurrent ? 'text-text-1' : undefined}
+                >
+                  {breadcrumb.href ? (
+                    <Link href={breadcrumb.href} className="rounded-4 focus-ring hover:text-text-1">
+                      {breadcrumb.label}
+                    </Link>
+                  ) : (
+                    breadcrumb.label
+                  )}
+                </li>,
+              ];
+            })}
           </ol>
         </nav>
 
-        <nav
-          aria-label="모바일 마이페이지 메뉴"
-          className="-mx-20 mb-20 flex gap-8 overflow-x-auto px-20 pb-4 lg:hidden"
-        >
-          {mobileLinks.map((link) =>
-            link.key === 'logout' ? (
-              <button
-                key={link.key}
-                type="button"
-                onClick={() => void handleLogout()}
-                className="shrink-0 rounded-capsule border border-line px-14 py-8 text-label-s text-text-2 focus-ring"
-              >
-                {link.label}
-              </button>
-            ) : (
-              <Link
-                key={link.key}
-                href={link.href}
-                aria-current={link.key === activeKey ? 'page' : undefined}
-                className={cx(
-                  'shrink-0 rounded-capsule border px-14 py-8 text-label-s focus-ring',
-                  link.key === activeKey
-                    ? 'border-text-1 bg-text-1 text-inverse'
-                    : 'border-line text-text-2',
-                )}
-              >
-                {link.label}
-              </Link>
-            ),
-          )}
-        </nav>
+        {!hideNavigation ? (
+          <nav
+            aria-label="모바일 마이페이지 메뉴"
+            className="-mx-20 mb-20 flex gap-8 overflow-x-auto px-20 pb-4 lg:hidden"
+          >
+            {mobileLinks.map((link) =>
+              link.key === 'logout' ? (
+                <button
+                  key={link.key}
+                  type="button"
+                  onClick={() => void handleLogout()}
+                  className="shrink-0 rounded-capsule border border-line px-14 py-8 text-label-s text-text-2 focus-ring"
+                >
+                  {link.label}
+                </button>
+              ) : (
+                <Link
+                  key={link.key}
+                  href={link.href}
+                  aria-current={link.key === activeKey ? 'page' : undefined}
+                  className={cx(
+                    'shrink-0 rounded-capsule border px-14 py-8 text-label-s focus-ring',
+                    link.key === activeKey
+                      ? 'border-text-1 bg-text-1 text-inverse'
+                      : 'border-line text-text-2',
+                  )}
+                >
+                  {link.label}
+                </Link>
+              ),
+            )}
+          </nav>
+        ) : null}
 
         {dashboardTop}
 
-        <div className="grid gap-24 lg:grid-cols-[196px_minmax(0,1fr)] lg:gap-24">
-          <aside aria-label="마이페이지 메뉴" className="hidden lg:block">
-            <Link
-              href="/mypage"
-              aria-current={activeSection === 'dashboard' ? 'page' : undefined}
-              className={cx(
-                'mb-20 flex h-40 items-center rounded-8 px-12 text-label-m focus-ring',
-                activeSection === 'dashboard' ? 'bg-surface text-text-1' : 'text-text-2',
-              )}
-            >
-              마이페이지
-            </Link>
-            <nav className="flex flex-col gap-24">
-              {MYPAGE_NAV_GROUPS.map((group) => (
-                <div key={group.label}>
-                  <p className="mb-8 px-4 text-caption text-text-3">{group.label}</p>
-                  <ul className="flex flex-col gap-2">
-                    {group.links.map((link) => (
-                      <li key={link.key}>
-                        {link.key === 'logout' ? (
-                          <button
-                            type="button"
-                            onClick={() => void handleLogout()}
-                            className="flex min-h-40 w-full items-center rounded-8 px-12 text-left text-body-s text-text-2 focus-ring hover:bg-surface"
-                          >
-                            {link.label}
-                          </button>
-                        ) : (
-                          <Link
-                            href={link.href}
-                            aria-current={link.key === activeKey ? 'page' : undefined}
-                            className={cx(
-                              'flex min-h-40 items-center rounded-8 px-12 text-body-s focus-ring',
-                              link.key === activeKey
-                                ? 'bg-surface text-label-m text-text-1'
-                                : 'text-text-2 hover:bg-surface',
-                            )}
-                          >
-                            {link.label}
-                          </Link>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </nav>
-          </aside>
+        <div
+          className={cx(
+            'grid gap-24',
+            hideNavigation ? 'lg:grid-cols-1' : 'lg:grid-cols-[196px_minmax(0,1fr)] lg:gap-24',
+          )}
+        >
+          {!hideNavigation ? (
+            <aside aria-label="마이페이지 메뉴" className="hidden lg:block">
+              <Link
+                href="/mypage"
+                aria-current={activeSection === 'dashboard' ? 'page' : undefined}
+                className={cx(
+                  'mb-20 flex h-40 items-center rounded-8 px-12 text-label-m focus-ring',
+                  activeSection === 'dashboard' ? 'bg-surface text-text-1' : 'text-text-2',
+                )}
+              >
+                마이페이지
+              </Link>
+              <nav className="flex flex-col gap-24">
+                {MYPAGE_NAV_GROUPS.map((group) => (
+                  <div key={group.label}>
+                    <p className="mb-8 px-4 text-caption text-text-3">{group.label}</p>
+                    <ul className="flex flex-col gap-2">
+                      {group.links.map((link) => (
+                        <li key={link.key}>
+                          {link.key === 'logout' ? (
+                            <button
+                              type="button"
+                              onClick={() => void handleLogout()}
+                              className="flex min-h-40 w-full items-center rounded-8 px-12 text-left text-body-s text-text-2 focus-ring hover:bg-surface"
+                            >
+                              {link.label}
+                            </button>
+                          ) : (
+                            <Link
+                              href={link.href}
+                              aria-current={link.key === activeKey ? 'page' : undefined}
+                              className={cx(
+                                'flex min-h-40 items-center rounded-8 px-12 text-body-s focus-ring',
+                                link.key === activeKey
+                                  ? 'bg-surface text-label-m text-text-1'
+                                  : 'text-text-2 hover:bg-surface',
+                              )}
+                            >
+                              {link.label}
+                            </Link>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </nav>
+            </aside>
+          ) : null}
           <div className="min-w-0">
             {activeLink ? <span className="sr-only">{activeLink.label}</span> : null}
             <div className="mb-20 flex items-start justify-between gap-12 lg:mb-24">
-              <h1
-                className={cx(
-                  'min-w-0 text-h2 lg:text-web-h2',
-                  activeSection === 'dashboard' && 'sr-only',
-                )}
-              >
-                {title}
-              </h1>
+              <div className="min-w-0">
+                <h1
+                  className={cx(
+                    'min-w-0 text-h2 lg:text-web-h2',
+                    activeSection === 'dashboard' && 'sr-only',
+                  )}
+                >
+                  {title}
+                </h1>
+                {titleDescription ? (
+                  <p className="mt-8 text-body-s text-text-2">{titleDescription}</p>
+                ) : null}
+              </div>
               {titleAction}
             </div>
             {children}
