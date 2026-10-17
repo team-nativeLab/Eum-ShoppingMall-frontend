@@ -1,5 +1,6 @@
 import type { Claim, Member } from '@eum/api/types';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { AnchorHTMLAttributes } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MyPageData } from './mypage-data';
@@ -90,5 +91,30 @@ describe('마이페이지 클레임 목록', () => {
     const claimLink = screen.getByRole('link', { name: '신청 상세' });
     expect(claimLink).toHaveAttribute('href', '/mypage/claims/claim-a');
     expect(claimLink).toHaveClass('min-h-44');
+  });
+});
+
+describe('마이페이지 배송지 편집', () => {
+  it('uses the shared padded native select for delivery requests', async () => {
+    const user = userEvent.setup();
+    render(<MyPageScreen section="addresses" />);
+
+    await user.click(screen.getByRole('button', { name: '배송지 추가' }));
+
+    const deliveryNote = screen.getByLabelText('배송 요청사항');
+    expect(deliveryNote.tagName).toBe('SELECT');
+    expect(deliveryNote).toHaveClass('appearance-none', 'pr-40');
+    expect(deliveryNote.parentElement?.querySelector('svg')).toHaveClass('right-14');
+    expect(deliveryNote).toHaveValue('');
+    expect(screen.getByRole('option', { name: '선택해 주세요' })).toHaveValue('');
+    expect(screen.getByRole('option', { name: '배송 전 연락 바랍니다' })).toHaveValue(
+      '배송 전 연락 바랍니다',
+    );
+    expect(screen.getByRole('option', { name: '문 앞에 놓아 주세요' })).toHaveValue(
+      '문 앞에 놓아 주세요',
+    );
+
+    await user.selectOptions(deliveryNote, '문 앞에 놓아 주세요');
+    expect(deliveryNote).toHaveValue('문 앞에 놓아 주세요');
   });
 });

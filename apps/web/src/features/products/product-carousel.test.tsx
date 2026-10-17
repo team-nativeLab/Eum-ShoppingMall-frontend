@@ -181,18 +181,23 @@ describe('ProductCarouselTrack responsive layouts', () => {
         'lg:auto-cols-[var(--home-carousel-card-width)]',
         'lg:gap-x-[var(--home-carousel-gap)]',
         'lg:translate-x-[var(--carousel-page-translate)]',
+        'lg:grid-rows-[minmax(0,max-content)]',
       );
+      expect(track).not.toHaveClass('lg:grid-rows-1', 'lg:grid-rows-[248px]', 'lg:h-[248px]');
       expect(track).toHaveStyle({
         '--home-carousel-card-width': '158px',
-        '--home-carousel-card-height': '408px',
         '--home-carousel-gap': '16px',
         '--carousel-page-translate': expectedTranslate,
       });
+      expect(layout.cardWidth).toBe(158);
+      expect(Math.round((layout.cardWidth * 284) / 181)).toBe(248);
+      expect(layout.cardHeight).toBe(248);
       expect(layout.pageSize).toBe(expectedPageSize);
       expect(cards.slice(0, layout.pageSize).every((card) => card.hasAttribute('inert'))).toBe(
         true,
       );
       expect(cards.slice(layout.pageSize).some((card) => card.hasAttribute('inert'))).toBe(false);
+      expect(cards[0]).not.toHaveClass('h-[248px]', 'lg:h-[248px]', 'lg:min-h-[248px]');
       expect(within(track).getAllByRole('article')[0]).toHaveAttribute(
         'data-card-variant',
         'home-carousel',

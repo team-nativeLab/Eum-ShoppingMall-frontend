@@ -210,8 +210,6 @@ export function MyPageShell({
           </nav>
         ) : null}
 
-        {dashboardTop}
-
         <div
           className={cx(
             'grid gap-24',
@@ -268,6 +266,7 @@ export function MyPageShell({
             </aside>
           ) : null}
           <div className="min-w-0">
+            {dashboardTop}
             {activeLink ? <span className="sr-only">{activeLink.label}</span> : null}
             <div className="mb-20 flex items-start justify-between gap-12 lg:mb-24">
               <div className="min-w-0">

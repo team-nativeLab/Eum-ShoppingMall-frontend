@@ -51,6 +51,33 @@ function createProduct(overrides: Partial<Product> = {}): Product {
 }
 
 describe('ProductCard', () => {
+  it('allows the home desktop card to grow while keeping long names, reviews and prices', () => {
+    const longProductName = '산업 현장용 고시인성 장시간 착용 안전화 상품명 길이 확인용';
+    render(
+      <ProductCard
+        product={createProduct({ name: longProductName, reviewCount: 12345 })}
+        mobileVariant="compact"
+        cardVariant="home-carousel"
+      />,
+    );
+
+    const card = screen.getByRole('article');
+    expect(card).toHaveClass('aspect-[181/284]', 'lg:h-auto', 'lg:min-h-max');
+    expect(card).not.toHaveClass(
+      'lg:min-h-0',
+      'lg:min-h-[var(--home-carousel-card-height)]',
+      'lg:h-[var(--home-carousel-card-height)]',
+    );
+    expect(within(card).getByRole('link', { name: longProductName })).toBeInTheDocument();
+    expect(within(card).getByLabelText('리뷰 12,345개')).toHaveTextContent('(12,345)');
+    expect(within(card).getByText('49%')).toBeInTheDocument();
+    expect(within(card).getByText('₩20,900')).toBeInTheDocument();
+    expect(within(card).getByText('₩10,560')).toBeInTheDocument();
+    expect(
+      within(card).getByRole('button', { name: `${longProductName} 장바구니 담기` }),
+    ).toBeInTheDocument();
+  });
+
   it('shows average stars, review count, integer discount, list price and highlighted sale price', () => {
     render(<ProductCard product={createProduct()} />);
 
@@ -105,8 +132,13 @@ describe('ProductCard', () => {
     );
 
     const card = screen.getByRole('article');
-    expect(card).toHaveClass('relative', 'pb-24', 'lg:pb-8', 'min-h-[384px]', 'lg:min-h-0');
-    expect(card).toHaveClass('lg:h-[var(--home-carousel-card-height)]');
+    expect(card).toHaveClass('relative', 'pb-24', 'lg:pb-8', 'min-h-[384px]');
+    expect(card).toHaveClass('aspect-[181/284]', 'lg:h-auto', 'lg:min-h-max');
+    expect(card).not.toHaveClass(
+      'lg:min-h-0',
+      'lg:min-h-[var(--home-carousel-card-height)]',
+      'lg:h-[var(--home-carousel-card-height)]',
+    );
     const imageFrame = card.firstElementChild;
     if (!(imageFrame instanceof HTMLElement)) throw new Error('Expected a product image frame.');
 
@@ -115,15 +147,13 @@ describe('ProductCard', () => {
       'w-[calc(100%_-_24px)]',
       'max-w-[116px]',
       'aspect-[2/3]',
-      'overflow-hidden',
-    );
-    expect(imageFrame).not.toHaveClass(
       'lg:mx-0',
+      'lg:aspect-[23/20]',
       'lg:w-full',
       'lg:max-w-none',
-      'lg:aspect-[3/4]',
-      'lg:min-h-0',
+      'overflow-hidden',
     );
+    expect(imageFrame).not.toHaveClass('lg:aspect-[181/284]', 'lg:min-h-0');
     expect(imageFrame.querySelector('img')).toHaveClass('object-cover');
 
     const favoriteButton = within(card).getByRole('button', {
@@ -189,8 +219,9 @@ describe('ProductCard', () => {
     let card = screen.getByRole('article');
     let imageFrame = card.firstElementChild;
     if (!(imageFrame instanceof HTMLElement)) throw new Error('Expected a product image frame.');
+    expect(card).toHaveClass('aspect-[181/284]', 'min-h-max');
     expect(card).not.toHaveClass('@container');
-    expect(imageFrame).toHaveClass('aspect-[3/4]');
+    expect(imageFrame).toHaveClass('aspect-[23/20]');
     expect(imageFrame).not.toHaveClass('w-[calc(100%_-_16px)]', 'mx-auto');
     expect(card).not.toHaveClass('pb-24');
     expect(card).not.toHaveClass('min-h-[384px]');
@@ -210,9 +241,22 @@ describe('ProductCard', () => {
     expect(card).not.toHaveClass('@container');
     expect(card).not.toHaveClass('min-h-[384px]');
     expect(card).toHaveClass('pb-10', 'lg:pb-8');
-    expect(imageFrame).toHaveClass('aspect-[3/4]');
+    expect(card).toHaveClass('aspect-[181/284]', 'min-h-max');
+    expect(imageFrame).toHaveClass('aspect-[23/20]');
     expect(imageFrame).not.toHaveClass('w-[calc(100%_-_16px)]', 'mx-auto');
     expect(within(imageFrame).getByText('품절').parentElement).toHaveClass('left-8');
     expect(within(imageFrame).getByText('품절').parentElement).not.toHaveClass('left-4');
+  });
+
+  it('keeps the list image square without applying the grid card ratio', () => {
+    render(<ProductCard product={createProduct()} layout="list" />);
+
+    const card = screen.getByRole('article');
+    const imageFrame = card.firstElementChild;
+    if (!(imageFrame instanceof HTMLElement)) throw new Error('Expected a product image frame.');
+
+    expect(card).toHaveClass('flex-row');
+    expect(card).not.toHaveClass('aspect-[181/284]');
+    expect(imageFrame).toHaveClass('aspect-square', 'w-144');
   });
 });

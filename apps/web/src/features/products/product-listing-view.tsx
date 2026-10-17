@@ -779,14 +779,39 @@ export function ProductListingView({
             {isLoading ? (
               <div
                 aria-busy="true"
-                className="grid grid-cols-2 gap-x-12 gap-y-16 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-24 lg:gap-y-40"
+                className={cx(
+                  layout === 'grid'
+                    ? 'grid grid-cols-2 gap-x-12 gap-y-16 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-24 lg:gap-y-40'
+                    : 'flex flex-col gap-12',
+                )}
               >
-                {Array.from({ length: 8 }, (_, skeletonIndex) => (
-                  <div
-                    key={skeletonIndex}
-                    className="aspect-[3/4] animate-pulse rounded-8 bg-surface"
-                  />
-                ))}
+                {Array.from({ length: 8 }, (_, skeletonIndex) =>
+                  layout === 'grid' ? (
+                    <div
+                      key={skeletonIndex}
+                      className="flex aspect-[181/284] min-h-max flex-col rounded-8 border border-line bg-bg p-8"
+                    >
+                      <div className="aspect-[23/20] shrink-0 animate-pulse rounded-6 bg-surface" />
+                      <div className="flex min-h-0 flex-1 flex-col gap-8 px-4 pt-16">
+                        <div className="h-12 w-1/2 animate-pulse rounded-4 bg-surface" />
+                        <div className="h-48 animate-pulse rounded-4 bg-surface" />
+                        <div className="mt-auto h-16 w-2/3 animate-pulse rounded-4 bg-surface" />
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      key={skeletonIndex}
+                      className="flex min-h-144 gap-16 rounded-8 border border-line bg-bg p-8"
+                    >
+                      <div className="aspect-square w-144 shrink-0 animate-pulse rounded-6 bg-surface" />
+                      <div className="flex min-w-0 flex-1 flex-col gap-8 py-12">
+                        <div className="h-12 w-1/3 animate-pulse rounded-4 bg-surface" />
+                        <div className="h-48 animate-pulse rounded-4 bg-surface" />
+                        <div className="mt-auto h-16 w-2/3 animate-pulse rounded-4 bg-surface" />
+                      </div>
+                    </div>
+                  ),
+                )}
               </div>
             ) : productsQuery.isError || categoriesQuery.isError ? (
               <NoticeInline tone="danger" role="alert">
