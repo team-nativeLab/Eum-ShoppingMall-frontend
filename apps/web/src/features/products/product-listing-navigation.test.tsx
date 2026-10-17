@@ -178,6 +178,30 @@ describe('ProductListingView listing toolbar', () => {
     });
   });
 
+  it('matches the selected grid or list layout while product results are loading', async () => {
+    const user = userEvent.setup();
+    apiMocks.listProducts.mockImplementation(() => new Promise<PagedResult<Product>>(() => {}));
+    const { container } = render(<ProductListingView />, { wrapper: createWrapper() });
+
+    await waitFor(() => expect(apiMocks.listProducts).toHaveBeenCalled());
+    const gridSkeleton = container.querySelector('[aria-busy="true"]');
+    if (!gridSkeleton) throw new Error('Expected product loading skeletons.');
+    expect(gridSkeleton).toHaveClass('grid', 'grid-cols-2');
+    expect(gridSkeleton.children).toHaveLength(8);
+    expect(gridSkeleton.firstElementChild).toHaveClass('aspect-[181/284]', 'min-h-max');
+    expect(gridSkeleton.firstElementChild?.firstElementChild).toHaveClass('aspect-[23/20]');
+
+    await user.click(screen.getByRole('button', { name: '목록 보기' }));
+
+    const listSkeleton = container.querySelector('[aria-busy="true"]');
+    if (!listSkeleton) throw new Error('Expected product loading skeletons.');
+    expect(listSkeleton).toHaveClass('flex', 'flex-col', 'gap-12');
+    expect(listSkeleton.children).toHaveLength(8);
+    const firstListRow = listSkeleton.firstElementChild;
+    expect(firstListRow).toHaveClass('flex', 'min-h-144');
+    expect(firstListRow?.firstElementChild).toHaveClass('aspect-square', 'w-144');
+  });
+
   it('keeps responsive sort controls accessible and applies view changes without a new query', async () => {
     const user = userEvent.setup();
     render(<ProductListingView />, { wrapper: createWrapper() });

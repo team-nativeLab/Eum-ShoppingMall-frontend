@@ -16,7 +16,7 @@ export function CheckoutPageTitle({ children }: { children: ReactNode }) {
     <div className="mb-24 flex flex-wrap items-center justify-between gap-16">
       <h1 className="text-h1">{children}</h1>
       <Link href="/cart" className="rounded-4 text-label-s text-text-2 underline focus-ring">
-        ‹ 장바구니로 돌아가기
+        장바구니로 돌아가기
       </Link>
     </div>
   );

@@ -67,6 +67,34 @@ beforeEach(() => {
 });
 
 describe('MyPageShell logout', () => {
+  it('places the dashboard summary inside the main column beside the navigation', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemberSessionProvider>
+          <MyPageShell
+            activeSection="dashboard"
+            title="마이페이지"
+            dashboardTop={<section data-testid="dashboard-summary">회원 요약</section>}
+          >
+            <p>대시보드 내용</p>
+          </MyPageShell>
+        </MemberSessionProvider>
+      </QueryClientProvider>,
+    );
+
+    const sidebar = await screen.findByRole('complementary', { name: '마이페이지 메뉴' });
+    const twoColumnLayout = sidebar.parentElement;
+    const dashboardSummary = screen.getByTestId('dashboard-summary');
+
+    expect(twoColumnLayout).toHaveClass('lg:grid-cols-[196px_minmax(0,1fr)]', 'lg:gap-24');
+    expect(twoColumnLayout?.firstElementChild).toBe(sidebar);
+    expect(dashboardSummary.parentElement).toBe(twoColumnLayout?.lastElementChild);
+    expect(
+      dashboardSummary.compareDocumentPosition(sidebar) & Node.DOCUMENT_POSITION_PRECEDING,
+    ).toBeTruthy();
+    expect(screen.getByRole('navigation', { name: '모바일 마이페이지 메뉴' })).toBeInTheDocument();
+  });
+
   it('renders a single page heading with its optional description and action', async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>

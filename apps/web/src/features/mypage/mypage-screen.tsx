@@ -21,7 +21,7 @@ import { EmptyState } from '@eum/ui/components/EmptyState';
 import { Modal } from '@eum/ui/components/Modal';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { Pagination } from '@eum/ui/components/Pagination';
-import { TextField } from '@eum/ui/components/TextField';
+import { SelectField, TextField } from '@eum/ui/components/TextField';
 import { cx } from '@eum/ui/lib/cx';
 import {
   ArrowDownToLine,
@@ -2657,18 +2657,17 @@ function AddressesView({
             onChange={(event) => updateForm('address2', event.target.value)}
             className="sm:col-span-2"
           />
-          <label className="rounded-8 focus-within:ring-1 focus-within:ring-text-1 sm:col-span-2">
-            <span className="mb-8 block text-label-m">배송 요청사항</span>
-            <select
-              value={form.deliveryNote}
-              onChange={(event) => updateForm('deliveryNote', event.target.value)}
-              className="h-48 w-full rounded-8 border border-line-strong bg-bg px-14 text-body-m focus-ring"
-            >
-              <option value="">선택해 주세요</option>
-              <option>배송 전 연락 바랍니다</option>
-              <option>문 앞에 놓아 주세요</option>
-            </select>
-          </label>
+          <SelectField
+            label="배송 요청사항"
+            value={form.deliveryNote}
+            onChange={(event) => updateForm('deliveryNote', event.target.value)}
+            placeholder="선택해 주세요"
+            options={[
+              { value: '배송 전 연락 바랍니다', label: '배송 전 연락 바랍니다' },
+              { value: '문 앞에 놓아 주세요', label: '문 앞에 놓아 주세요' },
+            ]}
+            className="sm:col-span-2"
+          />
           <Checkbox
             checked={form.isDefault}
             onChange={(event) => updateForm('isDefault', event.target.checked)}

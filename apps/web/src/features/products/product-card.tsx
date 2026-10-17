@@ -90,13 +90,17 @@ export function ProductCard({
     <article
       className={cx(
         'group flex min-w-0 rounded-8 border border-line bg-bg p-8 transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-1',
-        layout === 'list' ? 'flex-row gap-16' : 'flex-col',
+        layout === 'list'
+          ? 'flex-row gap-16'
+          : isHomeCarouselCard
+            ? 'aspect-[181/284] flex-col'
+            : 'aspect-[181/284] min-h-max flex-col',
         isCompactOnMobile && (isHomeCarouselCard ? 'pb-24 lg:pb-8' : 'pb-10 lg:pb-8'),
-        // Keep mobile home cards 16px taller than the former 368px layout without viewport-based sizing.
-        isHomeCarouselCompactCard && 'min-h-[384px] lg:min-h-0',
+        // Let the desktop ratio set the preferred height and content size raise its minimum when needed.
+        isHomeCarouselCompactCard && 'min-h-[384px]',
         isCompactOnMobile && (layout === 'list' ? 'gap-10 lg:gap-0' : 'gap-16 lg:gap-0'),
         isHomeCarouselCard &&
-          'relative lg:h-[var(--home-carousel-card-height)] lg:border-0 lg:before:pointer-events-none lg:before:absolute lg:before:inset-0 lg:before:rounded-8 lg:before:border lg:before:border-line lg:hover:before:border-line-strong',
+          'relative lg:h-auto lg:min-h-max lg:border-0 lg:before:pointer-events-none lg:before:absolute lg:before:inset-0 lg:before:rounded-8 lg:before:border lg:before:border-line lg:hover:before:border-line-strong',
         className,
       )}
     >
@@ -106,8 +110,8 @@ export function ProductCard({
           layout === 'list'
             ? 'aspect-square w-144'
             : isHomeCarouselCompactCard
-              ? 'mx-auto aspect-[2/3] w-[calc(100%_-_24px)] max-w-[116px]'
-              : 'aspect-[3/4]',
+              ? 'mx-auto aspect-[2/3] w-[calc(100%_-_24px)] max-w-[116px] lg:mx-0 lg:aspect-[23/20] lg:w-full lg:max-w-none'
+              : 'aspect-[23/20]',
         )}
       >
         {/* 이름 링크와 같은 곳으로 가는 중복 링크라 탭 순서·보조기기에서 뺍니다. */}

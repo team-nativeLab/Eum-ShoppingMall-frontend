@@ -17,8 +17,8 @@ export const HOME_WIDE_DESKTOP_QUERY = '(min-width: 80rem)';
 
 /** 홈 베스트 셀러 전용 데스크톱 레이아웃. 공유 추천 캐러셀은 기존 5열 규격을 유지합니다. */
 export const HOME_CAROUSEL_LAYOUTS = {
-  desktop: { pageSize: 5, cardWidth: 158, cardHeight: 408, gap: 16 },
-  wideDesktop: { pageSize: 7, cardWidth: 158, cardHeight: 408, gap: 16 },
+  desktop: { pageSize: 5, cardWidth: 158, cardHeight: 248, gap: 16 },
+  wideDesktop: { pageSize: 7, cardWidth: 158, cardHeight: 248, gap: 16 },
 } as const;
 
 export type CarouselDesktopLayout = {
@@ -121,7 +121,6 @@ export function ProductCarouselTrack({
   const trackStyle = desktopLayout
     ? ({
         '--home-carousel-card-width': `${desktopLayout.cardWidth}px`,
-        '--home-carousel-card-height': `${desktopLayout.cardHeight}px`,
         '--home-carousel-gap': `${desktopLayout.gap}px`,
         '--carousel-page-translate': `${-carouselTranslate}px`,
       } as CSSProperties)
@@ -145,7 +144,7 @@ export function ProductCarouselTrack({
           'grid auto-cols-[calc((100%-12px)/2)] grid-flow-col gap-x-12 gap-y-16',
           isMobileGrid ? 'grid-rows-2' : 'grid-rows-1',
           desktopLayout
-            ? 'lg:translate-x-[var(--carousel-page-translate)] lg:auto-cols-[var(--home-carousel-card-width)] lg:grid-rows-1 lg:gap-x-[var(--home-carousel-gap)]'
+            ? 'lg:translate-x-[var(--carousel-page-translate)] lg:auto-cols-[var(--home-carousel-card-width)] lg:grid-rows-[minmax(0,max-content)] lg:gap-x-[var(--home-carousel-gap)]'
             : 'lg:translate-x-[calc(var(--carousel-page)*(-100%_-_24px))] lg:auto-cols-[calc((100%-96px)/5)] lg:grid-rows-1 lg:gap-x-24',
           // 감속 모드에서는 transition을 붙이지 않아 즉시 이동합니다.
           'lg:motion-safe:transition-[translate] lg:motion-safe:duration-500 lg:motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]',
