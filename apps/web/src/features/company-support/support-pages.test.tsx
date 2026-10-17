@@ -285,13 +285,15 @@ describe('company support routes', () => {
     const title = screen.getByLabelText(/제목/);
     const body = screen.getByRole('textbox', { name: /문의 내용/ });
     expect(screen.getAllByText('*', { selector: 'span[aria-hidden="true"]' })).toHaveLength(4);
-    expect(screen.getByText('*', { selector: 'span.mr-4[aria-hidden="true"]' })).toHaveClass(
-      'mr-4',
-      'text-danger',
-    );
     expect(inquiryType).toHaveAccessibleName('문의 유형');
     expect(title).toHaveAccessibleName('제목');
     expect(body).not.toHaveAccessibleName(/\*/);
+    const bodyLabel = body.closest('label');
+    expect(bodyLabel).not.toBeNull();
+    const bodyRequiredIndicator = within(bodyLabel as HTMLElement).getByText('*');
+    expect(bodyRequiredIndicator).toHaveAttribute('aria-hidden', 'true');
+    expect(bodyRequiredIndicator).toHaveClass('text-danger');
+    expect(bodyRequiredIndicator.parentElement).toHaveClass('inline-flex', 'items-center', 'gap-4');
     fireEvent.change(inquiryType, { target: { value: 'delivery' } });
     fireEvent.change(title, { target: { value: '작성 중인 제목' } });
     fireEvent.change(body, { target: { value: '작성 중인 내용' } });
@@ -328,10 +330,10 @@ describe('company support routes', () => {
         '알림 선택은 화면 미리보기용입니다. 실제로 저장되지 않으며 답변 알림도 발송되지 않습니다.',
       ),
     ).toHaveAttribute('id', 'inquiry-notification-note');
-    fireEvent.change(screen.getByRole('combobox', { name: '문의 유형' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: /문의 유형/ }), {
       target: { value: 'delivery' },
     });
-    fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: /제목/ }), {
       target: { value: '배송 확인' },
     });
     fireEvent.change(screen.getByRole('textbox', { name: /문의 내용/ }), {
@@ -411,6 +413,9 @@ describe('company support routes', () => {
     expect(inquiryLinks[0]).toHaveAttribute('href', '/mypage/inquiries/inq-1');
     expect(await screen.findAllByText('세금계산서 발행 요청')).toHaveLength(2);
     expect(await screen.findAllByText('대량 구매 견적 문의')).toHaveLength(2);
+    const answeredBadges = await screen.findAllByText('답변완료');
+    expect(answeredBadges.length).toBeGreaterThan(0);
+    answeredBadges.forEach((badge) => expect(badge).toHaveClass('bg-success-tint', 'text-success'));
     const api = await getShopApi();
     expect(api.inquiries.listByMember).toHaveBeenCalledWith(
       'mem-001',
@@ -427,6 +432,7 @@ describe('company support routes', () => {
     mockMemberSession(createMember('mem-001'));
     renderWithQuery(<MemberInquiryDetailPage inquiryId="inq-1" />);
     expect(await screen.findByText('<script>alert(1)</script>문의 내용')).toBeInTheDocument();
+    expect(screen.getByText('답변완료')).toHaveClass('bg-success-tint', 'text-success');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 

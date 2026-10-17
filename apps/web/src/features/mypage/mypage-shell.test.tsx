@@ -44,18 +44,25 @@ function MemberProbe() {
   );
 }
 
-function renderPage() {
+function renderPage(activeSection: 'dashboard' | 'claim-new' = 'dashboard') {
   const queryClient = new QueryClient();
-  render(
+  const renderShell = (section: 'dashboard' | 'claim-new') => (
     <QueryClientProvider client={queryClient}>
       <MemberSessionProvider>
-        <MyPageShell activeSection="dashboard" title="마이페이지">
+        <MyPageShell activeSection={section} title="마이페이지">
           <MemberProbe />
         </MyPageShell>
       </MemberSessionProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
-  return queryClient;
+  const page = render(renderShell(activeSection));
+  return {
+    ...page,
+    queryClient,
+    updateActiveSection: (section: 'dashboard' | 'claim-new') => {
+      page.rerender(renderShell(section));
+    },
+  };
 }
 
 beforeEach(() => {
@@ -119,6 +126,8 @@ describe('MyPageShell logout', () => {
   });
 
   it('can hide both navigation menus and render a custom claim breadcrumb trail', async () => {
+    const addEventListenerSpy = vi.spyOn(window, 'addEventListener');
+    const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
     render(
       <QueryClientProvider client={new QueryClient()}>
         <MemberSessionProvider>
@@ -144,10 +153,12 @@ describe('MyPageShell logout', () => {
     expect(breadcrumb.parentElement).toHaveClass('max-w-[1240px]');
     expect(screen.queryByRole('navigation', { name: '모바일 마이페이지 메뉴' })).toBeNull();
     expect(screen.queryByRole('complementary', { name: '마이페이지 메뉴' })).toBeNull();
+    expect(addEventListenerSpy.mock.calls.filter(([type]) => type === 'resize')).toHaveLength(0);
+    expect(removeEventListenerSpy.mock.calls.filter(([type]) => type === 'resize')).toHaveLength(0);
   });
 
   it('clears member-owned caches and navigates to login', async () => {
-    const queryClient = renderPage();
+    const { queryClient } = renderPage();
     await screen.findByText(member.id);
     expect(screen.getByRole('navigation', { name: '모바일 마이페이지 메뉴' })).toBeVisible();
     expect(screen.getByRole('complementary', { name: '마이페이지 메뉴' })).toBeVisible();
@@ -169,5 +180,118 @@ describe('MyPageShell logout', () => {
       expect(routerMock.push).toHaveBeenCalledWith('/login');
     });
     expect(await screen.findByText('로그아웃됨')).toBeInTheDocument();
+  });
+});
+
+describe('MyPageShell claim navigation', () => {
+  it('shows and activates the claim application link in desktop and mobile menus', async () => {
+    renderPage('claim-new');
+    await screen.findByText(member.id);
+
+    const desktopMenu = screen.getByRole('complementary', { name: '마이페이지 메뉴' });
+    const mobileMenu = screen.getByRole('navigation', { name: '모바일 마이페이지 메뉴' });
+    const desktopLink = within(desktopMenu).getByRole('link', {
+      name: '취소/반품/교환 신청',
+    });
+    const mobileLink = within(mobileMenu).getByRole('link', {
+      name: '취소/반품/교환 신청',
+    });
+
+    expect(desktopLink).toHaveAttribute('href', '/mypage/claims/new');
+    expect(desktopLink).toHaveAttribute('aria-current', 'page');
+    expect(mobileLink).toHaveAttribute('href', '/mypage/claims/new');
+    expect(mobileLink).toHaveAttribute('aria-current', 'page');
+    expect(desktopMenu).toHaveClass('hidden', 'lg:block');
+    expect(mobileMenu).toHaveClass('lg:hidden');
+    expect(mobileMenu).toHaveClass('max-[600px]:-mx-16', 'max-[600px]:px-16');
+  });
+
+  it('scrolls only the mobile navigation to reveal the newly active link', async () => {
+    const { updateActiveSection } = renderPage('dashboard');
+    await screen.findByText(member.id);
+
+    const mobileMenu = screen.getByRole('navigation', { name: '모바일 마이페이지 메뉴' });
+    const claimApplicationLink = within(mobileMenu).getByRole('link', {
+      name: '취소/반품/교환 신청',
+    });
+    vi.spyOn(mobileMenu, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 390,
+      bottom: 48,
+      width: 390,
+      height: 48,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(claimApplicationLink, 'getBoundingClientRect').mockReturnValue({
+      x: 350,
+      y: 0,
+      left: 350,
+      top: 0,
+      right: 470,
+      bottom: 40,
+      width: 120,
+      height: 40,
+      toJSON: () => ({}),
+    });
+
+    updateActiveSection('claim-new');
+
+    expect(mobileMenu.scrollLeft).toBe(80);
+    expect(window.scrollX).toBe(0);
+    expect(document.documentElement.scrollLeft).toBe(0);
+    expect(document.body.scrollLeft).toBe(0);
+  });
+
+  it('reveals the active link after resizing from desktop to mobile and cleans up the listener', async () => {
+    const addEventListenerSpy = vi.spyOn(window, 'addEventListener');
+    const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
+    const { unmount } = renderPage('claim-new');
+    await screen.findByText(member.id);
+
+    const mobileMenu = screen.getByRole('navigation', { name: '모바일 마이페이지 메뉴' });
+    const claimApplicationLink = within(mobileMenu).getByRole('link', {
+      name: '취소/반품/교환 신청',
+    });
+    let isMobileViewport = false;
+    vi.spyOn(mobileMenu, 'getBoundingClientRect').mockImplementation(() => ({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: isMobileViewport ? 390 : 0,
+      bottom: isMobileViewport ? 48 : 0,
+      width: isMobileViewport ? 390 : 0,
+      height: isMobileViewport ? 48 : 0,
+      toJSON: () => ({}),
+    }));
+    vi.spyOn(claimApplicationLink, 'getBoundingClientRect').mockImplementation(() => ({
+      x: isMobileViewport ? 350 : 0,
+      y: 0,
+      left: isMobileViewport ? 350 : 0,
+      top: 0,
+      right: isMobileViewport ? 470 : 0,
+      bottom: isMobileViewport ? 40 : 0,
+      width: isMobileViewport ? 120 : 0,
+      height: isMobileViewport ? 40 : 0,
+      toJSON: () => ({}),
+    }));
+
+    const resizeListener = addEventListenerSpy.mock.calls.find(([type]) => type === 'resize')?.[1];
+    expect(resizeListener).toBeDefined();
+    expect(mobileMenu.scrollLeft).toBe(0);
+
+    isMobileViewport = true;
+    fireEvent(window, new Event('resize'));
+
+    expect(mobileMenu.scrollLeft).toBe(80);
+    expect(window.scrollX).toBe(0);
+    expect(document.documentElement.scrollLeft).toBe(0);
+    expect(document.body.scrollLeft).toBe(0);
+
+    unmount();
+    expect(removeEventListenerSpy).toHaveBeenCalledWith('resize', resizeListener);
   });
 });

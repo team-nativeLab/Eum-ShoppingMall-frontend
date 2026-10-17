@@ -248,28 +248,35 @@ function InquiryProductsPanel({
                         </span>
                       ) : null}
                     </span>
-                    <select
-                      aria-label={`${accessibleProductName} ${productOption.label}`}
-                      required={productOption.required}
-                      value={selection.optionChoiceIds[productOption.id] ?? ''}
-                      onChange={(event) =>
-                        onChangeOption(
-                          selection.selectionId,
-                          productOption.id,
-                          event.currentTarget.value,
-                        )
-                      }
-                      className="min-w-0 flex-1 rounded-8 border border-line-control bg-bg px-12 py-8 text-body-s focus-ring focus-visible:border-success focus-visible:outline-success"
-                    >
-                      <option value="">
-                        {productOption.required ? '옵션을 선택해 주세요' : '선택 사항'}
-                      </option>
-                      {productOption.choices.map((choice) => (
-                        <option key={choice.id} value={choice.id}>
-                          {choice.label}
+                    <div className="relative min-w-0 flex-1">
+                      <select
+                        aria-label={`${accessibleProductName} ${productOption.label}`}
+                        required={productOption.required}
+                        value={selection.optionChoiceIds[productOption.id] ?? ''}
+                        onChange={(event) =>
+                          onChangeOption(
+                            selection.selectionId,
+                            productOption.id,
+                            event.currentTarget.value,
+                          )
+                        }
+                        className="w-full min-w-0 appearance-none rounded-8 border border-line-control bg-bg py-8 pr-40 pl-12 text-body-s focus-ring focus-visible:border-success focus-visible:outline-success"
+                      >
+                        <option value="">
+                          {productOption.required ? '옵션을 선택해 주세요' : '선택 사항'}
                         </option>
-                      ))}
-                    </select>
+                        {productOption.choices.map((choice) => (
+                          <option key={choice.id} value={choice.id}>
+                            {choice.label}
+                          </option>
+                        ))}
+                      </select>
+                      <Icon
+                        icon={ChevronDown}
+                        size={20}
+                        className="pointer-events-none absolute top-1/2 right-14 -translate-y-1/2 text-text-1"
+                      />
+                    </div>
                   </label>
                 ))}
               </li>
