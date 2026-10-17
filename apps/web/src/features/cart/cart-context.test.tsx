@@ -3,11 +3,18 @@ import { ApiError } from '@eum/api/errors';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Product } from '@eum/api/types';
 import { CartLink } from '@/components/cart-link';
+import { CheckoutProvider, useCheckout } from '@/features/checkout/checkout-context';
 import { CartProvider, useCart } from './cart-context';
-import { CART_STORAGE_KEY, serializeCart } from './cart-storage';
+import {
+  CART_STORAGE_KEY,
+  ORDERED_CART_CLEANUP_STORAGE_KEY,
+  parseStoredCart,
+  serializeCart,
+  writePendingOrderedCartCleanup,
+} from './cart-storage';
 
 const { getProductById } = vi.hoisted(() => ({ getProductById: vi.fn() }));
 
@@ -93,15 +100,25 @@ function CartProbe() {
     addToCart,
     hasRestored,
     restoreError,
+    orderCleanupError,
+    hasPendingOrderCleanup,
+    isOrderPending,
     retryRestore,
+    consumeOrderedCartItems,
   } = useCart();
+  const checkout = useCheckout();
+  const orderRequestIdRef = useRef<number | null>(null);
   return (
     <div>
-      <p>{hasRestored ? '복원 완료' : '복원 중'}</p>
-      <p>{restoreError ? '복원 실패' : '복원 정상'}</p>
-      <p>수량 {totalQuantity}</p>
+      <p data-testid="cart-has-restored">{hasRestored ? '복원 완료' : '복원 중'}</p>
+      <p data-testid="cart-restore-error">{restoreError ? '복원 실패' : '복원 정상'}</p>
+      <p data-testid="cart-order-cleanup-error">{String(orderCleanupError)}</p>
+      <p data-testid="cart-has-pending-cleanup">{String(hasPendingOrderCleanup)}</p>
+      <p data-testid="cart-order-pending">{String(isOrderPending)}</p>
+      <p data-testid="cart-total-quantity">수량 {totalQuantity}</p>
       <p>합계 {cartTotals.productTotal}</p>
       <p>주문 불가 {cartGroups.unorderableItems.length}</p>
+      <output data-testid="order-pending">{String(checkout.isOrderPending)}</output>
       <CartLink />
       <button type="button" onClick={() => addToCart(visibleProduct, 2)}>
         표시 상품 담기
@@ -115,10 +132,106 @@ function CartProbe() {
       <button type="button" onClick={() => addToCart(visibleProduct, 1, 'red', '빨강')}>
         빨강 옵션 담기
       </button>
+      <button type="button" onClick={() => addToCart(optionProduct, 2, 'wall', '벽걸이형')}>
+        옵션 상품 담기
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          const requestId = checkout.beginOrderRequest(checkout.checkoutGeneration);
+          if (requestId === null) return;
+          orderRequestIdRef.current = requestId;
+          addToCart(optionProduct, 1, 'wall', '벽걸이형');
+        }}
+      >
+        주문 시작 후 같은 옵션 상품 담기
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          if (orderRequestIdRef.current === null) return;
+          checkout.finishOrderRequest(orderRequestIdRef.current);
+          orderRequestIdRef.current = null;
+        }}
+      >
+        주문 요청 종료
+      </button>
+      <button type="button" onClick={() => addToCart(optionProduct, 1, 'wall', '벽걸이형')}>
+        같은 옵션 상품 1개 담기
+      </button>
       <button type="button" onClick={retryRestore}>
         복원 다시 시도
       </button>
+      <button
+        type="button"
+        onClick={() => {
+          const requestId = checkout.beginOrderRequest(checkout.checkoutGeneration);
+          if (requestId === null) return;
+          checkout.finishOrderRequest(requestId);
+          consumeOrderedCartItems([{ productId: visibleProduct.id, quantity: 2, optionId: null }]);
+        }}
+      >
+        성공 주문 후 장바구니 정리
+      </button>
     </div>
+  );
+}
+
+function CartRestoreRaceProbe({ tab }: { tab: 'a' | 'b' }) {
+  const { totalQuantity, hasRestored, retryRestore, consumeOrderedCartItems } = useCart();
+  return (
+    <section>
+      <output data-testid={`tab-${tab}-quantity`}>{totalQuantity}</output>
+      <output data-testid={`tab-${tab}-restored`}>{String(hasRestored)}</output>
+      <button
+        type="button"
+        onClick={() =>
+          consumeOrderedCartItems([{ productId: visibleProduct.id, quantity: 2, optionId: null }])
+        }
+      >
+        tab {tab} 주문 수량 차감
+      </button>
+      <button type="button" onClick={retryRestore}>
+        tab {tab} 복원 다시 시도
+      </button>
+    </section>
+  );
+}
+
+function StorageRestoreProbe({
+  onAddToCartReady,
+}: {
+  onAddToCartReady: (attemptAdd: () => boolean) => void;
+}) {
+  const { addToCart, totalQuantity, isOrderPending } = useCart();
+  useLayoutEffect(() => {
+    onAddToCartReady(() => addToCart(visibleProduct));
+  }, [addToCart, onAddToCartReady]);
+  return (
+    <section>
+      <output data-testid="storage-restore-quantity">{totalQuantity}</output>
+      <output data-testid="storage-restore-pending">{String(isOrderPending)}</output>
+    </section>
+  );
+}
+
+function CleanupIntentLoadingProbe() {
+  const { addToCart, totalQuantity, isOrderPending } = useCart();
+  const attemptedRef = useRef(false);
+  const [initialPending] = useState(isOrderPending);
+  const [addResult, setAddResult] = useState<boolean | null>(null);
+  useLayoutEffect(() => {
+    if (attemptedRef.current) return;
+    attemptedRef.current = true;
+    setAddResult(addToCart(visibleProduct));
+  }, [addToCart]);
+  return (
+    <section>
+      <output data-testid="cleanup-gate-initial-pending">{String(initialPending)}</output>
+      <output data-testid="cleanup-gate-add-result">{String(addResult)}</output>
+      <output data-testid="cleanup-gate-quantity">{totalQuantity}</output>
+      <output data-testid="cleanup-gate-pending">{String(isOrderPending)}</output>
+    </section>
   );
 }
 
@@ -128,18 +241,60 @@ const renderCart = () => {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <CartProvider>
-        <CartProbe />
-      </CartProvider>
+      <CheckoutProvider>
+        <CartProvider>
+          <CartProbe />
+        </CartProvider>
+      </CheckoutProvider>
     </QueryClientProvider>,
   );
 };
+
+function renderIndependentCarts() {
+  const createQueryClient = () =>
+    new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 } } });
+  return render(
+    <div>
+      <QueryClientProvider client={createQueryClient()}>
+        <CheckoutProvider>
+          <CartProvider>
+            <CartRestoreRaceProbe tab="a" />
+          </CartProvider>
+        </CheckoutProvider>
+      </QueryClientProvider>
+      <QueryClientProvider client={createQueryClient()}>
+        <CheckoutProvider>
+          <CartProvider>
+            <CartRestoreRaceProbe tab="b" />
+          </CartProvider>
+        </CheckoutProvider>
+      </QueryClientProvider>
+    </div>,
+  );
+}
+
+function renderCleanupIntentLoadingCart() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: 0 } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <CheckoutProvider>
+        <CartProvider>
+          <CleanupIntentLoadingProbe />
+        </CartProvider>
+      </CheckoutProvider>
+    </QueryClientProvider>,
+  );
+}
 
 async function waitForRestore() {
   await screen.findByText('복원 완료');
 }
 
 beforeEach(() => {
+  window.localStorage.clear();
+  window.sessionStorage.clear();
   getProductById.mockImplementation(async (productId: string) => {
     if (productId === visibleProduct.id) return visibleProduct;
     if (productId === hiddenProduct.id) return hiddenProduct;
@@ -153,6 +308,526 @@ afterEach(() => {
 });
 
 describe('CartProvider', () => {
+  it('retries the recorded order cleanup until localStorage accepts it', async () => {
+    window.localStorage.setItem(
+      CART_STORAGE_KEY,
+      serializeCart([
+        { productId: visibleProduct.id, quantity: 2, optionId: null, optionLabel: null },
+      ]),
+    );
+    const user = userEvent.setup();
+    renderCart();
+    await waitForRestore();
+
+    const originalSetItem = Storage.prototype.setItem;
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (this === window.localStorage && key === CART_STORAGE_KEY) {
+        throw new DOMException('quota', 'QuotaExceededError');
+      }
+      originalSetItem.call(this, key, value);
+    });
+    await user.click(screen.getByRole('button', { name: '성공 주문 후 장바구니 정리' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('cart-order-cleanup-error')).toHaveTextContent('true');
+      expect(screen.getByTestId('cart-has-pending-cleanup')).toHaveTextContent('true');
+      expect(screen.getByTestId('cart-order-pending')).toHaveTextContent('true');
+    });
+    expect(screen.getByTestId('cart-has-restored')).toHaveTextContent('복원 완료');
+    expect(screen.getByTestId('cart-total-quantity')).toHaveTextContent('2');
+    expect(parseStoredCart(window.localStorage.getItem(CART_STORAGE_KEY))).toEqual([
+      { productId: visibleProduct.id, quantity: 2, optionId: null, optionLabel: null },
+    ]);
+    expect(window.sessionStorage.getItem(ORDERED_CART_CLEANUP_STORAGE_KEY)).not.toBeNull();
+
+    await user.click(screen.getByRole('button', { name: '복원 다시 시도' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('cart-order-cleanup-error')).toHaveTextContent('true'),
+    );
+    expect(screen.getByTestId('cart-total-quantity')).toHaveTextContent('2');
+    expect(parseStoredCart(window.localStorage.getItem(CART_STORAGE_KEY))).toEqual([
+      { productId: visibleProduct.id, quantity: 2, optionId: null, optionLabel: null },
+    ]);
+
+    setItemSpy.mockImplementation(function (this: Storage, key: string, value: string) {
+      originalSetItem.call(this, key, value);
+    });
+    await user.click(screen.getByRole('button', { name: '복원 다시 시도' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('cart-order-pending')).toHaveTextContent('false'),
+    );
+    expect(screen.getByTestId('cart-order-cleanup-error')).toHaveTextContent('false');
+    expect(screen.getByTestId('cart-has-pending-cleanup')).toHaveTextContent('false');
+    expect(parseStoredCart(window.localStorage.getItem(CART_STORAGE_KEY))).toEqual([]);
+    expect(window.sessionStorage.getItem(ORDERED_CART_CLEANUP_STORAGE_KEY)).toBeNull();
+    expect(screen.getByTestId('cart-total-quantity')).toHaveTextContent('0');
+  });
+
+  it('keeps successful-order cleanup pending when localStorage cannot be read', async () => {
+    const originalCart = serializeCart([
+      { productId: visibleProduct.id, quantity: 2, optionId: null, optionLabel: null },
+    ]);
+    window.localStorage.setItem(CART_STORAGE_KEY, originalCart);
+    const user = userEvent.setup();
+    renderCart();
+    await waitForRestore();
+
+    const originalGetItem = Storage.prototype.getItem;
+    const getItemSpy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+    ) {
+      if (this === window.localStorage && key === CART_STORAGE_KEY) {
+        throw new DOMException('denied', 'SecurityError');
+      }
+      return originalGetItem.call(this, key);
+    });
+    const originalSetItem = Storage.prototype.setItem;
+    const cartSetItemSpy = vi.fn(function (this: Storage, key: string, value: string) {
+      originalSetItem.call(this, key, value);
+    });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (this === window.localStorage && key === CART_STORAGE_KEY) {
+        cartSetItemSpy.call(this, key, value);
+        return;
+      }
+      originalSetItem.call(this, key, value);
+    });
+
+    await user.click(screen.getByRole('button', { name: '성공 주문 후 장바구니 정리' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('cart-order-cleanup-error')).toHaveTextContent('true');
+      expect(screen.getByTestId('cart-has-pending-cleanup')).toHaveTextContent('true');
+      expect(screen.getByTestId('cart-order-pending')).toHaveTextContent('true');
+    });
+    expect(cartSetItemSpy).not.toHaveBeenCalled();
+    expect(screen.getByTestId('cart-total-quantity')).toHaveTextContent('2');
+    expect(originalGetItem.call(window.localStorage, CART_STORAGE_KEY)).toBe(originalCart);
+    const pendingIntent: unknown = JSON.parse(
+      window.sessionStorage.getItem(ORDERED_CART_CLEANUP_STORAGE_KEY) ?? 'null',
+    );
+    expect(pendingIntent).toMatchObject({ beforeLines: null, afterLines: null });
+
+    getItemSpy.mockImplementation(originalGetItem);
+    await user.click(screen.getByRole('button', { name: '복원 다시 시도' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('cart-order-pending')).toHaveTextContent('false'),
+    );
+    expect(parseStoredCart(window.localStorage.getItem(CART_STORAGE_KEY))).toEqual([]);
+    expect(window.sessionStorage.getItem(ORDERED_CART_CLEANUP_STORAGE_KEY)).toBeNull();
+  });
+
+  it('does not hydrate or persist an empty cart when initial storage access fails', async () => {
+    const originalCart = serializeCart([
+      { productId: visibleProduct.id, quantity: 2, optionId: null, optionLabel: null },
+    ]);
+    window.localStorage.setItem(CART_STORAGE_KEY, originalCart);
+    const originalGetItem = Storage.prototype.getItem;
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+    ) {
+      if (this === window.localStorage && key === CART_STORAGE_KEY) {
+        throw new DOMException('denied', 'SecurityError');
+      }
+      return originalGetItem.call(this, key);
+    });
+    const originalSetItem = Storage.prototype.setItem;
+    const cartSetItemSpy = vi.fn();
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (this === window.localStorage && key === CART_STORAGE_KEY) {
+        cartSetItemSpy();
+      }
+      originalSetItem.call(this, key, value);
+    });
+
+    renderCart();
+
+    await waitFor(() =>
+      expect(screen.getByTestId('cart-restore-error')).toHaveTextContent('복원 실패'),
+    );
+    expect(screen.getByTestId('cart-has-restored')).toHaveTextContent('복원 중');
+    expect(screen.getByTestId('cart-total-quantity')).toHaveTextContent('0');
+    expect(cartSetItemSpy).not.toHaveBeenCalled();
+    expect(originalGetItem.call(window.localStorage, CART_STORAGE_KEY)).toBe(originalCart);
+  });
+
+  it('keeps the hydrated cart when storage-event reads and later persistence reads fail', async () => {
+    const originalCart = serializeCart([
+      { productId: visibleProduct.id, quantity: 1, optionId: null, optionLabel: null },
+    ]);
+    window.localStorage.setItem(CART_STORAGE_KEY, originalCart);
+    renderCart();
+    await waitForRestore();
+
+    const originalGetItem = Storage.prototype.getItem;
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+    ) {
+      if (this === window.localStorage && key === CART_STORAGE_KEY) {
+        throw new DOMException('denied', 'SecurityError');
+      }
+      return originalGetItem.call(this, key);
+    });
+    const originalSetItem = Storage.prototype.setItem;
+    const cartSetItemSpy = vi.fn();
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (this === window.localStorage && key === CART_STORAGE_KEY) {
+        cartSetItemSpy();
+      }
+      originalSetItem.call(this, key, value);
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: '표시 상품 담기' }));
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', { key: CART_STORAGE_KEY, newValue: serializeCart([]) }),
+      );
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('cart-restore-error')).toHaveTextContent('복원 실패'),
+    );
+    expect(screen.getByTestId('cart-has-restored')).toHaveTextContent('복원 완료');
+    expect(screen.getByTestId('cart-total-quantity')).toHaveTextContent('3');
+    expect(cartSetItemSpy).not.toHaveBeenCalled();
+    expect(originalGetItem.call(window.localStorage, CART_STORAGE_KEY)).toBe(originalCart);
+  });
+
+  it('does not accept a pending hydration result after snapshot validation cannot read storage', async () => {
+    const originalCart = serializeCart([
+      { productId: visibleProduct.id, quantity: 2, optionId: null, optionLabel: null },
+    ]);
+    window.localStorage.setItem(CART_STORAGE_KEY, originalCart);
+    let resolveProduct: (product: Product) => void = () => undefined;
+    getProductById.mockImplementationOnce(
+      () =>
+        new Promise<Product>((resolve) => {
+          resolveProduct = resolve;
+        }),
+    );
+    renderCart();
+    await waitFor(() => expect(getProductById).toHaveBeenCalled());
+
+    const originalGetItem = Storage.prototype.getItem;
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+    ) {
+      if (this === window.localStorage && key === CART_STORAGE_KEY) {
+        throw new DOMException('denied', 'SecurityError');
+      }
+      return originalGetItem.call(this, key);
+    });
+    const originalSetItem = Storage.prototype.setItem;
+    const cartSetItemSpy = vi.fn();
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (this === window.localStorage && key === CART_STORAGE_KEY) {
+        cartSetItemSpy();
+      }
+      originalSetItem.call(this, key, value);
+    });
+
+    await act(async () => {
+      resolveProduct(visibleProduct);
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('cart-restore-error')).toHaveTextContent('복원 실패'),
+    );
+    expect(screen.getByTestId('cart-has-restored')).toHaveTextContent('복원 중');
+    expect(cartSetItemSpy).not.toHaveBeenCalled();
+    expect(originalGetItem.call(window.localStorage, CART_STORAGE_KEY)).toBe(originalCart);
+  });
+
+  it('provider remount retries a pending order cleanup from sessionStorage', async () => {
+    const orderedLines = [{ productId: visibleProduct.id, quantity: 2, optionId: null }];
+    window.localStorage.setItem(
+      CART_STORAGE_KEY,
+      serializeCart([
+        { productId: visibleProduct.id, quantity: 2, optionId: null, optionLabel: null },
+      ]),
+    );
+    expect(
+      writePendingOrderedCartCleanup(
+        orderedLines,
+        [{ productId: visibleProduct.id, quantity: 2, optionId: null, optionLabel: null }],
+        [],
+      ),
+    ).toBe(true);
+    const originalSetItem = Storage.prototype.setItem;
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (this === window.localStorage && key === CART_STORAGE_KEY) {
+        throw new DOMException('quota', 'QuotaExceededError');
+      }
+      originalSetItem.call(this, key, value);
+    });
+
+    const firstProvider = renderCart();
+    await waitFor(() =>
+      expect(screen.getByTestId('cart-order-cleanup-error')).toHaveTextContent('true'),
+    );
+    expect(parseStoredCart(window.localStorage.getItem(CART_STORAGE_KEY))).toHaveLength(1);
+    firstProvider.unmount();
+
+    setItemSpy.mockImplementation(function (this: Storage, key: string, value: string) {
+      originalSetItem.call(this, key, value);
+    });
+    renderCart();
+    await waitFor(() =>
+      expect(screen.getByTestId('cart-order-pending')).toHaveTextContent('false'),
+    );
+
+    expect(parseStoredCart(window.localStorage.getItem(CART_STORAGE_KEY))).toEqual([]);
+    expect(window.sessionStorage.getItem(ORDERED_CART_CLEANUP_STORAGE_KEY)).toBeNull();
+  });
+
+  it('recognizes a persisted after snapshot after remount without subtracting twice', async () => {
+    const orderedLines = [{ productId: visibleProduct.id, quantity: 2, optionId: null }];
+    const beforeLines = [
+      { productId: visibleProduct.id, quantity: 5, optionId: null, optionLabel: null },
+    ];
+    const afterLines = [
+      { productId: visibleProduct.id, quantity: 3, optionId: null, optionLabel: null },
+    ];
+    window.localStorage.setItem(CART_STORAGE_KEY, serializeCart(beforeLines));
+    expect(writePendingOrderedCartCleanup(orderedLines, beforeLines, afterLines, 'applying')).toBe(
+      true,
+    );
+    // Simulate a crash after localStorage succeeds but before session intent cleanup.
+    window.localStorage.setItem(CART_STORAGE_KEY, serializeCart(afterLines));
+
+    renderCart();
+    await waitFor(() =>
+      expect(screen.getByTestId('cart-order-pending')).toHaveTextContent('false'),
+    );
+
+    expect(parseStoredCart(window.localStorage.getItem(CART_STORAGE_KEY))).toEqual(afterLines);
+    expect(window.sessionStorage.getItem(ORDERED_CART_CLEANUP_STORAGE_KEY)).toBeNull();
+    expect(screen.getByTestId('cart-total-quantity')).toHaveTextContent('3');
+  });
+
+  it('keeps an applying cleanup locked when storage returned to its before snapshot', async () => {
+    const orderedLines = [{ productId: visibleProduct.id, quantity: 2, optionId: null }];
+    const beforeLines = [
+      { productId: visibleProduct.id, quantity: 5, optionId: null, optionLabel: null },
+    ];
+    const afterLines = [
+      { productId: visibleProduct.id, quantity: 3, optionId: null, optionLabel: null },
+    ];
+    window.localStorage.setItem(CART_STORAGE_KEY, serializeCart(beforeLines));
+    expect(writePendingOrderedCartCleanup(orderedLines, beforeLines, afterLines, 'applying')).toBe(
+      true,
+    );
+    const originalSetItem = Storage.prototype.setItem;
+    const cartWrites = vi.fn();
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (this === window.localStorage && key === CART_STORAGE_KEY) cartWrites();
+      originalSetItem.call(this, key, value);
+    });
+
+    renderCart();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('cart-order-cleanup-error')).toHaveTextContent('true');
+      expect(screen.getByTestId('cart-order-pending')).toHaveTextContent('true');
+      expect(screen.getByTestId('cart-total-quantity')).toHaveTextContent('5');
+    });
+    expect(cartWrites).not.toHaveBeenCalled();
+    expect(parseStoredCart(window.localStorage.getItem(CART_STORAGE_KEY))).toEqual(beforeLines);
+    expect(
+      JSON.parse(window.sessionStorage.getItem(ORDERED_CART_CLEANUP_STORAGE_KEY) ?? 'null'),
+    ).toMatchObject({ phase: 'applying' });
+  });
+
+  it('blocks cart actions for every source until the session cleanup intent is loaded', async () => {
+    const orderedLines = [{ productId: visibleProduct.id, quantity: 2, optionId: null }];
+    const beforeLines = [
+      { productId: visibleProduct.id, quantity: 2, optionId: null, optionLabel: null },
+    ];
+    window.localStorage.setItem(CART_STORAGE_KEY, serializeCart(beforeLines));
+    expect(writePendingOrderedCartCleanup(orderedLines, beforeLines, [])).toBe(true);
+    const originalSetItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (this === window.localStorage && key === CART_STORAGE_KEY) {
+        throw new DOMException('quota', 'QuotaExceededError');
+      }
+      originalSetItem.call(this, key, value);
+    });
+
+    renderCleanupIntentLoadingCart();
+
+    expect(screen.getByTestId('cleanup-gate-add-result')).toHaveTextContent('false');
+    expect(screen.getByTestId('cleanup-gate-initial-pending')).toHaveTextContent('true');
+    await waitFor(() =>
+      expect(screen.getByTestId('cleanup-gate-pending')).toHaveTextContent('true'),
+    );
+    expect(screen.getByTestId('cleanup-gate-quantity')).toHaveTextContent('2');
+    expect(parseStoredCart(window.localStorage.getItem(CART_STORAGE_KEY))).toEqual(beforeLines);
+  });
+
+  it('reconciles ordered rows despite unrelated row changes and row reordering', async () => {
+    const orderedLines = [{ productId: visibleProduct.id, quantity: 2, optionId: null }];
+    const beforeLines = [
+      { productId: visibleProduct.id, quantity: 5, optionId: null, optionLabel: null },
+      { productId: hiddenProduct.id, quantity: 1, optionId: null, optionLabel: null },
+    ];
+    const afterLines = [
+      { productId: visibleProduct.id, quantity: 3, optionId: null, optionLabel: null },
+      { productId: hiddenProduct.id, quantity: 1, optionId: null, optionLabel: null },
+    ];
+    const latestLines = [
+      { productId: hiddenProduct.id, quantity: 4, optionId: null, optionLabel: null },
+      { productId: visibleProduct.id, quantity: 5, optionId: null, optionLabel: null },
+    ];
+    window.localStorage.setItem(CART_STORAGE_KEY, serializeCart(beforeLines));
+    expect(writePendingOrderedCartCleanup(orderedLines, beforeLines, afterLines)).toBe(true);
+    window.localStorage.setItem(CART_STORAGE_KEY, serializeCart(latestLines));
+
+    renderCart();
+
+    await waitFor(() =>
+      expect(screen.getByTestId('cart-order-pending')).toHaveTextContent('false'),
+    );
+    expect(parseStoredCart(window.localStorage.getItem(CART_STORAGE_KEY))).toEqual([
+      { productId: hiddenProduct.id, quantity: 4, optionId: null, optionLabel: null },
+      { productId: visibleProduct.id, quantity: 3, optionId: null, optionLabel: null },
+    ]);
+    expect(screen.getByTestId('cart-total-quantity')).toHaveTextContent('7');
+    expect(window.sessionStorage.getItem(ORDERED_CART_CLEANUP_STORAGE_KEY)).toBeNull();
+  });
+
+  it('keeps cleanup pending without subtracting when storage matches neither saved snapshot', async () => {
+    const orderedLines = [{ productId: visibleProduct.id, quantity: 2, optionId: null }];
+    const beforeLines = [
+      { productId: visibleProduct.id, quantity: 5, optionId: null, optionLabel: null },
+    ];
+    const afterLines = [
+      { productId: visibleProduct.id, quantity: 3, optionId: null, optionLabel: null },
+    ];
+    window.localStorage.setItem(CART_STORAGE_KEY, serializeCart(beforeLines));
+    expect(writePendingOrderedCartCleanup(orderedLines, beforeLines, afterLines)).toBe(true);
+    window.localStorage.setItem(
+      CART_STORAGE_KEY,
+      serializeCart([
+        { productId: visibleProduct.id, quantity: 6, optionId: null, optionLabel: null },
+      ]),
+    );
+
+    renderCart();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('cart-order-cleanup-error')).toHaveTextContent('true');
+      expect(screen.getByTestId('cart-has-pending-cleanup')).toHaveTextContent('true');
+    });
+    expect(screen.getByTestId('cart-order-pending')).toHaveTextContent('true');
+    expect(parseStoredCart(window.localStorage.getItem(CART_STORAGE_KEY))).toEqual([
+      { productId: visibleProduct.id, quantity: 6, optionId: null, optionLabel: null },
+    ]);
+  });
+
+  it('does not persist a stale restore from another provider after ordered quantity is consumed', async () => {
+    window.localStorage.setItem(
+      CART_STORAGE_KEY,
+      serializeCart([
+        { productId: visibleProduct.id, quantity: 5, optionId: null, optionLabel: null },
+      ]),
+    );
+    let resolveTabBRestore: ((product: Product) => void) | undefined;
+    getProductById
+      .mockImplementationOnce(async () => visibleProduct)
+      .mockImplementationOnce(
+        () =>
+          new Promise<Product>((resolve) => {
+            resolveTabBRestore = resolve;
+          }),
+      )
+      .mockImplementation(async () => visibleProduct);
+
+    const user = userEvent.setup();
+    renderIndependentCarts();
+
+    await waitFor(() => expect(screen.getByTestId('tab-a-quantity')).toHaveTextContent('5'));
+    await waitFor(() => expect(resolveTabBRestore).toBeDefined());
+    await user.click(screen.getByRole('button', { name: 'tab a 주문 수량 차감' }));
+    await waitFor(() => expect(screen.getByTestId('tab-a-quantity')).toHaveTextContent('3'));
+    expect(parseStoredCart(window.localStorage.getItem(CART_STORAGE_KEY))).toEqual([
+      { productId: visibleProduct.id, quantity: 3, optionId: null, optionLabel: null },
+    ]);
+
+    const finishStaleRestore = resolveTabBRestore;
+    if (!finishStaleRestore) throw new Error('Expected tab B restore to remain pending.');
+    await act(async () => {
+      finishStaleRestore(visibleProduct);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(parseStoredCart(window.localStorage.getItem(CART_STORAGE_KEY))).toEqual([
+      { productId: visibleProduct.id, quantity: 3, optionId: null, optionLabel: null },
+    ]);
+    expect(screen.getByTestId('tab-b-restored')).toHaveTextContent('false');
+
+    await user.click(screen.getByRole('button', { name: 'tab b 복원 다시 시도' }));
+    await waitFor(() => expect(screen.getByTestId('tab-b-quantity')).toHaveTextContent('3'));
+    expect(parseStoredCart(window.localStorage.getItem(CART_STORAGE_KEY))).toEqual([
+      { productId: visibleProduct.id, quantity: 3, optionId: null, optionLabel: null },
+    ]);
+  });
+
+  it('blocks a same-option add synchronously during checkout and allows it again after settling', async () => {
+    renderCart();
+    await waitForRestore();
+
+    await userEvent.click(screen.getByRole('button', { name: '옵션 상품 담기' }));
+    expect(screen.getByText('수량 2')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '주문 시작 후 같은 옵션 상품 담기' }));
+    expect(screen.getByTestId('order-pending')).toHaveTextContent('true');
+    expect(screen.getByText('수량 2')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /장바구니/ })).not.toBeInTheDocument();
+    expect(screen.getByText('장바구니').closest('[aria-disabled="true"]')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '주문 요청 종료' }));
+    expect(screen.getByTestId('order-pending')).toHaveTextContent('false');
+    await userEvent.click(screen.getByRole('button', { name: '같은 옵션 상품 1개 담기' }));
+    expect(screen.getByText('수량 3')).toBeInTheDocument();
+  });
+
   it('shows pending additions immediately and then shows the restored merged quantity', async () => {
     window.localStorage.setItem(
       CART_STORAGE_KEY,
@@ -195,6 +870,7 @@ describe('CartProvider', () => {
     renderCart();
     await waitForRestore();
     await userEvent.click(screen.getByRole('button', { name: '표시 상품 담기' }));
+    window.localStorage.clear();
     act(() => {
       window.dispatchEvent(new StorageEvent('storage', { key: null, newValue: null }));
     });
@@ -289,6 +965,7 @@ describe('CartProvider', () => {
     const otherTabValue = serializeCart([
       { productId: 'p-hidden', quantity: 4, optionId: null, optionLabel: null },
     ]);
+    window.localStorage.setItem(CART_STORAGE_KEY, otherTabValue);
     act(() => {
       window.dispatchEvent(
         new StorageEvent('storage', { key: CART_STORAGE_KEY, newValue: otherTabValue }),
@@ -296,6 +973,70 @@ describe('CartProvider', () => {
     });
     expect(await screen.findByText('수량 4')).toBeInTheDocument();
     expect(screen.getByText('주문 불가 1')).toBeInTheDocument();
+  });
+
+  it('keeps the current cart visible and blocks mutations while a storage restore is pending', async () => {
+    const currentLines = [
+      { productId: visibleProduct.id, quantity: 1, optionId: null, optionLabel: null },
+    ];
+    const externalLines = [
+      { productId: hiddenProduct.id, quantity: 4, optionId: null, optionLabel: null },
+    ];
+    window.localStorage.setItem(CART_STORAGE_KEY, serializeCart(currentLines));
+    let resolveExternalProduct: ((product: Product) => void) | undefined;
+    getProductById
+      .mockImplementationOnce(async () => visibleProduct)
+      .mockImplementationOnce(
+        () =>
+          new Promise<Product>((resolve) => {
+            resolveExternalProduct = resolve;
+          }),
+      );
+    let attemptAddToCart: (() => boolean) | undefined;
+    const handleAddToCartReady = (attempt: () => boolean) => {
+      attemptAddToCart = attempt;
+    };
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: 0 } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <CheckoutProvider>
+          <CartProvider>
+            <StorageRestoreProbe onAddToCartReady={handleAddToCartReady} />
+          </CartProvider>
+        </CheckoutProvider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('storage-restore-quantity')).toHaveTextContent('1'),
+    );
+    const addUsingPreviousContext = attemptAddToCart;
+
+    const externalStorageValue = serializeCart(externalLines);
+    window.localStorage.setItem(CART_STORAGE_KEY, externalStorageValue);
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', { key: CART_STORAGE_KEY, newValue: externalStorageValue }),
+      );
+    });
+
+    expect(screen.getByTestId('storage-restore-quantity')).toHaveTextContent('1');
+    expect(screen.getByTestId('storage-restore-pending')).toHaveTextContent('true');
+    expect(addUsingPreviousContext?.()).toBe(false);
+    expect(screen.getByTestId('storage-restore-quantity')).toHaveTextContent('1');
+
+    await waitFor(() => expect(resolveExternalProduct).toBeDefined());
+    const finishExternalRestore = resolveExternalProduct;
+    if (!finishExternalRestore) throw new Error('Expected the external product lookup to wait.');
+    await act(async () => {
+      finishExternalRestore(hiddenProduct);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('storage-restore-quantity')).toHaveTextContent('4');
+      expect(screen.getByTestId('storage-restore-pending')).toHaveTextContent('false');
+    });
   });
 
   it('복원이 끝나기 전에 담은 상품은 복원 결과에 합쳐 보존합니다', async () => {

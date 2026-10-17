@@ -4,20 +4,32 @@ import { formatKrw } from '@eum/api/price';
 import type { CartItem, CheckoutOptions, Coupon } from '@eum/api/types';
 import { Button } from '@eum/ui/components/Button';
 import { Icon } from '@eum/ui/components/Icon';
+import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { cx } from '@eum/ui/lib/cx';
 import { CircleAlert } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { PageContainer } from '@/components/page-container';
+import { useCart } from '@/features/cart/cart-context';
 import { calculateCheckoutAmounts, getCouponDiscount } from './checkout-utils';
+import { useCheckout } from './checkout-context';
 
 export function CheckoutPageTitle({ children }: { children: ReactNode }) {
+  const { isOrderPending: isCheckoutPending } = useCheckout();
+  const { isOrderPending: isCartPending } = useCart();
+  const isOrderPending = isCheckoutPending || isCartPending;
   return (
     <div className="mb-24 flex flex-wrap items-center justify-between gap-16">
       <h1 className="text-h1">{children}</h1>
-      <Link href="/cart" className="rounded-4 text-label-s text-text-2 underline focus-ring">
-        장바구니로 돌아가기
-      </Link>
+      {isOrderPending ? (
+        <span aria-disabled="true" className="rounded-4 text-label-s text-text-3">
+          장바구니로 돌아가기
+        </span>
+      ) : (
+        <Link href="/cart" className="rounded-4 text-label-s text-text-2 underline focus-ring">
+          장바구니로 돌아가기
+        </Link>
+      )}
     </div>
   );
 }
@@ -158,5 +170,22 @@ export function CheckoutPageShell({
   children: ReactNode;
   className?: string;
 }) {
-  return <PageContainer className={cx('py-40 lg:py-48', className)}>{children}</PageContainer>;
+  const { orderCleanupError, retryRestore } = useCart();
+
+  return (
+    <PageContainer className={cx('py-40 lg:py-48', className)}>
+      {orderCleanupError ? (
+        <div className="mb-20 max-w-720">
+          <NoticeInline tone="danger" role="alert">
+            주문은 완료됐지만 주문한 수량을 장바구니에서 정리하지 못했습니다. 중복 주문을 막기 위해
+            장바구니 정리가 끝날 때까지 주문할 수 없습니다.
+          </NoticeInline>
+          <Button variant="secondary" className="mt-12" onClick={retryRestore}>
+            주문 후 장바구니 정리 다시 시도
+          </Button>
+        </div>
+      ) : null}
+      {children}
+    </PageContainer>
+  );
 }

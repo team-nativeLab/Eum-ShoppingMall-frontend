@@ -1,17 +1,22 @@
 import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Product } from '@eum/api/types';
 import { ProductCard } from './product-card';
 
 const cardMocks = vi.hoisted(() => ({
   addToCart: vi.fn(),
+  isOrderPending: false,
   toggleWishlist: vi.fn(),
   routerPush: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: cardMocks.routerPush }) }));
 vi.mock('@/features/cart/cart-context', () => ({
-  useCart: () => ({ addToCart: cardMocks.addToCart }),
+  useCart: () => ({
+    addToCart: cardMocks.addToCart,
+    isOrderPending: cardMocks.isOrderPending,
+  }),
 }));
 vi.mock('./local-collections-context', () => ({
   useLocalCollections: () => ({ wishlistIds: [], toggleWishlist: cardMocks.toggleWishlist }),
@@ -51,6 +56,31 @@ function createProduct(overrides: Partial<Product> = {}): Product {
 }
 
 describe('ProductCard', () => {
+  beforeEach(() => {
+    cardMocks.addToCart.mockReset();
+    cardMocks.addToCart.mockReturnValue(true);
+    cardMocks.isOrderPending = false;
+  });
+
+  it('disables cart add while checkout is pending and restores it after the request settles', async () => {
+    cardMocks.isOrderPending = true;
+    const user = userEvent.setup();
+    const { rerender } = render(<ProductCard product={createProduct()} />);
+
+    const addButton = screen.getByRole('button', { name: '테스트 안전화 장바구니 담기' });
+    expect(addButton).toBeDisabled();
+    await user.click(addButton);
+    expect(cardMocks.addToCart).not.toHaveBeenCalled();
+
+    cardMocks.isOrderPending = false;
+    rerender(<ProductCard product={createProduct()} />);
+    await user.click(screen.getByRole('button', { name: '테스트 안전화 장바구니 담기' }));
+    expect(cardMocks.addToCart).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '테스트 안전화을(를) 장바구니에 담았습니다.',
+    );
+  });
+
   it('allows the home desktop card to grow while keeping long names, reviews and prices', () => {
     const longProductName = '산업 현장용 고시인성 장시간 착용 안전화 상품명 길이 확인용';
     render(

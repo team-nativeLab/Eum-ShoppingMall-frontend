@@ -1,8 +1,10 @@
 import type { Product, ProductOption } from '@eum/api/types';
-import { render, screen, within } from '@testing-library/react';
+import { render as renderWithoutProviders, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CheckoutProvider } from '@/features/checkout/checkout-context';
+import { CHECKOUT_SELECTION_STORAGE_KEY } from '@/features/checkout/checkout-selection-storage';
 import { ProductDetailView } from './product-detail-view';
 
 const detailMocks = vi.hoisted(() => ({
@@ -10,6 +12,9 @@ const detailMocks = vi.hoisted(() => ({
   categoriesQuery: vi.fn(),
   relatedQuery: vi.fn(),
   addToCart: vi.fn(),
+  isOrderPending: false,
+  getCurrentUser: vi.fn(),
+  isDesktop: true,
   toggleWishlist: vi.fn(),
   recordRecent: vi.fn(),
   routerPush: vi.fn(),
@@ -32,12 +37,18 @@ vi.mock('next/link', () => ({
   ),
 }));
 vi.mock('@/features/cart/cart-context', () => ({
-  useCart: () => ({ addToCart: detailMocks.addToCart }),
+  useCart: () => ({
+    addToCart: detailMocks.addToCart,
+    isOrderPending: detailMocks.isOrderPending,
+  }),
+}));
+vi.mock('@/lib/member-auth', () => ({
+  getMemberAuth: async () => ({ getCurrentUser: detailMocks.getCurrentUser }),
 }));
 vi.mock('@/lib/use-media-query', () => ({
   DESKTOP_QUERY: '(min-width: 64rem)',
   getScrollBehavior: () => 'auto',
-  useMediaQuery: () => true,
+  useMediaQuery: () => detailMocks.isDesktop,
   usePrefersReducedMotion: () => true,
 }));
 vi.mock('./local-collections-context', () => ({
@@ -129,6 +140,10 @@ function getButtonAt(buttons: HTMLElement[], index: number): HTMLElement {
 
 const originalIntersectionObserver = globalThis.IntersectionObserver;
 
+function render(ui: ReactNode) {
+  return renderWithoutProviders(<CheckoutProvider>{ui}</CheckoutProvider>);
+}
+
 beforeEach(() => {
   detailMocks.productQuery.mockReturnValue({
     data: testProduct,
@@ -138,6 +153,10 @@ beforeEach(() => {
   detailMocks.categoriesQuery.mockReturnValue({ data: [], isPending: false });
   detailMocks.relatedQuery.mockReturnValue({ data: [] });
   detailMocks.addToCart.mockReset();
+  detailMocks.addToCart.mockReturnValue(true);
+  detailMocks.isOrderPending = false;
+  detailMocks.getCurrentUser.mockResolvedValue(null);
+  detailMocks.isDesktop = true;
   detailMocks.toggleWishlist.mockReset();
   detailMocks.recordRecent.mockReset();
   detailMocks.routerPush.mockReset();
@@ -157,6 +176,16 @@ afterEach(() => {
 });
 
 describe('ProductDetailView content layout', () => {
+  it('disables cart additions while checkout is pending', () => {
+    detailMocks.isOrderPending = true;
+    render(<ProductDetailView productId="product-test" />);
+
+    expect(screen.getAllByRole('button', { name: '장바구니 담기' })).toHaveLength(2);
+    for (const addButton of screen.getAllByRole('button', { name: '장바구니 담기' })) {
+      expect(addButton).toBeDisabled();
+    }
+  });
+
   it('removes the duplicate purchase aside and lets the detail tabs use the full content column', () => {
     render(<ProductDetailView productId="product-test" />);
 
@@ -254,14 +283,15 @@ describe('ProductDetailView required option validation', () => {
     return render(<ProductDetailView productId="product-test" />);
   };
 
-  it.each<[string, number, string]>([
-    ['desktop add to cart', 0, '장바구니 담기'],
-    ['mobile add to cart', 1, '장바구니 담기'],
-    ['mobile buy now', 1, '바로 구매'],
+  it.each<[string, number, string, boolean]>([
+    ['desktop add to cart', 0, '장바구니 담기', true],
+    ['mobile add to cart', 1, '장바구니 담기', false],
+    ['mobile buy now', 1, '바로 구매', false],
   ])(
     '%s attaches the missing required option error to the first option',
-    async (_, buttonIndex, label) => {
+    async (_, buttonIndex, label, isDesktop) => {
       const user = userEvent.setup();
+      detailMocks.isDesktop = isDesktop;
       renderWithOptions([sizeOption, colorOption]);
       const actionButtons = screen.getAllByRole('button', { name: label });
       await user.click(getButtonAt(actionButtons, buttonIndex));
@@ -312,5 +342,25 @@ describe('ProductDetailView required option validation', () => {
         .some((status) => status.textContent === '옵션을 고른 뒤 추가 버튼을 눌러 주세요.'),
     ).toBe(true);
     expect(screen.getByLabelText('액세서리')).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('starts direct checkout without adding the product to the cart', async () => {
+    const user = userEvent.setup();
+    window.sessionStorage.clear();
+    render(<ProductDetailView productId="product-test" />);
+
+    await user.click(getButtonAt(screen.getAllByRole('button', { name: '바로 구매' }), 0));
+
+    await waitFor(() => {
+      expect(detailMocks.routerPush).toHaveBeenCalledWith('/login?redirect=%2Fcheckout%2Fshipping');
+    });
+    expect(detailMocks.addToCart).not.toHaveBeenCalled();
+    expect(
+      JSON.parse(window.sessionStorage.getItem(CHECKOUT_SELECTION_STORAGE_KEY) ?? 'null'),
+    ).toMatchObject({
+      selectionSource: 'direct',
+      directLines: [{ productId: 'product-test', optionId: null, quantity: 1 }],
+      checkoutStarted: true,
+    });
   });
 });
