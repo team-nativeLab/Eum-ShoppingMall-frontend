@@ -2,6 +2,7 @@
 
 import { queryKeys } from '@eum/api/query-keys';
 import type { Inquiry } from '@eum/api/types';
+import { Badge } from '@eum/ui/components/Badge';
 import { Button } from '@eum/ui/components/Button';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -125,9 +126,7 @@ export function MemberInquiriesPage() {
               {inquiries.map((inquiry) => (
                 <li key={inquiry.id} className="py-16">
                   <div className="flex items-center justify-between gap-8">
-                    <span className="rounded-capsule border border-line-strong px-10 py-4 text-caption text-text-2">
-                      {inquiry.status === 'answered' ? '답변완료' : '답변대기'}
-                    </span>
+                    <InquiryStatusBadge status={inquiry.status} />
                     <time className="text-caption text-text-3">
                       {formatInquiryDate(inquiry.createdAt)}
                     </time>
@@ -152,9 +151,7 @@ function InquiryListRow({ inquiry }: { inquiry: Inquiry }) {
   return (
     <tr className="border-b border-line">
       <td className="px-12 py-16 text-center">
-        <span className="rounded-capsule border border-line-strong px-10 py-4 text-caption text-text-2">
-          {inquiry.status === 'answered' ? '답변완료' : '답변대기'}
-        </span>
+        <InquiryStatusBadge status={inquiry.status} />
       </td>
       <td className="min-w-0 px-16 py-16">
         <Link
@@ -213,9 +210,7 @@ export function MemberInquiryDetailPage({ inquiryId }: { inquiryId: string }) {
         <article className="rounded-12 border border-line p-16 sm:p-24">
           <header className="border-b border-line pb-16">
             <div className="flex flex-wrap items-center justify-between gap-8">
-              <span className="rounded-capsule border border-line-strong px-10 py-4 text-caption text-text-2">
-                {inquiry.status === 'answered' ? '답변완료' : '답변대기'}
-              </span>
+              <InquiryStatusBadge status={inquiry.status} />
               <time className="text-caption text-text-3">
                 {formatInquiryDate(inquiry.createdAt)}
               </time>
@@ -251,5 +246,15 @@ export function MemberInquiryDetailPage({ inquiryId }: { inquiryId: string }) {
         </Link>
       </div>
     </MyPageShell>
+  );
+}
+
+function InquiryStatusBadge({ status }: { status: Inquiry['status'] }) {
+  return status === 'answered' ? (
+    <Badge tone="success">답변완료</Badge>
+  ) : (
+    <span className="rounded-capsule border border-line-strong px-10 py-4 text-caption text-text-2">
+      답변대기
+    </span>
   );
 }

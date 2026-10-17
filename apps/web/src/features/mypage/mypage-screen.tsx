@@ -21,12 +21,13 @@ import { EmptyState } from '@eum/ui/components/EmptyState';
 import { Modal } from '@eum/ui/components/Modal';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { Pagination } from '@eum/ui/components/Pagination';
-import { SelectField, TextField } from '@eum/ui/components/TextField';
+import { TextField } from '@eum/ui/components/TextField';
 import { cx } from '@eum/ui/lib/cx';
 import {
   ArrowDownToLine,
   ArrowRight,
   Check,
+  ChevronDown,
   ChevronRight,
   Clock3,
   Heart,
@@ -1230,23 +1231,30 @@ function ClaimFormView({
     <form onSubmit={handleSubmit} className="space-y-20">
       <div className="flex flex-wrap items-center gap-8 text-body-s text-text-2">
         <span>주문번호</span>
-        <select
-          aria-label="주문 선택"
-          value={orderId}
-          onChange={(event) => {
-            setOrderId(event.target.value);
-            setSelectedLines([]);
-            setReturnQuantities({});
-          }}
-          className="h-40 max-w-full rounded-8 border border-line-strong bg-bg px-12 text-body-s focus-ring"
-        >
-          <option value="">주문을 선택해 주세요</option>
-          {eligible.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.orderNumber} · {formatMyPageDate(option.orderedAt)}
-            </option>
-          ))}
-        </select>
+        <div className="relative max-w-full">
+          <select
+            aria-label="주문 선택"
+            value={orderId}
+            onChange={(event) => {
+              setOrderId(event.target.value);
+              setSelectedLines([]);
+              setReturnQuantities({});
+            }}
+            className="h-40 max-w-full appearance-none rounded-8 border border-line-strong bg-bg pr-40 pl-12 text-body-s focus-ring"
+          >
+            <option value="">주문을 선택해 주세요</option>
+            {eligible.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.orderNumber} · {formatMyPageDate(option.orderedAt)}
+              </option>
+            ))}
+          </select>
+          <ChevronDown
+            size={20}
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 right-14 -translate-y-1/2 text-text-1"
+          />
+        </div>
       </div>
       {!order && preferredOrderId ? (
         <NoticeInline tone="warning" role="status">
@@ -1356,13 +1364,21 @@ function ClaimFormView({
             </ul>
           </ClaimFormSection>
           <ClaimFormSection title="사유">
-            <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+            <div
+              role="radiogroup"
+              aria-label="사유"
+              className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-4"
+            >
               {reasonOptions.map((option) => (
                 <label
                   key={option}
                   className={cx(
                     'flex min-h-44 cursor-pointer items-center justify-center rounded-8 border px-12 text-center text-body-s focus-within:ring-2 focus-within:ring-text-1',
-                    reason === option ? 'border-text-1' : 'border-line',
+                    reason === option
+                      ? 'border-text-1 bg-bg text-text-1'
+                      : reason
+                        ? 'border-line bg-surface text-text-2'
+                        : 'border-line bg-bg text-text-1',
                   )}
                 >
                   <input
@@ -1440,19 +1456,26 @@ function ClaimFormView({
               <label className="mt-16 block max-w-560">
                 <span className="mb-8 block text-label-m">회수 주소</span>
                 {addresses.length ? (
-                  <select
-                    aria-label="회수 주소 선택"
-                    value={addressId}
-                    onChange={(event) => setAddressId(event.target.value)}
-                    className="h-48 w-full rounded-8 border border-line-strong bg-bg px-14 text-body-m focus-ring"
-                  >
-                    {addresses.map((address) => (
-                      <option key={address.id} value={address.id}>
-                        {address.label} · {address.recipientName} · {address.address1}{' '}
-                        {address.address2}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative w-full">
+                    <select
+                      aria-label="회수 주소 선택"
+                      value={addressId}
+                      onChange={(event) => setAddressId(event.target.value)}
+                      className="h-48 w-full appearance-none rounded-8 border border-line-strong bg-bg pr-40 pl-14 text-body-m focus-ring"
+                    >
+                      {addresses.map((address) => (
+                        <option key={address.id} value={address.id}>
+                          {address.label} · {address.recipientName} · {address.address1}{' '}
+                          {address.address2}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown
+                      size={20}
+                      aria-hidden="true"
+                      className="pointer-events-none absolute top-1/2 right-14 -translate-y-1/2 text-text-1"
+                    />
+                  </div>
                 ) : (
                   <span className="block rounded-8 border border-line p-12 text-body-s text-text-3">
                     등록된 회수 주소가 없습니다. 배송지 관리에서 주소를 추가해 주세요.
@@ -2015,20 +2038,27 @@ function PointsView({ memberBalance, points }: { memberBalance: number; points: 
         />
         <label className="flex h-40 items-center gap-8 self-end rounded-8 border border-line-strong px-12 text-body-s focus-within:border-text-1 focus-within:ring-1 focus-within:ring-text-1 lg:self-auto">
           <span className="sr-only">조회 기간</span>
-          <select
-            aria-label="조회 기간"
-            value={periodMonths}
-            onChange={(event) => {
-              setPeriodMonths(Number(event.target.value));
-              setCurrentPage(1);
-            }}
-            className="bg-transparent outline-none"
-          >
-            <option value={1}>최근 1개월</option>
-            <option value={3}>최근 3개월</option>
-            <option value={6}>최근 6개월</option>
-            <option value={12}>최근 1년</option>
-          </select>
+          <span className="relative inline-flex items-center">
+            <select
+              aria-label="조회 기간"
+              value={periodMonths}
+              onChange={(event) => {
+                setPeriodMonths(Number(event.target.value));
+                setCurrentPage(1);
+              }}
+              className="appearance-none bg-transparent pr-32 outline-none"
+            >
+              <option value={1}>최근 1개월</option>
+              <option value={3}>최근 3개월</option>
+              <option value={6}>최근 6개월</option>
+              <option value={12}>최근 1년</option>
+            </select>
+            <ChevronDown
+              size={16}
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 right-14 -translate-y-1/2 text-text-1"
+            />
+          </span>
         </label>
       </div>
       {!displayRows.length ? (
@@ -2657,17 +2687,25 @@ function AddressesView({
             onChange={(event) => updateForm('address2', event.target.value)}
             className="sm:col-span-2"
           />
-          <SelectField
-            label="배송 요청사항"
-            value={form.deliveryNote}
-            onChange={(event) => updateForm('deliveryNote', event.target.value)}
-            placeholder="선택해 주세요"
-            options={[
-              { value: '배송 전 연락 바랍니다', label: '배송 전 연락 바랍니다' },
-              { value: '문 앞에 놓아 주세요', label: '문 앞에 놓아 주세요' },
-            ]}
-            className="sm:col-span-2"
-          />
+          <label className="rounded-8 focus-within:ring-1 focus-within:ring-text-1 sm:col-span-2">
+            <span className="mb-8 block text-label-m">배송 요청사항</span>
+            <div className="relative w-full">
+              <select
+                value={form.deliveryNote}
+                onChange={(event) => updateForm('deliveryNote', event.target.value)}
+                className="h-48 w-full appearance-none rounded-8 border border-line-strong bg-bg pr-40 pl-14 text-body-m focus-ring"
+              >
+                <option value="">선택해 주세요</option>
+                <option value="배송 전 연락 바랍니다">배송 전 연락 바랍니다</option>
+                <option value="문 앞에 놓아 주세요">문 앞에 놓아 주세요</option>
+              </select>
+              <ChevronDown
+                size={20}
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 right-14 -translate-y-1/2 text-text-1"
+              />
+            </div>
+          </label>
           <Checkbox
             checked={form.isDefault}
             onChange={(event) => updateForm('isDefault', event.target.checked)}
