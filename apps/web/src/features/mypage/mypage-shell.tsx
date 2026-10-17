@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMemberSession } from '@/features/auth/member-session';
 import { PageContainer } from '@/components/page-container';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 interface MyPageNavLink {
   key: string;
@@ -26,6 +26,7 @@ export const MYPAGE_NAV_GROUPS: MyPageNavGroup[] = [
     links: [
       { key: 'orders', label: '주문/배송 조회', href: '/mypage/orders' },
       { key: 'claims', label: '취소/반품 내역', href: '/mypage/claims' },
+      { key: 'claim-new', label: '취소/반품/교환 신청', href: '/mypage/claims/new' },
       { key: 'wishlist', label: '찜한 상품', href: '/mypage/wishlist' },
       { key: 'recent', label: '최근 본 상품', href: '/mypage/recent' },
     ],
@@ -77,7 +78,7 @@ const SECTION_NAV_KEY: Record<MyPageShellSection, string> = {
   orders: 'orders',
   'order-detail': 'orders',
   claims: 'claims',
-  'claim-new': 'orders',
+  'claim-new': 'claim-new',
   wishlist: 'wishlist',
   recent: 'recent',
   coupons: 'coupons',
@@ -113,6 +114,8 @@ export function MyPageShell({
   const router = useRouter();
   const { clearMember } = useMemberSession();
   const activeKey = SECTION_NAV_KEY[activeSection];
+  const mobileNavRef = useRef<HTMLElement | null>(null);
+  const activeMobileLinkRef = useRef<HTMLAnchorElement | null>(null);
   const activeLink = MYPAGE_NAV_GROUPS.flatMap((group) => group.links).find(
     (link) => link.key === activeKey,
   );
@@ -121,6 +124,31 @@ export function MyPageShell({
     ...MYPAGE_NAV_GROUPS.flatMap((group) => group.links),
   ];
   const breadcrumbs = breadcrumbTrail ?? (activeSection === 'dashboard' ? [] : [{ label: title }]);
+
+  useEffect(() => {
+    if (hideNavigation) return;
+
+    function revealActiveMobileLink() {
+      const mobileNav = mobileNavRef.current;
+      const activeMobileLink = activeMobileLinkRef.current;
+      if (!mobileNav || !activeMobileLink) return;
+
+      const navBounds = mobileNav.getBoundingClientRect();
+      if (navBounds.width === 0) return;
+
+      const linkBounds = activeMobileLink.getBoundingClientRect();
+      if (linkBounds.left < navBounds.left) {
+        mobileNav.scrollLeft = Math.max(0, mobileNav.scrollLeft + linkBounds.left - navBounds.left);
+      } else if (linkBounds.right > navBounds.right) {
+        mobileNav.scrollLeft += linkBounds.right - navBounds.right;
+      }
+    }
+
+    revealActiveMobileLink();
+    window.addEventListener('resize', revealActiveMobileLink);
+
+    return () => window.removeEventListener('resize', revealActiveMobileLink);
+  }, [activeKey, hideNavigation]);
 
   async function handleLogout() {
     try {
@@ -178,8 +206,9 @@ export function MyPageShell({
 
         {!hideNavigation ? (
           <nav
+            ref={mobileNavRef}
             aria-label="모바일 마이페이지 메뉴"
-            className="-mx-20 mb-20 flex gap-8 overflow-x-auto px-20 pb-4 lg:hidden"
+            className="-mx-20 mb-20 flex gap-8 overflow-x-auto px-20 pb-4 max-[600px]:-mx-16 max-[600px]:px-16 lg:hidden"
           >
             {mobileLinks.map((link) =>
               link.key === 'logout' ? (
@@ -195,6 +224,7 @@ export function MyPageShell({
                 <Link
                   key={link.key}
                   href={link.href}
+                  ref={link.key === activeKey ? activeMobileLinkRef : undefined}
                   aria-current={link.key === activeKey ? 'page' : undefined}
                   className={cx(
                     'shrink-0 rounded-capsule border px-14 py-8 text-label-s focus-ring',

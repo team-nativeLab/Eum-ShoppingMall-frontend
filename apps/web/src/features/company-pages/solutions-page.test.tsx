@@ -166,7 +166,11 @@ describe('quote request preview', () => {
       'text-danger',
     );
     expect(optionalOption).not.toBeRequired();
-    expect(optionalOption.closest('label')?.querySelector('[aria-hidden="true"]')).toBeNull();
+    expect(optionalOption.tagName).toBe('SELECT');
+    const optionalChevron = optionalOption
+      .closest('label')
+      ?.querySelector('svg[aria-hidden="true"]');
+    expect(optionalChevron).toHaveClass('pointer-events-none', 'right-14');
   });
 
   it('견적 폼 정보를 정해진 순서로 보여 주고 전체 수량 도움말을 연결합니다', async () => {
@@ -243,7 +247,15 @@ describe('quote request preview', () => {
     fireEvent.change(productSelect, { target: { value: product.id } });
     fireEvent.click(screen.getByRole('button', { name: '상품 추가' }));
     expect(await screen.findAllByText('안전모')).toHaveLength(2);
-    fireEvent.change(screen.getByRole('combobox', { name: '안전모 색상' }), {
+    const optionSelect = screen.getByRole('combobox', { name: '안전모 색상' });
+    expect(optionSelect.tagName).toBe('SELECT');
+    expect(optionSelect).toHaveClass('appearance-none', 'pr-40', 'focus-ring');
+    expect(optionSelect.parentElement).toHaveClass('relative', 'min-w-0');
+    expect(optionSelect.parentElement?.querySelector('svg[aria-hidden="true"]')).toHaveClass(
+      'right-14',
+      'pointer-events-none',
+    );
+    fireEvent.change(optionSelect, {
       target: { value: 'white' },
     });
     fireEvent.change(screen.getByRole('spinbutton', { name: '안전모 수량' }), {

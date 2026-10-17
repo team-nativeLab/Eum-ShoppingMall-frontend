@@ -490,29 +490,30 @@ function InquiryForm({ memberId }: { memberId: string | null }) {
           required
           aria-required="true"
         />
-        <label className="flex flex-col gap-8 text-label-m">
-          문의 내용
-          <span aria-hidden="true" className="ml-4 text-danger">
-            *
-          </span>
-          <textarea
-            required
-            aria-required="true"
-            value={inquiryBody}
-            onChange={(changeEvent) => setInquiryBody(changeEvent.currentTarget.value)}
-            maxLength={1000}
-            aria-describedby="inquiry-body-count"
-            className="min-h-160 w-full resize-y rounded-8 border border-line-strong bg-bg p-14 text-body-m outline-none placeholder:text-text-3 focus:border-text-1 focus:ring-[0.5px] focus:ring-text-1 focus:ring-inset"
-            placeholder="문의 내용을 입력해 주세요"
-          />
+        <div className="space-y-8">
+          <label className="flex flex-col gap-8 text-label-m">
+            <span className="inline-flex items-center gap-4">
+              문의 내용 <span aria-hidden="true" className="text-danger">*</span>
+            </span>
+            <textarea
+              required
+              aria-required="true"
+              value={inquiryBody}
+              onChange={(changeEvent) => setInquiryBody(changeEvent.currentTarget.value)}
+              maxLength={1000}
+              aria-describedby="inquiry-body-count"
+              className="min-h-160 w-full resize-y rounded-8 border border-line-strong bg-bg p-14 text-body-m outline-none placeholder:text-text-3 focus:border-text-1 focus:ring-[0.5px] focus:ring-text-1 focus:ring-inset"
+              placeholder="문의 내용을 입력해 주세요"
+            />
+          </label>
           <span
             id="inquiry-body-count"
             aria-live="polite"
-            className="text-right text-caption text-text-3"
+            className="block text-right text-caption text-text-3"
           >
             {inquiryBody.length.toLocaleString('ko-KR')} / 1,000
           </span>
-        </label>
+        </div>
         <div className="space-y-8">
           <span className="block text-label-m">파일 첨부</span>
           <label className="flex min-h-88 cursor-not-allowed flex-col items-center justify-center gap-6 rounded-8 border border-dashed border-line-strong bg-surface px-16 text-center text-body-s text-text-3">
