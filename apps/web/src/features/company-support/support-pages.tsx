@@ -493,7 +493,10 @@ function InquiryForm({ memberId }: { memberId: string | null }) {
         <div className="space-y-8">
           <label className="flex flex-col gap-8 text-label-m">
             <span className="inline-flex items-center gap-4">
-              문의 내용 <span aria-hidden="true" className="text-danger">*</span>
+              문의 내용{' '}
+              <span aria-hidden="true" className="text-danger">
+                *
+              </span>
             </span>
             <textarea
               required
