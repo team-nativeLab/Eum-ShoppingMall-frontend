@@ -74,7 +74,7 @@ function ProductLoadError({
 
 // 상품 한 개 미리보기 카드
 function ProductPreviewCard({ product }: { product: Product }) {
-  const { addToCart } = useCart();
+  const { addToCart, isOrderPending } = useCart();
   const priceDisplay = getPriceDisplay(product);
   const isSoldOut = product.stockStatus === 'soldOut';
   return (
@@ -94,7 +94,7 @@ function ProductPreviewCard({ product }: { product: Product }) {
         variant="secondary"
         size="s"
         className="mt-auto"
-        disabled={!canAddToCart(product)}
+        disabled={isOrderPending || !canAddToCart(product)}
         onClick={() => addToCart(product)}
       >
         장바구니 담기

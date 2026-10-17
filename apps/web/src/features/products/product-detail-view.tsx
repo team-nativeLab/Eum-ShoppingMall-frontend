@@ -20,6 +20,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type UIEvent } from 'react';
 import { PageContainer } from '@/components/page-container';
 import { useCart } from '@/features/cart/cart-context';
+import { useCheckout } from '@/features/checkout/checkout-context';
 import { getMemberAuth } from '@/lib/member-auth';
 import {
   DESKTOP_QUERY,
@@ -175,7 +176,8 @@ function ProductDetailContent({
   relatedProducts: Product[];
 }) {
   const router = useRouter();
-  const { addToCart } = useCart();
+  const { addToCart, isOrderPending } = useCart();
+  const { beginDirectCheckout } = useCheckout();
   const { wishlistIds, toggleWishlist } = useLocalCollections();
   const [purchaseLines, setPurchaseLines] = useState<PurchaseLine[]>(() =>
     createInitialPurchaseLines(product),
@@ -204,6 +206,7 @@ function ProductDetailContent({
   const isSoldOut = product.stockStatus === 'soldOut';
   const isPurchasable = canBuyNow(product);
   const isAddable = canAddToCart(product);
+  const isCartAddable = isAddable && !isOrderPending;
   const selectedPurchaseLines = purchaseLines.filter(
     (line) => product.options.length > 0 || line.lineId !== BASE_LINE_ID || line.quantity !== 1,
   );
@@ -321,19 +324,43 @@ function ProductDetailContent({
     }
     setRequiredOptionErrorId(null);
     for (const line of purchaseLines) {
-      addToCart(product, line.quantity, line.optionId, line.optionLabel);
+      if (!addToCart(product, line.quantity, line.optionId, line.optionLabel)) return false;
     }
     return true;
   };
 
   const handleAddToCart = () => {
-    if (!isAddable) return;
+    if (!isCartAddable) return;
     if (addLinesToCart()) setNotice({ tone: 'success', message: '장바구니에 담았습니다.' });
   };
 
-  // 바로 구매: 처리 중이면 무시하고, 담은 뒤 로그인 여부에 따라 주문서 또는 로그인으로 보냅니다.
+  // 바로 구매: 선택 줄을 세션 주문 intent에 저장하고, 카트 변경 없이 주문서로 보냅니다.
   const handleBuyNow = async () => {
-    if (!isPurchasable || isBuyingNowRef.current || !addLinesToCart()) return;
+    if (!isPurchasable || isBuyingNowRef.current) return;
+    if (purchaseLines.length === 0) {
+      const firstMissingOption = getMissingRequiredOptions(product, pendingChoices)[0];
+      if (firstMissingOption) {
+        setNotice(null);
+        setRequiredOptionErrorId(firstMissingOption.id);
+      } else {
+        setRequiredOptionErrorId(null);
+        setNotice({
+          tone: 'danger',
+          message: '옵션을 고른 뒤 추가 버튼을 눌러 주세요.',
+        });
+      }
+      focusFirstMissingOption();
+      return;
+    }
+    setRequiredOptionErrorId(null);
+    const didStartDirectCheckout = beginDirectCheckout(
+      purchaseLines.map(({ optionId, quantity }) => ({
+        productId: product.id,
+        optionId,
+        quantity,
+      })),
+    );
+    if (!didStartDirectCheckout) return;
     isBuyingNowRef.current = true;
     setIsBuyingNow(true);
     const returnPath = sanitizeRedirectPath('/checkout/shipping');
@@ -356,7 +383,7 @@ function ProductDetailContent({
       .getElementById('product-tab-' + tabId)
       ?.scrollIntoView({ behavior: getScrollBehavior(prefersReducedMotion), block: 'start' });
   };
-  const isBuyNowDisabled = !isPurchasable || isBuyingNow;
+  const isBuyNowDisabled = !isPurchasable || isBuyingNow || isOrderPending;
   const noticeClassName = cx(
     'text-body-s',
     notice?.tone === 'danger' ? 'text-danger' : 'text-success',
@@ -480,7 +507,7 @@ function ProductDetailContent({
                   <Button
                     variant="secondary"
                     size="m"
-                    disabled={!isAddable}
+                    disabled={!isCartAddable}
                     onClick={commitPendingChoices}
                     className="self-start"
                   >
@@ -547,7 +574,12 @@ function ProductDetailContent({
                   onToggle={() => toggleWishlist(product.id)}
                   className="size-56"
                 />
-                <Button variant="primary" size="l" disabled={!isAddable} onClick={handleAddToCart}>
+                <Button
+                  variant="primary"
+                  size="l"
+                  disabled={!isCartAddable}
+                  onClick={handleAddToCart}
+                >
                   장바구니 담기
                 </Button>
                 <Button
@@ -775,7 +807,7 @@ function ProductDetailContent({
             variant="primary"
             size="l"
             isFullWidth
-            disabled={!isAddable}
+            disabled={!isCartAddable}
             onClick={handleAddToCart}
             className="px-8"
           >

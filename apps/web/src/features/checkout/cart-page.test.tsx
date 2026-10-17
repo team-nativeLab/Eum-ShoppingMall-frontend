@@ -1,15 +1,21 @@
 import type { CheckoutOptions, Product } from '@eum/api/types';
 import type { ShopApi } from '@eum/api/shop-api';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
+import { useEffect, useRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemberSessionProvider } from '@/features/auth/member-session';
 import { CartProvider } from '@/features/cart/cart-context';
-import { CART_STORAGE_KEY, serializeCart } from '@/features/cart/cart-storage';
+import {
+  CART_STORAGE_KEY,
+  parseStoredCart,
+  serializeCart,
+  writePendingOrderedCartCleanup,
+} from '@/features/cart/cart-storage';
 import { getShopApi } from '@/lib/shop-api';
-import { CheckoutProvider } from './checkout-context';
+import { CheckoutProvider, useCheckout } from './checkout-context';
 import { CartPageView } from './cart-page';
 
 const apiMocks = vi.hoisted(() => ({ getShopApi: vi.fn() }));
@@ -114,7 +120,41 @@ function saveCart(products: Array<{ id: string; price: number; quantity?: number
   );
 }
 
-function renderCartPage() {
+function PendingOrderProbe() {
+  const {
+    beginOrderRequest,
+    checkoutGeneration,
+    finishOrderRequest,
+    isOrderPending,
+    isSelectionReady,
+  } = useCheckout();
+  const requestId = useRef<number | null>(null);
+  const hasStartedRequest = useRef(false);
+
+  useEffect(() => {
+    if (!isSelectionReady || hasStartedRequest.current) return;
+    hasStartedRequest.current = true;
+    requestId.current = beginOrderRequest(checkoutGeneration);
+  }, [beginOrderRequest, checkoutGeneration, isSelectionReady]);
+
+  return (
+    <>
+      <output data-testid="pending-order-state">{String(isOrderPending)}</output>
+      <button
+        type="button"
+        onClick={() => {
+          if (requestId.current === null) return;
+          finishOrderRequest(requestId.current);
+          requestId.current = null;
+        }}
+      >
+        주문 요청 종료
+      </button>
+    </>
+  );
+}
+
+function renderCartPage(withPendingOrder = false) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
@@ -124,6 +164,7 @@ function renderCartPage() {
         <CheckoutProvider>
           <CartProvider>
             <CartPageView />
+            {withPendingOrder ? <PendingOrderProbe /> : null}
           </CartProvider>
         </CheckoutProvider>
       </MemberSessionProvider>
@@ -147,6 +188,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.clearAllMocks();
 });
 
@@ -388,5 +430,89 @@ describe('CartPageView free shipping progress', () => {
     await screen.findByText('장바구니를 불러오지 못했습니다');
 
     expect(screen.queryByRole('region', { name: '무료 배송 혜택' })).not.toBeInTheDocument();
+  });
+
+  it('locks cart selection, quantity, deletion, and checkout while an order is pending', async () => {
+    const user = userEvent.setup();
+    saveCart([{ id: 'pending-cart', price: 18_000, quantity: 2 }]);
+    renderCartPage(true);
+    await waitForCartItems(1);
+    await waitFor(() =>
+      expect(screen.getByTestId('pending-order-state')).toHaveTextContent('true'),
+    );
+
+    const allCheckbox = screen.getByRole('checkbox', { name: /전체 선택/ });
+    const productCheckbox = screen.getByRole('checkbox', { name: '상품 pending-cart 선택' });
+    const checkoutButton = screen.getByRole('button', { name: /주문하기/ });
+    const removeButton = screen.getByRole('button', { name: '상품 pending-cart 삭제' });
+    const quantityGroup = screen.getByRole('group', { name: '상품 pending-cart 수량' });
+    const increaseButton = within(quantityGroup).getByRole('button', { name: '수량 늘리기' });
+
+    expect(allCheckbox).toBeDisabled();
+    expect(productCheckbox).toBeDisabled();
+    expect(checkoutButton).toBeDisabled();
+    expect(removeButton).toBeDisabled();
+    expect(increaseButton).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: '주문 요청 종료' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('pending-order-state')).toHaveTextContent('false'),
+    );
+    expect(allCheckbox).toBeEnabled();
+    expect(productCheckbox).toBeEnabled();
+    expect(checkoutButton).toBeEnabled();
+    expect(removeButton).toBeEnabled();
+    expect(increaseButton).toBeEnabled();
+  });
+
+  it('shows order-cleanup recovery separately and keeps checkout blocked until it succeeds', async () => {
+    const user = userEvent.setup();
+    saveCart([{ id: 'cleanup-recovery', price: 18_000, quantity: 2 }]);
+    expect(
+      writePendingOrderedCartCleanup([
+        { productId: 'cleanup-recovery', optionId: null, quantity: 1 },
+      ]),
+    ).toBe(true);
+    const originalSetItem = Storage.prototype.setItem;
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (this === window.localStorage && key === CART_STORAGE_KEY) {
+        throw new DOMException('quota', 'QuotaExceededError');
+      }
+      originalSetItem.call(this, key, value);
+    });
+    renderCartPage();
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        /주문은 완료됐지만 주문한 수량을 장바구니에서 정리하지 못했습니다/,
+      ),
+    );
+    expect(screen.queryByText('장바구니를 불러오지 못했습니다')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /주문하기/ })).toBeDisabled();
+
+    setItemSpy.mockImplementation(function (this: Storage, key: string, value: string) {
+      originalSetItem.call(this, key, value);
+    });
+    await user.click(screen.getByRole('button', { name: '주문 후 장바구니 정리 다시 시도' }));
+
+    await waitFor(() =>
+      expect(
+        screen.queryByText(/주문은 완료됐지만 주문한 수량을 장바구니에서 정리하지 못했습니다/),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: /주문하기/ })).toBeEnabled();
+    expect(parseStoredCart(window.localStorage.getItem(CART_STORAGE_KEY))).toEqual([
+      {
+        productId: 'cleanup-recovery',
+        quantity: 1,
+        optionId: null,
+        optionLabel: null,
+      },
+    ]);
   });
 });

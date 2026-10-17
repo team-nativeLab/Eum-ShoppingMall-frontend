@@ -26,16 +26,26 @@ import { useCheckoutOptionsQuery } from './use-checkout-queries';
 /** W-05, W-05h, W-05h2: 주문 가능 상품만 선택·합산하고 숨은 가격·품절을 분리합니다. */
 export function CartPageView() {
   const router = useRouter();
-  const { cartItems, hasRestored, restoreError, changeQuantity, removeFromCart, retryRestore } =
-    useCart();
+  const {
+    cartItems,
+    hasRestored,
+    restoreError,
+    orderCleanupError,
+    isOrderPending: isCartOperationPending,
+    changeQuantity,
+    removeFromCart,
+    retryRestore,
+  } = useCart();
   const { member, status: memberStatus } = useMemberSession();
   const {
     beginCheckout,
     cartItemIds: persistedCartItemIds,
     isSelectionReady,
+    isOrderPending: isCheckoutPending,
     selectionMode,
     setCartSelection,
   } = useCheckout();
+  const isOrderPending = isCheckoutPending || isCartOperationPending;
   const optionsQuery = useCheckoutOptionsQuery();
   const resolvedOptions = optionsQuery.isError ? null : resolveCheckoutOptions(optionsQuery.data);
   const options = resolvedOptions?.options;
@@ -58,8 +68,8 @@ export function CartPageView() {
   const partiallySelected = selectedCount > 0 && !allSelected;
 
   const handleCheckout = () => {
-    if (!options || selectedCount === 0 || memberStatus !== 'ready') return;
-    beginCheckout([...selectedIds]);
+    if (isOrderPending || !options || selectedCount === 0 || memberStatus !== 'ready') return;
+    if (!beginCheckout([...selectedIds])) return;
     if (!member) {
       router.push('/login?redirect=' + encodeURIComponent('/checkout/shipping'));
       return;
@@ -67,7 +77,24 @@ export function CartPageView() {
     router.push('/checkout/shipping');
   };
 
-  if ((!hasRestored && !restoreError) || !isSelectionReady) {
+  if (orderCleanupError && (!hasRestored || cartItems.length === 0)) {
+    return (
+      <PageContainer className="py-40">
+        <EmptyState
+          icon={ShoppingCart}
+          title="주문 후 장바구니 정리가 필요합니다"
+          description="주문은 완료됐지만 주문한 수량을 장바구니에서 정리하지 못했습니다. 정리가 끝날 때까지 새 주문을 시작할 수 없습니다."
+          action={
+            <Button variant="secondary" onClick={retryRestore}>
+              주문 후 장바구니 정리 다시 시도
+            </Button>
+          }
+        />
+      </PageContainer>
+    );
+  }
+
+  if (((!hasRestored && !restoreError) || !isSelectionReady) && !orderCleanupError) {
     return (
       <PageContainer className="grid gap-24 py-40 lg:grid-cols-[minmax(0,1fr)_416px]">
         <div aria-busy="true" className="h-320 animate-pulse rounded-12 bg-surface" />
@@ -75,7 +102,7 @@ export function CartPageView() {
       </PageContainer>
     );
   }
-  if (restoreError) {
+  if (restoreError && !orderCleanupError) {
     return (
       <PageContainer className="py-40">
         <EmptyState
@@ -128,18 +155,23 @@ export function CartPageView() {
   const shippingFee = options ? calculateShippingFee(selectedTotals.productTotal, options) : null;
   const showFreeShippingBanner = Boolean(options && resolvedOptions?.hasFreeShippingThreshold);
   const toggleSelected = (itemId: string, checked: boolean) => {
+    if (isOrderPending) return;
     const next = new Set(selectedIds);
     if (checked) next.add(itemId);
     else next.delete(itemId);
     setCartSelection([...next]);
   };
   const deleteSelected = () => {
-    if (selectedIds.size === 0) return;
+    if (isOrderPending || selectedIds.size === 0) return;
     removeFromCart(selectedIds);
     setCartSelection([]);
   };
-  const handleToggleAll = () => setCartSelection(allSelected ? [] : orderableIds);
+  const handleToggleAll = () => {
+    if (isOrderPending) return;
+    setCartSelection(allSelected ? [] : orderableIds);
+  };
   const handleRemoveItem = (itemId: string) => {
+    if (isOrderPending) return;
     removeFromCart(new Set([itemId]));
     if (selectedIds.has(itemId)) {
       setCartSelection([...selectedIds].filter((selectedId) => selectedId !== itemId));
@@ -164,6 +196,17 @@ export function CartPageView() {
           완료
         </nav>
       </div>
+      {orderCleanupError ? (
+        <div className="mb-20 max-w-720">
+          <NoticeInline tone="danger" role="alert">
+            주문은 완료됐지만 주문한 수량을 장바구니에서 정리하지 못했습니다. 정리가 끝날 때까지 새
+            주문을 시작할 수 없습니다.
+          </NoticeInline>
+          <Button variant="secondary" className="mt-12" onClick={retryRestore}>
+            주문 후 장바구니 정리 다시 시도
+          </Button>
+        </div>
+      ) : null}
       <div className="grid items-start gap-24 lg:grid-cols-[minmax(0,1fr)_416px]">
         <div className="min-w-0">
           {showFreeShippingBanner && options ? (
@@ -245,7 +288,7 @@ export function CartPageView() {
             <Checkbox
               checked={allSelected}
               isIndeterminate={partiallySelected}
-              disabled={orderableIds.length === 0}
+              disabled={isOrderPending || orderableIds.length === 0}
               aria-label="주문 가능한 상품 전체 선택"
               onChange={handleToggleAll}
             >
@@ -253,7 +296,7 @@ export function CartPageView() {
             </Checkbox>
             <button
               type="button"
-              disabled={selectedCount === 0}
+              disabled={isOrderPending || selectedCount === 0}
               onClick={deleteSelected}
               className="inline-flex items-center gap-6 rounded-4 text-label-s text-text-2 underline focus-ring disabled:text-text-disabled"
             >
@@ -278,8 +321,11 @@ export function CartPageView() {
                     key={item.id}
                     item={item}
                     selected={selectedIds.has(item.id)}
+                    isMutationDisabled={isOrderPending}
                     onSelect={(checked) => toggleSelected(item.id, checked)}
-                    onQuantity={(quantity) => changeQuantity(item.id, quantity)}
+                    onQuantity={(quantity) => {
+                      if (!isOrderPending) changeQuantity(item.id, quantity);
+                    }}
                     onRemove={() => handleRemoveItem(item.id)}
                   />
                 ))}
@@ -300,9 +346,12 @@ export function CartPageView() {
                     key={cartItem.id}
                     item={cartItem}
                     selected={false}
+                    isMutationDisabled={isOrderPending}
                     unavailableReason={reason}
                     onSelect={() => undefined}
-                    onQuantity={(quantity) => changeQuantity(cartItem.id, quantity)}
+                    onQuantity={(quantity) => {
+                      if (!isOrderPending) changeQuantity(cartItem.id, quantity);
+                    }}
                     onRemove={() => handleRemoveItem(cartItem.id)}
                   />
                 ))}
@@ -352,7 +401,9 @@ export function CartPageView() {
               isFullWidth
               size="l"
               className="mt-24"
-              disabled={!options || memberStatus !== 'ready' || selectedCount === 0}
+              disabled={
+                isOrderPending || !options || memberStatus !== 'ready' || selectedCount === 0
+              }
               onClick={handleCheckout}
             >
               {formatKrw(selectedTotals.productTotal)} 주문하기 ({selectedCount})
@@ -392,6 +443,7 @@ function MoneyRow({
 function CartLine({
   item,
   selected,
+  isMutationDisabled,
   unavailableReason,
   onSelect,
   onQuantity,
@@ -399,6 +451,7 @@ function CartLine({
 }: {
   item: CartItem;
   selected: boolean;
+  isMutationDisabled: boolean;
   unavailableReason?: 'priceHidden' | 'soldOut' | 'optionUnavailable';
   onSelect: (checked: boolean) => void;
   onQuantity: (quantity: number) => void;
@@ -422,7 +475,7 @@ function CartLine({
     >
       <Checkbox
         checked={selected}
-        disabled={unavailable}
+        disabled={isMutationDisabled || unavailable}
         aria-label={`${item.product.name} 선택`}
         onChange={(event) => onSelect(event.target.checked)}
       />
@@ -472,7 +525,7 @@ function CartLine({
           size="s"
           value={item.quantity}
           label={`${item.product.name} 수량`}
-          isDisabled={soldOut}
+          isDisabled={isMutationDisabled || soldOut}
           max={999}
           onValueChange={onQuantity}
         />
@@ -492,6 +545,7 @@ function CartLine({
       </p>
       <button
         type="button"
+        disabled={isMutationDisabled}
         onClick={onRemove}
         aria-label={`${item.product.name} 삭제`}
         className="col-start-1 row-start-2 inline-flex size-36 items-center justify-center rounded-8 text-text-3 focus-ring hover:bg-surface md:col-start-auto md:row-start-auto"

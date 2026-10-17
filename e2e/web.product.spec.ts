@@ -51,6 +51,68 @@ test('필수 옵션 선택 후 장바구니에는 선택값과 상품 ID만 저�
   ]);
 });
 
+test('바로 구매는 기존 장바구니를 보존하고 로그인 후 선택 상품만 주문서로 보냅니다', async ({
+  page,
+}) => {
+  const originalCart = JSON.stringify({
+    version: 2,
+    cartItems: [{ productId: 'prd-1002', quantity: 1, optionId: null, optionLabel: null }],
+  });
+  await page.addInitScript((storedCart) => {
+    window.localStorage.setItem('eum.cart.v2', storedCart);
+  }, originalCart);
+
+  await page.goto('/products/prd-1001');
+  await expect
+    .poll(() => page.evaluate(() => window.localStorage.getItem('eum.cart.v2')))
+    .toBe(originalCart);
+  await page.getByRole('combobox', { name: '색상' }).selectOption('white');
+  await page.getByRole('button', { name: '바로 구매', exact: true }).first().click();
+
+  await expect(page).toHaveURL(/\/login\?redirect=%2Fcheckout%2Fshipping$/);
+  expect(
+    await page.evaluate(() =>
+      JSON.parse(window.sessionStorage.getItem('eum.checkout-selection.v1') ?? 'null'),
+    ),
+  ).toEqual({
+    version: 2,
+    cartItemIds: [],
+    directLines: [{ productId: 'prd-1001', optionId: 'color:white', quantity: 1 }],
+    selectionMode: 'defaultAll',
+    selectionSource: 'direct',
+    checkoutStarted: true,
+  });
+
+  await page.getByLabel('이메일').fill('buyer@example.com');
+  await page.getByLabel('비밀번호').fill('e2e-password');
+  await page.getByRole('button', { name: '로그인', exact: true }).click();
+
+  await expect(page).toHaveURL(/\/checkout\/shipping$/);
+  await expect(page.getByRole('heading', { name: '주문 상품 (1)' })).toBeVisible();
+  await expect(page.getByText('ABS 안전모 (내관 조절형)', { exact: true })).toBeVisible();
+  await expect(page.getByText('색상: 백색 · 1개', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /결제 단계로/ }).click();
+
+  await expect(page).toHaveURL(/\/checkout\/payment$/);
+  await expect(page.getByRole('heading', { name: '주문 상품 (1)' })).toBeVisible();
+  await page.getByText('상품 보기', { exact: true }).click();
+  await expect(page.getByText('ABS 안전모 (내관 조절형) · 1개', { exact: true })).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(window.sessionStorage.getItem('eum.checkout-selection.v1') ?? 'null')
+          ?.directLines,
+    ),
+  ).toEqual([{ productId: 'prd-1001', optionId: 'color:white', quantity: 1 }]);
+
+  await page.getByText('전체 동의', { exact: true }).click();
+  await expect(page.getByRole('checkbox', { name: '전체 동의' })).toBeChecked();
+  await page.getByRole('button', { name: /결제하기/ }).click();
+  await expect(page).toHaveURL(/\/checkout\/complete$/);
+  await expect(page.getByRole('heading', { name: '주문이 완료되었습니다' })).toBeVisible();
+  expect(await page.evaluate(() => window.localStorage.getItem('eum.cart.v2'))).toBe(originalCart);
+});
+
 test('여러 옵션을 고르면 줄이 쌓이고 수량·삭제가 총 금액에 반영됩니다', async ({ page }) => {
   await page.goto('/products/prd-1001');
   const colorSelect = page.getByRole('combobox', { name: '색상' });

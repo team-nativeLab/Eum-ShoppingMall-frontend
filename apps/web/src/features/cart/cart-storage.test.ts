@@ -2,9 +2,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CART_STORAGE_KEY,
   LEGACY_CART_STORAGE_KEY,
+  ORDERED_CART_CLEANUP_STORAGE_KEY,
+  clearPendingOrderedCartCleanup,
   parseStoredCart,
+  readPendingOrderedCartCleanup,
+  readPendingOrderedCartCleanupIntent,
   readStoredCart,
   serializeCart,
+  subtractOrderedCartLines,
+  tryReadStoredCart,
+  writePendingOrderedCartCleanup,
   writeStoredCart,
 } from './cart-storage';
 
@@ -78,7 +85,41 @@ describe('parseStoredCart', () => {
   });
 });
 
+describe('subtractOrderedCartLines', () => {
+  it('최신 같은 옵션 줄에서 주문한 수량만 빼고 추가 수량과 다른 옵션을 보존합니다', () => {
+    expect(
+      subtractOrderedCartLines(
+        [
+          { productId: 'p-1', quantity: 5, optionId: 'blue', optionLabel: '파랑' },
+          { productId: 'p-1', quantity: 4, optionId: 'red', optionLabel: '빨강' },
+        ],
+        [{ productId: 'p-1', quantity: 2, optionId: 'blue' }],
+      ),
+    ).toEqual([
+      { productId: 'p-1', quantity: 3, optionId: 'blue', optionLabel: '파랑' },
+      { productId: 'p-1', quantity: 4, optionId: 'red', optionLabel: '빨강' },
+    ]);
+  });
+
+  it('저장 수량보다 주문 수량이 많으면 해당 줄만 제거합니다', () => {
+    expect(
+      subtractOrderedCartLines(
+        [{ productId: 'p-1', quantity: 1, optionId: null, optionLabel: null }],
+        [{ productId: 'p-1', quantity: 2, optionId: null }],
+      ),
+    ).toEqual([]);
+  });
+});
+
 describe('저장소 접근 실패와 마이그레이션', () => {
+  it('유효한 빈 장바구니와 저장소 읽기 실패를 구분합니다', () => {
+    expect(tryReadStoredCart()).toEqual({ ok: true, cartLines: [] });
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new DOMException('denied', 'SecurityError');
+    });
+    expect(tryReadStoredCart()).toEqual({ ok: false });
+  });
+
   it('setItem 실패를 메모리 상태로 넘기고 예외를 밖으로 던지지 않습니다', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new DOMException('quota', 'QuotaExceededError');
@@ -114,5 +155,69 @@ describe('저장소 접근 실패와 마이그레이션', () => {
     expect(rawValue).not.toContain('name');
     expect(readStoredCart()).toEqual(cartLines);
     expect(window.localStorage.getItem(LEGACY_CART_STORAGE_KEY)).toBeNull();
+  });
+});
+
+describe('보류된 주문 장바구니 정리 저장소', () => {
+  it('세션에는 주문에 필요한 상품·옵션·수량만 저장하고 정리 후 삭제합니다', () => {
+    const orderedLines = [{ productId: 'p-1', quantity: 2, optionId: 'blue' }];
+    const beforeLines = [{ productId: 'p-1', quantity: 5, optionId: 'blue', optionLabel: '파랑' }];
+    const afterLines = [{ productId: 'p-1', quantity: 3, optionId: 'blue', optionLabel: '파랑' }];
+    expect(writePendingOrderedCartCleanup(orderedLines, beforeLines, afterLines)).toBe(true);
+    expect(window.sessionStorage.getItem(ORDERED_CART_CLEANUP_STORAGE_KEY)).toBe(
+      JSON.stringify({
+        version: 1,
+        phase: 'prepared',
+        orderedLines: [{ productId: 'p-1', quantity: 2, optionId: 'blue' }],
+        beforeLines: [{ productId: 'p-1', optionId: 'blue', quantity: 5 }],
+        afterLines: [{ productId: 'p-1', optionId: 'blue', quantity: 3 }],
+      }),
+    );
+    expect(readPendingOrderedCartCleanup()).toEqual(orderedLines);
+    expect(readPendingOrderedCartCleanupIntent()).toEqual({
+      phase: 'prepared',
+      orderedLines,
+      beforeLines: [{ productId: 'p-1', optionId: 'blue', quantity: 5 }],
+      afterLines: [{ productId: 'p-1', optionId: 'blue', quantity: 3 }],
+    });
+    expect(clearPendingOrderedCartCleanup()).toBe(true);
+    expect(readPendingOrderedCartCleanup()).toEqual([]);
+  });
+
+  it('reads legacy session intents without a phase as prepared', () => {
+    window.sessionStorage.setItem(
+      ORDERED_CART_CLEANUP_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        orderedLines: [{ productId: 'p-1', quantity: 2, optionId: null }],
+        beforeLines: [{ productId: 'p-1', quantity: 5, optionId: null }],
+        afterLines: [{ productId: 'p-1', quantity: 3, optionId: null }],
+      }),
+    );
+
+    expect(readPendingOrderedCartCleanupIntent()).toMatchObject({ phase: 'prepared' });
+  });
+
+  it('persists the phase for a pending order cleanup', () => {
+    const orderedLines = [{ productId: 'p-1', quantity: 2, optionId: null }];
+    const beforeLines = [{ productId: 'p-1', quantity: 5, optionId: null, optionLabel: null }];
+    const afterLines = [{ productId: 'p-1', quantity: 3, optionId: null, optionLabel: null }];
+
+    expect(writePendingOrderedCartCleanup(orderedLines, beforeLines, afterLines, 'applying')).toBe(
+      true,
+    );
+
+    expect(readPendingOrderedCartCleanupIntent()).toMatchObject({ phase: 'applying' });
+  });
+
+  it('잘못된 세션 intent는 복원하지 않습니다', () => {
+    window.sessionStorage.setItem(
+      ORDERED_CART_CLEANUP_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        orderedLines: [{ productId: 'p-1', quantity: 0, optionId: null }],
+      }),
+    );
+    expect(readPendingOrderedCartCleanup()).toEqual([]);
   });
 });

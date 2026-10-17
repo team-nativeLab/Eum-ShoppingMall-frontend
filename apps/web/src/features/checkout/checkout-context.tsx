@@ -1,12 +1,23 @@
 'use client';
 
 import type { Address, OrderReceipt, PaymentMethod } from '@eum/api/types';
-import { createContext, use, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   CHECKOUT_SELECTION_STORAGE_KEY,
   parseCheckoutSelection,
   serializeCheckoutSelection,
+  type DirectCheckoutLine,
   type CheckoutSelectionMode,
+  type CheckoutSelectionSource,
   type CheckoutSelectionSnapshot,
 } from './checkout-selection-storage';
 
@@ -18,7 +29,9 @@ export interface CompletedCheckout extends OrderReceipt {
 
 export interface CheckoutState {
   cartItemIds: string[];
+  directLines: DirectCheckoutLine[];
   selectionMode: CheckoutSelectionMode;
+  selectionSource: CheckoutSelectionSource;
   checkoutStarted: boolean;
   shippingAddress: Address | null;
   deliveryRequest: string;
@@ -30,17 +43,35 @@ export interface CheckoutState {
 
 interface CheckoutContextValue extends CheckoutState {
   isSelectionReady: boolean;
-  setCartSelection: (cartItemIds: readonly string[]) => void;
-  beginCheckout: (cartItemIds: readonly string[]) => void;
-  setShipping: (shippingAddress: Address, deliveryRequest: string) => void;
-  setPayment: (paymentMethod: PaymentMethod, couponId: string | null, pointsToUse: number) => void;
-  completeCheckout: (receipt: CompletedCheckout) => void;
-  resetCheckout: () => void;
+  checkoutGeneration: number;
+  isOrderPending: boolean;
+  isOrderRequestPending: () => boolean;
+  beginOrderRequest: (expectedGeneration: number) => number | null;
+  isOrderRequestCurrent: (requestId: number, generation: number) => boolean;
+  finishOrderRequest: (requestId: number) => void;
+  setCartSelection: (cartItemIds: readonly string[]) => boolean;
+  beginCheckout: (cartItemIds: readonly string[]) => boolean;
+  beginDirectCheckout: (directLines: readonly DirectCheckoutLine[]) => boolean;
+  setShipping: (shippingAddress: Address, deliveryRequest: string) => boolean;
+  setPayment: (
+    paymentMethod: PaymentMethod,
+    couponId: string | null,
+    pointsToUse: number,
+    orderRequestId?: number,
+  ) => number;
+  completeCheckout: (
+    receipt: CompletedCheckout,
+    expectedGeneration: number,
+    requestId: number,
+  ) => boolean;
+  resetCheckout: () => boolean;
 }
 
 const EMPTY_CHECKOUT_STATE: CheckoutState = {
   cartItemIds: [],
+  directLines: [],
   selectionMode: 'defaultAll',
+  selectionSource: 'cart',
   checkoutStarted: false,
   shippingAddress: null,
   deliveryRequest: '',
@@ -69,6 +100,21 @@ function storeCheckoutSelection(selection: CheckoutSelectionSnapshot): void {
 export function CheckoutProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<CheckoutState>(EMPTY_CHECKOUT_STATE);
   const [isSelectionReady, setIsSelectionReady] = useState(false);
+  const [checkoutGeneration, setCheckoutGeneration] = useState(0);
+  const [activeOrderRequestId, setActiveOrderRequestId] = useState<number | null>(null);
+  const stateRef = useRef(state);
+  const checkoutGenerationRef = useRef(0);
+  const activeOrderRequestIdRef = useRef<number | null>(null);
+  const orderRequestSequenceRef = useRef(0);
+
+  const commitState = useCallback((nextState: CheckoutState, selectionChanged = false) => {
+    stateRef.current = nextState;
+    setState(nextState);
+    if (selectionChanged) {
+      checkoutGenerationRef.current += 1;
+      setCheckoutGeneration(checkoutGenerationRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -81,88 +127,239 @@ export function CheckoutProvider({ children }: { children: ReactNode }) {
       }
       if (!isMounted) return;
       const restoredSelection = parseCheckoutSelection(storedSelection);
-      setState((currentState) => ({ ...currentState, ...restoredSelection }));
+      const currentState = stateRef.current;
+      if (!currentState.checkoutStarted && checkoutGenerationRef.current === 0) {
+        commitState({ ...currentState, ...restoredSelection });
+      }
       setIsSelectionReady(true);
     });
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [commitState]);
 
   useEffect(() => {
     if (!isSelectionReady) return;
     storeCheckoutSelection({
       cartItemIds: state.cartItemIds,
+      directLines: state.directLines,
       selectionMode: state.selectionMode,
+      selectionSource: state.selectionSource,
       checkoutStarted: state.checkoutStarted,
     });
-  }, [isSelectionReady, state.cartItemIds, state.selectionMode, state.checkoutStarted]);
+  }, [
+    isSelectionReady,
+    state.cartItemIds,
+    state.directLines,
+    state.selectionMode,
+    state.selectionSource,
+    state.checkoutStarted,
+  ]);
 
   const value = useMemo<CheckoutContextValue>(
     () => ({
       ...state,
       isSelectionReady,
+      checkoutGeneration,
+      isOrderPending: activeOrderRequestId !== null,
+      isOrderRequestPending: () => activeOrderRequestIdRef.current !== null,
+      beginOrderRequest: (expectedGeneration) => {
+        if (
+          activeOrderRequestIdRef.current !== null ||
+          checkoutGenerationRef.current !== expectedGeneration
+        ) {
+          return null;
+        }
+        orderRequestSequenceRef.current += 1;
+        activeOrderRequestIdRef.current = orderRequestSequenceRef.current;
+        setActiveOrderRequestId(orderRequestSequenceRef.current);
+        return orderRequestSequenceRef.current;
+      },
+      isOrderRequestCurrent: (requestId, generation) =>
+        activeOrderRequestIdRef.current === requestId &&
+        checkoutGenerationRef.current === generation,
+      finishOrderRequest: (requestId) => {
+        if (activeOrderRequestIdRef.current !== requestId) return;
+        activeOrderRequestIdRef.current = null;
+        setActiveOrderRequestId(null);
+      },
       setCartSelection: (cartItemIds) => {
+        if (activeOrderRequestIdRef.current !== null) return false;
         const nextCartItemIds = [...new Set(cartItemIds)];
-        storeCheckoutSelection({
+        const nextSelection: CheckoutSelectionSnapshot = {
           cartItemIds: nextCartItemIds,
+          directLines: [],
           selectionMode: 'explicit',
-          checkoutStarted: state.checkoutStarted,
-        });
-        setState((currentState) => ({
-          ...currentState,
-          cartItemIds: nextCartItemIds,
-          selectionMode: 'explicit',
-        }));
+          selectionSource: 'cart',
+          checkoutStarted: false,
+        };
+        storeCheckoutSelection(nextSelection);
+        commitState(
+          {
+            ...stateRef.current,
+            cartItemIds: nextCartItemIds,
+            directLines: [],
+            selectionMode: 'explicit',
+            selectionSource: 'cart',
+            checkoutStarted: false,
+          },
+          true,
+        );
+        return true;
       },
       beginCheckout: (cartItemIds) => {
+        if (activeOrderRequestIdRef.current !== null) return false;
         const nextCartItemIds = [...new Set(cartItemIds)];
-        storeCheckoutSelection({
+        const nextSelection: CheckoutSelectionSnapshot = {
           cartItemIds: nextCartItemIds,
+          directLines: [],
           selectionMode: 'explicit',
+          selectionSource: 'cart',
           checkoutStarted: true,
-        });
-        setState((currentState) => ({
-          ...EMPTY_CHECKOUT_STATE,
-          cartItemIds: nextCartItemIds,
-          selectionMode: 'explicit',
-          checkoutStarted: true,
-          paymentMethod: currentState.paymentMethod,
-        }));
+        };
+        storeCheckoutSelection(nextSelection);
+        const currentState = stateRef.current;
+        commitState(
+          {
+            ...EMPTY_CHECKOUT_STATE,
+            ...nextSelection,
+            paymentMethod: currentState.paymentMethod,
+          },
+          true,
+        );
+        return true;
       },
-      setShipping: (shippingAddress, deliveryRequest) =>
-        setState((currentState) => ({
-          ...currentState,
-          shippingAddress,
-          deliveryRequest,
-          receipt: null,
-        })),
-      setPayment: (paymentMethod, couponId, pointsToUse) =>
-        setState((currentState) => ({
-          ...currentState,
-          paymentMethod,
-          couponId,
-          pointsToUse,
-        })),
-      completeCheckout: (receipt) =>
-        setState((currentState) => ({
-          ...currentState,
-          cartItemIds: [],
-          selectionMode: 'explicit',
+      beginDirectCheckout: (directLines) => {
+        if (activeOrderRequestIdRef.current !== null) return false;
+        const nextDirectLines = directLines.map((line) => ({ ...line }));
+        const currentState = stateRef.current;
+        let preservedCartSelection = {
+          cartItemIds: currentState.cartItemIds,
+          selectionMode: currentState.selectionMode,
+        };
+        if (!isSelectionReady && checkoutGenerationRef.current === 0) {
+          try {
+            const storedSelection = parseCheckoutSelection(
+              window.sessionStorage.getItem(CHECKOUT_SELECTION_STORAGE_KEY),
+            );
+            preservedCartSelection = {
+              cartItemIds: storedSelection.cartItemIds,
+              selectionMode: storedSelection.selectionMode,
+            };
+          } catch {
+            // 저장소가 막힌 경우 현재 탭의 checkout 상태로 cart 선택을 보존합니다.
+          }
+        }
+        const nextSelection: CheckoutSelectionSnapshot = {
+          cartItemIds: preservedCartSelection.cartItemIds,
+          directLines: nextDirectLines,
+          selectionMode: preservedCartSelection.selectionMode,
+          selectionSource: 'direct',
           checkoutStarted: true,
-          receipt,
-        })),
+        };
+        storeCheckoutSelection(nextSelection);
+        const cartSelection = currentState.checkoutStarted
+          ? {
+              cartItemIds: currentState.cartItemIds,
+              selectionMode: currentState.selectionMode,
+            }
+          : preservedCartSelection;
+        commitState(
+          {
+            ...EMPTY_CHECKOUT_STATE,
+            ...cartSelection,
+            directLines: nextDirectLines,
+            selectionSource: 'direct',
+            checkoutStarted: true,
+            paymentMethod: currentState.paymentMethod,
+          },
+          true,
+        );
+        return true;
+      },
+      setShipping: (shippingAddress, deliveryRequest) => {
+        if (activeOrderRequestIdRef.current !== null) return false;
+        commitState(
+          {
+            ...stateRef.current,
+            shippingAddress,
+            deliveryRequest,
+            receipt: null,
+          },
+          true,
+        );
+        return true;
+      },
+      setPayment: (paymentMethod, couponId, pointsToUse, orderRequestId) => {
+        if (
+          activeOrderRequestIdRef.current !== null &&
+          activeOrderRequestIdRef.current !== orderRequestId
+        ) {
+          return checkoutGenerationRef.current;
+        }
+        commitState(
+          {
+            ...stateRef.current,
+            paymentMethod,
+            couponId,
+            pointsToUse,
+          },
+          true,
+        );
+        return checkoutGenerationRef.current;
+      },
+      completeCheckout: (receipt, expectedGeneration, requestId) => {
+        if (
+          activeOrderRequestIdRef.current !== requestId ||
+          checkoutGenerationRef.current !== expectedGeneration
+        ) {
+          return false;
+        }
+        const currentState = stateRef.current;
+        const nextSelection: CheckoutSelectionSnapshot =
+          currentState.selectionSource === 'direct'
+            ? {
+                cartItemIds: currentState.cartItemIds,
+                directLines: [],
+                selectionMode: currentState.selectionMode,
+                selectionSource: 'cart',
+                checkoutStarted: false,
+              }
+            : {
+                cartItemIds: [],
+                directLines: [],
+                selectionMode: 'explicit',
+                selectionSource: 'cart',
+                checkoutStarted: true,
+              };
+        storeCheckoutSelection(nextSelection);
+        commitState(
+          {
+            ...currentState,
+            ...nextSelection,
+            receipt,
+          },
+          true,
+        );
+        return true;
+      },
       resetCheckout: () => {
+        if (activeOrderRequestIdRef.current !== null && stateRef.current.receipt === null) {
+          return false;
+        }
         storeCheckoutSelection({
           cartItemIds: [],
+          directLines: [],
           selectionMode: 'defaultAll',
+          selectionSource: 'cart',
           checkoutStarted: false,
         });
-        setState(EMPTY_CHECKOUT_STATE);
+        commitState(EMPTY_CHECKOUT_STATE, true);
+        return true;
       },
     }),
-    [isSelectionReady, state],
+    [activeOrderRequestId, checkoutGeneration, commitState, isSelectionReady, state],
   );
 
   return <CheckoutContext value={value}>{children}</CheckoutContext>;

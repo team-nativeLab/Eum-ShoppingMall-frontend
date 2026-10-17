@@ -22,6 +22,7 @@ import {
 } from './checkout-common';
 import { calculateShippingFee, resolveCheckoutOptions } from './checkout-utils';
 import { useAddressesQuery, useCheckoutOptionsQuery } from './use-checkout-queries';
+import { useDirectCheckoutItems } from './use-direct-checkout-items';
 
 interface ShippingFields {
   recipientName: string;
@@ -42,15 +43,29 @@ const EMPTY_SHIPPING_FIELDS: ShippingFields = {
 /** W-06 배송지: 기존 mock 주소 선택 또는 메모리 임시 입력 후 다음 단계로 전달합니다. */
 export function ShippingPageView() {
   const router = useRouter();
-  const { cartItems, cartGroups, hasRestored, restoreError, retryRestore } = useCart();
+  const {
+    cartItems,
+    cartGroups,
+    hasRestored,
+    restoreError,
+    orderCleanupError,
+    isOrderPending: isCartOperationPending,
+    retryRestore,
+  } = useCart();
   const { member, status: memberStatus } = useMemberSession();
   const checkout = useCheckout();
+  const isOrderRequestPending = checkout.isOrderPending || isCartOperationPending;
   const addressesQuery = useAddressesQuery();
   const optionsQuery = useCheckoutOptionsQuery();
   const resolvedOptions = optionsQuery.isError ? null : resolveCheckoutOptions(optionsQuery.data);
   const options = resolvedOptions?.options;
   const hasOptionsError = optionsQuery.isError || (optionsQuery.isSuccess && !resolvedOptions);
   const amountsStatus = hasOptionsError ? 'error' : options ? 'ready' : 'loading';
+  const isDirectCheckout = checkout.selectionSource === 'direct';
+  const directItemsQuery = useDirectCheckoutItems(
+    checkout.directLines,
+    isDirectCheckout && checkout.checkoutStarted,
+  );
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(checkout.shippingAddress);
   const [fields, setFields] = useState<ShippingFields>(
     checkout.shippingAddress ?? EMPTY_SHIPPING_FIELDS,
@@ -68,17 +83,28 @@ export function ShippingPageView() {
   const defaultAddress =
     memberAddresses.find((address) => address.isDefault) ?? memberAddresses[0] ?? null;
   const selectedShipping = selectedAddress ?? defaultAddress;
-  const selectedIds = checkout.checkoutStarted
-    ? checkout.cartItemIds.filter((id) => cartGroups.orderableItems.some((item) => item.id === id))
-    : [];
+  const directItems = directItemsQuery.data?.isValid ? directItemsQuery.data.items : [];
+  const selectedIds = isDirectCheckout
+    ? directItems.map((item) => item.id)
+    : checkout.checkoutStarted
+      ? checkout.cartItemIds.filter((id) =>
+          cartGroups.orderableItems.some((item) => item.id === id),
+        )
+      : [];
+  const checkoutItems = isDirectCheckout ? directItems : cartItems;
 
   useEffect(() => {
-    if (memberStatus === 'ready' && checkout.isSelectionReady && hasRestored && !member)
+    if (
+      memberStatus === 'ready' &&
+      checkout.isSelectionReady &&
+      (isDirectCheckout || hasRestored) &&
+      !member
+    )
       router.replace('/login?redirect=%2Fcheckout%2Fshipping');
-  }, [checkout.isSelectionReady, hasRestored, member, memberStatus, router]);
+  }, [checkout.isSelectionReady, hasRestored, isDirectCheckout, member, memberStatus, router]);
 
   const handleContinue = () => {
-    if (!options) return;
+    if (!options || isOrderRequestPending) return;
     const nextAddress: Address | null =
       addressMode === 'saved'
         ? selectedShipping
@@ -93,28 +119,41 @@ export function ShippingPageView() {
       return;
     }
     setFormError('');
-    checkout.setShipping(nextAddress, deliveryRequest);
+    if (!checkout.setShipping(nextAddress, deliveryRequest)) return;
     router.push('/checkout/payment');
   };
 
-  if (restoreError && checkout.isSelectionReady) {
+  if (!isDirectCheckout && restoreError && !orderCleanupError && checkout.isSelectionReady) {
     return (
       <CheckoutPageShell>
         <MockOnlyNotice>
           장바구니 상품을 복원하지 못했습니다. 장바구니로 돌아가 다시 확인해 주세요.
         </MockOnlyNotice>
         <div className="mt-24 flex flex-wrap gap-8">
-          <Button variant="secondary" onClick={retryRestore}>
+          <Button variant="secondary" disabled={isOrderRequestPending} onClick={retryRestore}>
             장바구니 복원 다시 시도
           </Button>
-          <Link href="/cart" className={buttonClassName({ variant: 'secondary', size: 'm' })}>
-            장바구니로 돌아가기
-          </Link>
+          {isOrderRequestPending ? (
+            <span aria-disabled="true" className="text-body-s text-text-3">
+              주문 처리 중입니다.
+            </span>
+          ) : (
+            <Link href="/cart" className={buttonClassName({ variant: 'secondary', size: 'm' })}>
+              장바구니로 돌아가기
+            </Link>
+          )}
         </div>
       </CheckoutPageShell>
     );
   }
-  if (memberStatus === 'loading' || !checkout.isSelectionReady || !hasRestored) {
+  if (
+    memberStatus === 'loading' ||
+    !checkout.isSelectionReady ||
+    (!isDirectCheckout && !hasRestored) ||
+    (isDirectCheckout &&
+      checkout.directLines.length > 0 &&
+      (directItemsQuery.isPending || directItemsQuery.isFetching))
+  ) {
     return (
       <CheckoutPageShell>
         <div aria-busy="true" className="h-480 animate-pulse rounded-12 bg-surface" />
@@ -138,23 +177,79 @@ export function ShippingPageView() {
       </CheckoutPageShell>
     );
   }
+  if (isDirectCheckout && directItemsQuery.isError) {
+    return (
+      <CheckoutPageShell>
+        <CheckoutPageTitle>주문/결제</CheckoutPageTitle>
+        <NoticeInline tone="danger" role="alert">
+          바로 구매 상품을 최신 정보로 확인하지 못했습니다. 다시 시도해 주세요.
+        </NoticeInline>
+        <div className="mt-24 flex flex-wrap gap-8">
+          <Button
+            variant="secondary"
+            onClick={() => void directItemsQuery.refetch()}
+            disabled={directItemsQuery.isFetching}
+          >
+            {directItemsQuery.isFetching ? '불러오는 중…' : '상품 정보 다시 확인'}
+          </Button>
+          {isOrderRequestPending ? (
+            <span aria-disabled="true" className="text-body-s text-text-3">
+              주문 처리 중입니다.
+            </span>
+          ) : (
+            <Link href="/search" className={buttonClassName({ variant: 'secondary', size: 'm' })}>
+              상품 다시 선택
+            </Link>
+          )}
+        </div>
+      </CheckoutPageShell>
+    );
+  }
+  if (isDirectCheckout && directItemsQuery.data && !directItemsQuery.data.isValid) {
+    return (
+      <CheckoutPageShell>
+        <CheckoutPageTitle>주문/결제</CheckoutPageTitle>
+        <NoticeInline tone="danger" role="alert">
+          선택한 상품이나 옵션을 더 이상 바로 구매할 수 없습니다. 상품을 다시 선택해 주세요.
+        </NoticeInline>
+        {isOrderRequestPending ? (
+          <span aria-disabled="true" className="mt-24 text-body-s text-text-3">
+            주문 처리 중입니다.
+          </span>
+        ) : (
+          <Link
+            href="/search"
+            className={buttonClassName({ variant: 'secondary', size: 'm' }) + ' mt-24'}
+          >
+            상품 다시 선택
+          </Link>
+        )}
+      </CheckoutPageShell>
+    );
+  }
   if (selectedIds.length === 0) {
     return (
       <CheckoutPageShell>
         <h1 className="text-h1">주문/결제</h1>
         <p className="mt-16 text-body-m text-text-2">주문할 수 있는 상품이 없습니다.</p>
-        <Link
-          href="/cart"
-          className={buttonClassName({ variant: 'secondary', size: 'm' }) + ' mt-24'}
-        >
-          장바구니로 돌아가기
-        </Link>
+        {isOrderRequestPending ? (
+          <span aria-disabled="true" className="mt-24 text-body-s text-text-3">
+            주문 처리 중입니다.
+          </span>
+        ) : (
+          <Link
+            href="/cart"
+            className={buttonClassName({ variant: 'secondary', size: 'm' }) + ' mt-24'}
+          >
+            장바구니로 돌아가기
+          </Link>
+        )}
       </CheckoutPageShell>
     );
   }
 
-  const orderItems = cartItems.filter((item) => selectedIds.includes(item.id));
-  const productTotal = calculateCartTotals(cartItems, new Set(selectedIds)).productTotal;
+  const orderItems = checkoutItems.filter((item) => selectedIds.includes(item.id));
+  const productTotal = calculateCartTotals(checkoutItems, new Set(selectedIds)).productTotal;
   const shippingFee = options ? calculateShippingFee(productTotal, options) : 0;
   const shippingFeeLabel = options
     ? shippingFee === 0
@@ -173,6 +268,12 @@ export function ShippingPageView() {
         배송지와 주문은 이 화면의 데모 입력으로만 처리됩니다. 실제 주문이나 결제는 진행되지
         않습니다.
       </MockOnlyNotice>
+      {isOrderRequestPending ? (
+        <p role="status" className="mt-16 text-body-s text-text-2">
+          주문 요청 처리 중입니다. 요청 결과를 기다리는 동안 배송지를 변경하거나 다음 단계로 이동할
+          수 없습니다.
+        </p>
+      ) : null}
       {hasOptionsError ? (
         <div className="mt-16 flex flex-col items-start gap-8 sm:flex-row sm:items-center">
           <NoticeInline tone="danger" role="alert" className="w-full sm:flex-1">
@@ -233,6 +334,7 @@ export function ShippingPageView() {
               <Button
                 variant="secondary"
                 size="s"
+                disabled={isOrderRequestPending}
                 onClick={() => setIsChoosingAddress((open) => !open)}
                 aria-expanded={isChoosingAddress}
               >
@@ -248,7 +350,7 @@ export function ShippingPageView() {
                 <Button
                   variant="secondary"
                   size="s"
-                  disabled={addressesQuery.isFetching}
+                  disabled={isOrderRequestPending || addressesQuery.isFetching}
                   onClick={() => void addressesQuery.refetch()}
                 >
                   {addressesQuery.isFetching ? '불러오는 중…' : '다시 시도'}
@@ -256,7 +358,7 @@ export function ShippingPageView() {
               </div>
             ) : null}
             {isChoosingAddress ? (
-              <fieldset className="mb-16 space-y-8">
+              <fieldset className="mb-16 space-y-8" disabled={isOrderRequestPending}>
                 <legend className="mb-8 text-label-m">저장 배송지</legend>
                 {memberAddresses.map((address) => (
                   <label
@@ -330,6 +432,7 @@ export function ShippingPageView() {
               <div className="grid gap-12 sm:grid-cols-2">
                 <TextField
                   label="받는 분"
+                  disabled={isOrderRequestPending}
                   value={fields.recipientName}
                   onChange={(event) => updateField('recipientName', event.target.value)}
                   autoComplete="name"
@@ -337,6 +440,7 @@ export function ShippingPageView() {
                 <TextField
                   label="연락처"
                   type="tel"
+                  disabled={isOrderRequestPending}
                   inputMode="tel"
                   value={fields.phone}
                   onChange={(event) => updateField('phone', event.target.value)}
@@ -344,18 +448,21 @@ export function ShippingPageView() {
                 />
                 <TextField
                   label="우편번호"
+                  disabled={isOrderRequestPending}
                   value={fields.postalCode}
                   onChange={(event) => updateField('postalCode', event.target.value)}
                   autoComplete="postal-code"
                 />
                 <TextField
                   label="기본 주소"
+                  disabled={isOrderRequestPending}
                   value={fields.address1}
                   onChange={(event) => updateField('address1', event.target.value)}
                   autoComplete="address-line1"
                 />
                 <TextField
                   label="상세 주소"
+                  disabled={isOrderRequestPending}
                   value={fields.address2}
                   onChange={(event) => updateField('address2', event.target.value)}
                   autoComplete="address-line2"
@@ -373,6 +480,7 @@ export function ShippingPageView() {
                 variant="secondary"
                 size="s"
                 className="mt-12"
+                disabled={isOrderRequestPending}
                 onClick={() => setAddressMode('new')}
               >
                 새 배송지 입력
@@ -387,6 +495,7 @@ export function ShippingPageView() {
               배송 요청사항
               <div className="relative">
                 <select
+                  disabled={isOrderRequestPending}
                   value={deliveryRequest}
                   onChange={(event) => setDeliveryRequest(event.target.value)}
                   className="h-48 w-full appearance-none rounded-8 border border-line-strong bg-bg pr-40 pl-14 text-body-m focus-ring"
@@ -432,14 +541,17 @@ export function ShippingPageView() {
           </CheckoutSection>
         </div>
         <CheckoutOrderSummary
-          cartItems={cartItems}
+          cartItems={checkoutItems}
           selectedCartItemIds={selectedIds}
           options={options ?? EMPTY_OPTIONS}
           showPointsRow={false}
           amountsStatus={amountsStatus}
           buttonLabel="결제 단계로"
           buttonDisabled={
-            !options || selectedIds.length === 0 || (addressMode === 'saved' && !selectedShipping)
+            isOrderRequestPending ||
+            !options ||
+            selectedIds.length === 0 ||
+            (addressMode === 'saved' && !selectedShipping)
           }
           onSubmit={handleContinue}
           caption="다음 단계에서 약관에 동의한 뒤 결제할 수 있습니다."

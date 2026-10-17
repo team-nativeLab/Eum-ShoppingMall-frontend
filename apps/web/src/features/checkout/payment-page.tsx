@@ -29,17 +29,31 @@ import {
   resolveAvailablePaymentMethod,
   resolveCheckoutOptions,
 } from './checkout-utils';
+import { buildCheckoutOrderLines } from './direct-checkout-items';
 import { useCheckoutOptionsQuery, useCouponsQuery } from './use-checkout-queries';
+import { useDirectCheckoutItems } from './use-direct-checkout-items';
 
 const REQUIRED_TERMS = ['order', 'privacy', 'payment'] as const;
 type RequiredTerm = (typeof REQUIRED_TERMS)[number];
 type ReceiptType = 'cash' | 'tax' | 'none';
+interface OrderError {
+  generation: number;
+  message: string;
+}
 
 /** W-07 결제: 쿠폰·적립금·목 결제수단·약관 동의 후 mock receipt만 생성합니다. */
 export function PaymentPageView() {
   const router = useRouter();
-  const { cartItems, cartGroups, hasRestored, restoreError, removeFromCart, retryRestore } =
-    useCart();
+  const {
+    cartItems,
+    cartGroups,
+    hasRestored,
+    restoreError,
+    orderCleanupError,
+    isOrderPending: isCartOperationPending,
+    retryRestore,
+    consumeOrderedCartItems,
+  } = useCart();
   const { member, status: memberStatus } = useMemberSession();
   const checkout = useCheckout();
   const optionsQuery = useCheckoutOptionsQuery();
@@ -47,10 +61,23 @@ export function PaymentPageView() {
   const resolvedOptions = optionsQuery.isError ? null : resolveCheckoutOptions(optionsQuery.data);
   const options = resolvedOptions?.options;
   const hasOptionsError = optionsQuery.isError || (optionsQuery.isSuccess && !resolvedOptions);
-  const selectedIds = checkout.checkoutStarted
-    ? checkout.cartItemIds.filter((id) => cartGroups.orderableItems.some((item) => item.id === id))
-    : [];
-  const selectedItems = cartItems.filter((item) => selectedIds.includes(item.id));
+  const isDirectCheckout = checkout.selectionSource === 'direct';
+  const directItemsQuery = useDirectCheckoutItems(
+    checkout.directLines,
+    isDirectCheckout && checkout.checkoutStarted,
+  );
+  const directItems = directItemsQuery.data?.isValid ? directItemsQuery.data.items : [];
+  const selectedIds = isDirectCheckout
+    ? directItems.map((item) => item.id)
+    : checkout.checkoutStarted
+      ? checkout.cartItemIds.filter((id) =>
+          cartGroups.orderableItems.some((item) => item.id === id),
+        )
+      : [];
+  const selectedItems = isDirectCheckout
+    ? directItems
+    : cartItems.filter((item) => selectedIds.includes(item.id));
+  const checkoutItems = isDirectCheckout ? directItems : cartItems;
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(checkout.paymentMethod);
   const [couponId, setCouponId] = useState<string | null>(checkout.couponId);
   const [pointsInput, setPointsInput] = useState(
@@ -63,13 +90,14 @@ export function PaymentPageView() {
     privacy: false,
     payment: false,
   });
-  const [isOrdering, setIsOrdering] = useState(false);
-  const [error, setError] = useState('');
+  const [orderError, setOrderError] = useState<OrderError | null>(null);
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
+  const isOrdering = checkout.isOrderPending || isCartOperationPending;
+  const error = orderError?.generation === checkout.checkoutGeneration ? orderError.message : '';
 
   const availableCoupons = couponsQuery.data?.filter((coupon) => !coupon.isUsed) ?? [];
   const selectedCoupon = availableCoupons.find((coupon) => coupon.id === couponId);
-  const productTotal = calculateCartTotals(cartItems, new Set(selectedIds)).productTotal;
+  const productTotal = calculateCartTotals(checkoutItems, new Set(selectedIds)).productTotal;
   const pointsToUse = Math.min(Math.max(0, Number(pointsInput) || 0), member?.pointBalance ?? 0);
   const areTermsAccepted = REQUIRED_TERMS.every((term) => acceptedTerms[term]);
   const selectedPaymentMethod = options
@@ -92,20 +120,30 @@ export function PaymentPageView() {
       isOrdering
     )
       return;
-    setError('');
-    setIsOrdering(true);
+    const orderedCartLines =
+      checkout.selectionSource === 'cart'
+        ? selectedItems.map(({ productId, optionId, quantity }) => ({
+            productId,
+            optionId,
+            quantity,
+          }))
+        : [];
+    const requestId = checkout.beginOrderRequest(checkout.checkoutGeneration);
+    if (requestId === null) return;
+    setOrderError(null);
     const couponDiscount = selectedCoupon ? getCouponDiscount(selectedCoupon, productTotal) : 0;
     const safePoints = Math.min(pointsToUse, Math.max(0, productTotal - couponDiscount));
-    checkout.setPayment(selectedPaymentMethod, couponId, safePoints);
+    const expectedGeneration = checkout.setPayment(
+      selectedPaymentMethod,
+      couponId,
+      safePoints,
+      requestId,
+    );
     try {
       const receipt = await (
         await getShopApi()
       ).orders.create({
-        lines: selectedItems.map((item) => ({
-          productId: item.productId,
-          quantity: item.quantity,
-          optionId: item.optionId,
-        })),
+        lines: buildCheckoutOrderLines(selectedItems),
         shippingAddress: checkout.shippingAddress,
         deliveryRequest: checkout.deliveryRequest,
         paymentMethod: selectedPaymentMethod,
@@ -115,31 +153,41 @@ export function PaymentPageView() {
       const paymentLabel =
         options.paymentMethods.find((method) => method.id === selectedPaymentMethod)?.label ??
         '선택한 결제 수단';
-      checkout.completeCheckout({
-        ...receipt,
-        paymentMethod: selectedPaymentMethod,
-        paymentMethodLabel: paymentLabel,
-        shippingAddress: checkout.shippingAddress,
-      });
-      removeFromCart(new Set(selectedIds));
+      if (!checkout.isOrderRequestCurrent(requestId, expectedGeneration)) return;
+      const didCompleteCheckout = checkout.completeCheckout(
+        {
+          ...receipt,
+          paymentMethod: selectedPaymentMethod,
+          paymentMethodLabel: paymentLabel,
+          shippingAddress: checkout.shippingAddress,
+        },
+        expectedGeneration,
+        requestId,
+      );
+      if (!didCompleteCheckout) return;
+      if (orderedCartLines.length > 0) consumeOrderedCartItems(orderedCartLines);
       router.push('/checkout/complete');
     } catch (orderFailure: unknown) {
+      if (!checkout.isOrderRequestCurrent(requestId, expectedGeneration)) {
+        return;
+      }
       const isNotImplemented =
         typeof orderFailure === 'object' &&
         orderFailure !== null &&
         'code' in orderFailure &&
         orderFailure.code === 'NOT_IMPLEMENTED';
-      setError(
-        isNotImplemented
+      setOrderError({
+        generation: expectedGeneration,
+        message: isNotImplemented
           ? '실제 주문 API는 아직 연결되지 않았습니다. 데모 화면에서는 주문·결제가 처리되지 않습니다.'
           : '주문을 완료하지 못했습니다. 입력 내용을 확인하고 다시 시도해 주세요.',
-      );
+      });
     } finally {
-      setIsOrdering(false);
+      checkout.finishOrderRequest(requestId);
     }
   };
 
-  if (restoreError) {
+  if (!isDirectCheckout && restoreError && !orderCleanupError) {
     return (
       <CheckoutPageShell>
         <MockOnlyNotice>
@@ -147,12 +195,18 @@ export function PaymentPageView() {
           주세요.
         </MockOnlyNotice>
         <div className="mt-24 flex flex-wrap gap-8">
-          <Button variant="secondary" onClick={retryRestore}>
+          <Button variant="secondary" disabled={isOrdering} onClick={retryRestore}>
             장바구니 복원 다시 시도
           </Button>
-          <Link href="/cart" className={buttonClassName({ variant: 'secondary', size: 'm' })}>
-            장바구니로 돌아가기
-          </Link>
+          {isOrdering ? (
+            <span aria-disabled="true" className="text-body-s text-text-3">
+              주문 처리 중입니다.
+            </span>
+          ) : (
+            <Link href="/cart" className={buttonClassName({ variant: 'secondary', size: 'm' })}>
+              장바구니로 돌아가기
+            </Link>
+          )}
         </div>
       </CheckoutPageShell>
     );
@@ -160,7 +214,10 @@ export function PaymentPageView() {
   if (
     memberStatus === 'loading' ||
     !checkout.isSelectionReady ||
-    !hasRestored ||
+    (!isDirectCheckout && !hasRestored) ||
+    (isDirectCheckout &&
+      checkout.directLines.length > 0 &&
+      (directItemsQuery.isPending || directItemsQuery.isFetching)) ||
     (!hasOptionsError && (optionsQuery.isPending || couponsQuery.isPending))
   ) {
     return (
@@ -250,17 +307,73 @@ export function PaymentPageView() {
       </CheckoutPageShell>
     );
   }
+  if (isDirectCheckout && directItemsQuery.isError) {
+    return (
+      <CheckoutPageShell>
+        <CheckoutPageTitle>주문/결제</CheckoutPageTitle>
+        <NoticeInline tone="danger" role="alert">
+          바로 구매 상품을 최신 정보로 확인하지 못했습니다. 다시 시도해 주세요.
+        </NoticeInline>
+        <div className="mt-24 flex flex-wrap gap-8">
+          <Button
+            variant="secondary"
+            onClick={() => void directItemsQuery.refetch()}
+            disabled={isOrdering || directItemsQuery.isFetching}
+          >
+            {directItemsQuery.isFetching ? '불러오는 중…' : '상품 정보 다시 확인'}
+          </Button>
+          {isOrdering ? (
+            <span aria-disabled="true" className="text-body-s text-text-3">
+              주문 처리 중입니다.
+            </span>
+          ) : (
+            <Link href="/search" className={buttonClassName({ variant: 'secondary', size: 'm' })}>
+              상품 다시 선택
+            </Link>
+          )}
+        </div>
+      </CheckoutPageShell>
+    );
+  }
+  if (isDirectCheckout && directItemsQuery.data && !directItemsQuery.data.isValid) {
+    return (
+      <CheckoutPageShell>
+        <CheckoutPageTitle>주문/결제</CheckoutPageTitle>
+        <NoticeInline tone="danger" role="alert">
+          선택한 상품이나 옵션을 더 이상 바로 구매할 수 없습니다. 상품을 다시 선택해 주세요.
+        </NoticeInline>
+        {isOrdering ? (
+          <span aria-disabled="true" className="mt-24 text-body-s text-text-3">
+            주문 처리 중입니다.
+          </span>
+        ) : (
+          <Link
+            href="/search"
+            className={buttonClassName({ variant: 'secondary', size: 'm' }) + ' mt-24'}
+          >
+            상품 다시 선택
+          </Link>
+        )}
+      </CheckoutPageShell>
+    );
+  }
   if (!checkout.shippingAddress || selectedIds.length === 0) {
     return (
       <CheckoutPageShell>
         <h1 className="text-h1">주문/결제</h1>
         <p className="mt-16 text-body-m text-text-2">배송지나 주문할 상품이 없습니다.</p>
-        <Link
-          href="/checkout/shipping"
-          className={buttonClassName({ variant: 'secondary', size: 'm' }) + ' mt-24'}
-        >
-          배송지 단계로 돌아가기
-        </Link>
+        {isOrdering ? (
+          <span aria-disabled="true" className="mt-24 text-body-s text-text-3">
+            주문 처리 중입니다.
+          </span>
+        ) : (
+          <Link
+            href="/checkout/shipping"
+            className={buttonClassName({ variant: 'secondary', size: 'm' }) + ' mt-24'}
+          >
+            배송지 단계로 돌아가기
+          </Link>
+        )}
       </CheckoutPageShell>
     );
   }
@@ -313,12 +426,18 @@ export function PaymentPageView() {
           <CheckoutSection
             title="배송지"
             aside={
-              <Link
-                href="/checkout/shipping"
-                className="rounded-4 text-label-s underline focus-ring"
-              >
-                변경
-              </Link>
+              isOrdering ? (
+                <span aria-disabled="true" className="rounded-4 text-label-s text-text-3">
+                  변경
+                </span>
+              ) : (
+                <Link
+                  href="/checkout/shipping"
+                  className="rounded-4 text-label-s underline focus-ring"
+                >
+                  변경
+                </Link>
+              )
             }
           >
             <p className="text-body-s">
@@ -342,6 +461,7 @@ export function PaymentPageView() {
               쿠폰
               <div className="relative">
                 <select
+                  disabled={isOrdering}
                   value={couponId ?? ''}
                   onChange={(event) => setCouponId(event.target.value || null)}
                   className="h-48 w-full appearance-none rounded-8 border border-line-strong bg-bg pr-40 pl-14 text-body-m focus-ring"
@@ -376,6 +496,7 @@ export function PaymentPageView() {
               <TextField
                 label="적립금"
                 type="number"
+                disabled={isOrdering}
                 inputMode="numeric"
                 min={0}
                 max={Math.min(pointsBalance, canUsePoints)}
@@ -387,6 +508,7 @@ export function PaymentPageView() {
                 variant="secondary"
                 size="s"
                 className="mb-24"
+                disabled={isOrdering}
                 onClick={() => setPointsInput(String(Math.min(pointsBalance, canUsePoints)))}
               >
                 전액 사용
@@ -405,6 +527,7 @@ export function PaymentPageView() {
                     <Radio
                       name="payment-method"
                       value={method.id}
+                      disabled={isOrdering}
                       checked={selectedPaymentMethod === method.id}
                       onChange={() => setPaymentMethod(method.id)}
                     />
@@ -424,6 +547,7 @@ export function PaymentPageView() {
                 <Radio
                   name="receipt-type"
                   value="cash"
+                  disabled={isOrdering}
                   checked={receiptType === 'cash'}
                   onChange={() => setReceiptType('cash')}
                 >
@@ -432,6 +556,7 @@ export function PaymentPageView() {
                 <Radio
                   name="receipt-type"
                   value="tax"
+                  disabled={isOrdering}
                   checked={receiptType === 'tax'}
                   onChange={() => setReceiptType('tax')}
                 >
@@ -440,6 +565,7 @@ export function PaymentPageView() {
                 <Radio
                   name="receipt-type"
                   value="none"
+                  disabled={isOrdering}
                   checked={receiptType === 'none'}
                   onChange={() => setReceiptType('none')}
                 >
@@ -452,6 +578,7 @@ export function PaymentPageView() {
                 className="mt-16 max-w-360"
                 label={receiptType === 'tax' ? '사업자등록번호' : '휴대폰 번호'}
                 type="tel"
+                disabled={isOrdering}
                 inputMode="numeric"
                 autoComplete="off"
                 value={receiptPhone}
@@ -466,6 +593,7 @@ export function PaymentPageView() {
             aside={
               <Checkbox
                 checked={areTermsAccepted}
+                disabled={isOrdering}
                 onChange={(event) => toggleAllTerms(event.target.checked)}
               >
                 전체 동의
@@ -475,6 +603,7 @@ export function PaymentPageView() {
             <div className="flex flex-col gap-12">
               <Checkbox
                 checked={acceptedTerms.order}
+                disabled={isOrdering}
                 onChange={(event) => toggleTerm('order', event.target.checked)}
               >
                 주문 상품 및 결제 금액을 확인했습니다. (필수)
@@ -482,12 +611,14 @@ export function PaymentPageView() {
               <div className="flex flex-wrap items-center justify-between gap-8">
                 <Checkbox
                   checked={acceptedTerms.privacy}
+                  disabled={isOrdering}
                   onChange={(event) => toggleTerm('privacy', event.target.checked)}
                 >
                   개인정보 수집·이용에 동의합니다. (필수)
                 </Checkbox>
                 <button
                   type="button"
+                  disabled={isOrdering}
                   onClick={() => setIsPrivacyModalOpen(true)}
                   className="min-h-40 rounded-4 px-8 text-caption text-text-2 underline focus-ring"
                 >
@@ -496,6 +627,7 @@ export function PaymentPageView() {
               </div>
               <Checkbox
                 checked={acceptedTerms.payment}
+                disabled={isOrdering}
                 onChange={(event) => toggleTerm('payment', event.target.checked)}
               >
                 결제 진행에 동의합니다. (필수)
@@ -542,7 +674,7 @@ export function PaymentPageView() {
           ) : null}
         </div>
         <CheckoutOrderSummary
-          cartItems={cartItems}
+          cartItems={checkoutItems}
           selectedCartItemIds={selectedIds}
           options={options}
           coupon={selectedCoupon}
@@ -555,7 +687,7 @@ export function PaymentPageView() {
             isOrdering ||
             !selectedPaymentMethod
           }
-          isPending={isOrdering}
+          isPending={checkout.isOrderPending}
           onSubmit={() => void handleOrder()}
           caption="결제 버튼을 눌러도 실제 주문·결제는 처리되지 않습니다."
         />

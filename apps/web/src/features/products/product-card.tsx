@@ -34,7 +34,7 @@ export function ProductCard({
   cardVariant?: 'default' | 'home-carousel';
 }) {
   const router = useRouter();
-  const { addToCart } = useCart();
+  const { addToCart, isOrderPending } = useCart();
   const { wishlistIds, toggleWishlist } = useLocalCollections();
   const priceDisplay = getPriceDisplay(product);
   const isWishlisted = wishlistIds.includes(product.id);
@@ -78,12 +78,14 @@ export function ProductCard({
   );
 
   const handleCartAction = () => {
+    if (isOrderPending) return;
     if (hasRequiredOptions) {
       router.push(productHref);
       return;
     }
-    addToCart(product);
-    setCartAnnouncement(`${product.name}을(를) 장바구니에 담았습니다.`);
+    if (addToCart(product)) {
+      setCartAnnouncement(`${product.name}을(를) 장바구니에 담았습니다.`);
+    }
   };
 
   return (
@@ -234,7 +236,7 @@ export function ProductCard({
               hasRequiredOptions ? `${product.name} 옵션 선택` : `${product.name} 장바구니 담기`
             }
             onClick={handleCartAction}
-            disabled={!canAddToCart(product)}
+            disabled={isOrderPending || !canAddToCart(product)}
             className={cx(
               'size-36 shrink-0 items-center justify-center rounded-8 border border-line-strong bg-bg text-text-1 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:border-line disabled:text-text-disabled',
               isCompactOnMobile ? 'hidden lg:inline-flex' : 'inline-flex',
