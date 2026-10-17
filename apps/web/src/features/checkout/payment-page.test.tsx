@@ -108,6 +108,16 @@ const member: Member = {
   pointBalance: 0,
 };
 
+const activeCoupon: Coupon = {
+  id: 'payment-test-coupon',
+  name: '테스트 쿠폰',
+  discountType: 'amount',
+  discountValue: 1000,
+  minOrderAmount: 0,
+  expiresAt: '2026-12-31T23:59:59+09:00',
+  isUsed: false,
+};
+
 const shippingAddress: Address = {
   id: 'payment-test-address',
   label: '집',
@@ -704,6 +714,7 @@ describe('PaymentPageView', () => {
         }),
     );
     configureApi({
+      listCoupons: async () => [activeCoupon],
       productResponses: new Map([[productWithOption.id, productWithOption]]),
       createOrder,
     });
@@ -716,7 +727,9 @@ describe('PaymentPageView', () => {
     await waitFor(() => expect(createOrder).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole('link', { name: '변경' })).not.toBeInTheDocument();
     expect(screen.getByRole('radio', { name: '계좌 이체' })).toBeDisabled();
-    expect(screen.getByLabelText('쿠폰')).toBeDisabled();
+    const couponSelect = screen.getByLabelText('쿠폰');
+    expect(couponSelect).toBeDisabled();
+    expect(screen.getByRole('option', { name: /테스트 쿠폰/ })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '테스트용 배송지 변경' }));
 
     const resolvePendingOrder = resolveOrder;
@@ -728,6 +741,7 @@ describe('PaymentPageView', () => {
     });
 
     expect(apiMocks.routerPush).toHaveBeenCalledWith('/checkout/complete');
+    await waitFor(() => expect(screen.getByTestId('order-pending')).toHaveTextContent('false'));
     expect(screen.getByTestId('completed-payment-method')).toHaveTextContent('bankTransfer');
     expect(screen.getByTestId('completed-shipping-address')).toHaveTextContent('테스트 주소');
     expect(
@@ -749,6 +763,7 @@ describe('PaymentPageView', () => {
         }),
     );
     configureApi({
+      listCoupons: async () => [activeCoupon],
       productResponses: new Map([[productWithOption.id, productWithOption]]),
       createOrder,
     });
@@ -759,6 +774,21 @@ describe('PaymentPageView', () => {
     const shippingContinueButton = await screen.findByRole('button', {
       name: '결제 단계로 (1)',
     });
+    const couponSelect = screen.getByLabelText('쿠폰');
+    const deliveryRequestSelect = screen.getByRole('combobox', { name: '배송 요청사항' });
+    expect(couponSelect.parentElement).toHaveClass('relative');
+    expect(couponSelect).toHaveClass('appearance-none');
+    expect(couponSelect.parentElement?.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    expect(couponSelect.parentElement?.querySelector('svg')).toHaveClass('pointer-events-none');
+    expect(deliveryRequestSelect.parentElement).toHaveClass('relative');
+    expect(deliveryRequestSelect).toHaveClass('appearance-none');
+    expect(deliveryRequestSelect.parentElement?.querySelector('svg')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    );
+    expect(deliveryRequestSelect.parentElement?.querySelector('svg')).toHaveClass(
+      'pointer-events-none',
+    );
     await user.click(screen.getByRole('button', { name: '변경' }));
     await user.click(await screen.findByRole('button', { name: '새 배송지 직접 입력' }));
     const recipientField = screen.getByRole('textbox', { name: '받는 분' });
@@ -769,7 +799,8 @@ describe('PaymentPageView', () => {
     expect(screen.queryByRole('link', { name: '장바구니로 돌아가기' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '닫기' })).toBeDisabled();
     expect(shippingContinueButton).toBeDisabled();
-    expect(screen.getByRole('combobox', { name: '배송 요청사항' })).toBeDisabled();
+    expect(couponSelect).toBeDisabled();
+    expect(deliveryRequestSelect).toBeDisabled();
     expect(recipientField).toBeDisabled();
 
     const rejectPendingOrder = rejectOrder;
@@ -783,7 +814,8 @@ describe('PaymentPageView', () => {
     await waitFor(() => expect(screen.getByTestId('order-pending')).toHaveTextContent('false'));
     expect(screen.getByRole('button', { name: '닫기' })).toBeEnabled();
     expect(shippingContinueButton).toBeEnabled();
-    expect(screen.getByRole('combobox', { name: '배송 요청사항' })).toBeEnabled();
+    expect(couponSelect).toBeEnabled();
+    expect(deliveryRequestSelect).toBeEnabled();
     expect(recipientField).toBeEnabled();
   });
 });

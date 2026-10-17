@@ -9,6 +9,7 @@ import { Modal } from '@eum/ui/components/Modal';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { Radio } from '@eum/ui/components/Radio';
 import { TextField } from '@eum/ui/components/TextField';
+import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -458,26 +459,33 @@ export function PaymentPageView() {
           <CheckoutSection title="할인">
             <label className="flex flex-col gap-8 text-label-m">
               쿠폰
-              <select
-                disabled={isOrdering}
-                value={couponId ?? ''}
-                onChange={(event) => setCouponId(event.target.value || null)}
-                className="h-48 w-full rounded-8 border border-line-strong bg-bg px-14 text-body-m focus-ring"
-              >
-                <option value="">사용 가능한 쿠폰을 선택해 주세요</option>
-                {availableCoupons.map((coupon) => (
-                  <option
-                    key={coupon.id}
-                    value={coupon.id}
-                    disabled={productTotal < coupon.minOrderAmount}
-                  >
-                    {coupon.name} ·{' '}
-                    {productTotal >= coupon.minOrderAmount
-                      ? '사용 가능'
-                      : `${formatKrw(coupon.minOrderAmount)} 이상`}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  disabled={isOrdering}
+                  value={couponId ?? ''}
+                  onChange={(event) => setCouponId(event.target.value || null)}
+                  className="h-48 w-full appearance-none rounded-8 border border-line-strong bg-bg pr-40 pl-14 text-body-m focus-ring"
+                >
+                  <option value="">사용 가능한 쿠폰을 선택해 주세요</option>
+                  {availableCoupons.map((coupon) => (
+                    <option
+                      key={coupon.id}
+                      value={coupon.id}
+                      disabled={productTotal < coupon.minOrderAmount}
+                    >
+                      {coupon.name} ·{' '}
+                      {productTotal >= coupon.minOrderAmount
+                        ? '사용 가능'
+                        : `${formatKrw(coupon.minOrderAmount)} 이상`}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={20}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute top-1/2 right-14 -translate-y-1/2 text-text-1"
+                />
+              </div>
             </label>
             {selectedCoupon ? (
               <p className="mt-8 text-caption text-success">

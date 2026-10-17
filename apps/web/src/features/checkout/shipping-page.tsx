@@ -6,6 +6,7 @@ import type { Address, CartItem, CheckoutOptions } from '@eum/api/types';
 import { Button, buttonClassName } from '@eum/ui/components/Button';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { TextField } from '@eum/ui/components/TextField';
+import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -492,21 +493,28 @@ export function ShippingPageView() {
             ) : null}
             <label className="mt-16 flex flex-col gap-8 text-label-m">
               배송 요청사항
-              <select
-                disabled={isOrderRequestPending}
-                value={deliveryRequest}
-                onChange={(event) => setDeliveryRequest(event.target.value)}
-                className="h-48 w-full rounded-8 border border-line-strong bg-bg px-14 text-body-m focus-ring"
-              >
-                <option value="">요청사항을 선택해 주세요</option>
-                {(options?.deliveryRequests ?? [])
-                  .filter((option) => option.id !== 'none')
-                  .map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-              </select>
+              <div className="relative">
+                <select
+                  disabled={isOrderRequestPending}
+                  value={deliveryRequest}
+                  onChange={(event) => setDeliveryRequest(event.target.value)}
+                  className="h-48 w-full appearance-none rounded-8 border border-line-strong bg-bg pr-40 pl-14 text-body-m focus-ring"
+                >
+                  <option value="">요청사항을 선택해 주세요</option>
+                  {(options?.deliveryRequests ?? [])
+                    .filter((option) => option.id !== 'none')
+                    .map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                </select>
+                <ChevronDown
+                  size={20}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute top-1/2 right-14 -translate-y-1/2 text-text-1"
+                />
+              </div>
             </label>
           </CheckoutSection>
           <CheckoutSection title="배송 방법" className="p-32">
