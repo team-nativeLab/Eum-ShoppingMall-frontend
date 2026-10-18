@@ -1,5 +1,5 @@
 import { canBuyNow } from './price';
-import type { CartItem, Product } from './types';
+import type { CartItem, Product, ProductSku } from './types';
 
 /** 장바구니 수량 하한 */
 export const CART_MIN_QUANTITY = 1;
@@ -10,7 +10,8 @@ export const CART_MIN_QUANTITY = 1;
 export const CART_MAX_QUANTITY = 999;
 
 /** 주문할 수 없는 이유. optionUnavailable은 담은 옵션이 상품에서 사라졌거나 필수 옵션이 빠진 경우입니다. */
-export type CartUnavailableReason = 'priceHidden' | 'soldOut' | 'optionUnavailable';
+export type CartUnavailableReason =
+  'priceHidden' | 'soldOut' | 'optionUnavailable' | 'skuUnavailable';
 
 // 장바구니 옵션 식별자 형식: "옵션ID:선택지ID|옵션ID:선택지ID"
 const OPTION_PAIR_SEPARATOR = '|';
@@ -24,7 +25,8 @@ export interface CartOptionSelection {
 
 /** 장바구니 옵션 식별자를 최신 상품 옵션으로 해석한 결과 */
 export type CartOptionResolution =
-  { isAvailable: true; optionLabel: string | null; priceDelta: number } | { isAvailable: false };
+  | { isAvailable: true; optionLabel: string | null; priceDelta: number; sku?: ProductSku }
+  | { isAvailable: false; reason?: 'optionUnavailable' | 'skuUnavailable' };
 
 /** 주문할 수 없는 장바구니 항목과 그 이유 */
 export interface UnorderableCartItem {
@@ -79,16 +81,17 @@ export function formatCartOptionLabel(
  * 해석되면 최신 옵션 문구와 추가금(priceDelta 합계)을 돌려줍니다.
  */
 export function resolveCartOption(
-  product: Pick<Product, 'options'>,
+  product: Pick<Product, 'options' | 'skus'>,
   cartOptionId: string | null,
 ): CartOptionResolution {
   const selectedChoiceIds = new Map<string, string>();
   if (cartOptionId !== null) {
     for (const optionPair of cartOptionId.split(OPTION_PAIR_SEPARATOR)) {
       const separatorIndex = optionPair.indexOf(OPTION_CHOICE_SEPARATOR);
-      if (separatorIndex <= 0) return { isAvailable: false };
+      if (separatorIndex <= 0) return { isAvailable: false, reason: 'optionUnavailable' };
       const optionId = optionPair.slice(0, separatorIndex);
-      if (selectedChoiceIds.has(optionId)) return { isAvailable: false };
+      if (selectedChoiceIds.has(optionId))
+        return { isAvailable: false, reason: 'optionUnavailable' };
       selectedChoiceIds.set(optionId, optionPair.slice(separatorIndex + 1));
     }
   }
@@ -98,22 +101,40 @@ export function resolveCartOption(
   for (const [optionId, choiceId] of selectedChoiceIds) {
     const productOption = product.options.find((candidate) => candidate.id === optionId);
     const choice = productOption?.choices.find((candidate) => candidate.id === choiceId);
-    if (!productOption || !choice) return { isAvailable: false };
+    if (!productOption || !choice) return { isAvailable: false, reason: 'optionUnavailable' };
     optionLabels.push({ optionLabel: productOption.label, choiceLabel: choice.label });
     priceDelta += choice.priceDelta;
   }
   const isMissingRequiredOption = product.options.some(
     (productOption) => productOption.required && !selectedChoiceIds.has(productOption.id),
   );
-  if (isMissingRequiredOption) return { isAvailable: false };
-  return { isAvailable: true, optionLabel: formatCartOptionLabel(optionLabels), priceDelta };
+  if (isMissingRequiredOption) return { isAvailable: false, reason: 'optionUnavailable' };
+  const optionLabel = formatCartOptionLabel(optionLabels);
+  if (product.skus?.length) {
+    const selectedLabels = optionLabels
+      .map(({ optionLabel: label, choiceLabel }) => `${label}: ${choiceLabel}`)
+      .sort();
+    const sku = product.skus.find((candidate) => {
+      const candidateLabels = [...candidate.optionLabels].sort();
+      return (
+        candidateLabels.length === selectedLabels.length &&
+        candidateLabels.every((label, index) => label === selectedLabels[index])
+      );
+    });
+    if (!sku || !sku.isAvailable) {
+      return { isAvailable: false, reason: 'skuUnavailable' };
+    }
+    return { isAvailable: true, optionLabel, priceDelta: sku.priceDelta, sku };
+  }
+  return { isAvailable: true, optionLabel, priceDelta };
 }
 
 // 상품 상태와 옵션으로 주문 불가 이유를 정하는 함수. 주문 가능하면 null
 function getUnavailableReason(cartItem: CartItem): CartUnavailableReason | null {
   const { product } = cartItem;
   if (!canBuyNow(product)) return product.stockStatus === 'soldOut' ? 'soldOut' : 'priceHidden';
-  if (!resolveCartOption(product, cartItem.optionId).isAvailable) return 'optionUnavailable';
+  const optionResolution = resolveCartOption(product, cartItem.optionId);
+  if (!optionResolution.isAvailable) return optionResolution.reason ?? 'optionUnavailable';
   return null;
 }
 

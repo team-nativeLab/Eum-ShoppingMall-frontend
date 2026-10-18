@@ -101,6 +101,7 @@ const apiMocks = vi.hoisted(() => ({
   getShopApi: vi.fn(),
   membersList: vi.fn(),
   listOrdersByMember: vi.fn(),
+  updateOrderAdmin: vi.fn(),
   listProducts: vi.fn(),
   listQuotes: vi.fn(),
 }));
@@ -166,17 +167,21 @@ describe('partial order lookup retry actions', () => {
       { id: 'member-a', name: '목 회원', email: 'member@example.com', phone: '010-0000-0000' },
     ]);
     apiMocks.listOrdersByMember.mockResolvedValue([]);
+    apiMocks.updateOrderAdmin.mockResolvedValue(undefined);
     apiMocks.listProducts.mockResolvedValue({ items: [], totalCount: 0 });
     apiMocks.listQuotes.mockResolvedValue([]);
     apiMocks.getShopApi.mockResolvedValue({
-      members: { list: apiMocks.membersList },
-      orders: { listByMember: apiMocks.listOrdersByMember },
+      members: { adminList: apiMocks.membersList },
+      orders: {
+        listByMember: apiMocks.listOrdersByMember,
+        updateAdmin: apiMocks.updateOrderAdmin,
+      },
       products: { list: apiMocks.listProducts },
-      quotes: { list: apiMocks.listQuotes },
+      quotes: { adminList: apiMocks.listQuotes },
     });
   });
 
-  it('previews only selected orders and clears selection when the filter changes', async () => {
+  it('saves only selected orders and clears selection when the filter changes', async () => {
     const user = userEvent.setup();
     apiMocks.membersList.mockResolvedValue([memberA, memberB]);
     apiMocks.listOrdersByMember.mockImplementation((memberId: string) =>
@@ -187,10 +192,10 @@ describe('partial order lookup retry actions', () => {
     await user.click(within(firstOrderRow).getByRole('checkbox', { name: 'ORDER-member-a 선택' }));
     expect(screen.getByText('선택 1건')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '배송준비로 변경' }));
-    expect(
-      screen.getByText('1건을 배송 준비 상태로 화면에서만 미리 반영했습니다.'),
-    ).toBeInTheDocument();
-    expect(within(firstOrderRow).getByText('배송준비')).toBeInTheDocument();
+    expect(screen.getByText('1건을 배송 준비 상태로 목 API에 저장했습니다.')).toBeInTheDocument();
+    expect(apiMocks.updateOrderAdmin).toHaveBeenCalledWith('ORDER-member-a', {
+      status: 'preparing',
+    });
     expect(screen.getByText('선택 0건')).toBeInTheDocument();
 
     const secondOrderRow = screen.getByRole('row', { name: /ORDER-member-b/ });

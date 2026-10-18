@@ -1,14 +1,54 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   ADMIN_TRACKING_MAX_ROWS,
   ADMIN_TRACKING_INPUT_LIMIT_ERROR,
   getBrowserLocalDateKey,
+  generateAdminCouponCode,
+  saveWithGeneratedCouponCode,
   validateAdminCouponDraft,
   validateAdminQuoteDraft,
   validateAdminSettingsDraft,
   validateAdminTrackingRows,
 } from './admin-preview-validation';
 import { ADMIN_WITHDRAWN_MEMBER_FIXTURES } from './admin-preview-fixtures';
+import { ApiError } from '@eum/api/errors';
+
+describe('admin coupon code generation', () => {
+  it('uses browser cryptographic random bytes for a high-entropy code', () => {
+    const getRandomValues = vi.fn((bytes: Uint8Array) => {
+      bytes.set(Array.from({ length: bytes.length }, (_, index) => index));
+      return bytes;
+    });
+    const code = generateAdminCouponCode({ getRandomValues } as unknown as Crypto);
+
+    expect(getRandomValues).toHaveBeenCalledOnce();
+    expect(code).toBe('EUM000102030405060708090A0B');
+    expect(code).toHaveLength(27);
+  });
+
+  it('retries only a coupon-code collision and stops after three attempts', async () => {
+    const codes = ['COLLISION', 'AVAILABLE'];
+    const save = vi.fn(async (code: string) => {
+      if (code === 'COLLISION') throw new ApiError('VALIDATION', '이미 사용 중인 쿠폰 코드입니다.');
+      return { code };
+    });
+    const createCode = vi.fn(() => codes.shift() ?? 'LAST');
+
+    await expect(saveWithGeneratedCouponCode(save, createCode)).resolves.toEqual({
+      code: 'AVAILABLE',
+    });
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(createCode).toHaveBeenCalledTimes(2);
+
+    const alwaysCollides = vi.fn(async () => {
+      throw new ApiError('VALIDATION', '이미 사용 중인 쿠폰 코드입니다.');
+    });
+    await expect(saveWithGeneratedCouponCode(alwaysCollides, () => 'COLLISION')).rejects.toThrow(
+      '이미 사용 중인 쿠폰 코드입니다.',
+    );
+    expect(alwaysCollides).toHaveBeenCalledTimes(3);
+  });
+});
 
 describe('admin preview form validation', () => {
   it('rejects invalid quote amounts, expired dates, empty notices, and unsupported attachments', () => {

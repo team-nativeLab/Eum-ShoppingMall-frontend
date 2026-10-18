@@ -237,6 +237,12 @@ export function ProductReviewsPage({ productId }: { productId: string }) {
                   <p className="mt-8 text-caption text-text-3">옵션 · {review.optionLabel}</p>
                 ) : null}
                 <p className="mt-12 text-body-m whitespace-pre-line">{review.content}</p>
+                {review.adminReply ? (
+                  <div className="mt-12 rounded-8 bg-surface p-12 text-body-s">
+                    <p className="font-medium">판매자 답변</p>
+                    <p className="mt-4 whitespace-pre-line">{review.adminReply}</p>
+                  </div>
+                ) : null}
               </div>
             </li>
           ))}

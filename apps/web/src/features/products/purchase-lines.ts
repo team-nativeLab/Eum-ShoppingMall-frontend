@@ -1,4 +1,9 @@
-import { CART_MAX_QUANTITY, createCartOptionId, formatCartOptionLabel } from '@eum/api/cart';
+import {
+  CART_MAX_QUANTITY,
+  createCartOptionId,
+  formatCartOptionLabel,
+  resolveCartOption,
+} from '@eum/api/cart';
 import type { Product, ProductOption, ProductOptionChoice } from '@eum/api/types';
 
 /** 옵션 없는 기본 구성 줄의 식별자 */
@@ -19,6 +24,8 @@ export interface PurchaseLine {
   displayLabel: string;
   /** 고른 선택지 추가금 합계 */
   priceDelta: number;
+  /** 선택 SKU에 연결된 이미지 URL. 이미지가 없으면 null */
+  skuImageUrl?: string | null;
   quantity: number;
 }
 
@@ -84,7 +91,7 @@ function findChoice(
  * - 상품에 없는 옵션·선택지 ID는 무시합니다.
  */
 export function buildPurchaseLine(
-  product: Pick<Product, 'name' | 'options'>,
+  product: Pick<Product, 'name' | 'options' | 'skus'>,
   choices: OptionChoices,
 ): PurchaseLineDraft | null {
   if (getMissingRequiredOptions(product, choices).length > 0) return null;
@@ -104,12 +111,15 @@ export function buildPurchaseLine(
       choiceLabel: choice.label,
     })),
   );
+  const optionResolution = resolveCartOption(product, optionId);
+  if (!optionResolution.isAvailable) return null;
   return {
     lineId: optionId ?? BASE_LINE_ID,
     optionId,
     optionLabel,
     displayLabel: optionLabel ?? product.name,
-    priceDelta: chosenOptions.reduce((deltaSum, { choice }) => deltaSum + choice.priceDelta, 0),
+    priceDelta: optionResolution.priceDelta,
+    ...(optionResolution.sku ? { skuImageUrl: optionResolution.sku.imageUrl } : {}),
   };
 }
 

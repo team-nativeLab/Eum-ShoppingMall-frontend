@@ -12,6 +12,7 @@ import { SolutionsPageContent } from './solutions-page';
 vi.mock('@/lib/shop-api', () => ({ getShopApi: vi.fn() }));
 vi.mock('@/features/auth/member-session', () => ({ useMemberSession: vi.fn() }));
 const navigationMock = vi.hoisted(() => ({ search: '' }));
+const quoteSubmitMock = vi.hoisted(() => vi.fn());
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(navigationMock.search),
 }));
@@ -103,6 +104,7 @@ function renderWithQueryClient(element: ReactNode) {
 
 beforeEach(() => {
   navigationMock.search = '';
+  quoteSubmitMock.mockReset().mockResolvedValue({ id: 'qt-web-0001' });
   vi.mocked(useMemberSession).mockReturnValue({
     member,
     status: 'ready',
@@ -115,10 +117,11 @@ beforeEach(() => {
       list: async () => ({ items: [product], page: 1, pageSize: 100, totalCount: 1 }),
     },
     company: { getInfo: async () => companyInfo },
+    quotes: { submit: quoteSubmitMock },
   } as never);
 });
 
-describe('quote request preview', () => {
+describe('quote request submission', () => {
   it('uses the success selection state and keeps the disabled add action visible', async () => {
     const user = userEvent.setup();
     renderWithQueryClient(<SolutionsPageContent />);
@@ -239,7 +242,7 @@ describe('quote request preview', () => {
     expect(deliveryDateInput).toHaveAttribute('name', 'deliveryDate');
   });
 
-  it('상품·옵션·수량을 선택하고 접수 후 입력 내용을 저장하지 않는 완료 미리보기를 표시합니다', async () => {
+  it('상품·옵션·수량·첨부를 mock API에 제출하고 접수 번호를 표시합니다', async () => {
     const user = userEvent.setup();
     renderWithQueryClient(<SolutionsPageContent />);
     const productSelect = await screen.findByRole('combobox', { name: '상품 선택' });
@@ -277,14 +280,26 @@ describe('quote request preview', () => {
     expect(
       await screen.findByRole('heading', { name: '견적 문의가 접수되었습니다' }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/입력값은 서버로 전송되거나 저장되지 않았습니다/)).toBeInTheDocument();
-    expect(
-      screen.getByText('선택한 파일은 현재 화면에만 표시되며 문의와 함께 전송되지 않았습니다.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/접수 정보가 목업 ShopApi에 저장되었습니다/)).toBeInTheDocument();
     expect(screen.queryByText('drawing-plan.pdf')).not.toBeInTheDocument();
     expect(screen.getByText('대량 구매')).toBeInTheDocument();
     expect(screen.getByRole('list', { name: '문의 진행 상태' })).toBeInTheDocument();
-    expect(screen.getByText(/^PREVIEW-/)).toBeInTheDocument();
+    expect(screen.getByText('qt-web-0001')).toBeInTheDocument();
+    expect(quoteSubmitMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: '대량 구매 견적 문의',
+        companyName: '테스트 회사',
+        requestedItems: [{ name: '안전모', quantity: 12, option: '색상: 흰색' }],
+        attachments: [
+          expect.objectContaining({
+            fileName: 'drawing-plan.pdf',
+            mimeType: 'application/octet-stream',
+            sizeBytes: 7,
+          }),
+        ],
+      }),
+    );
+    expect(JSON.stringify(quoteSubmitMock.mock.calls)).not.toContain('dataUrl');
     expect(screen.getByRole('link', { name: '문의 내역 보기' })).toHaveAttribute(
       'href',
       '/mypage/quotes',
@@ -389,9 +404,7 @@ describe('quote request preview', () => {
     expect(input).toHaveValue('');
     const fileList = screen.getByRole('list', { name: '선택한 파일' });
     expect(within(fileList).getAllByText('drawing-plan.pdf')).toHaveLength(2);
-    expect(screen.getByRole('status')).toHaveTextContent(
-      '선택한 파일 2개가 화면에만 표시됩니다. 파일은 문의와 함께 전송되지 않습니다.',
-    );
+    expect(screen.getByRole('status')).toHaveTextContent('선택한 파일 2개를 문의에 첨부합니다.');
 
     fireEvent.click(screen.getByRole('button', { name: 'drawing-plan.pdf 항목 1 제거' }));
     expect(within(fileList).getAllByText('drawing-plan.pdf')).toHaveLength(1);
@@ -413,7 +426,7 @@ describe('quote request preview', () => {
     expect(dropArea).toHaveClass('border-text-1', 'bg-surface');
     const chooseButton = screen.getByRole('button', { name: '파일 선택' });
     const description = screen.getByText(
-      '선택한 파일은 현재 화면에만 표시되며 문의와 함께 전송되지 않습니다.',
+      '파일명·형식·크기만 목업 상태에 기록합니다. 파일 자체는 보관하거나 업로드하지 않습니다. 파일당 5.9MB 이하입니다.',
     );
     const dragLeaveWithinArea = createEvent.dragLeave(chooseButton);
     Object.defineProperty(dragLeaveWithinArea, 'relatedTarget', { value: description });

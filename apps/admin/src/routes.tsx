@@ -16,6 +16,15 @@ import { AdminCouponsPage } from './pages/AdminCouponsPage';
 import { AdminWithdrawnMemberDetailPage } from './pages/AdminWithdrawnMemberDetailPage';
 import { AdminBrandsPage } from './pages/AdminBrandsPage';
 import { AdminBrandFormPage } from './pages/AdminBrandFormPage';
+import { AdminHomePage } from './pages/AdminHomePage';
+import { AdminEventsPage } from './pages/AdminEventsPage';
+import { AdminClaimsPage } from './pages/AdminClaimsPage';
+import { AdminPointsPage } from './pages/AdminPointsPage';
+import { AdminFaqsPage, AdminNoticesPage } from './pages/AdminSupportContentPage';
+import { AdminInquiriesPage } from './pages/AdminInquiriesPage';
+import { AdminReviewsPage } from './pages/AdminReviewsPage';
+import { AdminProductQuestionsPage } from './pages/AdminProductQuestionsPage';
+import { AdminCompanyPoliciesPage } from './pages/AdminCompanyPoliciesPage';
 
 /** 화면 제목·상위 메뉴를 route handle에 담아 TopBar 경로 표시에 씁니다. */
 export interface AdminRouteHandle {
@@ -71,9 +80,69 @@ export const adminRoutes: RouteObject[] = [
         element: <AdminBrandFormPage />,
       },
       {
+        path: 'home-content',
+        handle: { title: '홈 편성', section: '몰 콘텐츠' },
+        element: <AdminHomePage />,
+      },
+      {
+        path: 'events',
+        handle: { title: '이벤트 관리', section: '몰 콘텐츠' },
+        element: <AdminEventsPage />,
+      },
+      {
+        path: 'events/new',
+        handle: { title: '이벤트 등록', section: '몰 콘텐츠' },
+        element: <AdminEventsPage />,
+      },
+      {
+        path: 'events/:eventId',
+        handle: { title: '이벤트 수정', section: '몰 콘텐츠' },
+        element: <AdminEventsPage />,
+      },
+      {
         path: 'quotes',
         handle: { title: '견적 문의 관리', section: '견적 문의' },
         element: <AdminQuotesPage />,
+      },
+      {
+        path: 'claims',
+        handle: { title: '취소·반품·교환 관리', section: '주문 관리' },
+        element: <AdminClaimsPage />,
+      },
+      {
+        path: 'points',
+        handle: { title: '적립금 관리', section: '회원·혜택' },
+        element: <AdminPointsPage />,
+      },
+      {
+        path: 'content/notices',
+        handle: { title: '공지 관리', section: '몰 콘텐츠' },
+        element: <AdminNoticesPage />,
+      },
+      {
+        path: 'content/faqs',
+        handle: { title: 'FAQ 관리', section: '고객 응대' },
+        element: <AdminFaqsPage />,
+      },
+      {
+        path: 'content/inquiries',
+        handle: { title: '1:1 문의', section: '고객 응대' },
+        element: <AdminInquiriesPage />,
+      },
+      {
+        path: 'content/reviews',
+        handle: { title: '상품 리뷰', section: '고객 응대' },
+        element: <AdminReviewsPage />,
+      },
+      {
+        path: 'content/product-questions',
+        handle: { title: '상품 문의', section: '고객 응대' },
+        element: <AdminProductQuestionsPage />,
+      },
+      {
+        path: 'settings/company-policies',
+        handle: { title: '회사·정책 정보', section: '운영 설정' },
+        element: <AdminCompanyPoliciesPage />,
       },
       {
         path: 'orders',

@@ -25,7 +25,7 @@ export function AdminMemberDetailPage() {
     enabled: Boolean(memberId),
     queryFn: async ({ signal }) => {
       if (!memberId) throw new Error('회원 번호가 없습니다.');
-      const members = await (await getShopApi()).members.list({ signal });
+      const members = await (await getShopApi()).members.adminList({ signal });
       return members.find((member) => member.id === memberId);
     },
   });
@@ -35,7 +35,8 @@ export function AdminMemberDetailPage() {
     queryFn: async ({ signal }) => {
       const currentMemberId = memberQuery.data?.id;
       if (!currentMemberId) return [];
-      return (await getShopApi()).orders.listByMember(currentMemberId, { signal });
+      const orders = await (await getShopApi()).orders.adminList({ signal });
+      return orders.filter((order) => order.memberId === currentMemberId);
     },
   });
   const quotesQuery = useQuery({
@@ -44,7 +45,7 @@ export function AdminMemberDetailPage() {
     queryFn: async ({ signal }) => {
       const currentMemberId = memberQuery.data?.id;
       if (!currentMemberId) return [];
-      const quotes = await (await getShopApi()).quotes.list({ signal });
+      const quotes = await (await getShopApi()).quotes.adminList({ signal });
       return quotes.filter((quote) => quote.memberId === currentMemberId);
     },
   });

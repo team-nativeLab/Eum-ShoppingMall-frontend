@@ -1,15 +1,9 @@
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { Category } from '@eum/api/types';
 import { Button } from '@eum/ui/components/Button';
-import {
-  AdminEmpty,
-  AdminError,
-  AdminLoading,
-  AdminNotice,
-  AdminPageHeader,
-} from '@/components/AdminUI';
+import { AdminEmpty, AdminError, AdminLoading, AdminPageHeader } from '@/components/AdminUI';
 import { getShopApi } from '@/lib/shop-api';
 
 interface CategoryTreeNode {
@@ -140,15 +134,13 @@ function CategoryTreeRows({
 /** Admin 카테고리 트리와 서버가 제공하는 카테고리 상세를 조회합니다. */
 async function loadCategories(signal: AbortSignal): Promise<Category[]> {
   const api = await getShopApi();
-  return api.categories.list({ signal });
+  return api.categories.adminList({ signal });
 }
 
 /** 카테고리 목록·상세를 탐색하는 읽기 전용 관리자 화면입니다. */
 export function AdminCategoriesPage() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [expandedCategoryIds, setExpandedCategoryIds] = useState<ReadonlySet<string> | null>(null);
-  const [localCategories, setLocalCategories] = useState<Category[]>([]);
-  const [hiddenCategoryIds, setHiddenCategoryIds] = useState<ReadonlySet<string>>(new Set());
   const [categoryDrafts, setCategoryDrafts] = useState<
     Record<string, { name: string; description: string }>
   >({});
@@ -156,6 +148,10 @@ export function AdminCategoriesPage() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryDescription, setNewCategoryDescription] = useState('');
   const [previewMessage, setPreviewMessage] = useState('');
+  const [newCategoryParentId, setNewCategoryParentId] = useState<string | null>(null);
+  const [filterDrafts, setFilterDrafts] = useState<Record<string, string>>({});
+  const [sortDrafts, setSortDrafts] = useState<Record<string, number>>({});
+  const queryClient = useQueryClient();
   const categoryQuery = useQuery({
     queryKey: ['admin', 'categories', 'list'],
     queryFn: ({ signal }) => loadCategories(signal),
@@ -169,12 +165,10 @@ export function AdminCategoriesPage() {
     return <AdminError onRetry={() => void categoryQuery.refetch()} />;
   }
 
-  const categories = [
-    ...categoryQuery.data
-      .filter((category) => !hiddenCategoryIds.has(category.id))
-      .map((category) => ({ ...category, ...categoryDrafts[category.id] })),
-    ...localCategories,
-  ];
+  const categories = categoryQuery.data.map((category) => ({
+    ...category,
+    ...categoryDrafts[category.id],
+  }));
   const categoryTree = buildCategoryTree(categories);
   const categoryById = new Map(categories.map((category) => [category.id, category]));
   const initialSelection = categories.find((category) => category.parentId) ?? categories[0];
@@ -205,21 +199,32 @@ export function AdminCategoriesPage() {
       <AdminPageHeader
         title="카테고리 관리"
         action={
-          <Button
-            onClick={() => {
-              setIsCreatingCategory(true);
-              setNewCategoryName('');
-              setNewCategoryDescription('');
-            }}
-          >
-            1차 카테고리 추가
-          </Button>
+          <div className="flex gap-8">
+            <Button
+              variant="secondary"
+              disabled={!activeCategory}
+              onClick={() => {
+                setIsCreatingCategory(true);
+                setNewCategoryName('');
+                setNewCategoryDescription('');
+                setNewCategoryParentId(activeCategory?.id ?? null);
+              }}
+            >
+              하위 카테고리 추가
+            </Button>
+            <Button
+              onClick={() => {
+                setIsCreatingCategory(true);
+                setNewCategoryName('');
+                setNewCategoryDescription('');
+                setNewCategoryParentId(null);
+              }}
+            >
+              1차 카테고리 추가
+            </Button>
+          </div>
         }
       />
-
-      <AdminNotice tone="warning" className="mb-16">
-        추가·수정·삭제는 이 화면에서만 임시로 반영됩니다. 서버에는 저장되지 않습니다.
-      </AdminNotice>
 
       {previewMessage ? (
         <p role="status" className="mb-16 text-body-s text-warning">
@@ -230,9 +235,11 @@ export function AdminCategoriesPage() {
       {isCreatingCategory ? (
         <section
           className="mb-16 rounded-12 border border-line bg-bg p-20"
-          aria-label="임시 카테고리 추가"
+          aria-label="카테고리 추가"
         >
-          <h2 className="text-title">1차 카테고리 추가 미리보기</h2>
+          <h2 className="text-title">
+            {newCategoryParentId ? '하위 카테고리 추가' : '1차 카테고리 추가'}
+          </h2>
           <div className="mt-16 grid grid-cols-2 gap-16">
             <label className="grid gap-8 text-label-m">
               카테고리명
@@ -250,6 +257,24 @@ export function AdminCategoriesPage() {
                 className="h-48 rounded-8 border border-line-control bg-bg px-14 text-body-s"
               />
             </label>
+            <label className="grid gap-8 text-label-m">
+              상위 카테고리
+              <select
+                aria-label="상위 카테고리 선택"
+                value={newCategoryParentId ?? ''}
+                onChange={(event) => setNewCategoryParentId(event.target.value || null)}
+                className="h-48 rounded-8 border border-line-control bg-bg px-14 text-body-s"
+              >
+                <option value="">최상위 카테고리</option>
+                {categories
+                  .filter((category) => category.parentId === null)
+                  .map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
           </div>
           <div className="mt-16 flex justify-end gap-8">
             <Button variant="secondary" onClick={() => setIsCreatingCategory(false)}>
@@ -257,25 +282,41 @@ export function AdminCategoriesPage() {
             </Button>
             <Button
               disabled={!newCategoryName.trim()}
-              onClick={() => {
-                const localId = `preview-category-${Date.now()}`;
-                const localCategory: Category = {
-                  id: localId,
-                  slug: localId,
-                  name: newCategoryName.trim(),
-                  parentId: null,
-                  description: newCategoryDescription.trim() || null,
-                  iconKey: null,
-                };
-                setLocalCategories((previous) => [...previous, localCategory]);
-                setSelectedCategoryId(localId);
-                setIsCreatingCategory(false);
-                setPreviewMessage(
-                  '카테고리가 목록에 임시 추가되었습니다. 새로고침하면 사라집니다.',
-                );
+              onClick={async () => {
+                const slug =
+                  newCategoryName
+                    .trim()
+                    .toLocaleLowerCase('ko-KR')
+                    .replace(/[^\p{L}\p{N}]+/gu, '-')
+                    .replace(/^-|-$/g, '') || `category-${Date.now()}`;
+                try {
+                  const api = await getShopApi();
+                  const createdCategory = await api.categories.save({
+                    slug,
+                    name: newCategoryName.trim(),
+                    parentId: newCategoryParentId,
+                    description: newCategoryDescription.trim() || null,
+                    iconKey: null,
+                    isVisible: true,
+                    sortOrder: categories.length,
+                    filterAttributes: [],
+                  });
+                  await queryClient.invalidateQueries({ queryKey: ['admin', 'categories'] });
+                  await queryClient.invalidateQueries({ queryKey: ['categories'] });
+                  await queryClient.invalidateQueries({ queryKey: ['products'] });
+                  setSelectedCategoryId(createdCategory.id);
+                  setIsCreatingCategory(false);
+                  setPreviewMessage('카테고리를 목 API에 저장했습니다.');
+                } catch (createError) {
+                  setPreviewMessage(
+                    createError instanceof Error
+                      ? createError.message
+                      : '카테고리를 저장하지 못했습니다.',
+                  );
+                }
               }}
             >
-              임시 추가
+              저장
             </Button>
           </div>
         </section>
@@ -381,16 +422,72 @@ export function AdminCategoriesPage() {
                 </div>
                 <div>
                   <p className="mb-8 text-label-m">노출</p>
-                  <div className="flex min-h-40 items-center gap-8 text-body-s text-text-3">
-                    <span
-                      className="inline-flex h-20 w-36 items-center rounded-capsule bg-surface-2 p-2"
-                      aria-hidden="true"
-                    >
-                      <span className="size-16 rounded-capsule bg-text-disabled" />
-                    </span>
-                    노출 상태 정보 없음
-                  </div>
+                  <label className="flex min-h-40 items-center gap-8 text-body-s">
+                    <input
+                      type="checkbox"
+                      checked={activeCategory.isVisible !== false}
+                      onChange={async (event) => {
+                        try {
+                          const api = await getShopApi();
+                          await api.categories.save({
+                            ...activeCategory,
+                            isVisible: event.target.checked,
+                          });
+                          await queryClient.invalidateQueries({
+                            queryKey: ['admin', 'categories'],
+                          });
+                          await queryClient.invalidateQueries({ queryKey: ['categories'] });
+                          setPreviewMessage('카테고리 노출 상태를 목 API에 저장했습니다.');
+                        } catch (updateError) {
+                          setPreviewMessage(
+                            updateError instanceof Error
+                              ? updateError.message
+                              : '노출 상태를 저장하지 못했습니다.',
+                          );
+                        }
+                      }}
+                    />
+                    웹 노출
+                  </label>
                 </div>
+              </div>
+
+              <div className="mt-16 grid grid-cols-2 gap-16">
+                <label className="grid gap-8 text-label-m">
+                  정렬 순서
+                  <input
+                    type="number"
+                    min="0"
+                    value={sortDrafts[activeCategory.id] ?? activeCategory.sortOrder ?? 0}
+                    onChange={(event) =>
+                      setSortDrafts((previous) => ({
+                        ...previous,
+                        [activeCategory.id]: Number(event.target.value) || 0,
+                      }))
+                    }
+                    className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
+                  />
+                </label>
+                <label className="grid gap-8 text-label-m">
+                  필터 속성 (속성명:값1,값2; 구분)
+                  <input
+                    value={
+                      filterDrafts[activeCategory.id] ??
+                      activeCategory.filterAttributes
+                        ?.map((attribute) => `${attribute.name}:${attribute.values.join(',')}`)
+                        .join('; ') ??
+                      ''
+                    }
+                    onChange={(event) =>
+                      setFilterDrafts((previous) => ({
+                        ...previous,
+                        [activeCategory.id]: event.target.value,
+                      }))
+                    }
+                    className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
+                    placeholder="인증:KCs,자율안전"
+                  />
+                </label>
               </div>
 
               <div className="mt-24 flex items-center justify-between border-t border-line pt-16">
@@ -398,31 +495,85 @@ export function AdminCategoriesPage() {
                   type="button"
                   variant="danger"
                   size="s"
-                  onClick={() => {
-                    if (activeCategory.id.startsWith('preview-category-')) {
-                      setLocalCategories((previous) =>
-                        previous.filter((category) => category.id !== activeCategory.id),
+                  onClick={async () => {
+                    try {
+                      const api = await getShopApi();
+                      await api.categories.delete(activeCategory.id);
+                      await queryClient.invalidateQueries({ queryKey: ['admin', 'categories'] });
+                      await queryClient.invalidateQueries({ queryKey: ['categories'] });
+                      await queryClient.invalidateQueries({ queryKey: ['products'] });
+                      setSelectedCategoryId(null);
+                      setPreviewMessage(
+                        '카테고리를 삭제했습니다. 연결된 하위 분류나 상품이 있으면 삭제되지 않습니다.',
                       );
-                    } else {
-                      setHiddenCategoryIds((previous) => new Set([...previous, activeCategory.id]));
+                    } catch (deleteError) {
+                      setPreviewMessage(
+                        deleteError instanceof Error
+                          ? deleteError.message
+                          : '카테고리를 삭제하지 못했습니다.',
+                      );
                     }
-                    setSelectedCategoryId(null);
-                    setPreviewMessage(
-                      '선택한 카테고리를 현재 화면에서만 숨겼습니다. 서버 데이터는 변경되지 않았습니다.',
-                    );
                   }}
                 >
                   삭제
                 </Button>
                 <Button
                   type="button"
-                  onClick={() =>
-                    setPreviewMessage(
-                      '변경 사항을 이 화면에 임시 반영했습니다. 서버에는 저장되지 않았습니다.',
-                    )
-                  }
+                  onClick={async () => {
+                    const filterAttributes = (filterDrafts[activeCategory.id] ?? '')
+                      .split(';')
+                      .map((part, index) => {
+                        const [namePart, valuesPart = ''] = part.split(':');
+                        return {
+                          id: `filter-${index + 1}`,
+                          name: namePart?.trim() ?? '',
+                          values: valuesPart
+                            .split(',')
+                            .map((value) => value.trim())
+                            .filter(Boolean),
+                        };
+                      })
+                      .filter((attribute) => attribute.name && attribute.values.length > 0);
+                    try {
+                      const api = await getShopApi();
+                      await api.categories.save({
+                        ...activeCategory,
+                        name: categoryDrafts[activeCategory.id]?.name ?? activeCategory.name,
+                        description:
+                          categoryDrafts[activeCategory.id]?.description ??
+                          activeCategory.description,
+                        sortOrder: sortDrafts[activeCategory.id] ?? activeCategory.sortOrder ?? 0,
+                        filterAttributes,
+                      });
+                      await queryClient.invalidateQueries({ queryKey: ['admin', 'categories'] });
+                      await queryClient.invalidateQueries({ queryKey: ['categories'] });
+                      await queryClient.invalidateQueries({ queryKey: ['products'] });
+                      setCategoryDrafts((previous) => {
+                        const next = { ...previous };
+                        delete next[activeCategory.id];
+                        return next;
+                      });
+                      setFilterDrafts((previous) => {
+                        const next = { ...previous };
+                        delete next[activeCategory.id];
+                        return next;
+                      });
+                      setSortDrafts((previous) => {
+                        const next = { ...previous };
+                        delete next[activeCategory.id];
+                        return next;
+                      });
+                      setPreviewMessage('카테고리 변경 사항을 목 API에 저장했습니다.');
+                    } catch (saveError) {
+                      setPreviewMessage(
+                        saveError instanceof Error
+                          ? saveError.message
+                          : '카테고리를 저장하지 못했습니다.',
+                      );
+                    }
+                  }}
                 >
-                  임시 저장
+                  저장
                 </Button>
               </div>
             </section>

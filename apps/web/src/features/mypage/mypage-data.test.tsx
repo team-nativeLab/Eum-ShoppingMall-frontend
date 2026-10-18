@@ -7,6 +7,7 @@ import { getCollectionProductIds, useMyPageData } from './mypage-data';
 
 const apiMocks = vi.hoisted(() => ({
   getShopApi: vi.fn(),
+  currentMember: vi.fn(),
   membersList: vi.fn(),
   ordersList: vi.fn(),
   claimsList: vi.fn(),
@@ -37,6 +38,12 @@ describe('useMyPageData', () => {
     apiMocks.membersList.mockResolvedValue([
       { id: 'member-a', name: '목 회원', email: 'member@example.com', pointBalance: 0 },
     ]);
+    apiMocks.currentMember.mockResolvedValue({
+      id: 'member-a',
+      name: '목 회원',
+      email: 'member@example.com',
+      pointBalance: 0,
+    });
     apiMocks.ordersList.mockResolvedValue([]);
     apiMocks.claimsList.mockResolvedValue([]);
     apiMocks.couponsList.mockResolvedValue([]);
@@ -45,13 +52,17 @@ describe('useMyPageData', () => {
     apiMocks.quotesList.mockResolvedValue([]);
     apiMocks.productById.mockResolvedValue({ id: 'product-a', name: '목 상품' });
     apiMocks.getShopApi.mockResolvedValue({
-      members: { list: apiMocks.membersList },
+      members: { getCurrent: apiMocks.currentMember, list: apiMocks.membersList },
       orders: { listByMember: apiMocks.ordersList },
       claims: { listByMember: apiMocks.claimsList },
-      coupons: { list: apiMocks.couponsList },
+      coupons: {
+        list: apiMocks.couponsList,
+        historyList: apiMocks.couponsList,
+        availableList: vi.fn().mockResolvedValue([]),
+      },
       points: { list: apiMocks.pointsList },
       addresses: { list: apiMocks.addressesList },
-      quotes: { list: apiMocks.quotesList },
+      quotes: { listByMember: apiMocks.quotesList },
       products: { getById: apiMocks.productById },
     });
   });
@@ -110,7 +121,7 @@ describe('useMyPageData', () => {
     });
     await waitFor(() => expect(result.current.isError).toBe(true));
 
-    expect(apiMocks.membersList).toHaveBeenCalledOnce();
+    expect(apiMocks.currentMember).toHaveBeenCalledOnce();
     expect(apiMocks.ordersList).toHaveBeenCalledOnce();
     expect(apiMocks.claimsList).not.toHaveBeenCalled();
     expect(apiMocks.couponsList).not.toHaveBeenCalled();

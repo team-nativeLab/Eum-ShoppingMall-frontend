@@ -1,7 +1,7 @@
 import type { Claim, Order } from '../types';
 import { mockAddresses } from './addresses';
 
-const defaultAddress = mockAddresses[0]!;
+const { memberId: _memberId, ...defaultAddress } = mockAddresses[0]!;
 
 /** 목 주문 */
 export const mockOrders: Order[] = [
@@ -55,5 +55,14 @@ export const mockClaims: Claim[] = [
     reason: '사이즈 교환',
     description: '착용 전 사이즈 확인 중 교환을 요청했습니다.',
     requestedAt: '2026-10-04T11:00:00+09:00',
+  },
+  {
+    id: 'clm-002',
+    orderId: 'ord-002',
+    type: 'cancel',
+    status: 'requested',
+    reason: '주문 변경',
+    description: '출고 전 주문 취소를 요청했습니다.',
+    requestedAt: '2026-10-11T09:30:00+09:00',
   },
 ];

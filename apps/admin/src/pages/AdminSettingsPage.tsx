@@ -1,9 +1,18 @@
 import { useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useBlocker } from 'react-router';
 import { Button } from '@eum/ui/components/Button';
 import { Modal } from '@eum/ui/components/Modal';
-import { AdminNotice, AdminPageHeader, AdminPanel } from '@/components/AdminUI';
+import {
+  AdminError,
+  AdminLoading,
+  AdminNotice,
+  AdminPageHeader,
+  AdminPanel,
+} from '@/components/AdminUI';
 import { validateAdminSettingsDraft } from '@/lib/admin-preview-validation';
+import { getShopApi } from '@/lib/shop-api';
+import type { AdminShopSettings } from '@eum/api/types';
 
 const INITIAL_SETTINGS = {
   baseShippingFee: '0',
@@ -83,11 +92,69 @@ const NUMERIC_SETTING_KEYS = [
   'firstPurchaseMinimumOrder',
 ] as const;
 
+function toSettingsDraft(settings: AdminShopSettings): SettingsDraft {
+  return {
+    baseShippingFee: String(settings.baseShippingFee),
+    baseFeeMode: settings.baseFeeMode,
+    freeShippingEnabled: String(settings.freeShippingEnabled),
+    freeShippingThreshold: String(settings.freeShippingThreshold),
+    freeShippingScope: settings.freeShippingScope,
+    remoteFeeEnabled: String(settings.remoteFeeEnabled),
+    jejuFee: String(settings.jejuFee),
+    islandFee: String(settings.islandFee),
+    returnFee: String(settings.returnFee),
+    exchangeFee: String(settings.exchangeFee),
+    combineReturnShipping: String(settings.combineReturnShipping),
+    businessDiscountEnabled: String(settings.businessDiscountEnabled),
+    businessDiscountRate: String(settings.businessDiscountRate),
+    businessDiscountScope: settings.businessDiscountScope,
+    businessCouponStacking: String(settings.businessCouponStacking),
+    firstPurchaseEnabled: String(settings.firstPurchaseEnabled),
+    firstPurchaseBenefitType: settings.firstPurchaseBenefitType,
+    firstPurchaseBenefitValue: String(settings.firstPurchaseBenefitValue),
+    firstPurchaseMaxDiscount: String(settings.firstPurchaseMaxDiscount),
+    firstPurchaseMinimumOrder: String(settings.firstPurchaseMinimumOrder),
+    firstPurchasePaymentScope: settings.firstPurchasePaymentScope,
+  };
+}
+
+function toShopSettings(draft: SettingsDraft): AdminShopSettings {
+  return {
+    baseShippingFee: Number(draft.baseShippingFee),
+    baseFeeMode: draft.baseFeeMode === 'included' ? 'included' : 'customer',
+    freeShippingEnabled: draft.freeShippingEnabled === 'true',
+    freeShippingThreshold: Number(draft.freeShippingThreshold),
+    freeShippingScope: draft.freeShippingScope === 'cart' ? 'cart' : 'all',
+    remoteFeeEnabled: draft.remoteFeeEnabled === 'true',
+    jejuFee: Number(draft.jejuFee),
+    islandFee: Number(draft.islandFee),
+    returnFee: Number(draft.returnFee),
+    exchangeFee: Number(draft.exchangeFee),
+    combineReturnShipping: draft.combineReturnShipping === 'true',
+    businessDiscountEnabled: draft.businessDiscountEnabled === 'true',
+    businessDiscountRate: Number(draft.businessDiscountRate),
+    businessDiscountScope: draft.businessDiscountScope === 'category' ? 'category' : 'direct',
+    businessCouponStacking: draft.businessCouponStacking === 'true',
+    firstPurchaseEnabled: draft.firstPurchaseEnabled === 'true',
+    firstPurchaseBenefitType: draft.firstPurchaseBenefitType === 'amount' ? 'amount' : 'rate',
+    firstPurchaseBenefitValue: Number(draft.firstPurchaseBenefitValue),
+    firstPurchaseMaxDiscount: Number(draft.firstPurchaseMaxDiscount),
+    firstPurchaseMinimumOrder: Number(draft.firstPurchaseMinimumOrder),
+    firstPurchasePaymentScope: draft.firstPurchasePaymentScope === 'newOnly' ? 'newOnly' : 'all',
+  };
+}
+
 /** 운영 설정의 상세 항목과 화면 내 임시 미리보기만 제공합니다. */
 export function AdminSettingsPage() {
+  const queryClient = useQueryClient();
+  const settingsQuery = useQuery({
+    queryKey: ['admin', 'settings', 'shipping-discount'],
+    queryFn: async ({ signal }) => (await getShopApi()).settings.getAdmin({ signal }),
+  });
   const [draft, setDraft] = useState<SettingsDraft>(INITIAL_SETTINGS);
   const [savedPreview, setSavedPreview] = useState<SettingsDraft>(INITIAL_SETTINGS);
   const [announcement, setAnnouncement] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const numericDraft = Object.fromEntries(NUMERIC_SETTING_KEYS.map((key) => [key, draft[key]]));
   if (draft.firstPurchaseEnabled === 'true' && draft.firstPurchaseBenefitType === 'rate') {
     numericDraft.firstPurchaseRate = draft.firstPurchaseBenefitValue;
@@ -97,6 +164,14 @@ export function AdminSettingsPage() {
     (key) => draft[key as SettingKey] !== savedPreview[key as SettingKey],
   );
   const blocker = useBlocker(isDirty);
+
+  useEffect(() => {
+    if (settingsQuery.data) {
+      const loadedDraft = toSettingsDraft(settingsQuery.data);
+      setDraft(loadedDraft);
+      setSavedPreview(loadedDraft);
+    }
+  }, [settingsQuery.data]);
 
   useEffect(() => {
     if (!isDirty) return;
@@ -116,7 +191,7 @@ export function AdminSettingsPage() {
     setDraft(savedPreview);
     setAnnouncement('변경 사항을 취소하고 현재 화면의 저장 미리보기로 되돌렸습니다.');
   };
-  const previewSave = () => {
+  const previewSave = async () => {
     const values = Object.fromEntries(NUMERIC_SETTING_KEYS.map((key) => [key, draft[key]]));
     if (draft.firstPurchaseEnabled === 'true' && draft.firstPurchaseBenefitType === 'rate')
       values.firstPurchaseRate = draft.firstPurchaseBenefitValue;
@@ -125,8 +200,24 @@ export function AdminSettingsPage() {
       setAnnouncement('입력 오류를 수정한 뒤 다시 저장해 주세요.');
       return;
     }
-    setSavedPreview(draft);
-    setAnnouncement('저장 미리보기를 갱신했습니다. 실제 운영 설정에는 저장되지 않았습니다.');
+    setIsSaving(true);
+    try {
+      const settings = await (await getShopApi()).settings.saveAdmin(toShopSettings(draft));
+      const savedDraft = toSettingsDraft(settings);
+      setSavedPreview(savedDraft);
+      setDraft(savedDraft);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['admin', 'settings', 'shipping-discount'] }),
+        queryClient.invalidateQueries({ queryKey: ['checkout', 'options'] }),
+      ]);
+      setAnnouncement(
+        '배송·할인 설정을 목 API에 저장했습니다. 주문서 화면도 같은 mock API 인스턴스의 배송비 정책을 사용합니다.',
+      );
+    } catch (error) {
+      setAnnouncement(error instanceof Error ? error.message : '운영 설정을 저장하지 못했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
   };
   const input = (field: SettingField) => (
     <label key={field.key} className="grid gap-6 text-body-s">
@@ -174,6 +265,9 @@ export function AdminSettingsPage() {
     </fieldset>
   );
 
+  if (settingsQuery.isPending) return <AdminLoading label="배송·할인 설정을 불러오고 있습니다." />;
+  if (settingsQuery.isError) return <AdminError onRetry={() => void settingsQuery.refetch()} />;
+
   return (
     <section aria-label="배송·할인 설정">
       <AdminPageHeader
@@ -189,9 +283,7 @@ export function AdminSettingsPage() {
           className="mb-16"
           title={section.title}
           description={
-            isDirty
-              ? '저장되지 않은 변경 사항이 있습니다.'
-              : '현재 관리자 화면의 미리보기 값입니다.'
+            isDirty ? '저장되지 않은 변경 사항이 있습니다.' : '현재 목 API에 저장된 설정입니다.'
           }
           action={
             section.title.includes('무료') ||
@@ -300,15 +392,16 @@ export function AdminSettingsPage() {
       </AdminPanel>
       <div className="flex justify-end gap-8 rounded-12 border border-line bg-bg p-12">
         <span className="mr-auto self-center text-caption text-text-3">
-          {isDirty
-            ? '저장되지 않은 변경 사항이 있습니다.'
-            : '미리보기 값은 브라우저 저장소에 보관되지 않습니다.'}
+          {isDirty ? '저장되지 않은 변경 사항이 있습니다.' : '설정은 목 API에 저장됩니다.'}
         </span>
         <Button variant="secondary" onClick={reset} disabled={!isDirty}>
           변경 취소
         </Button>
-        <Button onClick={previewSave} disabled={!isDirty || validationErrors.length > 0}>
-          저장 미리보기
+        <Button
+          onClick={() => void previewSave()}
+          disabled={!isDirty || validationErrors.length > 0 || isSaving}
+        >
+          {isSaving ? '저장 중…' : '설정 저장'}
         </Button>
       </div>
       {validationErrors.length ? (

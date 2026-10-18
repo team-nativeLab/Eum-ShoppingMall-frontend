@@ -47,6 +47,7 @@ import {
   type PurchaseLine,
 } from './purchase-lines';
 import { useRelatedProductsQuery } from './use-related-products-query';
+import { useProductQuestionsQuery } from './use-product-questions-query';
 
 /** 함께 구매하면 좋은 제품 최대 수(5열 × 2페이지) */
 const RELATED_PRODUCT_LIMIT = 10;
@@ -175,6 +176,7 @@ function ProductDetailContent({
   categories: Category[];
   relatedProducts: Product[];
 }) {
+  const questionsQuery = useProductQuestionsQuery(product.id);
   const router = useRouter();
   const { addToCart, isOrderPending } = useCart();
   const { beginDirectCheckout } = useCheckout();
@@ -211,12 +213,24 @@ function ProductDetailContent({
     (line) => product.options.length > 0 || line.lineId !== BASE_LINE_ID || line.quantity !== 1,
   );
   const totalQuantity = purchaseLines.reduce((quantitySum, line) => quantitySum + line.quantity, 0);
-  const galleryImages: GalleryImage[] =
+  const defaultGalleryImages: GalleryImage[] =
     product.images.length > 0
       ? product.images
       : product.thumbnailUrl
         ? [{ id: 'thumbnail', url: product.thumbnailUrl, alt: product.name }]
         : [];
+  const pendingPurchaseLine = buildPurchaseLine(product, pendingChoices);
+  const selectedSkuImageUrl = pendingPurchaseLine?.skuImageUrl ?? purchaseLines.at(-1)?.skuImageUrl;
+  const galleryImages: GalleryImage[] = selectedSkuImageUrl
+    ? [
+        {
+          id: `sku-image-${selectedSkuImageUrl}`,
+          url: selectedSkuImageUrl,
+          alt: `${product.name} 선택 옵션 이미지`,
+        },
+        ...defaultGalleryImages.filter((image) => image.url !== selectedSkuImageUrl),
+      ]
+    : defaultGalleryImages;
 
   // 선택 줄 금액(단가 + 옵션 추가금) × 수량. 금액 미표시 상품은 계산하지 않습니다.
   const getLineAmount = (line: PurchaseLine): number | null =>
@@ -245,6 +259,12 @@ function ProductDetailContent({
     const lineDraft = buildPurchaseLine(product, nextChoices);
     if (!lineDraft) {
       setPendingChoices(nextChoices);
+      if (product.skus?.length && getMissingRequiredOptions(product, nextChoices).length === 0) {
+        setNotice({
+          tone: 'danger',
+          message: '선택한 옵션 조합은 판매가 종료되었거나 재고가 부족합니다.',
+        });
+      }
       if (hadRequiredOptionError) {
         const firstMissingOption = getMissingRequiredOptions(product, nextChoices)[0];
         setRequiredOptionErrorId(firstMissingOption?.id ?? null);
@@ -261,7 +281,15 @@ function ProductDetailContent({
   // 선택 옵션만 있는 상품(manual)에서 "추가" 버튼으로 지금 고른 구성을 줄로 확정하는 함수
   const commitPendingChoices = () => {
     const lineDraft = buildPurchaseLine(product, pendingChoices);
-    if (!lineDraft) return;
+    if (!lineDraft) {
+      if (product.skus?.length && getMissingRequiredOptions(product, pendingChoices).length === 0) {
+        setNotice({
+          tone: 'danger',
+          message: '선택한 옵션 조합은 판매가 종료되었거나 재고가 부족합니다.',
+        });
+      }
+      return;
+    }
     setNotice(null);
     setPendingChoices({});
     setPurchaseLines((currentLines) => addPurchaseLine(currentLines, lineDraft));
@@ -418,7 +446,11 @@ function ProductDetailContent({
         </div>
 
         <div className="grid lg:mt-24 lg:grid-cols-[minmax(0,636fr)_minmax(0,612fr)] lg:gap-48">
-          <ProductGallery images={galleryImages} productName={product.name} />
+          <ProductGallery
+            key={galleryImages[0]?.id ?? product.id}
+            images={galleryImages}
+            productName={product.name}
+          />
 
           <div className="min-w-0">
             <section aria-labelledby="product-title" className="py-24 lg:py-0">
@@ -688,6 +720,11 @@ function ProductDetailContent({
                   {product.summary}
                 </p>
               ) : null}
+              {product.detailDescription ? (
+                <div className="mb-20 text-body-m whitespace-pre-line text-text-2">
+                  {product.detailDescription}
+                </div>
+              ) : null}
               <div className="mx-auto aspect-[856/1200] w-full max-w-[856px] overflow-hidden rounded-12 bg-surface">
                 <ProductImage
                   src={galleryImages[0]?.url ?? null}
@@ -762,12 +799,45 @@ function ProductDetailContent({
                   문의하기
                 </Link>
               </div>
-              <EmptyState
-                icon={PackageOpen}
-                title="등록된 상품 문의가 없습니다"
-                headingLevel="h3"
-                className="pt-48"
-              />
+              {questionsQuery.isPending ? (
+                <p role="status" className="pt-32 text-body-s text-text-3">
+                  상품 문의를 불러오고 있습니다.
+                </p>
+              ) : questionsQuery.isError ? (
+                <p role="alert" className="pt-32 text-body-s text-text-3">
+                  상품 문의를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.
+                </p>
+              ) : questionsQuery.data.length === 0 ? (
+                <EmptyState
+                  icon={PackageOpen}
+                  title="등록된 상품 문의가 없습니다"
+                  headingLevel="h3"
+                  className="pt-48"
+                />
+              ) : (
+                <ul className="mt-24 divide-y divide-line rounded-8 border border-line">
+                  {questionsQuery.data.map((question) => (
+                    <li key={question.id} className="p-16">
+                      <div className="flex flex-wrap items-center gap-8 text-caption text-text-3">
+                        <span>{question.authorName}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{question.isPrivate ? '비밀 문의' : '공개 문의'}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{question.status === 'answered' ? '답변 완료' : '답변 대기'}</span>
+                      </div>
+                      <h3 className="mt-8 text-label-m">{question.title}</h3>
+                      <p className="mt-6 text-body-s whitespace-pre-wrap text-text-2">
+                        {question.body}
+                      </p>
+                      {question.answer ? (
+                        <p className="mt-12 border-l-2 border-line-strong pl-12 text-body-s whitespace-pre-wrap">
+                          {question.answer}
+                        </p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
           </div>
         </div>

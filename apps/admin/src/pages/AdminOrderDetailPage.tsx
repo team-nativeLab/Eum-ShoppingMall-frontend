@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router';
 import { Button } from '@eum/ui/components/Button';
 import { Modal } from '@eum/ui/components/Modal';
@@ -15,7 +15,8 @@ import {
   formatAdminDateTime,
 } from '@/components/AdminUI';
 import { getShopApi } from '@/lib/shop-api';
-import type { OrderStatus } from '@eum/api/types';
+import type { AdminOrder, Order, OrderStatus } from '@eum/api/types';
+import type { AdminOrderUpdate } from '@eum/api/shop-api';
 
 const ORDER_STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
   { value: 'paymentPending', label: '결제대기' },
@@ -26,21 +27,35 @@ const ORDER_STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
   { value: 'canceled', label: '취소·반품' },
 ];
 
+function toAdminOrder(order: Order): AdminOrder {
+  return {
+    ...order,
+    memberId: order.memberId ?? '',
+    trackingCarrier: '',
+    trackingNumber: '',
+    adminMemo: '',
+    statusHistory: [{ status: order.status, occurredAt: order.orderedAt, note: '' }],
+  };
+}
+
 /** 주문 기본 정보와 읽기 전용 처리 영역을 표시합니다. */
 export function AdminOrderDetailPage() {
   const { orderId } = useParams();
-  const [previewStatusByOrder, setPreviewStatusByOrder] = useState<
-    Partial<Record<string, OrderStatus>>
-  >({});
+  const queryClient = useQueryClient();
+  const [mutationMessage, setMutationMessage] = useState('');
   const [cancelReason, setCancelReason] = useState('');
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
   const [cancelPreviewMessage, setCancelPreviewMessage] = useState('');
+  const [cancelError, setCancelError] = useState('');
   const orderQuery = useQuery({
     queryKey: ['admin', 'orders', 'detail', orderId],
     enabled: Boolean(orderId),
     queryFn: async ({ signal }) => {
       if (!orderId) throw new Error('주문 번호가 없습니다.');
-      return (await getShopApi()).orders.getById(orderId, { signal });
+      const orders = (await getShopApi()).orders;
+      return typeof orders.adminGetById === 'function'
+        ? orders.adminGetById(orderId, { signal })
+        : toAdminOrder(await orders.getById(orderId, { signal }));
     },
   });
   const memberQuery = useQuery({
@@ -49,7 +64,7 @@ export function AdminOrderDetailPage() {
     queryFn: async ({ signal }) => {
       const memberId = orderQuery.data?.memberId;
       if (!memberId) return undefined;
-      const members = await (await getShopApi()).members.list({ signal });
+      const members = await (await getShopApi()).members.adminList({ signal });
       return members.find((member) => member.id === memberId);
     },
   });
@@ -59,7 +74,10 @@ export function AdminOrderDetailPage() {
     queryFn: async ({ signal }) => {
       const memberId = orderQuery.data?.memberId;
       if (!memberId) return [];
-      return (await getShopApi()).claims.listByMember(memberId, { signal });
+      const claims = (await getShopApi()).claims;
+      return typeof claims.adminList === 'function'
+        ? claims.adminList({ signal })
+        : claims.listByMember(memberId, { signal });
     },
   });
 
@@ -74,16 +92,34 @@ export function AdminOrderDetailPage() {
     );
   }
 
-  const order = orderQuery.data;
-  const previewStatus = previewStatusByOrder[order.id] ?? order.status;
+  const order: AdminOrder = orderQuery.data;
+  const previewStatus = order.status;
   const totalQuantity = order.lines.reduce((total, line) => total + line.quantity, 0);
   const cancelRequest = claimsQuery.data?.find(
     (claim) =>
       claim.orderId === order.id && claim.type === 'cancel' && claim.status === 'requested',
   );
+  const saveOrder = async (update: AdminOrderUpdate) => {
+    setMutationMessage('');
+    try {
+      await (await getShopApi()).orders.updateAdmin(order.id, update);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['admin', 'orders', 'detail', order.id] }),
+        queryClient.invalidateQueries({ queryKey: ['admin', 'orders', 'list'] }),
+        queryClient.invalidateQueries({ queryKey: ['orders'] }),
+      ]);
+      setMutationMessage('주문 처리 내용을 목 API에 저장했습니다.');
+    } catch (error) {
+      setMutationMessage(
+        error instanceof Error ? error.message : '주문 처리를 저장하지 못했습니다.',
+      );
+      throw error;
+    }
+  };
   const closeCancelConfirm = () => {
     setIsCancelConfirmOpen(false);
     setCancelReason('');
+    setCancelError('');
   };
 
   return (
@@ -105,9 +141,13 @@ export function AdminOrderDetailPage() {
         <AdminStatusBadge status={previewStatus} kind="order" />
       </div>
       <AdminNotice className="mb-16" tone="warning">
-        주문 상태·배송 정보·메모는 이 화면에서만 미리보기로 반영됩니다. 서버에는 저장되거나 주문
-        취소가 처리되지 않습니다.
+        결제 취소·환불 및 택배사 전송은 이 화면에서 지원하지 않습니다.
       </AdminNotice>
+      {mutationMessage ? (
+        <p role="status" className="mb-12 text-body-s text-text-2">
+          {mutationMessage}
+        </p>
+      ) : null}
       {cancelRequest ? (
         <AdminPanel
           title="취소 요청"
@@ -127,8 +167,15 @@ export function AdminOrderDetailPage() {
             <dd>원 결제 수단 (세부 정보 미제공)</dd>
           </dl>
           <div className="border-t border-line px-20 py-12">
-            <Button size="s" variant="secondary" onClick={() => setIsCancelConfirmOpen(true)}>
-              취소 요청 확인 미리보기
+            <Button
+              size="s"
+              variant="secondary"
+              onClick={() => {
+                setCancelError('');
+                setIsCancelConfirmOpen(true);
+              }}
+            >
+              취소 요청 처리
             </Button>
           </div>
         </AdminPanel>
@@ -184,6 +231,12 @@ export function AdminOrderDetailPage() {
                           <span className="mt-2 block text-caption text-text-3">
                             상품 코드 {line.productId}
                           </span>
+                          {line.optionLabel ? (
+                            <span className="mt-2 block text-caption text-text-3">
+                              옵션 {line.optionLabel}
+                              {line.skuId ? ` · SKU ${line.skuId}` : ''}
+                            </span>
+                          ) : null}
                         </td>
                         <td className="px-12 py-12 text-right">
                           {line.quantity.toLocaleString('ko-KR')}
@@ -264,9 +317,10 @@ export function AdminOrderDetailPage() {
           <OrderProcessingPanel
             key={order.id}
             initialStatus={previewStatus}
-            onPreviewStatus={(status) =>
-              setPreviewStatusByOrder((previous) => ({ ...previous, [order.id]: status }))
-            }
+            initialCarrier={order.trackingCarrier ?? ''}
+            initialTrackingNumber={order.trackingNumber ?? ''}
+            initialMemo={order.adminMemo}
+            onSave={saveOrder}
           />
         </aside>
       </div>
@@ -282,14 +336,43 @@ export function AdminOrderDetailPage() {
             </Button>
             <Button
               disabled={!cancelReason}
-              onClick={() => {
-                setCancelPreviewMessage(
-                  '취소 요청 확인을 화면에서만 미리봤습니다. 환불·주문 상태는 변경되지 않았습니다.',
-                );
-                closeCancelConfirm();
+              onClick={async () => {
+                try {
+                  if (!cancelRequest)
+                    throw new Error(
+                      '처리할 취소 요청을 찾을 수 없습니다. 새로고침 후 다시 확인해 주세요.',
+                    );
+                  const api = await getShopApi();
+                  await api.claims.completeOrderCancellation(
+                    order.id,
+                    cancelRequest.id,
+                    cancelReason,
+                  );
+                  await Promise.all([
+                    queryClient.invalidateQueries({
+                      queryKey: ['admin', 'orders', 'detail', order.id],
+                    }),
+                    queryClient.invalidateQueries({ queryKey: ['admin', 'orders', 'list'] }),
+                    queryClient.invalidateQueries({
+                      queryKey: ['admin', 'orders', 'claims', order.memberId],
+                    }),
+                    queryClient.invalidateQueries({ queryKey: ['orders'] }),
+                    queryClient.invalidateQueries({ queryKey: ['claims'] }),
+                  ]);
+                  setCancelPreviewMessage(
+                    '취소 처리 상태를 목 API에 저장했습니다. 환불은 처리되지 않았습니다.',
+                  );
+                  closeCancelConfirm();
+                } catch (error) {
+                  setCancelError(
+                    error instanceof Error
+                      ? error.message
+                      : '취소 처리 저장에 실패했습니다. 다시 시도해 주세요.',
+                  );
+                }
               }}
             >
-              주문 취소 미리보기
+              취소 처리 저장
             </Button>
           </>
         }
@@ -299,6 +382,11 @@ export function AdminOrderDetailPage() {
             요청을 확인하면 실제 처리에서는 주문 취소와 결제 취소·환불이 진행될 수 있습니다. 이
             데모는 해당 작업을 수행하지 않습니다.
           </AdminNotice>
+          {cancelError ? (
+            <p role="alert" className="mt-12 text-body-s text-danger">
+              {cancelError}
+            </p>
+          ) : null}
           <dl className="grid grid-cols-[1fr_auto] gap-x-12 gap-y-10 rounded-8 bg-surface px-12 py-12 text-body-s">
             <dt className="text-text-3">환불 금액</dt>
             <dd className="text-right font-medium">{formatAdminCurrency(order.paymentTotal)}</dd>
@@ -330,21 +418,36 @@ export function AdminOrderDetailPage() {
 
 function OrderProcessingPanel({
   initialStatus,
-  onPreviewStatus,
+  initialCarrier,
+  initialTrackingNumber,
+  initialMemo,
+  onSave,
 }: {
   initialStatus: OrderStatus;
-  onPreviewStatus: (status: OrderStatus) => void;
+  initialCarrier: string;
+  initialTrackingNumber: string;
+  initialMemo: string;
+  onSave: (update: AdminOrderUpdate) => Promise<void>;
 }) {
   const [status, setStatus] = useState(initialStatus);
-  const [carrier, setCarrier] = useState('');
-  const [trackingNumber, setTrackingNumber] = useState('');
-  const [memo, setMemo] = useState('');
+  const [carrier, setCarrier] = useState(initialCarrier);
+  const [trackingNumber, setTrackingNumber] = useState(initialTrackingNumber);
+  const [memo, setMemo] = useState(initialMemo);
   const [message, setMessage] = useState('');
 
-  const applyPreview = (nextStatus = status) => {
-    setStatus(nextStatus);
-    onPreviewStatus(nextStatus);
-    setMessage('입력한 값과 상태가 화면에만 임시 반영되었습니다. 서버에는 저장되지 않았습니다.');
+  const save = async (nextStatus = status) => {
+    try {
+      await onSave({
+        status: nextStatus,
+        trackingCarrier: carrier,
+        trackingNumber,
+        adminMemo: memo,
+      });
+      setStatus(nextStatus);
+      setMessage('상태·송장·메모를 목 API에 저장했습니다.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '저장에 실패했습니다.');
+    }
   };
 
   return (
@@ -398,11 +501,11 @@ function OrderProcessingPanel({
           </p>
         ) : null}
         <div className="grid grid-cols-2 gap-8">
-          <Button variant="secondary" size="s" onClick={() => applyPreview('canceled')}>
-            취소 상태 미리보기
+          <Button variant="secondary" size="s" onClick={() => void save('canceled')}>
+            취소 상태 저장
           </Button>
-          <Button size="s" onClick={() => applyPreview()}>
-            화면에 임시 반영
+          <Button size="s" onClick={() => void save()}>
+            처리 내용 저장
           </Button>
         </div>
       </div>

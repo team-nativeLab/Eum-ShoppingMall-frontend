@@ -1,5 +1,5 @@
-import type { Address, Claim, Member, Order } from '@eum/api/types';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import type { Address, Claim, Member, Order, Quote } from '@eum/api/types';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useMemberSession } from '@/features/auth/member-session';
 import { useLocalCollections } from '@/features/products/local-collections-context';
@@ -7,11 +7,17 @@ import { MyPageScreen } from './mypage-screen';
 import { useMyPageData, type MyPageData } from './mypage-data';
 
 const routerMock = vi.hoisted(() => ({ push: vi.fn() }));
+const apiMocks = vi.hoisted(() => ({ submitClaim: vi.fn(), listClaims: vi.fn() }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: routerMock.push }) }));
 vi.mock('@/features/auth/member-session', () => ({ useMemberSession: vi.fn() }));
 vi.mock('@/features/products/local-collections-context', () => ({
   useLocalCollections: vi.fn(),
+}));
+vi.mock('@/lib/shop-api', () => ({
+  getShopApi: async () => ({
+    claims: { submit: apiMocks.submitClaim, listByMember: apiMocks.listClaims },
+  }),
 }));
 vi.mock('./mypage-data', () => ({
   formatMyPageDate: (value: string) => value,
@@ -69,6 +75,7 @@ const myPageData: MyPageData = {
   orders: [order],
   claims: [claim],
   coupons: [],
+  couponOffers: [],
   points: [],
   addresses: [address],
   quotes: [],
@@ -77,7 +84,9 @@ const myPageData: MyPageData = {
   loadWarnings: [],
 };
 
-function renderMyPageSection(section: 'claim-new' | 'claims' | 'points' | 'addresses') {
+function renderMyPageSection(
+  section: 'claim-new' | 'claims' | 'points' | 'addresses' | 'quote-detail',
+) {
   vi.mocked(useMyPageData).mockReturnValue({
     data: myPageData,
     isPending: false,
@@ -101,6 +110,8 @@ function getReasonCard(reason: string) {
 
 beforeEach(() => {
   routerMock.push.mockReset();
+  apiMocks.submitClaim.mockReset().mockResolvedValue({ id: 'claim-web-001' });
+  apiMocks.listClaims.mockReset().mockResolvedValue([{ ...claim, id: 'claim-web-001' }]);
   vi.mocked(useMemberSession).mockReturnValue({
     member,
     status: 'ready',
@@ -176,7 +187,14 @@ describe('MyPageScreen claim application', () => {
   });
 
   it('dims unselected reason cards and resets the selection when the claim type changes', () => {
-    renderClaimApplication();
+    const payableOrder = { ...order, id: 'order-paid', status: 'paid' as const };
+    vi.mocked(useMyPageData).mockReturnValue({
+      data: { ...myPageData, orders: [order, payableOrder] },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
+    render(<MyPageScreen section="claim-new" />);
 
     const reasonGroup = screen.getByRole('radiogroup', { name: '사유' });
     expect(within(reasonGroup).getAllByRole('radio')).toHaveLength(5);
@@ -192,10 +210,200 @@ describe('MyPageScreen claim application', () => {
 
     const claimTypeGroup = screen.getByRole('group', { name: '신청 종류' });
     fireEvent.click(within(claimTypeGroup).getByRole('button', { name: '취소' }));
+    fireEvent.change(screen.getByRole('combobox', { name: '주문 선택' }), {
+      target: { value: payableOrder.id },
+    });
     const resetReason = getReasonCard('주문 변경');
 
     expect(resetReason.radio).not.toBeChecked();
     expect(resetReason.card).toHaveClass('bg-bg', 'text-text-1');
+  });
+
+  it('submits the selected order claim and verifies it through the buyer claim list', async () => {
+    const { container } = renderClaimApplication();
+    fireEvent.click(screen.getByRole('checkbox', { name: '안전모 선택' }));
+    fireEvent.click(getReasonCard('상품 불량·파손').radio);
+    fireEvent.click(screen.getByRole('radio', { name: '직접 발송' }));
+    const attachment = new File(['sample'], 'damage.jpg', { type: 'image/jpeg' });
+    const fileInput = container.querySelector('input[type="file"]');
+    if (!fileInput) throw new Error('클레임 첨부 입력을 찾을 수 없습니다.');
+    fireEvent.change(fileInput, { target: { files: [attachment] } });
+    fireEvent.change(screen.getByPlaceholderText('상세 사유를 입력해 주세요.'), {
+      target: { value: '상품이 파손되어 도착했습니다.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '신청하기' }));
+
+    await waitFor(() =>
+      expect(apiMocks.submitClaim).toHaveBeenCalledWith({
+        orderId: 'order-1',
+        type: 'return',
+        reason: '상품 불량·파손',
+        description: '상품이 파손되어 도착했습니다.',
+        items: [{ productId: 'product-1', quantity: 2 }],
+        returnMethod: 'direct',
+        returnAddress: {
+          recipientName: '목 회원',
+          phone: '010-0000-0000',
+          postalCode: '00000',
+          address1: '서울시',
+          address2: '마포구',
+        },
+        attachments: [{ fileName: 'damage.jpg', mimeType: 'image/jpeg', sizeBytes: 6 }],
+      }),
+    );
+    expect(apiMocks.listClaims).toHaveBeenCalledWith(member.id);
+    expect(await screen.findByText(/신청번호 claim-web-001/)).toBeInTheDocument();
+  });
+
+  it('opens the cancel request mode for an eligible order and submits it through the buyer API', async () => {
+    const payableOrder = { ...order, status: 'paid' as const };
+    vi.mocked(useMyPageData).mockReturnValue({
+      data: { ...myPageData, orders: [payableOrder] },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
+
+    render(
+      <MyPageScreen section="claim-new" itemId={payableOrder.id} preferredClaimType="cancel" />,
+    );
+
+    expect(
+      within(screen.getByRole('group', { name: '신청 종류' })).getByRole('button', {
+        name: '취소',
+      }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('checkbox', { name: '안전모 선택' }));
+    fireEvent.click(getReasonCard('주문 변경').radio);
+    fireEvent.change(screen.getByPlaceholderText('상세 사유를 입력해 주세요.'), {
+      target: { value: '주문을 잘못했습니다.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '신청하기' }));
+
+    await waitFor(() =>
+      expect(apiMocks.submitClaim).toHaveBeenCalledWith({
+        orderId: payableOrder.id,
+        type: 'cancel',
+        reason: '주문 변경',
+        description: '주문을 잘못했습니다.',
+        items: [{ productId: 'product-1', quantity: 2 }],
+      }),
+    );
+    expect(apiMocks.listClaims).toHaveBeenCalledWith(member.id);
+    expect(await screen.findByText(/신청번호 claim-web-001/)).toBeInTheDocument();
+  });
+
+  it('limits orders by claim type and clears an order that is no longer eligible', () => {
+    const claimOrders: Order[] = [
+      ...(['paymentPending', 'paid', 'preparing'] as const).map((status) => ({
+        ...order,
+        id: `order-${status}`,
+        orderNumber: `ORD-${status}`,
+        status,
+      })),
+      ...(['shipping', 'delivered'] as const).map((status) => ({
+        ...order,
+        id: `order-${status}`,
+        orderNumber: `ORD-${status}`,
+        status,
+      })),
+    ];
+    const shippingOrder = claimOrders.find((candidate) => candidate.status === 'shipping');
+    if (!shippingOrder) throw new Error('배송 중 주문 fixture가 필요합니다.');
+    vi.mocked(useMyPageData).mockReturnValue({
+      data: { ...myPageData, orders: claimOrders },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
+
+    render(<MyPageScreen section="claim-new" itemId={shippingOrder.id} />);
+
+    const orderSelect = screen.getByRole('combobox', { name: '주문 선택' });
+    expect(within(orderSelect).getByRole('option', { name: /ORD-shipping/ })).toBeInTheDocument();
+    expect(within(orderSelect).getByRole('option', { name: /ORD-delivered/ })).toBeInTheDocument();
+    expect(
+      within(orderSelect).queryByRole('option', { name: /ORD-paymentPending/ }),
+    ).not.toBeInTheDocument();
+    expect(within(orderSelect).queryByRole('option', { name: /ORD-paid/ })).not.toBeInTheDocument();
+    expect(
+      within(orderSelect).queryByRole('option', { name: /ORD-preparing/ }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      within(screen.getByRole('group', { name: '신청 종류' })).getByRole('button', {
+        name: '취소',
+      }),
+    );
+
+    expect(orderSelect).toHaveValue('');
+    expect(
+      within(orderSelect).getByRole('option', { name: /ORD-paymentPending/ }),
+    ).toBeInTheDocument();
+    expect(within(orderSelect).getByRole('option', { name: /ORD-paid/ })).toBeInTheDocument();
+    expect(within(orderSelect).getByRole('option', { name: /ORD-preparing/ })).toBeInTheDocument();
+    expect(
+      within(orderSelect).queryByRole('option', { name: /ORD-shipping/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(orderSelect).queryByRole('option', { name: /ORD-delivered/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '취소 신청은 입금대기·결제완료·배송준비 주문',
+    );
+  });
+
+  it('shows one eligibility notice when changing type leaves no valid orders', () => {
+    const shippingOrder = { ...order, status: 'shipping' as const };
+    vi.mocked(useMyPageData).mockReturnValue({
+      data: { ...myPageData, orders: [shippingOrder] },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
+    render(<MyPageScreen section="claim-new" itemId={shippingOrder.id} />);
+
+    fireEvent.click(
+      within(screen.getByRole('group', { name: '신청 종류' })).getByRole('button', {
+        name: '취소',
+      }),
+    );
+
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(screen.getByRole('status')).toHaveTextContent('현재 신청 가능한 주문이 없습니다.');
+    expect(screen.getByRole('combobox', { name: '주문 선택' })).toHaveValue('');
+  });
+});
+
+describe('MyPageScreen quote detail', () => {
+  it('shows the member quote request body, items, and safe attachment metadata', () => {
+    const quote: Quote = {
+      id: 'quote-1',
+      title: '대량 납품 문의',
+      companyName: '테스트 회사',
+      contactName: '담당자',
+      status: 'received',
+      requestedAt: '2026-10-12T00:00:00+09:00',
+      memberId: member.id,
+      inquiryBody: '현장 납품 일정을 문의합니다.',
+      requestedItems: [{ name: '안전모', quantity: 12, option: '색상: 흰색' }],
+      attachments: [
+        { id: 'attachment-1', fileName: 'spec.pdf', mimeType: 'application/pdf', sizeBytes: 2048 },
+      ],
+    };
+    vi.mocked(useMyPageData).mockReturnValue({
+      data: { ...myPageData, quotes: [quote] },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
+
+    render(<MyPageScreen section="quote-detail" itemId={quote.id} />);
+
+    expect(screen.getByText('현장 납품 일정을 문의합니다.')).toBeInTheDocument();
+    expect(screen.getByText('안전모')).toBeInTheDocument();
+    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(screen.getByText('spec.pdf (2KB)')).toBeInTheDocument();
   });
 });
 

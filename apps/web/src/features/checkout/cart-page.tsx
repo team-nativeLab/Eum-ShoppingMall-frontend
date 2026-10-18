@@ -338,7 +338,8 @@ export function CartPageView() {
                 주문할 수 없는 상품 ({groups.unorderableItems.length})
               </h2>
               <p className="mt-4 mb-12 text-body-s text-text-2">
-                금액 미표시·품절 상품은 주문에서 제외됩니다. 수량 변경이나 삭제만 할 수 있습니다.
+                금액 미표시·품절·옵션 재고 부족 상품은 주문에서 제외됩니다. 수량 변경이나 삭제만 할
+                수 있습니다.
               </p>
               <ul className="divide-y divide-line">
                 {groups.unorderableItems.map(({ cartItem, reason }) => (
@@ -452,7 +453,7 @@ function CartLine({
   item: CartItem;
   selected: boolean;
   isMutationDisabled: boolean;
-  unavailableReason?: 'priceHidden' | 'soldOut' | 'optionUnavailable';
+  unavailableReason?: 'priceHidden' | 'soldOut' | 'optionUnavailable' | 'skuUnavailable';
   onSelect: (checked: boolean) => void;
   onQuantity: (quantity: number) => void;
   onRemove: () => void;
@@ -506,6 +507,11 @@ function CartLine({
           ) : null}
           {unavailableReason === 'optionUnavailable' ? (
             <p className="mt-4 text-caption text-danger">옵션을 다시 선택해 주세요</p>
+          ) : null}
+          {unavailableReason === 'skuUnavailable' ? (
+            <p className="mt-4 text-caption text-danger">
+              선택한 옵션의 판매가 종료되었거나 재고가 부족합니다
+            </p>
           ) : null}
           {item.optionLabel ? (
             <p className="mt-4 text-body-s text-text-2">옵션: {item.optionLabel}</p>

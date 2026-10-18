@@ -13,6 +13,37 @@ export function getBrowserLocalDateKey(date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
+/** 관리자 목 쿠폰 코드는 브라우저 암호학적 난수로 생성합니다. */
+export function generateAdminCouponCode(cryptoProvider: Crypto = globalThis.crypto): string {
+  if (!cryptoProvider?.getRandomValues) {
+    throw new Error('안전한 쿠폰 코드 생성기를 사용할 수 없습니다.');
+  }
+  const bytes = cryptoProvider.getRandomValues(new Uint8Array(12));
+  return `EUM${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0'))
+    .join('')
+    .toUpperCase()}`;
+}
+
+/** 코드 충돌 응답에 한해 새 코드를 생성해 제한 횟수만 재시도합니다. */
+export async function saveWithGeneratedCouponCode<TResult>(
+  save: (code: string) => Promise<TResult>,
+  createCode: () => string = generateAdminCouponCode,
+): Promise<TResult> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await save(createCode());
+    } catch (error) {
+      const apiError = error as { code?: unknown; message?: unknown };
+      const isCodeCollision =
+        apiError.code === 'VALIDATION' &&
+        typeof apiError.message === 'string' &&
+        apiError.message.includes('이미 사용 중인 쿠폰 코드');
+      if (!isCodeCollision || attempt === 2) throw error;
+    }
+  }
+  throw new Error('쿠폰 코드를 생성하지 못했습니다.');
+}
+
 export interface AdminCouponDraft {
   name: string;
   benefitType: 'rate' | 'amount';
