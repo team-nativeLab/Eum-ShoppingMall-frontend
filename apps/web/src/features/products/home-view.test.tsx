@@ -24,14 +24,19 @@ vi.mock('./product-carousel', async (importOriginal) => {
     }: {
       label: string;
       pageIndex: number;
-      desktopLayout?: { pageSize: number };
+      desktopLayout?: { pageSize: number; minCardHeight: number };
     }) => (
-      <ul aria-label={label} data-page-index={pageIndex} data-page-size={desktopLayout?.pageSize} />
+      <ul
+        aria-label={label}
+        data-page-index={pageIndex}
+        data-page-size={desktopLayout?.pageSize}
+        data-card-min-height={desktopLayout?.minCardHeight}
+      />
     ),
     useHomeCarouselLayout: () => ({
       pageSize: 7,
       cardWidth: 158,
-      cardHeight: 248,
+      minCardHeight: 292,
       gap: 16,
     }),
   };
@@ -183,6 +188,7 @@ describe('HomeView desktop section layout', () => {
     const productRow = productTrack.parentElement;
     expect(productRow).toHaveClass('mt-16', 'lg:mt-24');
     expect(productTrack).toHaveAttribute('data-page-size', '7');
+    expect(productTrack).toHaveAttribute('data-card-min-height', '292');
     expect(quoteSection).toHaveClass('mt-64');
     expect(serviceBenefits).toHaveClass('mt-64');
   });

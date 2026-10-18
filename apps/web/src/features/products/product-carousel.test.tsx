@@ -183,21 +183,28 @@ describe('ProductCarouselTrack responsive layouts', () => {
         'lg:translate-x-[var(--carousel-page-translate)]',
         'lg:grid-rows-[minmax(0,max-content)]',
       );
-      expect(track).not.toHaveClass('lg:grid-rows-1', 'lg:grid-rows-[248px]', 'lg:h-[248px]');
+      expect(track).not.toHaveClass(
+        'lg:grid-rows-1',
+        'lg:grid-rows-[minmax(0,292px)]',
+        'lg:h-[292px]',
+        'lg:min-h-[292px]',
+      );
       expect(track).toHaveStyle({
         '--home-carousel-card-width': '158px',
+        '--home-carousel-card-min-height': '292px',
         '--home-carousel-gap': '16px',
         '--carousel-page-translate': expectedTranslate,
       });
       expect(layout.cardWidth).toBe(158);
       expect(Math.round((layout.cardWidth * 284) / 181)).toBe(248);
-      expect(layout.cardHeight).toBe(248);
+      expect(layout.minCardHeight).toBe(292);
+      expect(layout.minCardHeight).toBeGreaterThan(Math.round((layout.cardWidth * 284) / 181));
       expect(layout.pageSize).toBe(expectedPageSize);
       expect(cards.slice(0, layout.pageSize).every((card) => card.hasAttribute('inert'))).toBe(
         true,
       );
       expect(cards.slice(layout.pageSize).some((card) => card.hasAttribute('inert'))).toBe(false);
-      expect(cards[0]).not.toHaveClass('h-[248px]', 'lg:h-[248px]', 'lg:min-h-[248px]');
+      expect(cards[0]).not.toHaveClass('h-[292px]', 'lg:h-[292px]');
       expect(within(track).getAllByRole('article')[0]).toHaveAttribute(
         'data-card-variant',
         'home-carousel',
