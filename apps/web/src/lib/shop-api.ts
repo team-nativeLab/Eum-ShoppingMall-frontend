@@ -1,6 +1,7 @@
 import { createRealApi } from '@eum/api/real-api';
 import type { ShopApi } from '@eum/api/shop-api';
 import { getWebApiConfig } from './api-config';
+import { getMemberAuth } from './member-auth';
 
 let shopApiPromise: Promise<ShopApi> | null = null;
 
@@ -11,7 +12,9 @@ async function loadShopApi(): Promise<ShopApi> {
   // "real"로 빌드하면 이 조건이 항상 false가 되어 목 구현·목 데이터 chunk가 산출물에서 빠집니다.
   if (process.env.NEXT_PUBLIC_API_MODE !== 'real' && apiConfig.mode === 'mock') {
     const { createMockApi } = await import('@eum/api/mock-api');
-    return createMockApi(apiConfig);
+    return createMockApi(apiConfig, {
+      getCurrentMember: async () => (await getMemberAuth()).getCurrentUser(),
+    });
   }
   return createRealApi(apiConfig);
 }

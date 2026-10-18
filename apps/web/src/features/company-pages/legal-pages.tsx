@@ -6,6 +6,9 @@ import { PageContainer } from '@/components/page-container';
 import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import type { AdminLegalDocument } from '@eum/api/types';
+import { getShopApi } from '@/lib/shop-api';
 
 type LegalDocument = 'terms' | 'privacy' | 'guide' | 'shipping';
 type PolicyDocument = Extract<LegalDocument, 'terms' | 'privacy'>;
@@ -248,6 +251,13 @@ export function LegalDocumentPage({ document }: { document: LegalDocument }) {
 
 function PolicyDocumentPage({ document }: { document: PolicyDocument }) {
   const [version, setVersion] = useState<LegalVersion>('current');
+  const publicDocumentQuery = useQuery({
+    queryKey: ['legal-document', document],
+    queryFn: async ({ signal }) =>
+      (await getShopApi()).legalDocuments.getPublished(document, { signal }),
+  });
+  if (publicDocumentQuery.data)
+    return <PublishedLegalDocument document={publicDocumentQuery.data} />;
   const isTerms = document === 'terms';
   const title = isTerms ? '이용약관' : '개인정보처리방침';
 
@@ -281,6 +291,50 @@ function PolicyDocumentPage({ document }: { document: PolicyDocument }) {
           )}
         </div>
       </div>
+    </PageContainer>
+  );
+}
+
+function PublishedLegalDocument({ document }: { document: AdminLegalDocument }) {
+  const route =
+    document.id === 'terms'
+      ? '/terms'
+      : document.id === 'privacy'
+        ? '/privacy'
+        : document.id === 'guide'
+          ? '/guide'
+          : '/shipping-policy';
+  return (
+    <PageContainer className="px-20 pt-24 pb-48 lg:pb-80">
+      <nav aria-label="현재 위치" className="mb-24 text-caption text-text-3">
+        <Link href="/" className="rounded-4 focus-ring">
+          홈
+        </Link>
+        <span aria-hidden="true" className="px-8">
+          /
+        </span>
+        <span>약관 및 정책</span>
+        <span aria-hidden="true" className="px-8">
+          /
+        </span>
+        <span aria-current="page">{document.title}</span>
+      </nav>
+      <h1 className="mb-24 text-h2 lg:text-web-h2">약관 및 정책</h1>
+      {document.id === 'terms' || document.id === 'privacy' ? (
+        <PolicyDocumentTabs document={document.id} />
+      ) : null}
+      <article className="mx-auto max-w-856">
+        <header className="border-b border-line-strong pb-20">
+          <h2 className="text-h2">{document.title}</h2>
+          <p className="mt-4 text-caption text-text-3">
+            버전 {document.version} · 시행일 {document.effectiveAt.slice(0, 10)}
+          </p>
+        </header>
+        <div className="mt-24 text-body-m whitespace-pre-wrap text-text-2">{document.body}</div>
+        <Link href={route} className="sr-only">
+          현재 문서
+        </Link>
+      </article>
     </PageContainer>
   );
 }
@@ -639,6 +693,13 @@ function PrivacyContactCard() {
 
 function GuideOrShippingPage({ document }: { document: GuideDocument }) {
   const content = GUIDE_DOCUMENTS[document];
+  const publicDocumentQuery = useQuery({
+    queryKey: ['legal-document', document],
+    queryFn: async ({ signal }) =>
+      (await getShopApi()).legalDocuments.getPublished(document, { signal }),
+  });
+  if (publicDocumentQuery.data)
+    return <PublishedLegalDocument document={publicDocumentQuery.data} />;
 
   return (
     <PageContainer className="px-16 pt-24 pb-64 sm:px-20 lg:pt-40 lg:pb-80">

@@ -1,4 +1,4 @@
-import type { Faq, Inquiry, Notice, Quote, ShopEvent } from '../types';
+import type { AdminProductQuestion, Faq, Inquiry, Notice, Quote, ShopEvent } from '../types';
 
 /** 목 이벤트·기획전. 기간과 상태는 목 API가 제공하는 시연 데이터입니다. */
 export const mockEvents: ShopEvent[] = [
@@ -399,6 +399,40 @@ export const mockInquiries: Inquiry[] = [
     status: 'answered',
     createdAt: '2026-09-12T16:20:00+09:00',
     answer: '요청 사항을 확인해 안내드렸습니다.',
+  },
+];
+
+/** 상품 문의 운영 예시. 고객 표시는 마스킹된 이름만 둡니다. */
+export const mockProductQuestions: AdminProductQuestion[] = [
+  {
+    id: 'pq-001',
+    productId: 'prd-1001',
+    authorName: '김*수',
+    title: '헬멧 사이즈 조절 문의',
+    body: '머리 둘레 58cm인데 조절해서 착용할 수 있나요?',
+    isPrivate: false,
+    status: 'answered',
+    createdAt: '2026-10-08T09:20:00+09:00',
+    answer: '후면 다이얼로 조절할 수 있으며 58cm 착용이 가능합니다.',
+    adminMemo: '',
+    statusHistory: [
+      { status: 'answered', occurredAt: '2026-10-08T10:00:00+09:00', note: '답변 등록' },
+    ],
+  },
+  {
+    id: 'pq-002',
+    productId: 'prd-1002',
+    authorName: '이*영',
+    title: '단체 주문 납기 문의',
+    body: '사이즈 혼합 30켤레 주문 시 납기를 알고 싶습니다.',
+    isPrivate: true,
+    status: 'waiting',
+    createdAt: '2026-10-15T13:40:00+09:00',
+    answer: null,
+    adminMemo: '',
+    statusHistory: [
+      { status: 'waiting', occurredAt: '2026-10-15T13:40:00+09:00', note: '문의 접수' },
+    ],
   },
 ];
 

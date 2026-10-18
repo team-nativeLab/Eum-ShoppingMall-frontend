@@ -65,6 +65,9 @@ vi.mock('./use-product-query', () => ({ useProductQuery: detailMocks.productQuer
 vi.mock('./use-related-products-query', () => ({
   useRelatedProductsQuery: detailMocks.relatedQuery,
 }));
+vi.mock('./use-product-questions-query', () => ({
+  useProductQuestionsQuery: () => ({ data: [], isPending: false, isError: false }),
+}));
 
 const testProduct: Product = {
   id: 'product-test',
@@ -258,6 +261,34 @@ describe('ProductDetailView content layout', () => {
     expect(query.getAll('productId')).toEqual(['product-test', 'product-test']);
     expect(query.getAll('optionId')).toEqual(['size:medium', 'size:large']);
     expect(query.getAll('quantity')).toEqual(['3', '2']);
+  });
+
+  it('shows the selected SKU image in the product gallery', async () => {
+    const user = userEvent.setup();
+    detailMocks.productQuery.mockReturnValue({
+      data: {
+        ...testProduct,
+        options: [sizeOption],
+        skus: [
+          {
+            id: 'sku-large',
+            optionLabels: ['사이즈: L'],
+            priceDelta: 1000,
+            isAvailable: true,
+            imageUrl: '/sku-large.jpg',
+          },
+        ],
+      },
+      isPending: false,
+      isError: false,
+    });
+    render(<ProductDetailView productId="product-test" />);
+
+    await user.selectOptions(screen.getByLabelText('사이즈'), 'large');
+
+    expect(
+      screen.getAllByRole('img', { name: '테스트 안전화 선택 옵션 이미지' })[0],
+    ).toHaveAttribute('src', '/sku-large.jpg');
   });
 
   it('does not show a false zero discount in the purchase summary', () => {

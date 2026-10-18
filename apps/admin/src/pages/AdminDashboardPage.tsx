@@ -24,7 +24,7 @@ type DashboardMember = Pick<Member, 'id' | 'name'>;
 type DashboardOrderRecord = Pick<
   Order,
   'id' | 'orderNumber' | 'orderedAt' | 'status' | 'memberId' | 'paymentTotal'
->;
+> & { memberId: string };
 
 interface DashboardOrder {
   order: DashboardOrderRecord;
@@ -49,8 +49,8 @@ async function loadDashboardData(signal: AbortSignal): Promise<DashboardData> {
   const api = await getShopApi();
   const [productPage, members, quotes] = await Promise.all([
     api.products.list({ page: 1, pageSize: 100 }, { signal }),
-    api.members.list({ signal }),
-    api.quotes.list({ signal }),
+    api.members.adminList({ signal }),
+    api.quotes.adminList({ signal }),
   ]);
   const orderListUnavailable = getAdminApiConfig().mode === 'real';
   const ordersByMember = orderListUnavailable
@@ -75,10 +75,10 @@ async function loadDashboardData(signal: AbortSignal): Promise<DashboardData> {
             orderNumber: order.orderNumber,
             orderedAt: order.orderedAt,
             status: order.status,
-            memberId: order.memberId,
+            memberId: result.value.member.id,
             paymentTotal: order.paymentTotal,
           },
-          member: memberById.get(order.memberId),
+          member: memberById.get(result.value.member.id),
         }))
       : [],
   );
@@ -318,7 +318,7 @@ export function AdminDashboardPage() {
                 orderNumber: order.orderNumber,
                 orderedAt: order.orderedAt,
                 status: order.status,
-                memberId: order.memberId,
+                memberId: result.value.memberId,
                 paymentTotal: order.paymentTotal,
               },
               member: cachedDashboardData.membersById.get(result.value.memberId),

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { AnchorHTMLAttributes, ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LegalDocumentPage } from './legal-pages';
 
 vi.mock('next/link', () => ({
@@ -21,9 +22,30 @@ vi.mock('@/components/page-container', () => ({
   ),
 }));
 
+const mocks = vi.hoisted(() => ({ getShopApi: vi.fn() }));
+vi.mock('@/lib/shop-api', () => ({ getShopApi: mocks.getShopApi }));
+
+function renderLegalPage(document: 'terms' | 'privacy' | 'guide' | 'shipping') {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <LegalDocumentPage document={document} />
+    </QueryClientProvider>,
+  );
+}
+
 describe('법률 문서 페이지', () => {
+  beforeEach(() => {
+    mocks.getShopApi.mockResolvedValue({
+      legalDocuments: {
+        getPublished: async () => {
+          throw new Error('NOT_FOUND');
+        },
+      },
+    });
+  });
   it('약관 페이지 제목과 탭, 문서 헤더, 목차를 Figma 순서로 표시합니다', () => {
-    render(<LegalDocumentPage document="terms" />);
+    renderLegalPage('terms');
 
     const pageHeading = screen.getByRole('heading', { level: 1, name: '약관 및 정책' });
     const tabs = screen.getByRole('navigation', { name: '이용 안내 메뉴' });
@@ -47,7 +69,7 @@ describe('법률 문서 페이지', () => {
   });
 
   it('약관의 다섯 장, 스물네 조항과 샘플 조항을 표시합니다', () => {
-    render(<LegalDocumentPage document="terms" />);
+    renderLegalPage('terms');
 
     expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(24);
     expect(screen.getByRole('heading', { name: '제1장 총칙' })).toBeInTheDocument();
@@ -62,7 +84,7 @@ describe('법률 문서 페이지', () => {
   });
 
   it('개인정보처리방침의 12개 항목과 Figma 샘플 표를 표시합니다', () => {
-    render(<LegalDocumentPage document="privacy" />);
+    renderLegalPage('privacy');
 
     expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(12);
     expect(
@@ -78,7 +100,7 @@ describe('법률 문서 페이지', () => {
   });
 
   it('이전 약관과 개정 예정 고지를 Figma 샘플 문구로 표시합니다', () => {
-    render(<LegalDocumentPage document="terms" />);
+    renderLegalPage('terms');
 
     fireEvent.change(screen.getByLabelText('시행일'), { target: { value: 'previous' } });
     expect(screen.getByRole('status')).toHaveTextContent(
@@ -89,5 +111,23 @@ describe('법률 문서 페이지', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       '0000.00.00부터 개정 약관이 시행됩니다. 주요 변경: 개정 요약이 들어갑니다.',
     );
+  });
+
+  it('공개 ShopApi 약관 문서가 있으면 정적 샘플 대신 저장된 버전 본문을 표시합니다', async () => {
+    mocks.getShopApi.mockResolvedValue({
+      legalDocuments: {
+        getPublished: async () => ({
+          id: 'terms',
+          title: '운영 이용약관',
+          version: '2.0',
+          effectiveAt: '2026-11-01',
+          body: '운영자가 저장한 약관 본문',
+          isPublished: true,
+        }),
+      },
+    });
+    renderLegalPage('terms');
+    expect(await screen.findByText('운영자가 저장한 약관 본문')).toBeInTheDocument();
+    expect(screen.getByText('버전 2.0 · 시행일 2026-11-01')).toBeInTheDocument();
   });
 });

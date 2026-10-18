@@ -55,6 +55,12 @@ function ProductReviewCard({ review }: { review: ProductReview }) {
         </div>
         <ProductRatingStars rating={review.rating} />
         <p className="text-body-m whitespace-pre-line">{review.content}</p>
+        {review.adminReply ? (
+          <div className="rounded-8 bg-surface p-12 text-body-s">
+            <p className="font-medium">판매자 답변</p>
+            <p className="mt-4 whitespace-pre-line">{review.adminReply}</p>
+          </div>
+        ) : null}
         {review.optionLabel ? (
           <p className="text-caption text-text-3">옵션 · {review.optionLabel}</p>
         ) : null}

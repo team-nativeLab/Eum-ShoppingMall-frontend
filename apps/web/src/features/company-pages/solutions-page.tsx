@@ -1,6 +1,6 @@
 'use client';
 
-import { resolveCartOption } from '@eum/api/cart';
+import { createCartOptionId, resolveCartOption } from '@eum/api/cart';
 import type { Product } from '@eum/api/types';
 import { Checkbox } from '@eum/ui/components/Checkbox';
 import { Button } from '@eum/ui/components/Button';
@@ -23,6 +23,7 @@ import {
 import { PageContainer } from '@/components/page-container';
 import { useMemberSession } from '@/features/auth/member-session';
 import { useProductsQuery } from '@/features/products/use-products-query';
+import { getShopApi } from '@/lib/shop-api';
 import { CompanyContactSummary } from './company-contact-summary';
 import { QuoteDateField } from './quote-date-field';
 import { QuoteDetailsField } from './quote-details-field';
@@ -112,6 +113,7 @@ interface QuotePreviewReceipt {
 interface LocalAttachmentName {
   id: number;
   name: string;
+  file: File;
 }
 
 function InquiryProductsPanel({
@@ -334,6 +336,8 @@ function QuoteFormVisual({
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [attachments, setAttachments] = useState<LocalAttachmentName[]>([]);
+  const [submitError, setSubmitError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [attachmentAnnouncement, setAttachmentAnnouncement] = useState('');
   const [isAttachmentDropActive, setIsAttachmentDropActive] = useState(false);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
@@ -400,14 +404,19 @@ function QuoteFormVisual({
 
   function handleAttachmentFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
+    const oversizedFile = Array.from(files).find((file) => file.size > 5_900_000);
+    if (oversizedFile) {
+      setSubmitError(`${oversizedFile.name}: 첨부 파일은 5.9MB 이하로 등록해 주세요.`);
+      return;
+    }
     const nextAttachments = Array.from(files, (file) => ({
       id: nextAttachmentId.current++,
       name: file.name,
+      file,
     }));
     setAttachments((current) => [...current, ...nextAttachments]);
-    setAttachmentAnnouncement(
-      `선택한 파일 ${nextAttachments.length}개가 화면에만 표시됩니다. 파일은 문의와 함께 전송되지 않습니다.`,
-    );
+    setSubmitError('');
+    setAttachmentAnnouncement(`선택한 파일 ${nextAttachments.length}개를 문의에 첨부합니다.`);
   }
 
   function handleAttachmentInputChange(changeEvent: ChangeEvent<HTMLInputElement>) {
@@ -438,7 +447,7 @@ function QuoteFormVisual({
     setIsAttachmentDropActive(false);
   }
 
-  function handleSubmit(submitEvent: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(submitEvent: FormEvent<HTMLFormElement>) {
     submitEvent.preventDefault();
     if (selectedProducts.length === 0) {
       setProductError('견적을 요청할 상품을 하나 이상 선택해 주세요.');
@@ -452,10 +461,58 @@ function QuoteFormVisual({
       'regular-supply': '정기 납품',
       other: '기타',
     };
-    onComplete({
-      inquiryNumber: `PREVIEW-${Date.now().toString(36).toUpperCase()}`,
-      inquiryType: inquiryTypeLabels[String(formData.get('inquiryType'))] ?? '맞춤 제작',
-    });
+    const inquiryType = inquiryTypeLabels[String(formData.get('inquiryType'))] ?? '맞춤 제작';
+    const products = productsQuery.data?.items ?? [];
+    setIsSubmitting(true);
+    setSubmitError('');
+    try {
+      const submittedQuote = await (
+        await getShopApi()
+      ).quotes.submit({
+        title: `${inquiryType} 견적 문의`,
+        companyName: companyName.trim(),
+        contactName: contactName.trim(),
+        inquiryBody: [
+          `연락처: ${phone.trim()}`,
+          `이메일: ${email.trim()}`,
+          `희망 수량: ${String(formData.get('quantity') ?? '').trim()}`,
+          `희망 납기: ${String(formData.get('deliveryDate') ?? '').trim()}`,
+          `납품 지역: ${String(formData.get('deliveryLocation') ?? '').trim()}`,
+          `관심 품목: ${formData.getAll('interestItems').join(', ')}`,
+          String(formData.get('details') ?? '').trim(),
+        ]
+          .filter(Boolean)
+          .join('\n'),
+        requestedItems: selectedProducts.map((selection) => {
+          const product = products.find((candidate) => candidate.id === selection.productId);
+          const optionId = createCartOptionId(
+            Object.entries(selection.optionChoiceIds).map(([optionId, choiceId]) => ({
+              optionId,
+              choiceId,
+            })),
+          );
+          const resolvedOption = product ? resolveCartOption(product, optionId) : null;
+          return {
+            name: product?.name ?? selection.productId,
+            quantity: selection.quantity,
+            ...(resolvedOption?.isAvailable && resolvedOption.optionLabel
+              ? { option: resolvedOption.optionLabel }
+              : {}),
+          };
+        }),
+        attachments: attachments.map((attachment) => ({
+          id: `web-attachment-${attachment.id}`,
+          fileName: attachment.file.name,
+          mimeType: attachment.file.type || 'application/octet-stream',
+          sizeBytes: attachment.file.size,
+        })),
+      });
+      onComplete({ inquiryNumber: submittedQuote.id, inquiryType });
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : '견적 문의 접수에 실패했습니다.');
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -467,6 +524,7 @@ function QuoteFormVisual({
           setSelectedProducts([]);
           setSelectedProductId('');
           setProductError('');
+          setSubmitError('');
           setCompanyName('');
           setContactName('');
           setPhone('');
@@ -693,7 +751,8 @@ function QuoteFormVisual({
             onChange={handleAttachmentInputChange}
           />
           <p id="quote-attachment-description" className="text-caption text-text-3">
-            선택한 파일은 현재 화면에만 표시되며 문의와 함께 전송되지 않습니다.
+            파일명·형식·크기만 목업 상태에 기록합니다. 파일 자체는 보관하거나 업로드하지 않습니다.
+            파일당 5.9MB 이하입니다.
           </p>
           {attachments.length > 0 ? (
             <ul
@@ -736,10 +795,22 @@ function QuoteFormVisual({
             </Checkbox>
           </div>
           <p id="quote-submit-description" className="text-caption text-text-3">
-            동의는 화면 확인용입니다. 입력 내용은 실제로 수집·전송·저장되지 않습니다.
+            목업 실행에서는 문의 데이터가 현재 화면의 ShopApi 인스턴스에만 저장됩니다. 실제 서버
+            저장·회원 인가는 연결되지 않았습니다.
           </p>
-          <Button type="submit" size="l" isFullWidth aria-describedby="quote-submit-description">
-            견적 문의 접수
+          {submitError ? (
+            <p role="alert" className="text-body-s text-danger">
+              {submitError}
+            </p>
+          ) : null}
+          <Button
+            type="submit"
+            size="l"
+            isFullWidth
+            disabled={isSubmitting}
+            aria-describedby="quote-submit-description"
+          >
+            {isSubmitting ? '접수 중…' : '견적 문의 접수'}
           </Button>
           <Button type="reset" variant="secondary" size="m" className="self-end">
             취소
@@ -794,13 +865,15 @@ function SolutionsPageContentInner() {
         >
           <Icon icon={Check} size={24} />
         </span>
-        <p className="mt-24 text-overline text-text-3">DEMO PREVIEW</p>
+        <p className="mt-24 text-overline text-text-3">MOCK SUBMISSION</p>
         <h1 className="mt-8 text-h1">견적 문의가 접수되었습니다</h1>
         <p className="mt-12 max-w-560 text-body-s text-text-2">
-          현재는 화면 확인용 미리보기입니다. 입력값은 서버로 전송되거나 저장되지 않았습니다.
+          접수 정보가 목업 ShopApi에 저장되었습니다. 별도 앱 프로세스 간 공유와 실제 서버 전송은
+          지원하지 않습니다.
         </p>
         <p className="mt-8 max-w-560 text-caption text-text-3">
-          선택한 파일은 현재 화면에만 표시되며 문의와 함께 전송되지 않았습니다.
+          첨부 파일의 이름·형식·크기만 현재 목업 상태에 기록되며 파일 자체는 보관하거나 업로드되지
+          않습니다.
         </p>
         <dl className="mt-32 grid w-full max-w-560 grid-cols-[120px_minmax(0,1fr)] gap-x-16 gap-y-12 text-left text-body-s">
           <dt className="text-text-3">문의번호</dt>

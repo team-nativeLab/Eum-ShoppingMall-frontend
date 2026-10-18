@@ -1,14 +1,21 @@
 import { useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@eum/ui/components/Button';
 import { Modal } from '@eum/ui/components/Modal';
-import { AdminEmpty, AdminNotice, AdminPageHeader, AdminTabs } from '@/components/AdminUI';
 import {
-  ADMIN_COUPON_PREVIEW_FIXTURES,
-  type AdminCouponPreview,
-  type AdminCouponStatus,
-} from '@/lib/admin-preview-fixtures';
+  AdminEmpty,
+  AdminError,
+  AdminLoading,
+  AdminNotice,
+  AdminPageHeader,
+  AdminTabs,
+} from '@/components/AdminUI';
+import type { AdminCoupon, AdminCouponStatus } from '@eum/api/types';
+import { getShopApi } from '@/lib/shop-api';
+import type { AdminCouponInput } from '@eum/api/shop-api';
 import {
   getBrowserLocalDateKey,
+  saveWithGeneratedCouponCode,
   validateAdminCouponDraft,
   type AdminCouponDraft,
 } from '@/lib/admin-preview-validation';
@@ -39,17 +46,19 @@ const STATUS_OPTIONS: { value: AdminCouponStatus | 'all'; label: string }[] = [
   { value: 'ended', label: '종료' },
 ];
 
-/** 운영 쿠폰은 합성 fixture로만 표시하고 화면 메모리에서 미리보기합니다. */
+/** 운영 쿠폰을 프론트엔드 목 API에 저장하고 상태를 관리합니다. */
 export function AdminCouponsPage() {
-  const [coupons, setCoupons] = useState<AdminCouponPreview[]>(() =>
-    ADMIN_COUPON_PREVIEW_FIXTURES.map((coupon) => ({ ...coupon })),
-  );
-  const [couponNotices, setCouponNotices] = useState<Record<string, string>>({});
+  const queryClient = useQueryClient();
+  const couponsQuery = useQuery({
+    queryKey: ['admin', 'coupons'],
+    queryFn: async ({ signal }) => (await getShopApi()).coupons.adminList({ signal }),
+  });
   const [filter, setFilter] = useState<AdminCouponStatus | 'all'>('all');
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [errors, setErrors] = useState<string[]>([]);
   const [message, setMessage] = useState('');
+  const coupons = useMemo(() => couponsQuery.data ?? [], [couponsQuery.data]);
   const visible = useMemo(
     () => coupons.filter((coupon) => filter === 'all' || coupon.status === filter),
     [coupons, filter],
@@ -59,14 +68,12 @@ export function AdminCouponsPage() {
     setDraft(EMPTY_DRAFT);
     setErrors([]);
   };
-  const createPreview = () => {
+  const createPreview = async () => {
     const validationErrors = validateAdminCouponDraft(draft);
     setErrors(validationErrors);
     if (validationErrors.length) return;
-    const coupon: AdminCouponPreview = {
-      id: `preview-${Date.now()}`,
+    const coupon: Omit<AdminCouponInput, 'code'> = {
       name: draft.name.trim(),
-      code: 'PREVIEW',
       benefitType: draft.benefitType,
       benefitValue: Number(draft.benefitValue),
       maxDiscountAmount: Number(draft.maxDiscountAmount),
@@ -80,24 +87,42 @@ export function AdminCouponsPage() {
       endsAt: draft.validityMode === 'issueDays' ? `${draft.validityDays}일 이내` : draft.endsAt,
       target: draft.target ?? 'all',
       issueMethod: draft.issueMethod ?? 'automatic',
-      issuedCount: 0,
-      usedCount: 0,
+      notice: draft.notice.trim(),
       status:
         draft.validityMode !== 'issueDays' && draft.startsAt > getBrowserLocalDateKey()
           ? 'scheduled'
           : 'active',
     };
-    setCoupons((current) => [coupon, ...current]);
-    setCouponNotices((current) => ({ ...current, [coupon.id]: draft.notice.trim() }));
-    setMessage(
-      '쿠폰을 이 화면의 데모 목록에만 추가했습니다. 실제 발급·할인 계산에는 반영되지 않았습니다.',
-    );
-    close();
+    try {
+      const api = await getShopApi();
+      await saveWithGeneratedCouponCode((code) => api.coupons.saveAdmin({ ...coupon, code }));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['admin', 'coupons'] }),
+        queryClient.invalidateQueries({ queryKey: ['coupons'] }),
+      ]);
+      setMessage(
+        '운영 쿠폰 설정을 프론트엔드 목 API에 저장했습니다. 같은 mock 인스턴스에서 이미 보유한 적격 쿠폰은 주문 할인에 반영됩니다.',
+      );
+      close();
+    } catch (error) {
+      setErrors([error instanceof Error ? error.message : '쿠폰을 저장하지 못했습니다.']);
+    }
   };
-  const updateStatus = (couponId: string, status: AdminCouponStatus) =>
-    setCoupons((current) =>
-      current.map((coupon) => (coupon.id === couponId ? { ...coupon, status } : coupon)),
-    );
+  const updateStatus = async (coupon: AdminCoupon, status: AdminCouponStatus) => {
+    try {
+      await (await getShopApi()).coupons.saveAdmin({ ...coupon, status });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['admin', 'coupons'] }),
+        queryClient.invalidateQueries({ queryKey: ['coupons'] }),
+      ]);
+      setMessage('쿠폰 상태를 목 API에 저장했습니다.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '쿠폰 상태를 저장하지 못했습니다.');
+    }
+  };
+
+  if (couponsQuery.isPending) return <AdminLoading label="운영 쿠폰을 불러오고 있습니다." />;
+  if (couponsQuery.isError) return <AdminError onRetry={() => void couponsQuery.refetch()} />;
 
   return (
     <section aria-label="쿠폰 관리">
@@ -116,8 +141,10 @@ export function AdminCouponsPage() {
         }
       />
       <AdminNotice className="mb-16" tone="warning">
-        쿠폰 등록과 상태 변경은 Admin 화면 메모리에서만 미리봅니다. 고객 쿠폰·주문 금액·실제 발급
-        상태를 변경하지 않습니다.
+        목 동작: 자동 쿠폰은 구매자 쿠폰 조회 시 발급되고, 다운로드 쿠폰은 구매자가 쿠폰 화면에서
+        받으며, 코드 쿠폰은 구매자 코드 입력으로 등록합니다. 회원 유형 타깃과 카테고리·상품 한정 및
+        발급 rate limit은 지원하지 않습니다. 생성 코드는 브라우저 보안 난수로 만들고 mock API 충돌
+        응답 시 새 코드로 최대 3회 재시도합니다.
       </AdminNotice>
       <span role="status" aria-live="polite" className="sr-only">
         {message}
@@ -162,9 +189,9 @@ export function AdminCouponsPage() {
                 <tr key={coupon.id} className="border-t border-line">
                   <td className="px-16 py-12 font-medium">
                     {coupon.name}
-                    {couponNotices[coupon.id] ? (
+                    {coupon.notice ? (
                       <span className="mt-4 block max-w-240 text-caption font-normal break-words text-text-3">
-                        {couponNotices[coupon.id]}
+                        {coupon.notice}
                       </span>
                     ) : null}
                   </td>
@@ -215,13 +242,13 @@ export function AdminCouponsPage() {
                   </td>
                   <td className="px-16 py-12">
                     <label className="sr-only" htmlFor={`coupon-status-${coupon.id}`}>
-                      {coupon.name} 상태 미리보기
+                      {coupon.name} 상태
                     </label>
                     <select
                       id={`coupon-status-${coupon.id}`}
                       value={coupon.status}
                       onChange={(event) =>
-                        updateStatus(coupon.id, event.target.value as AdminCouponStatus)
+                        void updateStatus(coupon, event.target.value as AdminCouponStatus)
                       }
                       className="h-32 rounded-6 border border-line-control bg-bg px-8"
                     >
@@ -240,13 +267,13 @@ export function AdminCouponsPage() {
       <Modal
         isOpen={isOpen}
         onClose={close}
-        title="쿠폰 등록 미리보기"
+        title="쿠폰 등록"
         actions={
           <>
             <Button variant="secondary" onClick={close}>
               취소
             </Button>
-            <Button onClick={createPreview}>등록 미리보기</Button>
+            <Button onClick={() => void createPreview()}>쿠폰 저장</Button>
           </>
         }
       >

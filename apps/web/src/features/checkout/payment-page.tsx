@@ -12,10 +12,12 @@ import { TextField } from '@eum/ui/components/TextField';
 import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCart } from '@/features/cart/cart-context';
 import { useMemberSession } from '@/features/auth/member-session';
 import { getShopApi } from '@/lib/shop-api';
+import { queryKeys } from '@eum/api/query-keys';
 import { useCheckout } from './checkout-context';
 import {
   CheckoutOrderSummary,
@@ -43,7 +45,9 @@ interface OrderError {
 
 /** W-07 결제: 쿠폰·적립금·목 결제수단·약관 동의 후 mock receipt만 생성합니다. */
 export function PaymentPageView() {
+  const orderIdempotencyRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const router = useRouter();
+  const queryClient = useQueryClient();
   const {
     cartItems,
     cartGroups,
@@ -139,17 +143,26 @@ export function PaymentPageView() {
       safePoints,
       requestId,
     );
+    const orderInput = {
+      lines: buildCheckoutOrderLines(selectedItems),
+      shippingAddress: checkout.shippingAddress,
+      deliveryRequest: checkout.deliveryRequest,
+      paymentMethod: selectedPaymentMethod,
+      couponId,
+      pointsToUse: safePoints,
+    };
+    const fingerprint = JSON.stringify(orderInput);
+    const idempotencyKey =
+      orderIdempotencyRef.current?.fingerprint === fingerprint
+        ? orderIdempotencyRef.current.key
+        : globalThis.crypto.randomUUID();
+    orderIdempotencyRef.current = { fingerprint, key: idempotencyKey };
     try {
-      const receipt = await (
-        await getShopApi()
-      ).orders.create({
-        lines: buildCheckoutOrderLines(selectedItems),
-        shippingAddress: checkout.shippingAddress,
-        deliveryRequest: checkout.deliveryRequest,
-        paymentMethod: selectedPaymentMethod,
-        couponId,
-        pointsToUse: safePoints,
-      });
+      const receipt = await (await getShopApi()).orders.create({ ...orderInput, idempotencyKey });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.products.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.coupons.all }),
+      ]);
       const paymentLabel =
         options.paymentMethods.find((method) => method.id === selectedPaymentMethod)?.label ??
         '선택한 결제 수단';
@@ -165,6 +178,7 @@ export function PaymentPageView() {
         requestId,
       );
       if (!didCompleteCheckout) return;
+      orderIdempotencyRef.current = null;
       if (orderedCartLines.length > 0) consumeOrderedCartItems(orderedCartLines);
       router.push('/checkout/complete');
     } catch (orderFailure: unknown) {

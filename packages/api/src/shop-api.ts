@@ -1,11 +1,30 @@
 import type {
   Address,
+  AdminProduct,
+  AdminBrand,
+  AdminHomeContentInput,
+  AdminShopEvent,
+  AdminOrder,
+  AdminClaim,
+  AdminQuote,
   Brand,
   BrandSummary,
   Category,
   Claim,
+  ClaimSubmitInput,
   CompanyInfo,
   Coupon,
+  CouponOffer,
+  AdminCoupon,
+  AdminFaq,
+  AdminNotice,
+  AdminInquiry,
+  AdminProductReview,
+  AdminProductQuestion,
+  AdminLegalDocument,
+  LegalDocumentId,
+  AdminPoint,
+  AdminShopSettings,
   CheckoutOptions,
   CreateOrderInput,
   Faq,
@@ -20,6 +39,7 @@ import type {
   Product,
   ProductFacets,
   ProductReview,
+  ProductQuestion,
   ProductReviewSummary,
   ProductSuggestion,
   Quote,
@@ -61,6 +81,41 @@ export interface RequestOptions {
   signal?: AbortSignal;
 }
 
+export type AdminProductInput = Omit<
+  AdminProduct,
+  'id' | 'createdAt' | 'rating' | 'reviewCount'
+> & {
+  id?: string;
+};
+export type AdminBrandInput = Omit<AdminBrand, 'id' | 'productCount'> & { id?: string };
+export type AdminShopEventInput = Omit<AdminShopEvent, 'id'> & { id?: string };
+export type AdminOrderUpdate = Partial<
+  Pick<AdminOrder, 'status' | 'trackingCarrier' | 'trackingNumber' | 'adminMemo'>
+>;
+export type AdminClaimUpdate = Partial<Pick<AdminClaim, 'status' | 'adminMemo'>>;
+export type AdminQuoteUpdate = Partial<
+  Pick<
+    AdminQuote,
+    'status' | 'internalMemo' | 'publicMessage' | 'quoteAmount' | 'expiresAt' | 'attachments'
+  >
+>;
+export type QuoteSubmitInput = Pick<
+  AdminQuote,
+  'title' | 'companyName' | 'contactName' | 'inquiryBody' | 'requestedItems' | 'attachments'
+>;
+export type AdminCouponInput = Omit<AdminCoupon, 'id' | 'issuedCount' | 'usedCount'> & {
+  id?: string;
+};
+export type AdminNoticeInput = Omit<AdminNotice, 'id'> & { id?: string };
+export type AdminFaqInput = Omit<AdminFaq, 'id'> & { id?: string };
+export type AdminInquiryUpdate = Partial<Pick<AdminInquiry, 'status' | 'answer' | 'adminMemo'>>;
+export type AdminProductReviewUpdate = Partial<
+  Pick<AdminProductReview, 'isVisible' | 'adminReply' | 'adminMemo'>
+>;
+export type AdminProductQuestionUpdate = Partial<
+  Pick<AdminProductQuestion, 'status' | 'answer' | 'adminMemo'>
+>;
+
 /**
  * 화면이 쓰는 조회 함수 묶음. mock(mock-api.ts)과 real(real-api.ts)이 같은 모양을 구현합니다.
  * 어느 구현을 쓸지는 각 앱의 src/lib/shop-api.ts가 빌드 상수(API_MODE)로 정해서,
@@ -81,6 +136,10 @@ export interface ShopApi {
     ): Promise<Product[]>;
     /** 검색 결과 없음 화면의 "추천 상품". 고르는 규칙은 서버가 정합니다. */
     listRecommended(params?: ProductLimitParams, options?: RequestOptions): Promise<Product[]>;
+    /** 관리자용 전체 상품과 판매가·재고 편집 모델 */
+    adminList(options?: RequestOptions): Promise<AdminProduct[]>;
+    saveAdmin(input: AdminProductInput, options?: RequestOptions): Promise<AdminProduct>;
+    deleteAdmin(productId: string, options?: RequestOptions): Promise<void>;
     /** 상품 리뷰(최신순) */
     listReviews(
       productId: string,
@@ -89,6 +148,19 @@ export interface ShopApi {
     ): Promise<PagedResult<ProductReview>>;
     /** 전체 리뷰 화면의 평점·사진 리뷰 요약 */
     getReviewSummary(productId: string, options?: RequestOptions): Promise<ProductReviewSummary>;
+    adminListReviews(options?: RequestOptions): Promise<AdminProductReview[]>;
+    updateReviewAdmin(
+      reviewId: string,
+      update: AdminProductReviewUpdate,
+      options?: RequestOptions,
+    ): Promise<AdminProductReview>;
+    listQuestions(productId: string, options?: RequestOptions): Promise<ProductQuestion[]>;
+    adminListQuestions(options?: RequestOptions): Promise<AdminProductQuestion[]>;
+    updateQuestionAdmin(
+      questionId: string,
+      update: AdminProductQuestionUpdate,
+      options?: RequestOptions,
+    ): Promise<AdminProductQuestion>;
   };
   /** 구매자에게 노출하는 브랜드. 비노출 브랜드는 목록에서 빠지고 상세는 NOT_FOUND입니다. */
   brands: {
@@ -97,31 +169,142 @@ export interface ShopApi {
     getById(brandId: string, options?: RequestOptions): Promise<Brand>;
     /** W-32 "이달의 브랜드". 지정한 브랜드가 없으면 null */
     getFeatured(options?: RequestOptions): Promise<Brand | null>;
+    adminList(options?: RequestOptions): Promise<AdminBrand[]>;
+    saveAdmin(input: AdminBrandInput, options?: RequestOptions): Promise<AdminBrand>;
+    deleteAdmin(brandId: string, options?: RequestOptions): Promise<void>;
   };
   /** 검색 결과가 없을 때 보여 줄 추천 검색어 */
   search: { recommendedKeywords(options?: RequestOptions): Promise<string[]> };
   /** 주문서의 mock 배송·결제 선택지. real API 미연결 상태에서는 NOT_IMPLEMENTED입니다. */
   checkout: { getOptions(options?: RequestOptions): Promise<CheckoutOptions> };
-  categories: { list(options?: RequestOptions): Promise<Category[]> };
-  home: { getContent(options?: RequestOptions): Promise<HomeContent> };
+  categories: {
+    list(options?: RequestOptions): Promise<Category[]>;
+    adminList(options?: RequestOptions): Promise<Category[]>;
+    save(
+      input: Omit<Category, 'id'> & { id?: string },
+      options?: RequestOptions,
+    ): Promise<Category>;
+    delete(categoryId: string, options?: RequestOptions): Promise<void>;
+  };
+  home: {
+    getContent(options?: RequestOptions): Promise<HomeContent>;
+    getAdminContent(options?: RequestOptions): Promise<AdminHomeContentInput>;
+    saveAdminContent(
+      input: AdminHomeContentInput,
+      options?: RequestOptions,
+    ): Promise<AdminHomeContentInput>;
+  };
   /** 푸터 사업자·고객센터 정보 */
-  company: { getInfo(options?: RequestOptions): Promise<CompanyInfo> };
+  company: {
+    getInfo(options?: RequestOptions): Promise<CompanyInfo>;
+    getAdminInfo(options?: RequestOptions): Promise<CompanyInfo>;
+    saveAdminInfo(input: CompanyInfo, options?: RequestOptions): Promise<CompanyInfo>;
+  };
+  legalDocuments: {
+    getPublished(
+      documentId: LegalDocumentId,
+      options?: RequestOptions,
+    ): Promise<AdminLegalDocument>;
+    adminList(options?: RequestOptions): Promise<AdminLegalDocument[]>;
+    saveAdmin(input: AdminLegalDocument, options?: RequestOptions): Promise<AdminLegalDocument>;
+  };
   orders: {
+    adminList(options?: RequestOptions): Promise<AdminOrder[]>;
+    adminGetById(orderId: string, options?: RequestOptions): Promise<AdminOrder>;
+    updateAdmin(
+      orderId: string,
+      update: AdminOrderUpdate,
+      options?: RequestOptions,
+    ): Promise<AdminOrder>;
     listByMember(memberId: string, options?: RequestOptions): Promise<Order[]>;
     getById(orderId: string, options?: RequestOptions): Promise<Order>;
     create(input: CreateOrderInput, options?: RequestOptions): Promise<OrderReceipt>;
   };
-  claims: { listByMember(memberId: string, options?: RequestOptions): Promise<Claim[]> };
-  coupons: { list(options?: RequestOptions): Promise<Coupon[]> };
-  points: { list(options?: RequestOptions): Promise<Point[]> };
+  claims: {
+    adminList(options?: RequestOptions): Promise<AdminClaim[]>;
+    updateAdmin(
+      claimId: string,
+      update: AdminClaimUpdate,
+      options?: RequestOptions,
+    ): Promise<AdminClaim>;
+    submit(input: ClaimSubmitInput, options?: RequestOptions): Promise<Claim>;
+    /** 취소 요청과 주문 상태를 단일 mock mutation으로 처리합니다. */
+    completeOrderCancellation(
+      orderId: string,
+      claimId: string,
+      reason: string,
+      options?: RequestOptions,
+    ): Promise<{ order: AdminOrder; claim: AdminClaim }>;
+    listByMember(memberId: string, options?: RequestOptions): Promise<Claim[]>;
+  };
+  coupons: {
+    /** Coupons currently eligible for checkout. */
+    list(options?: RequestOptions): Promise<Coupon[]>;
+    historyList(options?: RequestOptions): Promise<Coupon[]>;
+    availableList(options?: RequestOptions): Promise<CouponOffer[]>;
+    acquire(couponId: string, options?: RequestOptions): Promise<Coupon>;
+    redeemCode(code: string, options?: RequestOptions): Promise<Coupon>;
+    adminList(options?: RequestOptions): Promise<AdminCoupon[]>;
+    saveAdmin(input: AdminCouponInput, options?: RequestOptions): Promise<AdminCoupon>;
+    deleteAdmin(couponId: string, options?: RequestOptions): Promise<void>;
+  };
+  settings: {
+    getAdmin(options?: RequestOptions): Promise<AdminShopSettings>;
+    saveAdmin(input: AdminShopSettings, options?: RequestOptions): Promise<AdminShopSettings>;
+  };
+  points: {
+    list(options?: RequestOptions): Promise<Point[]>;
+    adminList(options?: RequestOptions): Promise<AdminPoint[]>;
+    adjustAdmin(
+      input: { memberId: string; amount: number; reason: string; expiresAt: string | null },
+      options?: RequestOptions,
+    ): Promise<AdminPoint>;
+  };
   addresses: { list(options?: RequestOptions): Promise<Address[]> };
-  quotes: { list(options?: RequestOptions): Promise<Quote[]> };
-  notices: { list(options?: RequestOptions): Promise<Notice[]> };
+  quotes: {
+    submit(input: QuoteSubmitInput, options?: RequestOptions): Promise<Quote>;
+    adminList(options?: RequestOptions): Promise<AdminQuote[]>;
+    updateAdmin(
+      quoteId: string,
+      update: AdminQuoteUpdate,
+      options?: RequestOptions,
+    ): Promise<AdminQuote>;
+    listByMember(memberId: string, options?: RequestOptions): Promise<Quote[]>;
+  };
+  notices: {
+    list(options?: RequestOptions): Promise<Notice[]>;
+    adminList(options?: RequestOptions): Promise<AdminNotice[]>;
+    saveAdmin(input: AdminNoticeInput, options?: RequestOptions): Promise<AdminNotice>;
+    deleteAdmin(noticeId: string, options?: RequestOptions): Promise<void>;
+  };
   events: {
     list(options?: RequestOptions): Promise<ShopEvent[]>;
     getById(eventId: string, options?: RequestOptions): Promise<ShopEvent>;
+    adminList(options?: RequestOptions): Promise<AdminShopEvent[]>;
+    saveAdmin(input: AdminShopEventInput, options?: RequestOptions): Promise<AdminShopEvent>;
+    deleteAdmin(eventId: string, options?: RequestOptions): Promise<void>;
   };
-  faqs: { list(options?: RequestOptions): Promise<Faq[]> };
-  inquiries: { listByMember(memberId: string, options?: RequestOptions): Promise<Inquiry[]> };
-  members: { list(options?: RequestOptions): Promise<Member[]> };
+  faqs: {
+    list(options?: RequestOptions): Promise<Faq[]>;
+    adminList(options?: RequestOptions): Promise<AdminFaq[]>;
+    saveAdmin(input: AdminFaqInput, options?: RequestOptions): Promise<AdminFaq>;
+    deleteAdmin(faqId: string, options?: RequestOptions): Promise<void>;
+  };
+  inquiries: {
+    listByMember(memberId: string, options?: RequestOptions): Promise<Inquiry[]>;
+    adminList(options?: RequestOptions): Promise<AdminInquiry[]>;
+    updateAdmin(
+      inquiryId: string,
+      update: AdminInquiryUpdate,
+      options?: RequestOptions,
+    ): Promise<AdminInquiry>;
+  };
+  members: {
+    /** Returns only the current buyer session member. The mock does not implement real authentication. */
+    getCurrent(options?: RequestOptions): Promise<Member>;
+    /** Buyer-safe single-member list; never enumerates other member records. */
+    list(options?: RequestOptions): Promise<Member[]>;
+    /** Admin-only member directory contract; the mock has no server-side authorization. */
+    adminList(options?: RequestOptions): Promise<Member[]>;
+  };
 }

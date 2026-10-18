@@ -20,6 +20,9 @@ export interface Category {
    * 서버가 아이콘 이미지 URL을 주게 되면 이 필드를 대체합니다.
    */
   iconKey: string | null;
+  isVisible?: boolean;
+  sortOrder?: number;
+  filterAttributes?: { id: string; name: string; values: string[] }[];
 }
 
 /** 브랜드 목록 항목(W-32 디렉터리·전체 메뉴). 구매자에게 노출하는 브랜드만 내려옵니다. */
@@ -50,6 +53,13 @@ export interface Brand extends BrandSummary {
   story: { title: string; body: string } | null;
 }
 
+/** 관리자에서 편집하는 브랜드 운영 상태 */
+export interface AdminBrand extends Brand {
+  isVisible: boolean;
+  isFeatured: boolean;
+  sortOrder?: number;
+}
+
 /** 상품 */
 export interface Product {
   id: string;
@@ -69,12 +79,16 @@ export interface Product {
   /** 대표 이미지 URL. 아직 이미지가 없으면 null(플레이스홀더 표시) */
   thumbnailUrl: string | null;
   summary: string;
+  /** 상세 본문 콘텐츠. 없으면 summary를 노출합니다. */
+  detailDescription?: string;
   /** 모델명. 등록하지 않았으면 null */
   modelName: string | null;
   /** 상세 갤러리. 서버 이미지가 아직 없으면 빈 배열입니다. */
   images: ProductImage[];
   /** 필수 여부를 포함한 구매 옵션 */
   options: ProductOption[];
+  /** 옵션 조합별 추가금·재고·판매 상태. SKU 편집 행이 있는 경우에만 제공합니다. */
+  skus?: ProductSku[];
   /** 상품에 노출할 사양 */
   specifications: ProductSpecification[];
   /** 상품 인증 표시명 */
@@ -92,9 +106,39 @@ export interface Product {
   isFeatured: boolean;
 }
 
+/** 구매자에게 공개할 옵션 조합별 판매 정보 */
+export interface ProductSku {
+  id: string;
+  optionLabels: string[];
+  priceDelta: number;
+  isAvailable: boolean;
+  imageUrl: string | null;
+}
+
 /** 구매자 응답과 별도로 실제 가격을 보관하는 Admin 편집 모델 */
-export interface AdminProduct extends Omit<Product, 'price'> {
+export interface AdminProduct extends Omit<Product, 'price' | 'skus'> {
   price: number;
+  productCode?: string;
+  stockCount?: number;
+  salesStatus?: 'active' | 'paused' | 'ended';
+  isVisible?: boolean;
+  manufacturer?: string;
+  material?: string;
+  dimensions?: string;
+  weight?: string;
+  detailDescription?: string;
+  skus?: AdminProductSku[];
+}
+
+/** 관리자가 옵션 조합별로 관리하는 SKU 재고 행 */
+export interface AdminProductSku {
+  id: string;
+  optionLabels: string[];
+  productCode: string;
+  priceDelta: number;
+  stockCount: number;
+  salesStatus: 'active' | 'paused' | 'ended';
+  imageId: string | null;
 }
 
 /** 상품 상세 이미지 */
@@ -153,6 +197,14 @@ export interface ProductReview {
   /** 구매한 옵션 문구. 옵션 없는 상품이면 null */
   optionLabel: string | null;
   createdAt: string;
+  /** 공개된 관리자 답변. 내부 메모는 포함하지 않습니다. */
+  adminReply?: string;
+}
+
+export interface AdminProductReview extends ProductReview {
+  isVisible: boolean;
+  adminReply: string;
+  adminMemo: string;
 }
 
 /** 상품 전체 리뷰 요약 */
@@ -259,6 +311,15 @@ export interface HomeContent {
   ctaBand: HomeCtaBand | null;
 }
 
+/** 관리자 홈 편성 저장 모델. 상품 상세는 ID로 연결해 Web 응답에서 최신 데이터를 구성합니다. */
+export interface AdminHomeContentInput {
+  heroSlides: HeroSlide[];
+  promoBanners: PromoBanner[];
+  serviceBenefits: ServiceBenefit[];
+  featuredProductIds: string[];
+  ctaBand: HomeCtaBand | null;
+}
+
 /** 푸터에 표시하는 사업자·고객센터 정보 */
 export interface CompanyInfo {
   /** 상호 */
@@ -280,6 +341,18 @@ export interface CompanyInfo {
   customerCenterTel: string | null;
   /** 고객센터 운영 시간 안내 문구 */
   customerCenterHours: string;
+}
+
+export type LegalDocumentId = 'terms' | 'privacy' | 'guide' | 'shipping';
+
+/** 관리자에서 공개할 법률·운영 문서의 버전 모델입니다. 본문은 텍스트로만 렌더링합니다. */
+export interface AdminLegalDocument {
+  id: LegalDocumentId;
+  title: string;
+  version: string;
+  effectiveAt: string;
+  body: string;
+  isPublished: boolean;
 }
 
 /** 장바구니 항목 */
@@ -306,6 +379,11 @@ export interface Address {
   isDefault: boolean;
 }
 
+/** Internal mock address owner. `memberId` is removed from buyer responses. */
+export interface AdminAddress extends Address {
+  memberId: string;
+}
+
 /** 주문서에서 선택할 수 있는 mock 결제 수단. 실제 결제 연동은 포함하지 않습니다. */
 export type PaymentMethod =
   'creditCard' | 'bankTransfer' | 'virtualAccount' | 'simpleA' | 'simpleB' | 'mobile';
@@ -314,13 +392,42 @@ export type PaymentMethod =
 export interface CheckoutOptions {
   freeShippingThreshold: number;
   shippingFee: number;
+  freeShippingScope?: 'all' | 'cart';
+  baseFeeMode?: 'customer' | 'included';
   deliveryRequests: { id: string; label: string }[];
   shippingMethods: { id: string; label: string; description: string }[];
   paymentMethods: { id: PaymentMethod; label: string }[];
 }
 
+/** 관리자 배송·할인 정책. 목 주문의 배송비 계산과 checkout 표시에서 사용합니다. */
+export interface AdminShopSettings {
+  baseShippingFee: number;
+  baseFeeMode: 'customer' | 'included';
+  freeShippingEnabled: boolean;
+  freeShippingThreshold: number;
+  freeShippingScope: 'all' | 'cart';
+  remoteFeeEnabled: boolean;
+  jejuFee: number;
+  islandFee: number;
+  returnFee: number;
+  exchangeFee: number;
+  combineReturnShipping: boolean;
+  businessDiscountEnabled: boolean;
+  businessDiscountRate: number;
+  businessDiscountScope: 'direct' | 'category';
+  businessCouponStacking: boolean;
+  firstPurchaseEnabled: boolean;
+  firstPurchaseBenefitType: 'rate' | 'amount';
+  firstPurchaseBenefitValue: number;
+  firstPurchaseMaxDiscount: number;
+  firstPurchaseMinimumOrder: number;
+  firstPurchasePaymentScope: 'all' | 'newOnly';
+}
+
 /** 목 주문 생성 요청. real API에서는 서버가 상품·쿠폰·배송비·합계를 다시 계산해야 합니다. */
 export interface CreateOrderInput {
+  /** Same key and payload reuse the prior mock receipt without applying inventory or benefits twice. */
+  idempotencyKey?: string;
   lines: { productId: string; quantity: number; optionId: string | null }[];
   shippingAddress: Address;
   deliveryRequest: string;
@@ -349,6 +456,10 @@ export interface OrderLine {
   productName: string;
   unitPrice: number;
   quantity: number;
+  /** Mock checkout snapshot used by Admin and claim quantity validation. */
+  optionId?: string | null;
+  skuId?: string | null;
+  optionLabel?: string | null;
 }
 
 /** 주문 */
@@ -357,7 +468,8 @@ export interface Order {
   orderNumber: string;
   orderedAt: string;
   status: OrderStatus;
-  memberId: string;
+  /** Internal mock ownership key. Buyer order projections omit this field. */
+  memberId?: string;
   lines: OrderLine[];
   productTotal: number;
   shippingFee: number;
@@ -365,6 +477,19 @@ export interface Order {
   pointUsed: number;
   paymentTotal: number;
   shippingAddress: Address;
+  trackingCarrier?: string | null;
+  trackingNumber?: string | null;
+}
+
+/** 관리자 주문 처리 데이터. 구매자 주문 응답에서는 이 필드를 제외합니다. */
+export interface AdminOrder extends Order {
+  memberId: string;
+  trackingCarrier: string | null;
+  trackingNumber: string | null;
+  adminMemo: string;
+  statusHistory: { status: OrderStatus; occurredAt: string; note: string }[];
+  /** Internal mock ownership key of a coupon consumed by this order. */
+  usedCouponId?: string | null;
 }
 
 /** 취소·반품·교환 유형 */
@@ -372,6 +497,19 @@ export type ClaimType = 'cancel' | 'return' | 'exchange';
 
 /** 취소·반품·교환 처리 상태 */
 export type ClaimStatus = 'requested' | 'processing' | 'completed' | 'rejected';
+
+export type ClaimReturnMethod = 'pickup' | 'direct';
+
+export interface ClaimAttachmentMetadata {
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
+export type ClaimReturnAddress = Pick<
+  Address,
+  'recipientName' | 'phone' | 'postalCode' | 'address1' | 'address2'
+>;
 
 /** 취소·반품·교환 신청 */
 export interface Claim {
@@ -381,7 +519,33 @@ export interface Claim {
   status: ClaimStatus;
   reason: string;
   description?: string;
+  items?: {
+    productId: string;
+    quantity: number;
+    skuId?: string | null;
+    optionLabel?: string | null;
+  }[];
+  returnMethod?: ClaimReturnMethod;
+  returnAddress?: ClaimReturnAddress;
+  attachments?: ClaimAttachmentMetadata[];
   requestedAt: string;
+}
+
+/** 구매자 취소·반품·교환 신청. 주문 소유자는 mock API 세션에서 결정합니다. */
+export interface ClaimSubmitInput {
+  orderId: string;
+  type: ClaimType;
+  reason: string;
+  description: string;
+  items: { productId: string; quantity: number; skuId?: string | null }[];
+  returnMethod?: ClaimReturnMethod;
+  returnAddress?: ClaimReturnAddress;
+  attachments?: ClaimAttachmentMetadata[];
+}
+
+export interface AdminClaim extends Claim {
+  adminMemo: string;
+  statusHistory: { status: ClaimStatus; occurredAt: string; note: string }[];
 }
 
 /** 쿠폰 */
@@ -391,9 +555,50 @@ export interface Coupon {
   discountType: 'amount' | 'rate';
   /** amount이면 원, rate이면 % */
   discountValue: number;
+  /** 운영 카탈로그 할인 한도. 없으면 주문 금액까지만 할인합니다. */
+  maxDiscountAmount?: number;
   minOrderAmount: number;
   expiresAt: string;
   isUsed: boolean;
+  /** 회원에게 이미 발급된 쿠폰의 운영 카탈로그 ID */
+  adminCouponId?: string;
+}
+
+/** 구매자가 획득할 수 있는 운영 쿠폰 제안. 실제 코드와 회원 식별자는 포함하지 않습니다. */
+export interface CouponOffer {
+  id: string;
+  name: string;
+  discountType: 'amount' | 'rate';
+  discountValue: number;
+  maxDiscountAmount?: number;
+  minOrderAmount: number;
+  expiresAt: string;
+  issueMethod: 'automatic' | 'download' | 'code';
+  isAcquired: boolean;
+}
+
+export type AdminCouponStatus = 'active' | 'scheduled' | 'paused' | 'ended';
+export interface AdminCoupon {
+  id: string;
+  name: string;
+  code: string;
+  benefitType: 'rate' | 'amount';
+  benefitValue: number;
+  maxDiscountAmount: number;
+  minimumOrderAmount: number;
+  target: 'all' | 'business' | 'personal';
+  issueMethod: 'automatic' | 'download' | 'code';
+  productScope: 'all' | 'category' | 'products';
+  issueLimit: number | null;
+  allowStacking: boolean;
+  validityMode: 'period' | 'issueDays';
+  validityDays: number | null;
+  startsAt: string;
+  endsAt: string;
+  issuedCount: number;
+  usedCount: number;
+  status: AdminCouponStatus;
+  notice: string;
 }
 
 /** 적립금 내역 한 줄 */
@@ -404,6 +609,12 @@ export interface Point {
   amount: number;
   occurredAt: string;
   expiresAt: string | null;
+}
+
+/** 운영에서 조정한 적립금 원장 행. 회원 식별자는 관리자 전용 응답에만 포함됩니다. */
+export interface AdminPoint extends Point {
+  memberId: string;
+  reason: string;
 }
 
 /** 견적 문의 상태: 접수 / 상담중 / 견적 발송 / 완료 / 취소 */
@@ -418,6 +629,27 @@ export interface Quote {
   status: QuoteStatus;
   requestedAt: string;
   memberId: string | null;
+  /** 본인 문의 상세에서만 공개하는 요청 내용 */
+  inquiryBody?: string;
+  requestedItems?: { name: string; quantity: number; option?: string }[];
+  /** 첨부 파일 다운로드 데이터는 제외한 메타데이터 */
+  attachments?: { id: string; fileName: string; mimeType: string; sizeBytes: number }[];
+  /** 회원에게 공개할 견적 답변 정보 */
+  publicMessage?: string | null;
+  quoteAmount?: number | null;
+  expiresAt?: string | null;
+}
+
+/** 관리자 견적 데이터. 내부 메모와 고객 공개 답변을 분리합니다. */
+export interface AdminQuote extends Quote {
+  inquiryBody: string;
+  requestedItems: { name: string; quantity: number; option?: string }[];
+  /** 목 API가 보관하는 첨부 메타데이터. 파일 바이트는 저장하지 않습니다. */
+  attachments: { id: string; fileName: string; mimeType: string; sizeBytes: number }[];
+  internalMemo: string;
+  publicMessage: string | null;
+  quoteAmount: number | null;
+  expiresAt: string | null;
 }
 
 /** 일반 회원 */
@@ -456,6 +688,11 @@ export interface Notice {
   attachments?: { id: string; fileName: string; sizeBytes: number; downloadUrl?: string }[];
 }
 
+export interface AdminNotice extends Notice {
+  isVisible: boolean;
+  sortOrder: number;
+}
+
 /** 구매자에게 노출하는 이벤트·기획전 */
 export type ShopEventStatus = 'ongoing' | 'upcoming' | 'ended';
 
@@ -474,12 +711,23 @@ export interface ShopEvent {
   searchKeyword: string;
 }
 
+/** 관리자 이벤트 목록·편집 모델 */
+export interface AdminShopEvent extends ShopEvent {
+  isVisible: boolean;
+  sortOrder: number;
+}
+
 /** 자주 묻는 질문 */
 export interface Faq {
   id: string;
   category: string;
   question: string;
   answer: string;
+}
+
+export interface AdminFaq extends Faq {
+  isVisible: boolean;
+  sortOrder: number;
 }
 
 /** 1:1 문의 상태 */
@@ -494,6 +742,39 @@ export interface Inquiry {
   status: InquiryStatus;
   createdAt: string;
   answer: string | null;
+  attachments?: {
+    id: string;
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+    dataUrl?: string;
+  }[];
+}
+
+export interface AdminInquiry extends Inquiry {
+  adminMemo: string;
+  statusHistory: { status: InquiryStatus; occurredAt: string; note: string }[];
+}
+
+export type ProductQuestionStatus = 'waiting' | 'answered';
+
+/** 상품 상세에 표시하는 구매자 상품 문의입니다. 작성자 표시는 마스킹된 이름만 포함합니다. */
+export interface ProductQuestion {
+  id: string;
+  productId: string;
+  authorName: string;
+  title: string;
+  body: string;
+  isPrivate: boolean;
+  status: ProductQuestionStatus;
+  createdAt: string;
+  answer: string | null;
+}
+
+/** 관리자 답변·메모·처리 이력을 포함하는 상품 문의 모델입니다. */
+export interface AdminProductQuestion extends ProductQuestion {
+  adminMemo: string;
+  statusHistory: { status: ProductQuestionStatus; occurredAt: string; note: string }[];
 }
 
 /** 목록 조회 응답(페이지네이션) */

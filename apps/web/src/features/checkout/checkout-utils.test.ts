@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   calculateCheckoutAmounts,
   calculateShippingFee,
+  getCouponDiscount,
   resolveAvailablePaymentMethod,
   resolveCheckoutOptions,
 } from './checkout-utils';
@@ -57,6 +58,19 @@ const cartItems: CartItem[] = [
 ];
 
 describe('checkout option resolution and shipping amounts', () => {
+  it('uses the published coupon cap in the buyer checkout estimate', () => {
+    const coupon = {
+      id: 'coupon-test',
+      name: '할인',
+      discountType: 'rate' as const,
+      discountValue: 50,
+      maxDiscountAmount: 4000,
+      minOrderAmount: 0,
+      expiresAt: '2026-12-31',
+      isUsed: false,
+    };
+    expect(getCouponDiscount(coupon, 18000)).toBe(4000);
+  });
   it.each([
     { name: 'missing', threshold: undefined },
     { name: 'null', threshold: null },
@@ -99,6 +113,16 @@ describe('checkout option resolution and shipping amounts', () => {
         pointsToUse: 0,
       }),
     ).toMatchObject({ shippingFee: 3000, paymentTotal: 21_000 });
+  });
+
+  it('matches Admin shipping scope, discounted threshold, and included-fee settings', () => {
+    const policyOptions = { ...validCheckoutOptions, freeShippingScope: 'cart' as const };
+    expect(calculateShippingFee(50_000, policyOptions, 1_000)).toBe(3000);
+    expect(calculateShippingFee(51_000, policyOptions, 1_000)).toBe(0);
+    expect(
+      calculateShippingFee(50_000, { ...policyOptions, freeShippingScope: 'all' }, 1_000),
+    ).toBe(0);
+    expect(calculateShippingFee(18_000, { ...policyOptions, baseFeeMode: 'included' })).toBe(0);
   });
 
   it('accepts empty delivery requests when the shipping and payment choices are available', () => {

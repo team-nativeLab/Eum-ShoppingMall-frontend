@@ -2,9 +2,9 @@ import { Button, buttonClassName } from '@eum/ui/components/Button';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { Switch } from '@eum/ui/components/Switch';
 import { SelectField, TextField } from '@eum/ui/components/TextField';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import {
   AdminError,
   AdminLoading,
@@ -15,10 +15,17 @@ import {
 } from '@/components/AdminUI';
 import { useAdminPriceVisibilityPreview } from '@/lib/admin-price-visibility-preview';
 import { getShopApi } from '@/lib/shop-api';
-import type { Category, Product } from '@eum/api/types';
+import type {
+  AdminProduct,
+  AdminProductSku,
+  Category,
+  ProductImage,
+  ProductOption,
+} from '@eum/api/types';
+import type { AdminProductInput } from '@eum/api/shop-api';
 
 interface ProductEditorData {
-  product: Product | null;
+  product: AdminProduct | null;
   categories: Category[];
 }
 
@@ -28,22 +35,36 @@ async function loadProductEditor(
   signal: AbortSignal,
 ): Promise<ProductEditorData> {
   const api = await getShopApi();
-  const [categories, product] = await Promise.all([
-    api.categories.list({ signal }),
-    productId && productId !== 'new'
-      ? api.products.getById(productId, { signal })
-      : Promise.resolve(null),
+  const [categories, adminProducts] = await Promise.all([
+    api.categories.adminList({ signal }),
+    productId && productId !== 'new' ? api.products.adminList({ signal }) : Promise.resolve([]),
   ]);
+  const product = productId
+    ? (adminProducts.find((entry) => entry.id === productId) ?? null)
+    : null;
   return { product, categories };
 }
 
-/** 입력·파일 선택은 폼이 열려 있는 동안만 유지하며 서버 변경을 호출하지 않습니다. */
+/** 선택한 이미지 파일을 목 API에서 사용할 수 있는 데이터 URL로 바꿉니다. */
+function readImageFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener('load', () => {
+      if (typeof reader.result === 'string') resolve(reader.result);
+      else reject(new Error('이미지를 읽지 못했습니다.'));
+    });
+    reader.addEventListener('error', () => reject(new Error('이미지를 읽지 못했습니다.')));
+    reader.readAsDataURL(file);
+  });
+}
+
+/** 상품 기본정보·옵션·SKU·이미지를 목 API에 저장합니다. */
 function ProductEditor({
   product,
   categories,
   isNew,
 }: {
-  product: Product | null;
+  product: AdminProduct | null;
   categories: Category[];
   isNew: boolean;
 }) {
@@ -56,17 +77,135 @@ function ProductEditor({
   const [rootCategoryId, setRootCategoryId] = useState(initialRootId);
   const [leafCategoryId, setLeafCategoryId] = useState(product?.categoryId ?? '');
   const [stockStatus, setStockStatus] = useState(product?.stockStatus ?? 'inStock');
-  const [extraOptionRows, setExtraOptionRows] = useState(0);
-  const [selectedFileNames, setSelectedFileNames] = useState<string[]>([]);
+  const [salesStatus, setSalesStatus] = useState(product?.salesStatus ?? 'active');
+  const [isVisible, setIsVisible] = useState(product?.isVisible ?? true);
+  const [options, setOptions] = useState<ProductOption[]>(() =>
+    structuredClone(product?.options ?? []),
+  );
+  const [skuRows, setSkuRows] = useState<AdminProductSku[]>(() =>
+    structuredClone(product?.skus ?? []),
+  );
+  const [images, setImages] = useState<ProductImage[]>(() =>
+    structuredClone(product?.images ?? []),
+  );
   const [demoMessage, setDemoMessage] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const [isNewProductPriceVisible, setNewProductPriceVisible] = useState(true);
   const { getPreviewValue, setPreviewValue } = useAdminPriceVisibilityPreview();
   const previewPriceVisible = product ? getPreviewValue(product) : isNewProductPriceVisible;
   const leafOptions = categories.filter((category) => category.parentId === rootCategoryId);
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
-  const handleSave = (event: FormEvent<HTMLFormElement>) => {
+  const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setDemoMessage('데모 화면에서는 입력한 내용이 저장되지 않습니다.');
+    const formData = new FormData(event.currentTarget);
+    const text = (key: string) => String(formData.get(key) ?? '').trim();
+    const price = Number(formData.get('price'));
+    if (
+      !text('name') ||
+      !text('brand') ||
+      !Number.isFinite(price) ||
+      price < 0 ||
+      !leafCategoryId
+    ) {
+      setDemoMessage('상품명, 브랜드, 카테고리와 판매가를 확인해 주세요.');
+      return;
+    }
+    if (isSaving) return;
+    const parseNumber = (key: string, fallback: number) => {
+      const value = Number(formData.get(key));
+      return Number.isFinite(value) ? value : fallback;
+    };
+    const specificationRows: [string, string][] = [
+      ['제조사', text('manufacturer')],
+      ['재질', text('material')],
+      ['크기', text('dimensions')],
+      ['중량', text('weight')],
+      ['원산지', text('countryOfOrigin')],
+    ];
+    const nextProduct: AdminProductInput = {
+      ...(product ?? {
+        name: '',
+        brand: '',
+        categoryId: leafCategoryId,
+        price,
+        listPrice: null,
+        priceVisible: true,
+        stockStatus,
+        thumbnailUrl: null,
+        summary: '',
+        modelName: null,
+        images: [],
+        options: [],
+        specifications: [],
+        certifications: [],
+        shipping: { method: '', estimate: '', fee: 0, countryOfOrigin: '', policy: '' },
+        purchaseNotices: [],
+        rating: null,
+        reviewCount: 0,
+        isFeatured: false,
+      }),
+      ...(product ? { id: product.id } : {}),
+      name: text('name'),
+      brand: text('brand'),
+      categoryId: leafCategoryId,
+      price,
+      listPrice: text('listPrice') ? parseNumber('listPrice', price) : null,
+      priceVisible: previewPriceVisible,
+      stockStatus,
+      stockCount: parseNumber('stockCount', product?.stockCount ?? 0),
+      salesStatus,
+      isVisible,
+      productCode: text('productCode') || product?.productCode || '',
+      modelName: text('modelName') || null,
+      summary: text('summary'),
+      certifications: text('certifications')
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean),
+      shipping: {
+        ...(product?.shipping ?? {
+          method: '',
+          estimate: '',
+          fee: 0,
+          countryOfOrigin: '',
+          policy: '',
+        }),
+        estimate: text('shippingEstimate'),
+        fee: parseNumber('shippingFee', product?.shipping.fee ?? 0),
+        countryOfOrigin: text('countryOfOrigin'),
+        policy: text('shippingPolicy'),
+      },
+      detailDescription: text('description'),
+      specifications: specificationRows
+        .filter((specification) => specification[1].length > 0)
+        .map(([label, value]) => ({ label, value })),
+      options,
+      skus: skuRows,
+      images,
+      thumbnailUrl: images[0]?.url ?? null,
+    };
+    setDemoMessage('');
+    setIsSaving(true);
+    try {
+      const api = await getShopApi();
+      const savedProduct = await api.products.saveAdmin(nextProduct);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['admin', 'products'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin', 'product-editor'] }),
+        queryClient.invalidateQueries({ queryKey: ['products'] }),
+        queryClient.invalidateQueries({ queryKey: ['home', 'content'] }),
+      ]);
+      setDemoMessage('프론트엔드 목 API에 저장했습니다. 실제 서버 데이터는 변경되지 않았습니다.');
+      if (!product) navigate(`/products/${savedProduct.id}`, { replace: true });
+    } catch (saveError) {
+      setDemoMessage(
+        saveError instanceof Error ? saveError.message : '상품을 저장하지 못했습니다.',
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -78,14 +217,13 @@ function ProductEditor({
             <Link to="/products" className={buttonClassName({ variant: 'secondary' })}>
               목록
             </Link>
-            <Button type="submit">저장</Button>
+            <Button type="submit" disabled={isSaving}>
+              {isSaving ? '저장 중…' : '저장'}
+            </Button>
           </>
         }
       />
       <div className="mb-16">
-        <AdminNotice tone="info">
-          이 폼의 입력은 화면 확인용입니다. 저장을 눌러도 서버에는 반영되지 않습니다.
-        </AdminNotice>
         {demoMessage ? (
           <NoticeInline role="status" tone="warning" className="mt-8">
             {demoMessage}
@@ -180,6 +318,7 @@ function ProductEditor({
             />
             <SelectField
               label="2차 카테고리"
+              name="categoryId"
               value={leafCategoryId}
               onChange={(event) => setLeafCategoryId(event.target.value)}
               options={(leafOptions.length
@@ -247,9 +386,9 @@ function ProductEditor({
                   }
                 />
               </div>
-              <AdminNotice tone="warning">
-                이 스위치는 현재 관리자 세션 미리보기만 바꿉니다. 서버에 저장되지 않으며 구매자
-                화면·장바구니·주문에는 반영되지 않습니다. 새로고침 또는 로그아웃하면 초기화됩니다.
+              <AdminNotice tone="info">
+                저장한 가격 공개 설정은 구매자 API 응답에 반영됩니다. 실제 서버 저장은 지원하지
+                않습니다.
               </AdminNotice>
             </div>
           </AdminPanel>
@@ -258,47 +397,250 @@ function ProductEditor({
             title="옵션"
             id="option-info"
             className="scroll-mt-24"
-            description="상품별 선택 옵션을 확인합니다. 입력한 변경은 화면에서만 유지됩니다."
+            description="옵션 선택지와 SKU 조합별 코드·추가금·재고·판매 상태·연결 이미지를 관리합니다."
             action={
               <Button
                 variant="secondary"
                 size="s"
-                onClick={() => setExtraOptionRows((count) => count + 1)}
+                onClick={() => {
+                  const optionId = `option-${Date.now()}`;
+                  setOptions((current) => [
+                    ...current,
+                    { id: optionId, label: '', required: false, choices: [] },
+                  ]);
+                }}
               >
                 옵션 목록 만들기
               </Button>
             }
             bodyClassName="space-y-12 p-20"
           >
-            {(product?.options ?? []).map((option) => (
+            {options.map((option) => (
               <div
                 key={option.id}
-                className="grid grid-cols-[1fr_2fr] gap-12 rounded-8 border border-line p-12"
+                className="grid grid-cols-[1fr_2fr_auto] gap-12 rounded-8 border border-line p-12"
               >
-                <TextField label="옵션명" defaultValue={option.label} />
                 <TextField
-                  label="선택지"
-                  defaultValue={option.choices.map((choice) => choice.label).join(', ')}
+                  label="옵션명"
+                  value={option.label}
+                  onChange={(event) =>
+                    setOptions((current) =>
+                      current.map((entry) =>
+                        entry.id === option.id ? { ...entry, label: event.target.value } : entry,
+                      ),
+                    )
+                  }
                 />
-                {option.choices.map((choice) => (
-                  <span key={choice.id} className="col-span-2 text-caption text-text-3">
-                    {choice.label} · 추가 금액 {choice.priceDelta.toLocaleString('ko-KR')}원
-                  </span>
-                ))}
+                <TextField
+                  label="선택지 (쉼표 구분)"
+                  value={option.choices.map((choice) => choice.label).join(', ')}
+                  onChange={(event) => {
+                    const labels = event.target.value
+                      .split(',')
+                      .map((label) => label.trim())
+                      .filter(Boolean);
+                    setOptions((current) =>
+                      current.map((entry) =>
+                        entry.id === option.id
+                          ? {
+                              ...entry,
+                              choices: labels.map((label, index) => ({
+                                id: entry.choices[index]?.id ?? `${entry.id}-choice-${index + 1}`,
+                                label,
+                                priceDelta: entry.choices[index]?.priceDelta ?? 0,
+                              })),
+                            }
+                          : entry,
+                      ),
+                    );
+                  }}
+                />
+                <button
+                  type="button"
+                  className="text-label-s text-danger"
+                  onClick={() =>
+                    setOptions((current) => current.filter((entry) => entry.id !== option.id))
+                  }
+                >
+                  옵션 삭제
+                </button>
+                <label className="col-span-3 flex items-center gap-8 text-body-s">
+                  <input
+                    type="checkbox"
+                    checked={option.required}
+                    onChange={(event) =>
+                      setOptions((current) =>
+                        current.map((entry) =>
+                          entry.id === option.id
+                            ? { ...entry, required: event.target.checked }
+                            : entry,
+                        ),
+                      )
+                    }
+                  />
+                  필수 옵션
+                </label>
               </div>
             ))}
-            {Array.from({ length: extraOptionRows }, (_, index) => (
-              <div
-                key={'new-option-' + index}
-                className="grid grid-cols-[1fr_2fr] gap-12 rounded-8 border border-dashed border-line-strong p-12"
-              >
-                <TextField label="새 옵션명" placeholder="옵션명을 입력해 주세요" />
-                <TextField label="선택지" placeholder="쉼표로 구분해 입력해 주세요" />
-              </div>
-            ))}
-            {!product?.options.length && extraOptionRows === 0 ? (
+            {options.length === 0 ? (
               <p className="text-body-s text-text-3">등록된 옵션이 없습니다.</p>
             ) : null}
+            <div className="border-t border-line pt-12">
+              <div className="mb-8 flex items-center justify-between">
+                <h3 className="text-label-m">SKU 조합별 판매 설정 ({skuRows.length}개)</h3>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="s"
+                  onClick={() =>
+                    setSkuRows((current) => [
+                      ...current,
+                      {
+                        id: `sku-${Date.now()}`,
+                        optionLabels: [],
+                        productCode: '',
+                        priceDelta: 0,
+                        stockCount: 0,
+                        salesStatus: 'active',
+                        imageId: null,
+                      },
+                    ])
+                  }
+                >
+                  SKU 행 추가
+                </Button>
+              </div>
+              <p className="mb-8 text-caption text-text-3">
+                {skuRows.length > 0
+                  ? '등록된 SKU 행별로 옵션 조합·코드·추가금·재고를 확인하세요.'
+                  : options.length > 0
+                    ? '옵션 조합은 자동 생성되지 않습니다. SKU 행 추가를 눌러 각 조합의 코드와 재고를 직접 입력하세요.'
+                    : '옵션별 재고를 나누려면 옵션 목록을 먼저 만든 뒤 SKU 행을 추가하세요. 옵션 없는 상품은 SKU 설정을 비워둘 수 있습니다.'}
+              </p>
+              {skuRows.map((sku, index) => (
+                <div
+                  key={sku.id}
+                  className="mb-8 grid grid-cols-3 gap-8 rounded-8 border border-line p-12"
+                >
+                  <TextField
+                    label="옵션 조합"
+                    value={sku.optionLabels.join(' / ')}
+                    onChange={(event) =>
+                      setSkuRows((current) =>
+                        current.map((row) =>
+                          row.id === sku.id
+                            ? {
+                                ...row,
+                                optionLabels: event.target.value
+                                  .split('/')
+                                  .map((label) => label.trim())
+                                  .filter(Boolean),
+                              }
+                            : row,
+                        ),
+                      )
+                    }
+                  />
+                  <TextField
+                    label="SKU 코드"
+                    value={sku.productCode}
+                    onChange={(event) =>
+                      setSkuRows((current) =>
+                        current.map((row) =>
+                          row.id === sku.id ? { ...row, productCode: event.target.value } : row,
+                        ),
+                      )
+                    }
+                  />
+                  <TextField
+                    label="추가금"
+                    type="number"
+                    value={sku.priceDelta}
+                    onChange={(event) =>
+                      setSkuRows((current) =>
+                        current.map((row) =>
+                          row.id === sku.id
+                            ? { ...row, priceDelta: Number(event.target.value) || 0 }
+                            : row,
+                        ),
+                      )
+                    }
+                  />
+                  <TextField
+                    label="재고"
+                    type="number"
+                    min="0"
+                    value={sku.stockCount}
+                    onChange={(event) =>
+                      setSkuRows((current) =>
+                        current.map((row) =>
+                          row.id === sku.id
+                            ? { ...row, stockCount: Math.max(0, Number(event.target.value) || 0) }
+                            : row,
+                        ),
+                      )
+                    }
+                  />
+                  <label className="grid gap-6 text-label-s">
+                    판매 상태
+                    <select
+                      aria-label={`SKU ${index + 1} 판매 상태`}
+                      className="h-40 rounded-8 border border-line-control bg-bg px-8"
+                      value={sku.salesStatus}
+                      onChange={(event) =>
+                        setSkuRows((current) =>
+                          current.map((row) =>
+                            row.id === sku.id
+                              ? {
+                                  ...row,
+                                  salesStatus: event.target.value as AdminProductSku['salesStatus'],
+                                }
+                              : row,
+                          ),
+                        )
+                      }
+                    >
+                      <option value="active">판매 중</option>
+                      <option value="paused">일시 중지</option>
+                      <option value="ended">판매 종료</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-6 text-label-s">
+                    연결 이미지
+                    <select
+                      aria-label={`SKU ${index + 1} 연결 이미지`}
+                      className="h-40 rounded-8 border border-line-control bg-bg px-8"
+                      value={sku.imageId ?? ''}
+                      onChange={(event) =>
+                        setSkuRows((current) =>
+                          current.map((row) =>
+                            row.id === sku.id
+                              ? { ...row, imageId: event.target.value || null }
+                              : row,
+                          ),
+                        )
+                      }
+                    >
+                      <option value="">없음</option>
+                      {images.map((image, imageIndex) => (
+                        <option key={image.id} value={image.id}>
+                          이미지 {imageIndex + 1}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    className="text-label-s text-danger"
+                    onClick={() =>
+                      setSkuRows((current) => current.filter((row) => row.id !== sku.id))
+                    }
+                  >
+                    SKU 삭제
+                  </button>
+                </div>
+              ))}
+            </div>
           </AdminPanel>
 
           <AdminPanel
@@ -329,41 +671,66 @@ function ProductEditor({
                   </label>
                 ))}
               </div>
-              <p className="text-caption text-text-3">
-                현재 설정은 브라우저 화면에서만 유지됩니다.
-              </p>
+              <p className="text-caption text-text-3">저장 후 웹 목 상품 응답에도 적용됩니다.</p>
             </fieldset>
             <TextField
               label="재고 수량"
               name="stockCount"
-              placeholder="재고 수량 API 미제공"
-              disabled
-              helperText="실제 재고 수량은 아직 조회되지 않습니다."
+              type="number"
+              min="0"
+              defaultValue={product?.stockCount ?? 0}
+              helperText="목 API 재고 수량입니다."
             />
           </AdminPanel>
 
           <AdminPanel
             id="image-info"
             title="이미지"
-            description="선택 파일명만 브라우저 화면에 임시 표시합니다."
+            description="이미지 URL·순서·대표 이미지를 목 API에 저장합니다."
             className="scroll-mt-24"
             bodyClassName="p-20"
           >
             <div className="flex flex-wrap gap-12">
-              {(product?.images ?? []).map((image) => (
+              {images.map((image, index) => (
                 <div
                   key={image.id}
-                  className="flex size-96 items-center justify-center overflow-hidden rounded-8 border border-line bg-surface"
+                  className="relative flex size-96 items-center justify-center overflow-hidden rounded-8 border border-line bg-surface"
                 >
                   <img src={image.url} alt={image.alt} className="size-full object-cover" />
-                </div>
-              ))}
-              {selectedFileNames.map((fileName) => (
-                <div
-                  key={fileName}
-                  className="flex h-96 w-160 items-center justify-center rounded-8 border border-dashed border-line-control px-12 text-center text-caption text-text-2"
-                >
-                  {fileName}
+                  <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-bg/90 px-4 text-caption">
+                    <span>{index === 0 ? '대표' : `순서 ${index + 1}`}</span>
+                    <span className="flex gap-4">
+                      {index > 0 ? (
+                        <button
+                          type="button"
+                          aria-label={`이미지 ${index + 1} 앞당기기`}
+                          onClick={() =>
+                            setImages((current) => {
+                              const precedingImage = current[index - 1];
+                              const selectedImage = current[index];
+                              if (!precedingImage || !selectedImage) return current;
+                              const reorderedImages = [...current];
+                              reorderedImages[index - 1] = selectedImage;
+                              reorderedImages[index] = precedingImage;
+                              return reorderedImages;
+                            })
+                          }
+                        >
+                          ↑
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        aria-label={`이미지 ${index + 1} 삭제`}
+                        className="text-danger"
+                        onClick={() =>
+                          setImages((current) => current.filter((entry) => entry.id !== image.id))
+                        }
+                      >
+                        ×
+                      </button>
+                    </span>
+                  </div>
                 </div>
               ))}
               <label className="flex h-96 w-160 cursor-pointer items-center justify-center rounded-8 border border-dashed border-line-control text-body-s text-text-2 focus-within:ring-2 focus-within:ring-text-1">
@@ -373,11 +740,34 @@ function ProductEditor({
                   accept="image/*"
                   multiple
                   className="sr-only"
-                  onChange={(event) =>
-                    setSelectedFileNames(
-                      Array.from(event.target.files ?? []).map((file) => file.name),
-                    )
-                  }
+                  onChange={async (event) => {
+                    const files = Array.from(event.currentTarget.files ?? []);
+                    event.currentTarget.value = '';
+                    if (
+                      files.some(
+                        (file) => !file.type.startsWith('image/') || file.size > 5 * 1024 * 1024,
+                      )
+                    ) {
+                      setDemoMessage('이미지 파일은 파일당 5MB 이하로 등록해 주세요.');
+                      return;
+                    }
+                    try {
+                      const loadedImages = await Promise.all(
+                        files.map(async (file, index) => ({
+                          id: `img-${Date.now()}-${index}`,
+                          url: await readImageFile(file),
+                          alt: file.name.replace(/\.[^.]+$/, ''),
+                        })),
+                      );
+                      setImages((current) => [...current, ...loadedImages]);
+                    } catch (imageError) {
+                      setDemoMessage(
+                        imageError instanceof Error
+                          ? imageError.message
+                          : '이미지를 읽지 못했습니다.',
+                      );
+                    }
+                  }}
                 />
               </label>
             </div>
@@ -390,22 +780,50 @@ function ProductEditor({
             bodyClassName="grid grid-cols-2 gap-16 p-20"
           >
             <TextField
+              label="제조사"
+              name="manufacturer"
+              defaultValue={product?.manufacturer ?? ''}
+              placeholder="제조사를 입력해 주세요"
+            />
+            <TextField
+              label="재질"
+              name="material"
+              defaultValue={product?.material ?? ''}
+              placeholder="재질을 입력해 주세요"
+            />
+            <TextField
+              label="크기"
+              name="dimensions"
+              defaultValue={product?.dimensions ?? ''}
+              placeholder="크기를 입력해 주세요"
+            />
+            <TextField
+              label="중량"
+              name="weight"
+              defaultValue={product?.weight ?? ''}
+              placeholder="중량을 입력해 주세요"
+            />
+            <TextField
               label="인증번호"
+              name="certifications"
               defaultValue={product?.certifications.join(', ') ?? ''}
               placeholder="인증 정보를 입력해 주세요"
             />
             <TextField
               label="원산지"
+              name="countryOfOrigin"
               defaultValue={product?.shipping.countryOfOrigin ?? ''}
               placeholder="원산지를 입력해 주세요"
             />
             <TextField
               label="배송 안내"
+              name="shippingEstimate"
               defaultValue={product?.shipping.estimate ?? ''}
               placeholder="배송 안내를 입력해 주세요"
             />
             <TextField
               label="배송비"
+              name="shippingFee"
               type="number"
               defaultValue={product?.shipping.fee ?? ''}
               placeholder="배송비를 입력해 주세요"
@@ -431,12 +849,32 @@ function ProductEditor({
                 <AdminStatusBadge status={stockStatus} kind="product" />
               </div>
             </div>
+            <label className="flex items-center gap-8 border-t border-line pt-16 text-label-m">
+              <input
+                type="checkbox"
+                checked={isVisible}
+                onChange={(event) => setIsVisible(event.target.checked)}
+              />
+              웹에 노출
+            </label>
+            <label className="grid gap-6 border-t border-line pt-16 text-label-m">
+              판매 운영 상태
+              <select
+                className="h-40 rounded-8 border border-line-control bg-bg px-12"
+                value={salesStatus}
+                onChange={(event) => setSalesStatus(event.target.value as typeof salesStatus)}
+              >
+                <option value="active">판매 중</option>
+                <option value="paused">판매 일시 중지</option>
+                <option value="ended">판매 종료</option>
+              </select>
+            </label>
             <div className="border-t border-line pt-16">
               <p className="text-label-m">금액 표시</p>
               <p className="mt-4 text-body-s text-text-3">
                 {previewPriceVisible
-                  ? '표시 상태로 관리자 미리보기 중입니다.'
-                  : '미표시 상태로 관리자 미리보기 중입니다.'}
+                  ? '구매자 화면에 상품 금액을 표시합니다.'
+                  : '구매자 화면에서 상품 금액을 숨깁니다.'}
               </p>
               <a href="#price-info" className="mt-8 inline-flex text-label-s text-text-2 underline">
                 가격 섹션 보기

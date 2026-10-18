@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useRef, useState, type FormEvent } from 'react';
-import type { Quote, QuoteStatus } from '@eum/api/types';
+import type { AdminQuote, QuoteStatus } from '@eum/api/types';
 import { QUOTE_STATUS_META } from '@eum/api/quote-status';
 import { Badge } from '@eum/ui/components/Badge';
 import { Button } from '@eum/ui/components/Button';
@@ -20,6 +20,7 @@ import {
   parseAdminDateInput,
 } from '@/components/AdminUI';
 import { getShopApi } from '@/lib/shop-api';
+import type { AdminQuoteUpdate } from '@eum/api/shop-api';
 import {
   getBrowserLocalDateKey,
   validateAdminQuoteDraft,
@@ -38,12 +39,12 @@ const QUOTE_TABS = [
 ] as const satisfies readonly { value: QuoteStatusFilter; label: string }[];
 
 const PAGE_SIZE = 8;
-const EMPTY_QUOTES: Quote[] = [];
+const EMPTY_QUOTES: AdminQuote[] = [];
 
 /** 견적 문의의 읽기 목록을 API에서 가져옵니다. */
-async function loadQuotes(signal: AbortSignal): Promise<Quote[]> {
+async function loadQuotes(signal: AbortSignal): Promise<AdminQuote[]> {
   const api = await getShopApi();
-  return api.quotes.list({ signal });
+  return api.quotes.adminList({ signal });
 }
 
 /** 상태 코드에 프로젝트 공통 견적 색상 규칙을 적용합니다. */
@@ -63,7 +64,6 @@ export function AdminQuotesPage() {
   const [endDateInput, setEndDateInput] = useState('');
   const [appliedFilters, setAppliedFilters] = useState({ keyword: '', startDate: '', endDate: '' });
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
-  const [statusPreviews, setStatusPreviews] = useState<Partial<Record<string, QuoteStatus>>>({});
   const [page, setPage] = useState(1);
   const hasInvalidDateFilter =
     isInvalidAdminDateInput(startDateInput) || isInvalidAdminDateInput(endDateInput);
@@ -72,14 +72,7 @@ export function AdminQuotesPage() {
     queryFn: ({ signal }) => loadQuotes(signal),
   });
 
-  const allQuotes = useMemo(
-    () =>
-      (quotesQuery.data ?? EMPTY_QUOTES).map((quote) => ({
-        ...quote,
-        status: statusPreviews[quote.id] ?? quote.status,
-      })),
-    [quotesQuery.data, statusPreviews],
-  );
+  const allQuotes = quotesQuery.data ?? EMPTY_QUOTES;
   const visibleQuotes = useMemo(() => {
     const normalizedKeyword = appliedFilters.keyword.toLocaleLowerCase('ko-KR');
     const startDate = appliedFilters.startDate
@@ -318,13 +311,7 @@ export function AdminQuotesPage() {
         </section>
 
         {activeQuote ? (
-          <QuoteDetailPanel
-            key={activeQuote.id}
-            quote={activeQuote}
-            onPreviewStatus={(status) =>
-              setStatusPreviews((previous) => ({ ...previous, [activeQuote.id]: status }))
-            }
-          />
+          <QuoteDetailPanel key={activeQuote.id} quote={activeQuote} />
         ) : (
           <div className="min-h-320 rounded-12 border border-line bg-bg p-24">
             <AdminEmpty
@@ -338,16 +325,11 @@ export function AdminQuotesPage() {
   );
 }
 
-/** API가 제공하는 견적 데이터만 표시하고 미지원 필드 변경은 비활성화합니다. */
-function QuoteDetailPanel({
-  quote,
-  onPreviewStatus,
-}: {
-  quote: Quote;
-  onPreviewStatus: (status: QuoteStatus) => void;
-}) {
+/** 견적 답변, 내부 메모, PDF 첨부 정보를 목 API에 저장합니다. */
+function QuoteDetailPanel({ quote }: { quote: AdminQuote }) {
+  const queryClient = useQueryClient();
   const [draftStatus, setDraftStatus] = useState<QuoteStatus>(quote.status);
-  const [adminMemo, setAdminMemo] = useState('');
+  const [adminMemo, setAdminMemo] = useState(quote.internalMemo);
   const [previewMessage, setPreviewMessage] = useState('');
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
   const [quoteDraft, setQuoteDraft] = useState<AdminQuoteDraft>({
@@ -368,14 +350,39 @@ function QuoteDetailPanel({
     setIsQuoteModalOpen(false);
     resetQuoteDraft();
   };
-  const validateAndPreviewQuote = () => {
+  const persistQuote = async (update: AdminQuoteUpdate) => {
+    await (await getShopApi()).quotes.updateAdmin(quote.id, update);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['admin', 'quotes', 'list'] }),
+      queryClient.invalidateQueries({ queryKey: ['quotes'] }),
+    ]);
+  };
+  const validateAndPreviewQuote = async () => {
     const validationErrors = validateAdminQuoteDraft(quoteDraft, getBrowserLocalDateKey());
     setQuoteErrors(validationErrors);
     if (validationErrors.length) return;
-    setQuotePreview(
-      '견적 발송 미리보기를 완료했습니다. 이메일은 전송되지 않았고 파일과 입력값은 보관되지 않습니다.',
-    );
-    closeQuoteModal();
+    try {
+      const attachments = quoteDraft.attachments.map((file) => ({
+        id: `${quote.id}-${file.name}-${file.size}`,
+        fileName: file.name,
+        mimeType: file.type,
+        sizeBytes: file.size,
+      }));
+      await persistQuote({
+        status: 'quoteSent',
+        quoteAmount: Number(quoteDraft.amount),
+        expiresAt: quoteDraft.expiresAt,
+        publicMessage: quoteDraft.notice.trim(),
+        attachments,
+      });
+      setDraftStatus('quoteSent');
+      setQuotePreview(
+        '견적 정보와 PDF 파일 메타데이터를 목 API에 저장했습니다. PDF 파일 자체는 보관되지 않고 고객 이메일도 발송되지 않았습니다.',
+      );
+      closeQuoteModal();
+    } catch (error) {
+      setQuoteErrors([error instanceof Error ? error.message : '견적 정보를 저장하지 못했습니다.']);
+    }
   };
 
   return (
@@ -400,12 +407,41 @@ function QuoteDetailPanel({
 
       <div className="mt-24 border-t border-line pt-20">
         <h3 className="text-label-m">문의 상세 정보</h3>
-        <p className="mt-8 text-body-s text-text-3">
-          품목·수량·연락처·첨부 파일 정보는 현재 견적 조회 API에서 제공하지 않습니다.
-        </p>
+        <p className="mt-8 text-body-s text-text-3">{quote.inquiryBody || '문의 상세 내용 없음'}</p>
+        {quote.requestedItems.length ? (
+          <ul className="mt-12 grid gap-4 text-body-s">
+            {quote.requestedItems.map((item, index) => (
+              <li key={`${item.name}-${index}`}>
+                {item.name} × {item.quantity}
+                {item.option ? ` · ${item.option}` : ''}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {quote.attachments.length ? (
+          <ul className="mt-12 grid gap-4 text-caption text-text-2">
+            {quote.attachments.map((file) => (
+              <li key={file.id}>
+                {file.fileName} · {(file.sizeBytes / 1024 / 1024).toFixed(1)}MB
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {quote.quoteAmount !== null ? (
+          <p className="mt-12 text-body-s">
+            견적 금액: {quote.quoteAmount.toLocaleString('ko-KR')}원
+            {quote.expiresAt ? ` · 유효기간 ${quote.expiresAt}` : ''}
+          </p>
+        ) : null}
+        {quote.publicMessage ? (
+          <p className="mt-12 rounded-8 bg-surface p-12 text-body-s whitespace-pre-wrap">
+            고객 공개 안내: {quote.publicMessage}
+          </p>
+        ) : null}
         <AdminNotice className="mt-16" tone="warning">
-          상태와 메모는 이 화면에서만 미리보기로 반영됩니다. 서버에는 저장되지 않으며 견적서도
-          발송되지 않습니다.
+          견적 작성·저장에서 금액과 고객 안내를 입력하고 PDF를 선택할 수 있습니다. 저장 시
+          파일명·형식·크기만 목 상태에 기록하며 PDF 파일 자체는 보관하거나 업로드하지 않고, 실제
+          이메일도 발송하지 않습니다.
         </AdminNotice>
       </div>
 
@@ -437,10 +473,13 @@ function QuoteDetailPanel({
           id="quote-admin-memo"
           value={adminMemo}
           onChange={(event) => setAdminMemo(event.target.value)}
-          placeholder="메모를 입력해 주세요. 현재 화면에만 유지됩니다."
+          placeholder="내부 운영 메모를 입력해 주세요. 고객에게 공개되지 않습니다."
           className="min-h-96 resize-y rounded-8 border border-line-control bg-bg px-14 py-12 text-body-s text-text-2 placeholder:text-text-3 disabled:cursor-not-allowed"
         />
-        <p className="text-caption text-text-3">이 화면을 닫으면 메모 미리보기는 사라집니다.</p>
+        <p className="text-caption text-text-3">
+          견적 작성·저장에서 PDF 파일을 선택할 수 있습니다. 목 상태에는 파일명·형식·크기만 기록하고
+          PDF 자체는 보관하거나 업로드하지 않습니다.
+        </p>
       </div>
       {previewMessage ? (
         <p role="status" className="mt-12 text-caption text-warning">
@@ -458,19 +497,22 @@ function QuoteDetailPanel({
             setIsQuoteModalOpen(true);
           }}
         >
-          견적서 발송
+          견적 작성·저장
         </Button>
         <Button
           type="button"
           className="flex-1"
-          onClick={() => {
-            onPreviewStatus(draftStatus);
-            setPreviewMessage(
-              '상태가 이 화면에만 임시 반영되었습니다. 서버에는 저장되지 않았습니다.',
-            );
-          }}
+          onClick={() =>
+            void persistQuote({ status: draftStatus, internalMemo: adminMemo })
+              .then(() => setPreviewMessage('상태와 내부 메모를 목 API에 저장했습니다.'))
+              .catch((error: unknown) =>
+                setPreviewMessage(
+                  error instanceof Error ? error.message : '견적 변경을 저장하지 못했습니다.',
+                ),
+              )
+          }
         >
-          임시 반영
+          상태·메모 저장
         </Button>
       </div>
       {quotePreview ? (
@@ -481,21 +523,17 @@ function QuoteDetailPanel({
       <Modal
         isOpen={isQuoteModalOpen}
         onClose={closeQuoteModal}
-        title="견적서 발송 미리보기"
+        title="견적 정보 저장"
         actions={
           <>
             <Button variant="secondary" onClick={closeQuoteModal}>
               취소
             </Button>
-            <Button onClick={validateAndPreviewQuote}>발송 미리보기</Button>
+            <Button onClick={() => void validateAndPreviewQuote()}>목 API에 저장</Button>
           </>
         }
       >
         <div className="mt-16 grid max-h-[65vh] gap-12 overflow-y-auto pr-4 text-body-s">
-          <AdminNotice tone="warning">
-            발송, 업로드, 상태 저장은 실행되지 않습니다. 입력값과 파일은 이 화면의 메모리에서만
-            사용되고 닫을 때 지워집니다.
-          </AdminNotice>
           <label className="grid gap-4">
             견적 금액
             <input

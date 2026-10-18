@@ -1,3 +1,43 @@
+# Web/Admin 기능 호환성 — 작업 인계
+
+기준일: 2026-10-19
+
+## 현재 상태
+
+- 이슈: [#89](https://github.com/team-nativeLab/Eum-ShoppingMall-frontend/issues/89) — OPEN
+- 브랜치: `feature/#89-admin-web-parity`
+- Worktree: `/private/tmp/eum-admin-web-parity-89`
+- 범위: 전체 Admin 화면과 구매자 Web 흐름의 프론트엔드 mock 연결. 실제 API/DB, 실서비스 인증/인가, 환불/택배 처리는 미구현.
+
+## 완료 내용
+
+- 상품·카테고리·브랜드·홈 편성·이벤트·공지·FAQ·문의·리뷰·주문·클레임·견적·회원·적립금·배송/할인·회사/정책·쿠폰 운영 화면을 추가/보완했습니다.
+- 같은 ShopApi mock 인스턴스 안에서 상품/SKU, 주문/배송, 쿠폰/적립금/배송비, 견적, 클레임 및 운영 콘텐츠의 구매자 표시와 Admin 편집·응답을 연결했습니다.
+- 회원별 mock 조회, 주문/클레임/반품 수량 검증, 주문 취소 재고·포인트·쿠폰 복원, 내부 정보 구매자 projection 제외를 반영했습니다.
+- Admin/Web은 별도 프로세스에서 각자의 mock 메모리를 사용하므로 저장 상태가 프로세스 사이에서 공유되지 않습니다.
+
+## 검증
+
+- `npm test` — PASS, 75 files / 626 tests
+- `npm run lint` — PASS
+- `npm run typecheck` — PASS
+- Admin mock production build — PASS (500KB 이상 chunk 경고)
+- Web `npx next build --webpack` — PASS; 기본 Turbopack은 sandbox worker port bind 권한 문제로 대체했습니다.
+- `git diff --check` — PASS
+- Browser QA: Admin 핵심 화면을 1440×1000으로 확인. 모바일/좁은 화면과 키보드 접근성은 미검증.
+- 보안 리뷰: Critical 없음. `.env.production`의 mock 허용과 브라우저에서 변경 가능한 mock 회원 세션은 실제 인증이 아니므로 실데이터와 함께 운영하면 안 됩니다.
+
+## 남은 작업
+
+- 실제 API/DB와 서버 측 관리자 역할 및 회원 소유권 검증을 연결합니다.
+- Admin과 Web의 별도 실행 프로세스 사이 저장 상태 공유를 위한 영속 API를 구현합니다.
+- 실제 환불/회수/택배 연동과 서버 쿠폰 속도 제한을 구현합니다.
+- 변경은 아직 커밋/PR하지 않았습니다. GitHub workflow 진행은 사용자 요청 후 위임합니다.
+
+현재 프론트엔드 mock 구현에는 미해결 질문이 없습니다.
+
+---
+
 # 전역 메뉴 팝업 개선 — 작업 인계
 
 기준일: 2026-10-16

@@ -1,7 +1,17 @@
 'use client';
 
 import { queryKeys } from '@eum/api/query-keys';
-import type { Address, Claim, Coupon, Member, Order, Point, Product, Quote } from '@eum/api/types';
+import type {
+  Address,
+  Claim,
+  Coupon,
+  CouponOffer,
+  Member,
+  Order,
+  Point,
+  Product,
+  Quote,
+} from '@eum/api/types';
 import { useQuery } from '@tanstack/react-query';
 import { getShopApi } from '@/lib/shop-api';
 
@@ -26,6 +36,7 @@ export interface MyPageData {
   orders: Order[];
   claims: Claim[];
   coupons: Coupon[];
+  couponOffers: CouponOffer[];
   points: Point[];
   addresses: Address[];
   quotes: Quote[];
@@ -84,6 +95,7 @@ export function useMyPageData(
           orders: [],
           claims: [],
           coupons: [],
+          couponOffers: [],
           points: [],
           addresses: [],
           quotes: [],
@@ -97,11 +109,7 @@ export function useMyPageData(
         };
       }
 
-      const members = await api.members.list({ signal });
-      const member = members.find((candidate) => candidate.id === memberId);
-      if (!member) {
-        throw new Error('회원 정보를 확인할 수 없습니다.');
-      }
+      const member = await api.members.getCurrent({ signal });
 
       const needsOrders =
         scope === 'dashboard' ||
@@ -118,20 +126,26 @@ export function useMyPageData(
       const [orders, claims, coupons, points, addresses, allQuotes] = await Promise.all([
         needsOrders ? api.orders.listByMember(member.id, { signal }) : Promise.resolve([]),
         needsClaims ? api.claims.listByMember(member.id, { signal }) : Promise.resolve([]),
-        needsCoupons ? api.coupons.list({ signal }) : Promise.resolve([]),
+        needsCoupons
+          ? scope === 'coupons'
+            ? api.coupons.historyList({ signal })
+            : api.coupons.list({ signal })
+          : Promise.resolve([]),
         needsPoints ? api.points.list({ signal }) : Promise.resolve([]),
         needsAddresses ? api.addresses.list({ signal }) : Promise.resolve([]),
-        needsQuotes ? api.quotes.list({ signal }) : Promise.resolve([]),
+        needsQuotes ? api.quotes.listByMember(member.id, { signal }) : Promise.resolve([]),
       ]);
+      const couponOffers = scope === 'coupons' ? await api.coupons.availableList({ signal }) : [];
 
       return {
         member,
         orders,
         claims,
         coupons,
+        couponOffers,
         points,
         addresses,
-        quotes: allQuotes.filter((quote) => quote.memberId === member.id),
+        quotes: allQuotes,
         products: [],
         unavailableProductIds: [],
         loadWarnings: [],

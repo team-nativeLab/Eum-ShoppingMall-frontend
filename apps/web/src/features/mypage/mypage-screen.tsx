@@ -1,12 +1,15 @@
 'use client';
 
 import { QUOTE_STATUS_META } from '@eum/api/quote-status';
+import { queryKeys } from '@eum/api/query-keys';
 import type {
   Address,
+  ClaimAttachmentMetadata,
   Claim,
   ClaimStatus,
   ClaimType,
   Coupon,
+  CouponOffer,
   Order,
   OrderStatus,
   Point,
@@ -44,11 +47,13 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { ProductCard } from '@/features/products/product-card';
 import { useLocalCollections } from '@/features/products/local-collections-context';
 import { useMemberSession } from '@/features/auth/member-session';
 import { getWebApiConfig } from '@/lib/api-config';
+import { getShopApi } from '@/lib/shop-api';
 import { MyPageActionLink, MyPageShell, type MyPageSection } from './mypage-shell';
 import {
   formatMyPageDate,
@@ -157,7 +162,15 @@ const ORDER_STAGE_ORDER: OrderStatus[] = [
   'delivered',
 ];
 const QUOTE_STAGE_ORDER: QuoteStatus[] = ['received', 'consulting', 'quoteSent', 'completed'];
-export function MyPageScreen({ section, itemId }: { section: MyPageSection; itemId?: string }) {
+export function MyPageScreen({
+  section,
+  itemId,
+  preferredClaimType,
+}: {
+  section: MyPageSection;
+  itemId?: string;
+  preferredClaimType?: ClaimType;
+}) {
   const addAddressActionRef = useRef<(() => void) | null>(null);
   const { member, status: memberStatus, refreshMember } = useMemberSession();
   const { wishlistIds, recentIds, recentViewedAt } = useLocalCollections();
@@ -234,6 +247,7 @@ export function MyPageScreen({ section, itemId }: { section: MyPageSection; item
             data={query.data}
             section={section}
             itemId={itemId}
+            preferredClaimType={preferredClaimType}
             wishlistIds={wishlistIds}
             recentIds={recentIds}
             recentViewedAt={recentViewedAt}
@@ -249,6 +263,7 @@ function MyPageContent({
   data,
   section,
   itemId,
+  preferredClaimType,
   wishlistIds,
   recentIds,
   recentViewedAt,
@@ -257,6 +272,7 @@ function MyPageContent({
   data: MyPageData;
   section: MyPageSection;
   itemId?: string;
+  preferredClaimType?: ClaimType;
   wishlistIds: string[];
   recentIds: string[];
   recentViewedAt: Record<string, string>;
@@ -300,10 +316,12 @@ function MyPageContent({
           orders={data.orders}
           addresses={data.addresses}
           preferredOrderId={itemId}
+          preferredClaimType={preferredClaimType}
+          memberId={member.id}
         />
       );
     case 'coupons':
-      return <CouponsView coupons={data.coupons} />;
+      return <CouponsView coupons={data.coupons} offers={data.couponOffers} memberId={member.id} />;
     case 'points':
       return <PointsView memberBalance={member.pointBalance} points={data.points} />;
     case 'profile':
@@ -488,7 +506,11 @@ function OrderCard({ order, compact = false }: { order: Order; compact?: boolean
             </MyPageActionLink>
           ) : null}
           {!compact && ['paymentPending', 'paid'].includes(order.status) ? (
-            <CancelOrderButton order={order} />
+            <MyPageActionLink
+              href={`/mypage/claims/new?orderId=${encodeURIComponent(order.id)}&type=cancel`}
+            >
+              주문 취소 신청
+            </MyPageActionLink>
           ) : null}
           <span className="min-w-104 text-right text-price-m">
             {formatMyPagePrice(order.paymentTotal)}
@@ -527,8 +549,8 @@ function TrackingButton({ order }: { order: Order }) {
           <dl className="grid gap-12 sm:grid-cols-3">
             {[
               ['도착 예정일', '목 데이터에 미제공'],
-              ['택배사', '목 데이터에 미제공'],
-              ['송장 번호', '목 데이터에 미제공'],
+              ['택배사', order.trackingCarrier || '등록되지 않음'],
+              ['송장 번호', order.trackingNumber || '등록되지 않음'],
             ].map(([label, value]) => (
               <div key={label}>
                 <dt className="text-caption text-text-3">{label}</dt>
@@ -595,46 +617,6 @@ function TrackingButton({ order }: { order: Order }) {
           </ol>
         </section>
       </Modal>
-    </>
-  );
-}
-
-function CancelOrderButton({ order }: { order: Order }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [notice, setNotice] = useState<LocalNotice>(null);
-  return (
-    <>
-      <Button size="s" variant="secondary" onClick={() => setIsOpen(true)}>
-        주문 취소
-      </Button>
-      <Modal
-        isOpen={isOpen}
-        onClose={() => setIsOpen(false)}
-        title="주문을 취소하시겠습니까?"
-        description="현재 화면은 목 데이터로 동작합니다. 실제 주문 상태는 변경되지 않습니다."
-        tone="danger"
-        actions={
-          <>
-            <Button variant="secondary" onClick={() => setIsOpen(false)}>
-              돌아가기
-            </Button>
-            <Button
-              onClick={() => {
-                setNotice({
-                  tone: 'info',
-                  message: '목 화면에서는 실제 주문 취소가 처리되지 않습니다.',
-                });
-                setIsOpen(false);
-              }}
-            >
-              확인
-            </Button>
-          </>
-        }
-      >
-        <p className="mt-16 text-body-s text-text-2">주문번호 {order.orderNumber}</p>
-      </Modal>
-      <NoticeResult notice={notice} />
     </>
   );
 }
@@ -821,6 +803,9 @@ function OrderDetailView({ order }: { order?: Order }) {
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-label-m">{line.productName}</p>
+                  {line.optionLabel ? (
+                    <p className="mt-4 text-caption text-text-2">옵션 {line.optionLabel}</p>
+                  ) : null}
                   <p className="mt-4 text-caption text-text-3">상품번호 {line.productId}</p>
                 </div>
               </div>
@@ -870,6 +855,7 @@ function OrderDetailView({ order }: { order?: Order }) {
             <PriceRow label="적립금 사용" amount={-order.pointUsed} />
           </dl>
         </div>
+        <p className="mt-12 text-caption text-text-3">배송 추적 서비스 연동은 제공하지 않습니다.</p>
         <div className="rounded-12 bg-surface p-16 lg:p-24">
           <p className="text-label-m">총 결제 금액</p>
           <p className="mt-8 text-web-price-xl">{formatMyPagePrice(order.paymentTotal)}</p>
@@ -1147,32 +1133,39 @@ function ClaimFormView({
   orders,
   addresses,
   preferredOrderId,
+  preferredClaimType,
+  memberId,
 }: {
   orders: Order[];
   addresses: Address[];
   preferredOrderId?: string;
+  preferredClaimType?: ClaimType;
+  memberId: string;
 }) {
   const router = useRouter();
-  const eligible = orders.filter(
-    (order) => order.status === 'shipping' || order.status === 'delivered',
-  );
+  const [claimType, setClaimType] = useState<ClaimType>(preferredClaimType ?? 'return');
+  const eligibleStatuses =
+    claimType === 'cancel' ? ['paymentPending', 'paid', 'preparing'] : ['shipping', 'delivered'];
+  const eligible = orders.filter((order) => eligibleStatuses.includes(order.status));
   const [orderId, setOrderId] = useState(() =>
     getInitialClaimOrderId(
       eligible.map((order) => order.id),
       preferredOrderId,
     ),
   );
-  const [claimType, setClaimType] = useState<ClaimType>('return');
+  const [isOrderSelectionInvalid, setIsOrderSelectionInvalid] = useState(false);
   const [selectedLines, setSelectedLines] = useState<string[]>([]);
   const [returnQuantities, setReturnQuantities] = useState<Record<string, number>>({});
   const [reason, setReason] = useState('');
   const [details, setDetails] = useState('');
-  const [fileName, setFileName] = useState('');
+  const [attachment, setAttachment] = useState<ClaimAttachmentMetadata | null>(null);
   const [returnMethod, setReturnMethod] = useState<'pickup' | 'direct'>('pickup');
   const [addressId, setAddressId] = useState(
     addresses.find((address) => address.isDefault)?.id ?? addresses[0]?.id ?? '',
   );
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submittedClaimId, setSubmittedClaimId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const order = eligible.find((candidate) => candidate.id === orderId);
   const reasonOptions =
     claimType === 'cancel'
@@ -1185,41 +1178,85 @@ function ClaimFormView({
   );
   const isReasonValid = reasonOptions.includes(reason);
   const needsReturnAddress = claimType !== 'cancel';
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (
-      order &&
-      selectedLines.length > 0 &&
-      isReasonValid &&
-      details.trim() &&
-      (!needsReturnAddress ||
-        (Boolean(returnMethod) && addresses.some((address) => address.id === addressId)))
+      isSubmitting ||
+      !(
+        order &&
+        selectedLines.length > 0 &&
+        isReasonValid &&
+        details.trim() &&
+        (!needsReturnAddress ||
+          (Boolean(returnMethod) && addresses.some((address) => address.id === addressId)))
+      )
     )
-      setIsSubmitted(true);
+      return;
+    setIsSubmitting(true);
+    setSubmitError('');
+    try {
+      const items = order.lines.flatMap((line, index) => {
+        const lineId = `${line.productId}-${index}`;
+        if (!selectedLines.includes(lineId)) return [];
+        return [
+          {
+            productId: line.productId,
+            quantity:
+              claimType === 'return'
+                ? clampReturnQuantity(returnQuantities[lineId] ?? line.quantity, line.quantity)
+                : line.quantity,
+            ...(line.skuId ? { skuId: line.skuId } : {}),
+          },
+        ];
+      });
+      const api = await getShopApi();
+      const returnAddress = needsReturnAddress
+        ? addresses.find((address) => address.id === addressId)
+        : undefined;
+      const claim = await api.claims.submit({
+        orderId: order.id,
+        type: claimType,
+        reason,
+        description: details.trim(),
+        items,
+        ...(needsReturnAddress && returnAddress
+          ? {
+              returnMethod,
+              returnAddress: {
+                recipientName: returnAddress.recipientName,
+                phone: returnAddress.phone,
+                postalCode: returnAddress.postalCode,
+                address1: returnAddress.address1,
+                address2: returnAddress.address2,
+              },
+            }
+          : {}),
+        ...(attachment ? { attachments: [attachment] } : {}),
+      });
+      const buyerClaims = await api.claims.listByMember(memberId);
+      if (!buyerClaims.some((buyerClaim) => buyerClaim.id === claim.id)) {
+        throw new Error(
+          '신청은 접수했지만 신청 내역을 다시 불러오지 못했습니다. 신청 내역에서 새로고침해 주세요.',
+        );
+      }
+      setSubmittedClaimId(claim.id);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : '신청을 접수하지 못했습니다.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  if (!eligible.length)
-    return (
-      <EmptyState
-        icon={Package}
-        title="신청 가능한 주문이 없습니다."
-        description="배송 중이거나 배송 완료된 주문이 있을 때 신청할 수 있습니다."
-        action={
-          <MyPageActionLink href="/mypage/orders" variant="primary">
-            주문 내역 보기
-          </MyPageActionLink>
-        }
-      />
-    );
-  if (isSubmitted)
+  if (submittedClaimId)
     return (
       <div className="mx-auto max-w-560 rounded-12 border border-line p-24 text-center lg:p-40">
         <div className="mx-auto flex size-56 items-center justify-center rounded-capsule bg-success-tint text-success">
           <Check size={28} aria-hidden="true" />
         </div>
-        <h2 className="mt-16 text-h3">신청서 입력을 마쳤습니다.</h2>
+        <h2 className="mt-16 text-h3">신청이 접수되었습니다.</h2>
         <p className="mt-8 text-body-s text-text-2">
-          목 화면이라 신청 내용은 저장되거나 접수되지 않았습니다.
+          신청번호 {submittedClaimId} · 현재 mock API에 저장했습니다. 실제 회수·환불 처리는 실행되지
+          않습니다.
         </p>
         <Button className="mt-24" onClick={() => router.push('/mypage/claims')}>
           신청 내역 보기
@@ -1237,6 +1274,7 @@ function ClaimFormView({
             value={orderId}
             onChange={(event) => {
               setOrderId(event.target.value);
+              setIsOrderSelectionInvalid(false);
               setSelectedLines([]);
               setReturnQuantities({});
             }}
@@ -1256,26 +1294,45 @@ function ClaimFormView({
           />
         </div>
       </div>
-      {!order && preferredOrderId ? (
+      {!order && (isOrderSelectionInvalid || !eligible.length) ? (
         <NoticeInline tone="warning" role="status">
-          요청한 주문을 찾을 수 없습니다. 신청할 주문을 직접 선택해 주세요.
+          {claimType === 'cancel'
+            ? '취소 신청은 입금대기·결제완료·배송준비 주문에서만 가능합니다.'
+            : '반품·교환 신청은 배송중·배송완료 주문에서만 가능합니다.'}{' '}
+          {eligible.length
+            ? '신청할 수 있는 주문을 선택해 주세요.'
+            : '현재 신청 가능한 주문이 없습니다.'}
         </NoticeInline>
       ) : null}
+      <TabBar
+        options={[
+          { value: 'cancel', label: '취소' },
+          { value: 'return', label: '반품' },
+          { value: 'exchange', label: '교환' },
+        ]}
+        value={claimType}
+        onChange={(nextType) => {
+          setClaimType(nextType);
+          setReason('');
+          const matchingOrder = orders.find((candidate) => candidate.id === orderId);
+          const isMatchingOrderEligible = matchingOrder
+            ? nextType === 'cancel'
+              ? ['paymentPending', 'paid', 'preparing'].includes(matchingOrder.status)
+              : ['shipping', 'delivered'].includes(matchingOrder.status)
+            : false;
+          if (!isMatchingOrderEligible) {
+            setOrderId('');
+            setIsOrderSelectionInvalid(Boolean(matchingOrder));
+          } else {
+            setIsOrderSelectionInvalid(false);
+          }
+          setSelectedLines([]);
+          setReturnQuantities({});
+        }}
+        label="신청 종류"
+      />
       {order ? (
         <>
-          <TabBar
-            options={[
-              { value: 'cancel', label: '취소' },
-              { value: 'return', label: '반품' },
-              { value: 'exchange', label: '교환' },
-            ]}
-            value={claimType}
-            onChange={(nextType) => {
-              setClaimType(nextType);
-              setReason('');
-            }}
-            label="신청 종류"
-          />
           <ClaimFormSection title="상품 선택">
             <ul className="divide-y divide-line">
               {order.lines.map((line, index) => {
@@ -1317,6 +1374,9 @@ function ClaimFormView({
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-label-m">{line.productName}</p>
+                      {line.optionLabel ? (
+                        <p className="mt-4 text-caption text-text-2">옵션 {line.optionLabel}</p>
+                      ) : null}
                       <p className="mt-4 text-caption text-text-2">
                         주문 {line.quantity}개 · {formatMyPagePrice(line.unitPrice)}
                       </p>
@@ -1412,19 +1472,31 @@ function ClaimFormView({
               <ArrowDownToLine size={20} aria-hidden="true" className="text-text-2" />
               <span className="mt-8 text-body-s">사진을 선택해 첨부할 수 있습니다.</span>
               <span className="mt-4 text-caption text-text-3">
-                선택한 파일명만 이 화면에 표시됩니다.
+                파일 바이트는 전송하지 않고 파일 정보만 목 API에 전달합니다.
               </span>
               <input
                 type="file"
                 accept="image/*"
                 className="sr-only"
-                onChange={(event) => setFileName(event.target.files?.[0]?.name ?? '')}
+                onChange={(event) => {
+                  const selectedFile = event.target.files?.[0];
+                  setAttachment(
+                    selectedFile
+                      ? {
+                          fileName: selectedFile.name,
+                          mimeType: selectedFile.type,
+                          sizeBytes: selectedFile.size,
+                        }
+                      : null,
+                  );
+                }}
               />
             </label>
-            {fileName ? (
+            {attachment ? (
               <p className="mt-8 flex items-center gap-6 text-caption text-text-2">
                 <Info size={14} aria-hidden="true" />
-                {fileName}
+                {attachment.fileName} · {attachment.mimeType || 'MIME type 미제공'} ·{' '}
+                {(attachment.sizeBytes / 1024).toFixed(1)} KB
               </p>
             ) : null}
           </ClaimFormSection>
@@ -1513,8 +1585,14 @@ function ClaimFormView({
             </div>
           </ClaimFormSection>
           <NoticeInline tone="warning">
-            택배 회수 정보와 신청 접수는 현재 연결되어 있지 않습니다.
+            신청은 mock API에 접수됩니다. 첨부는 파일명·형식·크기만 전달하며 실제 파일
+            전송·회수·환불은 지원하지 않습니다.
           </NoticeInline>
+          {submitError ? (
+            <p role="alert" className="text-body-s text-danger">
+              {submitError}
+            </p>
+          ) : null}
           <div className="flex flex-wrap justify-center gap-8 pt-4">
             <Button variant="secondary" size="l" onClick={() => router.push('/mypage/orders')}>
               취소
@@ -1523,13 +1601,14 @@ function ClaimFormView({
               type="submit"
               size="l"
               disabled={
+                isSubmitting ||
                 selectedLines.length === 0 ||
                 !isReasonValid ||
                 !details.trim() ||
                 (needsReturnAddress && !addresses.some((address) => address.id === addressId))
               }
             >
-              신청하기
+              {isSubmitting ? '접수 중…' : '신청하기'}
             </Button>
           </div>
         </>
@@ -1752,10 +1831,21 @@ function ProductCollectionView({
   );
 }
 
-function CouponsView({ coupons }: { coupons: Coupon[] }) {
+function CouponsView({
+  coupons,
+  offers,
+  memberId,
+}: {
+  coupons: Coupon[];
+  offers: CouponOffer[];
+  memberId: string;
+}) {
   const [tab, setTab] = useState<'available' | 'used'>('available');
   const [couponCode, setCouponCode] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [notice, setNotice] = useState<LocalNotice>(null);
+  const [couponFeedback, setCouponFeedback] = useState<LocalNotice>(null);
+  const queryClient = useQueryClient();
   const today = dateInputValue(new Date());
   const isPresentationMode = shouldShowPresentationRows(getWebApiConfig().mode);
   const available = coupons.filter(
@@ -1809,16 +1899,30 @@ function CouponsView({ coupons }: { coupons: Coupon[] }) {
       scope: '전 상품',
     },
   ];
-  const registerCoupon = (event: FormEvent<HTMLFormElement>) => {
+  const refreshCoupons = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.myPage.byMember(memberId) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.coupons.all }),
+    ]);
+  };
+  const registerCoupon = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setNotice(
-      couponCode.trim()
-        ? {
-            tone: 'info',
-            message: '쿠폰 등록 API가 연결되지 않아 입력한 코드는 저장되지 않았습니다.',
-          }
-        : { tone: 'warning', message: '쿠폰 코드를 입력해 주세요.' },
-    );
+    if (!couponCode.trim())
+      return setCouponFeedback({ tone: 'warning', message: '쿠폰 코드를 입력해 주세요.' });
+    setIsSubmitting(true);
+    try {
+      await (await getShopApi()).coupons.redeemCode(couponCode.trim());
+      setCouponCode('');
+      setCouponFeedback({ tone: 'info', message: '쿠폰을 등록했습니다.' });
+      await refreshCoupons();
+    } catch (error) {
+      setCouponFeedback({
+        tone: 'warning',
+        message: error instanceof Error ? error.message : '쿠폰 등록에 실패했습니다.',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   return (
     <div className="space-y-20">
@@ -1827,20 +1931,91 @@ function CouponsView({ coupons }: { coupons: Coupon[] }) {
           <p className="text-body-s text-text-2">사용 가능 쿠폰</p>
           <p className="mt-4 text-h2">{available}장</p>
         </div>
-        <form onSubmit={registerCoupon} className="flex w-full gap-8 sm:max-w-420">
-          <TextField
-            label="쿠폰 코드"
-            isLabelHidden
-            name="couponCode"
-            value={couponCode}
-            onChange={(event) => setCouponCode(event.target.value)}
-            placeholder="쿠폰 코드를 입력해 주세요"
-          />
-          <Button type="submit" className="self-start">
-            등록
-          </Button>
+        <form onSubmit={(event) => void registerCoupon(event)} className="w-full sm:max-w-420">
+          <div className="flex gap-8">
+            <TextField
+              label="쿠폰 코드"
+              isLabelHidden
+              name="couponCode"
+              value={couponCode}
+              onChange={(event) => {
+                setCouponCode(event.target.value);
+                setCouponFeedback(null);
+              }}
+              placeholder="쿠폰 코드를 입력해 주세요"
+              disabled={isSubmitting}
+              aria-describedby={couponFeedback ? 'coupon-code-feedback' : undefined}
+              aria-invalid={couponFeedback?.tone === 'warning'}
+            />
+            <Button type="submit" className="self-start" disabled={isSubmitting}>
+              {isSubmitting ? '등록 중…' : '등록'}
+            </Button>
+          </div>
+          {couponFeedback ? (
+            <NoticeInline
+              id="coupon-code-feedback"
+              tone={couponFeedback.tone === 'warning' ? 'danger' : 'info'}
+              role={couponFeedback.tone === 'warning' ? 'alert' : 'status'}
+              className="mt-8"
+            >
+              {couponFeedback.message}
+            </NoticeInline>
+          ) : null}
         </form>
       </section>
+      {offers.length ? (
+        <section aria-label="받을 수 있는 쿠폰" className="rounded-12 border border-line p-16">
+          <h3 className="text-label-l">받을 수 있는 쿠폰</h3>
+          <ul className="mt-12 grid gap-12 sm:grid-cols-2">
+            {offers.map((offer) => (
+              <li
+                key={offer.id}
+                className="flex items-center justify-between gap-12 rounded-8 bg-surface p-12"
+              >
+                <div>
+                  <p className="text-label-m">{offer.name}</p>
+                  <p className="mt-4 text-caption text-text-2">
+                    {offer.discountType === 'rate'
+                      ? `${offer.discountValue}% 할인`
+                      : `${formatMyPagePrice(offer.discountValue)} 할인`}
+                  </p>
+                </div>
+                {offer.issueMethod === 'download' ? (
+                  <Button
+                    size="s"
+                    variant="secondary"
+                    disabled={isSubmitting || offer.isAcquired}
+                    onClick={() => {
+                      setIsSubmitting(true);
+                      void (async () => {
+                        try {
+                          await (await getShopApi()).coupons.acquire(offer.id);
+                          setNotice({ tone: 'info', message: '쿠폰을 받았습니다.' });
+                          await refreshCoupons();
+                        } catch (error) {
+                          setNotice({
+                            tone: 'warning',
+                            message:
+                              error instanceof Error ? error.message : '쿠폰을 받지 못했습니다.',
+                          });
+                        } finally {
+                          setIsSubmitting(false);
+                        }
+                      })();
+                    }}
+                  >
+                    {offer.isAcquired ? '받은 쿠폰' : '쿠폰 받기'}
+                  </Button>
+                ) : offer.issueMethod === 'automatic' ? (
+                  <span className="text-caption text-text-2">자동 발급</span>
+                ) : (
+                  <span className="text-caption text-text-2">코드 등록</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       <NoticeResult notice={notice} />
       <TabBar
         options={[
@@ -2783,6 +2958,12 @@ function QuotesView({ quotes }: { quotes: Quote[] }) {
   );
   return (
     <div className="space-y-16 lg:space-y-20">
+      {getWebApiConfig().mode === 'mock' ? (
+        <NoticeInline tone="info">
+          데모에서는 요청한 회원 ID로 견적을 필터링합니다. 실제 회원 소유권은 서버 인증과 인가가
+          연결되어야 검증됩니다.
+        </NoticeInline>
+      ) : null}
       <DateRangeFilter
         startDate={startDate}
         endDate={endDate}
@@ -2996,21 +3177,48 @@ function QuoteDetailView({ quote, memberEmail }: { quote?: Quote; memberEmail: s
               <span className="text-center">수량</span>
               <span className="text-right">비고</span>
             </div>
-            <div className="grid grid-cols-[minmax(0,1fr)_64px_108px] gap-8 border-b border-line px-10 py-14 text-body-s">
-              <span>요청 상품 정보 미제공</span>
-              <span className="text-center">—</span>
-              <span className="text-right text-text-3">미제공</span>
-            </div>
+            {(quote.requestedItems ?? []).length > 0 ? (
+              (quote.requestedItems ?? []).map((item, index) => (
+                <div
+                  key={`${item.name}-${index}`}
+                  className="grid grid-cols-[minmax(0,1fr)_64px_108px] gap-8 border-b border-line px-10 py-14 text-body-s"
+                >
+                  <span>
+                    {item.name}
+                    {item.option ? (
+                      <span className="ml-6 text-caption text-text-3">{item.option}</span>
+                    ) : null}
+                  </span>
+                  <span className="text-center">{item.quantity.toLocaleString('ko-KR')}</span>
+                  <span className="text-right text-text-3">—</span>
+                </div>
+              ))
+            ) : (
+              <div className="grid grid-cols-[minmax(0,1fr)_64px_108px] gap-8 border-b border-line px-10 py-14 text-body-s">
+                <span>요청 상품 정보 미제공</span>
+                <span className="text-center">—</span>
+                <span className="text-right text-text-3">미제공</span>
+              </div>
+            )}
           </section>
           <section className="rounded-12 border border-line p-16 lg:p-24">
             <h2 className="text-label-m">요청 사항</h2>
             <dl className="mt-12 grid gap-10 text-body-s sm:grid-cols-[112px_minmax(0,1fr)]">
               <dt className="text-text-3">요청 내용</dt>
-              <dd>{quote.title}</dd>
+              <dd>{quote.inquiryBody?.trim() || quote.title}</dd>
               <dt className="text-text-3">상세 요청</dt>
               <dd className="text-text-3">미제공</dd>
               <dt className="text-text-3">첨부 파일</dt>
-              <dd className="text-text-3">첨부 내역 미제공</dd>
+              <dd>
+                {quote.attachments?.length
+                  ? quote.attachments
+                      .map(
+                        (attachment) =>
+                          `${attachment.fileName} (${Math.ceil(attachment.sizeBytes / 1024)}KB)`,
+                      )
+                      .join(', ')
+                  : '첨부 내역 미제공'}
+              </dd>
             </dl>
           </section>
         </div>
@@ -3018,13 +3226,18 @@ function QuoteDetailView({ quote, memberEmail }: { quote?: Quote; memberEmail: s
           <h2 className="text-h3">견적 답변</h2>
           <dl className="mt-16 divide-y divide-line text-body-s">
             {[
-              ['공급 금액', '미제공'],
+              [
+                '공급 금액',
+                quote.quoteAmount === null || quote.quoteAmount === undefined
+                  ? '미제공'
+                  : formatMyPagePrice(quote.quoteAmount),
+              ],
               ['부가세', '미제공'],
-              ['견적 유효기간', '미제공'],
+              ['견적 유효기간', quote.expiresAt ? formatMyPageDate(quote.expiresAt) : '미제공'],
               ['담당자', '미제공'],
               ['연락처', '미제공'],
               ['이메일', '미제공'],
-              ['답변 내용', '답변 내용 미제공'],
+              ['답변 내용', quote.publicMessage?.trim() || '답변 내용 미제공'],
               ['첨부 파일', '첨부 내역 미제공'],
             ].map(([label, value]) => (
               <div key={label} className="grid grid-cols-[88px_minmax(0,1fr)] gap-12 py-12">

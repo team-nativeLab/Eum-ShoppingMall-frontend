@@ -21,20 +21,20 @@ import {
 } from '@/components/AdminUI';
 import { getShopApi } from '@/lib/shop-api';
 import { getAdminApiConfig } from '@/lib/api-config';
-import { mapSettledWithConcurrency } from '@/lib/settled-concurrency';
 import { createAdminRequestScope } from '@/lib/admin-request-lifecycle';
+import { mapSettledWithConcurrency } from '@/lib/settled-concurrency';
 import {
   ADMIN_TRACKING_MAX_CHARACTERS,
   validateAdminTrackingRows,
 } from '@/lib/admin-preview-validation';
-import type { Member, Order, OrderStatus } from '@eum/api/types';
+import type { AdminOrder, Member, Order, OrderStatus } from '@eum/api/types';
 
 type OrderTab = 'all' | OrderStatus;
 type AdminOrderMember = Pick<Member, 'id' | 'name' | 'email' | 'phone'>;
 type AdminOrderSummary = Pick<
   Order,
   'id' | 'orderNumber' | 'orderedAt' | 'status' | 'memberId' | 'paymentTotal'
-> & {
+> & { memberId: string } & {
   lines: Pick<Order['lines'][number], 'productName'>[];
 };
 
@@ -58,7 +58,7 @@ const ORDER_TABS: { value: OrderTab; label: string }[] = [
   { value: 'canceled', label: '취소·반품' },
 ];
 
-function toAdminOrderSummary(order: Order): AdminOrderSummary {
+function toAdminOrderSummary(order: Order & { memberId: string }): AdminOrderSummary {
   return {
     id: order.id,
     orderNumber: order.orderNumber,
@@ -70,7 +70,7 @@ function toAdminOrderSummary(order: Order): AdminOrderSummary {
   };
 }
 
-/** 현재 API의 회원별 주문 조회를 모아 관리자 주문 목록을 만듭니다. */
+/** 관리자 전용 주문 API와 회원 표시 정보를 함께 불러옵니다. */
 async function loadAdminOrders(signal: AbortSignal): Promise<AdminOrdersData> {
   if (getAdminApiConfig().mode === 'real') {
     return {
@@ -82,29 +82,40 @@ async function loadAdminOrders(signal: AbortSignal): Promise<AdminOrdersData> {
     };
   }
   const api = await getShopApi();
-  const members = await api.members.list({ signal });
-  const memberOrders = await mapSettledWithConcurrency(
-    members,
-    5,
-    async (member) => ({
-      member: {
-        id: member.id,
-        name: member.name,
-        email: member.email,
-        phone: member.phone,
-      },
-      orders: await api.orders.listByMember(member.id, { signal }),
-    }),
-    signal,
-  );
-  const failedMemberIds = memberOrders.flatMap((result, index) => {
-    const member = members[index];
-    return result.status === 'rejected' && member ? [member.id] : [];
-  });
+  const members = await api.members.adminList({ signal });
+  if (typeof api.orders.adminList !== 'function') {
+    // Transitional compatibility for partial API adapters; the production mock
+    // and real API contracts use adminList directly.
+    const memberResults = await mapSettledWithConcurrency(
+      members,
+      4,
+      (member) => api.orders.listByMember(member.id, { signal }),
+      signal,
+    );
+    const legacyOrders: (Order & { memberId: string })[] = [];
+    const failedMemberIds: string[] = [];
+    memberResults.forEach((result, index) => {
+      const member = members[index];
+      if (result.status === 'fulfilled' && member) {
+        legacyOrders.push(...result.value.map((order) => ({ ...order, memberId: member.id })));
+      } else if (member) failedMemberIds.push(member.id);
+    });
+    return {
+      orders: legacyOrders.map(toAdminOrderSummary),
+      membersById: new Map(
+        members.map((member) => [
+          member.id,
+          { id: member.id, name: member.name, email: member.email, phone: member.phone },
+        ]),
+      ),
+      failedMemberIds,
+      failedMemberCount: failedMemberIds.length,
+      orderListUnavailable: false,
+    };
+  }
+  const adminOrders = await api.orders.adminList({ signal });
   return {
-    orders: memberOrders.flatMap((result) =>
-      result.status === 'fulfilled' ? result.value.orders.map(toAdminOrderSummary) : [],
-    ),
+    orders: adminOrders.map(toAdminOrderSummary),
     membersById: new Map(
       members.map(
         (member) =>
@@ -119,8 +130,8 @@ async function loadAdminOrders(signal: AbortSignal): Promise<AdminOrdersData> {
           ] as const,
       ),
     ),
-    failedMemberIds,
-    failedMemberCount: failedMemberIds.length,
+    failedMemberIds: [],
+    failedMemberCount: 0,
     orderListUnavailable: false,
   };
 }
@@ -138,7 +149,6 @@ export function AdminOrdersPage() {
   const [pageSize, setPageSize] = useState(20);
   const [page, setPage] = useState(1);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
-  const [previewPreparingIds, setPreviewPreparingIds] = useState<string[]>([]);
   const [bulkMessage, setBulkMessage] = useState('');
   const [isTrackingModalOpen, setIsTrackingModalOpen] = useState(false);
   const [trackingInput, setTrackingInput] = useState('');
@@ -178,54 +188,65 @@ export function AdminOrdersPage() {
     try {
       const api = await getShopApi();
       if (!requestScope.isCurrent()) return;
-      const retryResults = await mapSettledWithConcurrency(
-        failedMemberIds,
-        5,
-        async (memberId) => ({
-          memberId,
-          orders: await api.orders.listByMember(memberId, { signal: requestScope.signal }),
-        }),
-        requestScope.signal,
-      );
-      if (!requestScope.isCurrent()) return;
-      const resolvedMemberIds = new Set(
-        retryResults.flatMap((result) =>
-          result.status === 'fulfilled' ? [result.value.memberId] : [],
-        ),
-      );
-      const stillFailedMemberIds = retryResults.flatMap((result, index) => {
-        const memberId = failedMemberIds[index];
-        return result.status === 'rejected' && memberId ? [memberId] : [];
-      });
-      const retriedOrders = retryResults.flatMap((result) =>
-        result.status === 'fulfilled' ? result.value.orders.map(toAdminOrderSummary) : [],
-      );
-
-      if (!requestScope.isCurrent()) return;
-      queryClient.setQueryData<AdminOrdersData>(ADMIN_ORDERS_QUERY_KEY, (currentData) => {
-        if (!currentData) return undefined;
-        const failedMemberIds = new Set(
-          currentData.failedMemberIds.filter((memberId) => !resolvedMemberIds.has(memberId)),
+      let refreshedOrders: AdminOrder[];
+      if (typeof api.orders.adminList === 'function') {
+        refreshedOrders = await api.orders.adminList({ signal: requestScope.signal });
+      } else {
+        const retryMembers = [...cachedOrderData.membersById.values()].filter((member) =>
+          failedMemberIds.includes(member.id),
         );
-        stillFailedMemberIds.forEach((memberId) => failedMemberIds.add(memberId));
-
-        return {
-          ...currentData,
-          orders: [
-            ...currentData.orders.filter((order) => !resolvedMemberIds.has(order.memberId)),
-            ...retriedOrders,
-          ],
-          failedMemberIds: [...failedMemberIds],
-          failedMemberCount: failedMemberIds.size,
-        };
-      });
+        const results = await mapSettledWithConcurrency(
+          retryMembers,
+          4,
+          (member) => api.orders.listByMember(member.id, { signal: requestScope.signal }),
+          requestScope.signal,
+        );
+        const successfulOrders: (Order & { memberId: string })[] = [];
+        const stillFailedMemberIds: string[] = [];
+        results.forEach((result, index) => {
+          const member = retryMembers[index];
+          if (result.status === 'fulfilled' && member) {
+            successfulOrders.push(
+              ...result.value.map((order) => ({ ...order, memberId: member.id })),
+            );
+          } else if (member) stillFailedMemberIds.push(member.id);
+        });
+        if (!requestScope.isCurrent()) return;
+        queryClient.setQueryData<AdminOrdersData>(ADMIN_ORDERS_QUERY_KEY, (currentData) => {
+          if (!currentData) return currentData;
+          const retainedOrders = currentData.orders.filter(
+            (order) => !retryMembers.some((member) => member.id === order.memberId),
+          );
+          return {
+            ...currentData,
+            orders: [...retainedOrders, ...successfulOrders.map(toAdminOrderSummary)],
+            failedMemberIds: stillFailedMemberIds,
+            failedMemberCount: stillFailedMemberIds.length,
+          };
+        });
+        if (stillFailedMemberIds.length) {
+          if (!requestScope.isCurrent()) return;
+          setOrderRetryAnnouncement(
+            `주문 재조회 후에도 회원 ${stillFailedMemberIds.length}명의 주문 조회에 실패했습니다.`,
+          );
+          return;
+        }
+        if (!requestScope.isCurrent()) return;
+        setOrderRetryAnnouncement('회원별 주문 재조회가 완료되었습니다.');
+        return;
+      }
+      if (!requestScope.isCurrent()) return;
+      queryClient.setQueryData<AdminOrdersData>(ADMIN_ORDERS_QUERY_KEY, (currentData) =>
+        currentData
+          ? {
+              ...currentData,
+              orders: refreshedOrders.map(toAdminOrderSummary),
+            }
+          : undefined,
+      );
 
       if (!requestScope.isCurrent()) return;
-      setOrderRetryAnnouncement(
-        stillFailedMemberIds.length > 0
-          ? `주문 재조회 후에도 회원 ${stillFailedMemberIds.length.toLocaleString('ko-KR')}명의 주문 조회에 실패했습니다.`
-          : '회원별 주문 재조회가 완료되었습니다.',
-      );
+      setOrderRetryAnnouncement('회원별 주문 재조회가 완료되었습니다.');
     } catch {
       if (!requestScope.isCurrent()) return;
       setOrderRetryAnnouncement('주문 재조회에 실패했습니다. 기존 목록과 경고를 유지합니다.');
@@ -307,14 +328,44 @@ export function AdminOrdersPage() {
     setSelectedOrderIds([]);
   };
   const trackingValidation = validateAdminTrackingRows(trackingInput, selectedOrderIds);
-  const applyTrackingPreview = () => {
+  const applyPreparing = async () => {
+    try {
+      const api = await getShopApi();
+      const results = await Promise.allSettled(
+        selectedOrderIds.map((id) => api.orders.updateAdmin(id, { status: 'preparing' })),
+      );
+      const savedCount = results.filter((result) => result.status === 'fulfilled').length;
+      await queryClient.invalidateQueries({ queryKey: ADMIN_ORDERS_QUERY_KEY });
+      setBulkMessage(`${savedCount}건을 배송 준비 상태로 목 API에 저장했습니다.`);
+      setSelectedOrderIds([]);
+    } catch (error) {
+      setBulkMessage(error instanceof Error ? error.message : '주문 상태를 저장하지 못했습니다.');
+    }
+  };
+  const applyTrackingPreview = async () => {
     if (!trackingValidation.validRows.length) return;
-    setBulkMessage(
-      `${trackingValidation.validRows.length}건의 송장 입력을 화면에서만 미리봤습니다. 실제 배송 정보는 변경되지 않았습니다.${trackingValidation.errors.length ? ` ${trackingValidation.errors.length}개 오류를 제외했습니다.` : ''}`,
-    );
-    setIsTrackingModalOpen(false);
-    setTrackingInput('');
-    setSelectedOrderIds([]);
+    try {
+      const api = await getShopApi();
+      const results = await Promise.allSettled(
+        trackingValidation.validRows.map((row) =>
+          api.orders.updateAdmin(row.orderId, {
+            trackingCarrier: row.carrier,
+            trackingNumber: row.trackingNumber,
+            status: 'shipping',
+          }),
+        ),
+      );
+      const successCount = results.filter((result) => result.status === 'fulfilled').length;
+      await queryClient.invalidateQueries({ queryKey: ADMIN_ORDERS_QUERY_KEY });
+      setBulkMessage(
+        `${successCount}건의 송장과 배송 상태를 목 API에 저장했습니다.${trackingValidation.errors.length ? ` ${trackingValidation.errors.length}개 입력 오류를 제외했습니다.` : ''}`,
+      );
+      setIsTrackingModalOpen(false);
+      setTrackingInput('');
+      setSelectedOrderIds([]);
+    } catch (error) {
+      setBulkMessage(error instanceof Error ? error.message : '송장 정보를 저장하지 못했습니다.');
+    }
   };
 
   return (
@@ -328,8 +379,8 @@ export function AdminOrdersPage() {
         tone={ordersQuery.data.orderListUnavailable ? 'warning' : 'info'}
       >
         {ordersQuery.data.orderListUnavailable
-          ? '실제 운영 API에는 주문 목록 조회가 연결되지 않았습니다. 주문 목록을 표시할 수 없습니다.'
-          : '전체 주문 조회 API가 없어 등록 회원별 조회 결과를 모아 표시합니다. 결제수단 정보와 변경 기능은 제공되지 않습니다.'}
+          ? '실제 운영 API에는 주문 관리가 연결되지 않았습니다. 주문 목록을 표시할 수 없습니다.'
+          : '주문 취소·환불과 택배사 전송은 이 화면에서 지원하지 않습니다.'}
       </AdminNotice>
       {ordersQuery.data.failedMemberCount > 0 ? (
         <AdminNotice
@@ -364,10 +415,6 @@ export function AdminOrdersPage() {
           setSelectedOrderIds([]);
         }}
       />
-      <AdminNotice className="mt-12" tone="warning">
-        일괄 배송 준비 처리는 현재 화면의 미리보기만 변경합니다. 엑셀 다운로드와 송장 반영은 운영
-        API 미연결로 실행하지 않습니다.
-      </AdminNotice>
       <form
         className="mt-16 flex flex-wrap items-center gap-8 rounded-12 border border-line bg-bg p-12"
         onSubmit={handleSearch}
@@ -473,13 +520,7 @@ export function AdminOrdersPage() {
             size="s"
             variant="secondary"
             disabled={!selectedOrderIds.length}
-            onClick={() => {
-              setPreviewPreparingIds((ids) => [...new Set([...ids, ...selectedOrderIds])]);
-              setBulkMessage(
-                `${selectedOrderIds.length}건을 배송 준비 상태로 화면에서만 미리 반영했습니다.`,
-              );
-              setSelectedOrderIds([]);
-            }}
+            onClick={() => void applyPreparing()}
           >
             배송준비로 변경
           </Button>
@@ -601,12 +642,7 @@ export function AdminOrdersPage() {
                       </td>
                       <td className="px-12 py-12 text-text-3">미제공</td>
                       <td className="px-20 py-12">
-                        <AdminStatusBadge
-                          status={
-                            previewPreparingIds.includes(order.id) ? 'preparing' : order.status
-                          }
-                          kind="order"
-                        />
+                        <AdminStatusBadge status={order.status} kind="order" />
                       </td>
                     </tr>
                   );
@@ -631,7 +667,7 @@ export function AdminOrdersPage() {
           setIsTrackingModalOpen(false);
           setTrackingInput('');
         }}
-        title="송장 일괄 등록 미리보기"
+        title="송장 일괄 등록"
         actions={
           <>
             <Button
@@ -643,16 +679,19 @@ export function AdminOrdersPage() {
             >
               취소
             </Button>
-            <Button disabled={!trackingValidation.validRows.length} onClick={applyTrackingPreview}>
-              유효 행 미리보기
+            <Button
+              disabled={!trackingValidation.validRows.length}
+              onClick={() => void applyTrackingPreview()}
+            >
+              유효 행 저장
             </Button>
           </>
         }
       >
         <div className="mt-16 grid gap-12 text-body-s">
           <AdminNotice tone="warning">
-            주문 ID, 택배사, 송장번호를 쉼표로 구분해 한 줄씩 입력합니다. 값은 저장·전송되지
-            않습니다.
+            주문 ID, 택배사, 송장번호를 쉼표로 구분해 한 줄씩 입력합니다. 유효한 값은 목 API에
+            저장되며 실제 택배사로 전송되지 않습니다.
           </AdminNotice>
           <textarea
             maxLength={ADMIN_TRACKING_MAX_CHARACTERS + 1}

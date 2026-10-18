@@ -86,7 +86,7 @@ export function AdminMembersPage() {
   const [page, setPage] = useState(1);
   const membersQuery = useQuery({
     queryKey: ['admin', 'members', 'list'],
-    queryFn: async ({ signal }) => (await getShopApi()).members.list({ signal }),
+    queryFn: async ({ signal }) => (await getShopApi()).members.adminList({ signal }),
   });
   const memberOrderCountsQuery = useQuery({
     queryKey: ['admin', 'members', 'order-counts', membersQuery.data?.map((member) => member.id)],

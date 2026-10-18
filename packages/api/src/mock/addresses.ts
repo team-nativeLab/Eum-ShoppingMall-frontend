@@ -1,9 +1,10 @@
-import type { Address } from '../types';
+import type { AdminAddress } from '../types';
 
 /** 목 배송지 */
-export const mockAddresses: Address[] = [
+export const mockAddresses: AdminAddress[] = [
   {
     id: 'addr-001',
+    memberId: 'mem-001',
     label: '본사',
     recipientName: '김구매',
     phone: '010-0000-0001',
@@ -14,6 +15,7 @@ export const mockAddresses: Address[] = [
   },
   {
     id: 'addr-002',
+    memberId: 'mem-001',
     label: '현장 사무소',
     recipientName: '이현장',
     phone: '010-0000-0002',

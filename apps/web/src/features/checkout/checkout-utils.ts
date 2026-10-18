@@ -33,6 +33,15 @@ export function resolveCheckoutOptions(response: unknown): ResolvedCheckoutOptio
   if (!deliveryRequests || !shippingMethods?.length || !paymentMethods?.length) {
     return null;
   }
+  if (
+    (response.freeShippingScope !== undefined &&
+      response.freeShippingScope !== 'all' &&
+      response.freeShippingScope !== 'cart') ||
+    (response.baseFeeMode !== undefined &&
+      response.baseFeeMode !== 'customer' &&
+      response.baseFeeMode !== 'included')
+  )
+    return null;
 
   const hasFreeShippingThreshold = isFiniteNonNegativeNumber(response.freeShippingThreshold);
   let freeShippingThreshold = 0;
@@ -44,6 +53,8 @@ export function resolveCheckoutOptions(response: unknown): ResolvedCheckoutOptio
     options: {
       freeShippingThreshold,
       shippingFee: response.shippingFee,
+      freeShippingScope: response.freeShippingScope === 'cart' ? 'cart' : 'all',
+      baseFeeMode: response.baseFeeMode === 'included' ? 'included' : 'customer',
       deliveryRequests,
       shippingMethods,
       paymentMethods,
@@ -53,11 +64,18 @@ export function resolveCheckoutOptions(response: unknown): ResolvedCheckoutOptio
 }
 
 /** Shares the shipping rule across cart, shipping, and payment summaries. */
-export function calculateShippingFee(productTotal: number, options: CheckoutOptions): number {
+export function calculateShippingFee(
+  productTotal: number,
+  options: CheckoutOptions,
+  discountTotal = 0,
+): number {
+  if (productTotal === 0 || options.baseFeeMode === 'included') return 0;
   const threshold = isFiniteNonNegativeNumber(options.freeShippingThreshold)
     ? options.freeShippingThreshold
     : 0;
-  return productTotal === 0 || productTotal >= threshold ? 0 : options.shippingFee;
+  const shippingBasis =
+    options.freeShippingScope === 'cart' ? Math.max(0, productTotal - discountTotal) : productTotal;
+  return shippingBasis >= threshold ? 0 : options.shippingFee;
 }
 
 /** Keeps a saved payment method only if it is still offered, otherwise selects the first option. */
@@ -94,7 +112,7 @@ export function calculateCheckoutAmounts({
   const discountTotal = Math.min(productTotal, rawDiscount);
   const beforePoints = productTotal - discountTotal;
   const pointsUsed = Math.min(Math.max(0, Math.floor(pointsToUse)), beforePoints);
-  const shippingFee = calculateShippingFee(productTotal, options);
+  const shippingFee = calculateShippingFee(productTotal, options, discountTotal);
 
   return {
     productTotal,
@@ -111,7 +129,7 @@ export function getCouponDiscount(coupon: Coupon, productTotal: number): number 
     coupon.discountType === 'amount'
       ? coupon.discountValue
       : Math.floor((productTotal * coupon.discountValue) / 100);
-  return Math.min(productTotal, discount);
+  return Math.min(productTotal, discount, coupon.maxDiscountAmount ?? productTotal);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
