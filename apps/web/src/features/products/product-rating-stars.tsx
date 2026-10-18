@@ -10,9 +10,11 @@ const STAR_COUNT = 5;
 export function ProductRatingStars({
   rating,
   className,
+  variant = 'default',
 }: {
   rating: number | null;
   className?: string;
+  variant?: 'default' | 'home-carousel';
 }) {
   const filledCount = rating === null ? 0 : Math.floor(rating);
   return (
@@ -28,7 +30,13 @@ export function ProductRatingStars({
             key={starIndex}
             aria-hidden="true"
             strokeWidth={1.5}
-            fill={isFilled ? 'var(--color-rating-star-fill)' : 'none'}
+            fill={
+              isFilled
+                ? variant === 'home-carousel'
+                  ? '#F2B72F'
+                  : 'var(--color-rating-star-fill)'
+                : 'none'
+            }
             className={cx(
               'size-14 lg:size-16',
               isFilled ? 'text-rating-star-stroke' : 'text-line-control',
