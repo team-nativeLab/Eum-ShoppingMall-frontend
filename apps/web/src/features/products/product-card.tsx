@@ -95,14 +95,14 @@ export function ProductCard({
         layout === 'list'
           ? 'flex-row gap-16'
           : isHomeCarouselCard
-            ? 'aspect-[181/284] flex-col'
+            ? 'aspect-[181/284] flex-col lg:aspect-auto'
             : 'aspect-[181/284] min-h-max flex-col',
         isCompactOnMobile && (isHomeCarouselCard ? 'pb-24 lg:pb-8' : 'pb-10 lg:pb-8'),
-        // Let the desktop ratio set the preferred height and content size raise its minimum when needed.
+        // Keep compact home cards tall on mobile and use the desktop carousel minimum height.
         isHomeCarouselCompactCard && 'min-h-[384px]',
         isCompactOnMobile && (layout === 'list' ? 'gap-10 lg:gap-0' : 'gap-16 lg:gap-0'),
         isHomeCarouselCard &&
-          'relative lg:h-auto lg:min-h-max lg:border-0 lg:before:pointer-events-none lg:before:absolute lg:before:inset-0 lg:before:rounded-8 lg:before:border lg:before:border-line lg:hover:before:border-line-strong',
+          'relative lg:min-h-[var(--home-carousel-card-min-height)] lg:border-0 lg:before:pointer-events-none lg:before:absolute lg:before:inset-0 lg:before:rounded-8 lg:before:border lg:before:border-line lg:hover:before:border-line-strong',
         className,
       )}
     >
@@ -112,7 +112,7 @@ export function ProductCard({
           layout === 'list'
             ? 'aspect-square w-144'
             : isHomeCarouselCompactCard
-              ? 'mx-auto aspect-[2/3] w-[calc(100%_-_24px)] max-w-[116px] lg:mx-0 lg:aspect-[23/20] lg:w-full lg:max-w-none'
+              ? 'mx-auto aspect-[2/3] w-[calc(100%_-_24px)] max-w-[116px] lg:mx-0 lg:aspect-[4/3] lg:w-full lg:max-w-none'
               : 'aspect-[23/20]',
         )}
       >
@@ -128,6 +128,19 @@ export function ProductCard({
         >
           <ProductImage src={product.thumbnailUrl} alt={product.name} />
         </Link>
+        {isHomeCarouselCompactCard ? (
+          <button
+            type="button"
+            aria-label={
+              hasRequiredOptions ? `${product.name} 옵션 선택` : `${product.name} 장바구니 담기`
+            }
+            onClick={handleCartAction}
+            disabled={isOrderPending || !canAddToCart(product)}
+            className="absolute right-8 bottom-8 z-10 hidden size-36 shrink-0 items-center justify-center rounded-8 border border-line-strong bg-bg text-text-1 shadow-1 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:border-line disabled:text-text-disabled lg:inline-flex"
+          >
+            <Icon icon={ShoppingCart} size={20} />
+          </button>
+        ) : null}
         {!isHomeCarouselCard ? (
           <div className="pointer-events-none absolute top-8 left-8 flex flex-wrap gap-4">
             {productBadges}
@@ -204,16 +217,22 @@ export function ProductCard({
             isCompactOnMobile ? 'lg:pt-8' : 'pt-8',
           )}
         >
-          <div className="min-w-0">
+          <div className={cx('min-w-0', isHomeCarouselCompactCard && 'lg:w-full')}>
             {priceDisplay.listPriceText ? (
-              <p className="truncate text-caption text-text-3 line-through">
+              <p
+                className={
+                  isHomeCarouselCompactCard
+                    ? 'text-caption text-text-3 line-through lg:break-all'
+                    : 'truncate text-caption text-text-3 line-through'
+                }
+              >
                 <span className="sr-only">정가 </span>
                 {priceDisplay.listPriceText}
               </p>
             ) : null}
             <p
               className={cx(
-                'truncate text-price-m',
+                isHomeCarouselCompactCard ? 'text-price-m lg:break-all' : 'truncate text-price-m',
                 isSoldOut
                   ? 'text-text-3'
                   : priceDisplay.discountRateLabel !== null
@@ -230,20 +249,22 @@ export function ProductCard({
               {priceDisplay.text}
             </p>
           </div>
-          <button
-            type="button"
-            aria-label={
-              hasRequiredOptions ? `${product.name} 옵션 선택` : `${product.name} 장바구니 담기`
-            }
-            onClick={handleCartAction}
-            disabled={isOrderPending || !canAddToCart(product)}
-            className={cx(
-              'size-36 shrink-0 items-center justify-center rounded-8 border border-line-strong bg-bg text-text-1 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:border-line disabled:text-text-disabled',
-              isCompactOnMobile ? 'hidden lg:inline-flex' : 'inline-flex',
-            )}
-          >
-            <Icon icon={ShoppingCart} size={20} />
-          </button>
+          {!isHomeCarouselCompactCard ? (
+            <button
+              type="button"
+              aria-label={
+                hasRequiredOptions ? `${product.name} 옵션 선택` : `${product.name} 장바구니 담기`
+              }
+              onClick={handleCartAction}
+              disabled={isOrderPending || !canAddToCart(product)}
+              className={cx(
+                'size-36 shrink-0 items-center justify-center rounded-8 border border-line-strong bg-bg text-text-1 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:border-line disabled:text-text-disabled',
+                isCompactOnMobile ? 'hidden lg:inline-flex' : 'inline-flex',
+              )}
+            >
+              <Icon icon={ShoppingCart} size={20} />
+            </button>
+          ) : null}
         </div>
         <p role="status" className="sr-only">
           {cartAnnouncement}

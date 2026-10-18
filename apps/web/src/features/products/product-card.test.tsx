@@ -81,31 +81,44 @@ describe('ProductCard', () => {
     );
   });
 
-  it('allows the home desktop card to grow while keeping long names, reviews and prices', () => {
+  it('uses the home minimum height and keeps full-width prices untruncated', () => {
     const longProductName = '산업 현장용 고시인성 장시간 착용 안전화 상품명 길이 확인용';
     render(
       <ProductCard
-        product={createProduct({ name: longProductName, reviewCount: 12345 })}
+        product={createProduct({
+          name: longProductName,
+          price: 1234567,
+          listPrice: 2345678,
+          reviewCount: 12345,
+        })}
         mobileVariant="compact"
         cardVariant="home-carousel"
       />,
     );
 
     const card = screen.getByRole('article');
-    expect(card).toHaveClass('aspect-[181/284]', 'lg:h-auto', 'lg:min-h-max');
-    expect(card).not.toHaveClass(
-      'lg:min-h-0',
-      'lg:min-h-[var(--home-carousel-card-height)]',
-      'lg:h-[var(--home-carousel-card-height)]',
+    expect(card).toHaveClass(
+      'aspect-[181/284]',
+      'lg:aspect-auto',
+      'lg:min-h-[var(--home-carousel-card-min-height)]',
     );
     expect(within(card).getByRole('link', { name: longProductName })).toBeInTheDocument();
     expect(within(card).getByLabelText('리뷰 12,345개')).toHaveTextContent('(12,345)');
-    expect(within(card).getByText('49%')).toBeInTheDocument();
-    expect(within(card).getByText('₩20,900')).toBeInTheDocument();
-    expect(within(card).getByText('₩10,560')).toBeInTheDocument();
-    expect(
-      within(card).getByRole('button', { name: `${longProductName} 장바구니 담기` }),
-    ).toBeInTheDocument();
+    expect(within(card).getByText('47%')).toBeInTheDocument();
+    const listPrice = within(card).getByText('₩2,345,678');
+    expect(listPrice).not.toHaveClass('truncate');
+    expect(listPrice).toHaveClass('lg:break-all');
+    const salePrice = within(card).getByText('₩1,234,567');
+    expect(salePrice).toBeInTheDocument();
+    expect(salePrice).not.toHaveClass('truncate');
+    expect(salePrice).toHaveClass('lg:break-all');
+    const imageFrame = card.firstElementChild;
+    if (!(imageFrame instanceof HTMLElement)) throw new Error('Expected a product image frame.');
+    expect(imageFrame).toHaveClass('lg:aspect-[4/3]');
+    const cartButton = within(imageFrame).getByRole('button', {
+      name: `${longProductName} 장바구니 담기`,
+    });
+    expect(cartButton).toHaveClass('absolute', 'right-8', 'bottom-8', 'hidden', 'lg:inline-flex');
   });
 
   it('shows average stars, review count, integer discount, list price and highlighted sale price', () => {
@@ -163,11 +176,10 @@ describe('ProductCard', () => {
 
     const card = screen.getByRole('article');
     expect(card).toHaveClass('relative', 'pb-24', 'lg:pb-8', 'min-h-[384px]');
-    expect(card).toHaveClass('aspect-[181/284]', 'lg:h-auto', 'lg:min-h-max');
-    expect(card).not.toHaveClass(
-      'lg:min-h-0',
-      'lg:min-h-[var(--home-carousel-card-height)]',
-      'lg:h-[var(--home-carousel-card-height)]',
+    expect(card).toHaveClass(
+      'aspect-[181/284]',
+      'lg:aspect-auto',
+      'lg:min-h-[var(--home-carousel-card-min-height)]',
     );
     const imageFrame = card.firstElementChild;
     if (!(imageFrame instanceof HTMLElement)) throw new Error('Expected a product image frame.');
@@ -178,7 +190,7 @@ describe('ProductCard', () => {
       'max-w-[116px]',
       'aspect-[2/3]',
       'lg:mx-0',
-      'lg:aspect-[23/20]',
+      'lg:aspect-[4/3]',
       'lg:w-full',
       'lg:max-w-none',
       'overflow-hidden',
@@ -214,11 +226,10 @@ describe('ProductCard', () => {
     const priceRow = card.querySelector('div.mt-auto');
     expect(priceRow).toHaveClass('mt-auto', 'items-end', 'justify-between');
     expect(priceRow?.parentElement).toHaveClass('px-4');
-    expect(
-      within(card).getByRole('button', {
-        name: `${longProductName} 장바구니 담기`,
-      }),
-    ).toHaveClass('size-36', 'hidden', 'lg:inline-flex');
+    const cartButton = within(imageFrame).getByRole('button', {
+      name: `${longProductName} 장바구니 담기`,
+    });
+    expect(cartButton).toHaveClass('size-36', 'hidden', 'lg:inline-flex');
   });
 
   it('stacks home mobile unrated stars above a single-line rating summary', () => {

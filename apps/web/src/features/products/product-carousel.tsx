@@ -17,14 +17,14 @@ export const HOME_WIDE_DESKTOP_QUERY = '(min-width: 80rem)';
 
 /** 홈 베스트 셀러 전용 데스크톱 레이아웃. 공유 추천 캐러셀은 기존 5열 규격을 유지합니다. */
 export const HOME_CAROUSEL_LAYOUTS = {
-  desktop: { pageSize: 5, cardWidth: 158, cardHeight: 248, gap: 16 },
-  wideDesktop: { pageSize: 7, cardWidth: 158, cardHeight: 248, gap: 16 },
+  desktop: { pageSize: 5, cardWidth: 158, minCardHeight: 292, gap: 16 },
+  wideDesktop: { pageSize: 7, cardWidth: 158, minCardHeight: 292, gap: 16 },
 } as const;
 
 export type CarouselDesktopLayout = {
   pageSize: number;
   cardWidth: number;
-  cardHeight: number;
+  minCardHeight: number;
   gap: number;
 };
 
@@ -121,6 +121,7 @@ export function ProductCarouselTrack({
   const trackStyle = desktopLayout
     ? ({
         '--home-carousel-card-width': `${desktopLayout.cardWidth}px`,
+        '--home-carousel-card-min-height': `${desktopLayout.minCardHeight}px`,
         '--home-carousel-gap': `${desktopLayout.gap}px`,
         '--carousel-page-translate': `${-carouselTranslate}px`,
       } as CSSProperties)
