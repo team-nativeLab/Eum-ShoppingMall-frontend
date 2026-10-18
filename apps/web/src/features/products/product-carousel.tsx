@@ -12,13 +12,13 @@ import { ProductCard } from './product-card';
 /** 공용 추천 캐러셀의 데스크톱 한 페이지 카드 수(Figma 240 카드 5열) */
 export const DESKTOP_CAROUSEL_PAGE_SIZE = 5;
 
-/** Tailwind 기본 xl 브레이크포인트(80rem). W-01 홈에서 7개를 한 번에 이동하는 기준입니다. */
+/** Tailwind 기본 xl 브레이크포인트(80rem). 홈 베스트 셀러는 이 구간부터 5개씩 이동합니다. */
 export const HOME_WIDE_DESKTOP_QUERY = '(min-width: 80rem)';
 
 /** 홈 베스트 셀러 전용 데스크톱 레이아웃. 공유 추천 캐러셀은 기존 5열 규격을 유지합니다. */
 export const HOME_CAROUSEL_LAYOUTS = {
-  desktop: { pageSize: 5, cardWidth: 158, minCardHeight: 292, gap: 16 },
-  wideDesktop: { pageSize: 7, cardWidth: 158, minCardHeight: 292, gap: 16 },
+  desktop: { pageSize: 4, cardWidth: 220, minCardHeight: 284, gap: 16 },
+  wideDesktop: { pageSize: 5, cardWidth: 220, minCardHeight: 284, gap: 16 },
 } as const;
 
 export type CarouselDesktopLayout = {
@@ -28,7 +28,7 @@ export type CarouselDesktopLayout = {
   gap: number;
 };
 
-/** 홈만 Tailwind xl(1280px)에서 7장 이동으로 전환합니다. */
+/** 홈만 Tailwind xl(1280px)에서 5장 이동으로 전환합니다. */
 export function useHomeCarouselLayout(): CarouselDesktopLayout {
   return useMediaQuery(HOME_WIDE_DESKTOP_QUERY)
     ? HOME_CAROUSEL_LAYOUTS.wideDesktop

@@ -73,9 +73,9 @@ describe('useCarouselPaging', () => {
     expect(result.current).toMatchObject({ pageIndex: 0, direction: 'none' });
   });
 
-  it('7개와 8개 경계를 처리하고 뷰포트 변경 후 현재 상품이 포함된 페이지를 보존합니다', () => {
+  it('5개와 8개 경계를 처리하고 뷰포트 변경 후 현재 상품이 포함된 페이지를 보존합니다', () => {
     const initialProps: { productCount: number; pageSize: number } = {
-      productCount: 7,
+      productCount: 5,
       pageSize: HOME_CAROUSEL_LAYOUTS.wideDesktop.pageSize,
     };
     const { result, rerender } = renderHook(
@@ -106,7 +106,7 @@ describe('useCarouselPaging', () => {
 });
 
 describe('useHomeCarouselLayout', () => {
-  it('uses a five-card stride below 1280px and a seven-card stride at 1280px and wider', () => {
+  it('uses a four-card stride below 1280px and a five-card stride at 1280px and wider', () => {
     const { result, rerender } = renderHook(
       ({ isWideDesktop }) => {
         mediaQueryState.isWideDesktop = isWideDesktop;
@@ -117,11 +117,11 @@ describe('useHomeCarouselLayout', () => {
 
     expect(HOME_WIDE_DESKTOP_QUERY).toBe('(min-width: 80rem)');
     expect(result.current).toEqual(HOME_CAROUSEL_LAYOUTS.desktop);
-    expect(result.current.pageSize).toBe(5);
+    expect(result.current.pageSize).toBe(4);
 
     rerender({ isWideDesktop: true });
     expect(result.current).toEqual(HOME_CAROUSEL_LAYOUTS.wideDesktop);
-    expect(result.current.pageSize).toBe(7);
+    expect(result.current.pageSize).toBe(5);
   });
 });
 
@@ -152,14 +152,14 @@ describe('ProductCarouselTrack responsive layouts', () => {
     {
       name: '1024px',
       layout: HOME_CAROUSEL_LAYOUTS.desktop,
-      expectedPageSize: 5,
-      expectedTranslate: '-870px',
+      expectedPageSize: 4,
+      expectedTranslate: '-944px',
     },
     {
       name: '1280px+',
       layout: HOME_CAROUSEL_LAYOUTS.wideDesktop,
-      expectedPageSize: 7,
-      expectedTranslate: '-1218px',
+      expectedPageSize: 5,
+      expectedTranslate: '-1180px',
     },
   ])(
     'uses the home-only $name card geometry, stride, and inert range',
@@ -190,15 +190,14 @@ describe('ProductCarouselTrack responsive layouts', () => {
         'lg:min-h-[292px]',
       );
       expect(track).toHaveStyle({
-        '--home-carousel-card-width': '158px',
-        '--home-carousel-card-min-height': '292px',
+        '--home-carousel-card-width': '220px',
+        '--home-carousel-card-min-height': '284px',
         '--home-carousel-gap': '16px',
         '--carousel-page-translate': expectedTranslate,
       });
-      expect(layout.cardWidth).toBe(158);
-      expect(Math.round((layout.cardWidth * 284) / 181)).toBe(248);
-      expect(layout.minCardHeight).toBe(292);
-      expect(layout.minCardHeight).toBeGreaterThan(Math.round((layout.cardWidth * 284) / 181));
+      expect(layout.cardWidth).toBe(220);
+      expect(layout.minCardHeight).toBe(284);
+      expect(layout.gap).toBe(16);
       expect(layout.pageSize).toBe(expectedPageSize);
       expect(cards.slice(0, layout.pageSize).every((card) => card.hasAttribute('inert'))).toBe(
         true,

@@ -30,7 +30,7 @@ export function ProductCard({
   className?: string;
   layout?: 'grid' | 'list';
   mobileVariant?: 'full' | 'compact';
-  /** 홈 베스트 셀러: 중앙 정렬한 좁은 2:3 프레임과 전용 카드 여백·데스크톱 규격을 제어합니다. */
+  /** 홈 베스트 셀러: 중앙 정렬한 모바일 2:3 프레임과 전용 데스크톱 규격을 제어합니다. */
   cardVariant?: 'default' | 'home-carousel';
 }) {
   const router = useRouter();
@@ -112,7 +112,7 @@ export function ProductCard({
           layout === 'list'
             ? 'aspect-square w-144'
             : isHomeCarouselCompactCard
-              ? 'mx-auto aspect-[2/3] w-[calc(100%_-_24px)] max-w-[116px] lg:mx-0 lg:aspect-[4/3] lg:w-full lg:max-w-none'
+              ? 'mx-auto aspect-[2/3] w-[calc(100%_-_24px)] max-w-[116px] lg:mx-0 lg:aspect-video lg:w-full lg:max-w-none'
               : 'aspect-[23/20]',
         )}
       >
@@ -128,19 +128,6 @@ export function ProductCard({
         >
           <ProductImage src={product.thumbnailUrl} alt={product.name} />
         </Link>
-        {isHomeCarouselCompactCard ? (
-          <button
-            type="button"
-            aria-label={
-              hasRequiredOptions ? `${product.name} 옵션 선택` : `${product.name} 장바구니 담기`
-            }
-            onClick={handleCartAction}
-            disabled={isOrderPending || !canAddToCart(product)}
-            className="absolute right-8 bottom-8 z-10 hidden size-36 shrink-0 items-center justify-center rounded-8 border border-line-strong bg-bg text-text-1 shadow-1 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:border-line disabled:text-text-disabled lg:inline-flex"
-          >
-            <Icon icon={ShoppingCart} size={20} />
-          </button>
-        ) : null}
         {!isHomeCarouselCard ? (
           <div className="pointer-events-none absolute top-8 left-8 flex flex-wrap gap-4">
             {productBadges}
@@ -189,7 +176,10 @@ export function ProductCard({
               'max-lg:flex-col max-lg:items-start max-lg:gap-2',
           )}
         >
-          <ProductRatingStars rating={product.rating} />
+          <ProductRatingStars
+            rating={product.rating}
+            variant={isHomeCarouselCard ? 'home-carousel' : 'default'}
+          />
           {product.rating === null ? (
             <span
               className={cx(
@@ -217,7 +207,12 @@ export function ProductCard({
             isCompactOnMobile ? 'lg:pt-8' : 'pt-8',
           )}
         >
-          <div className={cx('min-w-0', isHomeCarouselCompactCard && 'lg:w-full')}>
+          <div
+            className={cx(
+              'min-w-0',
+              isCompactOnMobile && !isHomeCarouselCompactCard && 'lg:w-full',
+            )}
+          >
             {priceDisplay.listPriceText ? (
               <p
                 className={
@@ -249,22 +244,20 @@ export function ProductCard({
               {priceDisplay.text}
             </p>
           </div>
-          {!isHomeCarouselCompactCard ? (
-            <button
-              type="button"
-              aria-label={
-                hasRequiredOptions ? `${product.name} 옵션 선택` : `${product.name} 장바구니 담기`
-              }
-              onClick={handleCartAction}
-              disabled={isOrderPending || !canAddToCart(product)}
-              className={cx(
-                'size-36 shrink-0 items-center justify-center rounded-8 border border-line-strong bg-bg text-text-1 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:border-line disabled:text-text-disabled',
-                isCompactOnMobile ? 'hidden lg:inline-flex' : 'inline-flex',
-              )}
-            >
-              <Icon icon={ShoppingCart} size={20} />
-            </button>
-          ) : null}
+          <button
+            type="button"
+            aria-label={
+              hasRequiredOptions ? `${product.name} 옵션 선택` : `${product.name} 장바구니 담기`
+            }
+            onClick={handleCartAction}
+            disabled={isOrderPending || !canAddToCart(product)}
+            className={cx(
+              'size-36 shrink-0 items-center justify-center rounded-8 border border-line-strong bg-bg text-text-1 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:border-line disabled:text-text-disabled',
+              isCompactOnMobile ? 'hidden lg:inline-flex' : 'inline-flex',
+            )}
+          >
+            <Icon icon={ShoppingCart} size={20} />
+          </button>
         </div>
         <p role="status" className="sr-only">
           {cartAnnouncement}
