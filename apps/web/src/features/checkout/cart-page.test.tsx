@@ -222,7 +222,7 @@ describe('CartPageView free shipping progress', () => {
     await user.click(screen.getByRole('button', { name: '다시 시도' }));
 
     const shippingBanner = await screen.findByRole('region', { name: '무료 배송 혜택' });
-    expect(shippingBanner).toHaveClass('border-text-1', 'bg-bg');
+    expect(shippingBanner).toHaveClass('border-text-1', 'bg-text-1');
     expect(attempts).toBe(2);
   });
 
@@ -321,22 +321,21 @@ describe('CartPageView free shipping progress', () => {
       const shippingBanner = await screen.findByRole('region', { name: '무료 배송 혜택' });
       await waitForCartItems(1);
 
-      expect(shippingBanner).toHaveClass('border-text-1', 'bg-bg');
+      expect(shippingBanner).toHaveClass('border-text-1', 'bg-text-1');
       expect(shippingBanner).not.toHaveClass('border-success', 'bg-success-tint');
       expect(screen.getByText(`${expectedRemaining} 더 담으면 무료배송!`)).toHaveClass(
-        'text-text-1',
+        'text-inverse',
       );
       expect(screen.getByText(`₩${amount.toLocaleString('ko-KR')} / ₩50,000`)).toHaveClass(
-        'text-text-1',
+        'text-inverse-2',
       );
       expect(getShippingProgress()).toHaveAttribute('aria-valuenow', expectedProgress);
-      expect(getShippingProgress().firstElementChild).toHaveClass('bg-text-1');
+      expect(getShippingProgress().firstElementChild).toHaveClass('bg-inverse');
       expect(getShippingProgress().firstElementChild).toHaveClass(
-        'transition-[width]',
-        'duration-300',
-        'motion-reduce:transition-none',
+        'motion-safe:transition-[width]',
+        'motion-safe:duration-700',
       );
-      expect(getShippingProgress()).toHaveClass('bg-bg-subtle');
+      expect(getShippingProgress()).toHaveClass('bg-text-2');
     },
   );
 
@@ -353,7 +352,7 @@ describe('CartPageView free shipping progress', () => {
     expect(shippingBanner).toHaveClass('border-success', 'bg-success-tint');
     expect(screen.getByText('무료 배송 기준을 충족했습니다.')).toHaveClass('text-success');
     expect(screen.getByText(`₩${amount.toLocaleString('ko-KR')} / ₩50,000`)).toHaveClass(
-      'text-success',
+      'text-text-3',
     );
     expect(getShippingProgress()).toHaveAttribute('aria-valuemin', '0');
     expect(getShippingProgress()).toHaveAttribute('aria-valuemax', '100');
@@ -392,7 +391,7 @@ describe('CartPageView free shipping progress', () => {
     await user.click(screen.getByRole('checkbox', { name: '상품 unselected-product 선택' }));
 
     await waitFor(() => expect(shippingBanner).toHaveTextContent('₩26,000 / ₩50,000'));
-    expect(shippingBanner).toHaveClass('border-text-1', 'bg-bg');
+    expect(shippingBanner).toHaveClass('border-text-1', 'bg-text-1');
     expect(shippingBanner).toHaveTextContent('₩24,000 더 담으면 무료배송!');
     expect(getShippingProgress()).toHaveAttribute('aria-valuenow', '52');
 
