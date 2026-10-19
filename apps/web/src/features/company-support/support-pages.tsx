@@ -2,6 +2,7 @@
 
 import { queryKeys } from '@eum/api/query-keys';
 import type { Faq, Inquiry, Notice, Order } from '@eum/api/types';
+import { Badge } from '@eum/ui/components/Badge';
 import { Button } from '@eum/ui/components/Button';
 import { Checkbox } from '@eum/ui/components/Checkbox';
 import { Chip } from '@eum/ui/components/Chip';
@@ -609,9 +610,13 @@ function MemberInquiryHistory({ memberId }: { memberId: string }) {
             {inquiriesQuery.data.map((inquiry) => (
               <li key={inquiry.id} className="py-16">
                 <div className="mb-8 flex items-center justify-between gap-8">
-                  <span className="rounded-capsule border border-line-strong px-10 py-4 text-caption text-text-2">
-                    {inquiry.status === 'answered' ? '답변완료' : '답변대기'}
-                  </span>
+                  {inquiry.status === 'answered' ? (
+                    <Badge tone="success">답변완료</Badge>
+                  ) : (
+                    <span className="rounded-capsule border border-line-strong px-10 py-4 text-caption text-text-2">
+                      답변대기
+                    </span>
+                  )}
                   <time className="text-caption text-text-3" dateTime={inquiry.createdAt}>
                     {formatDate(inquiry.createdAt)}
                   </time>
