@@ -3,21 +3,21 @@ import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { Switch } from '@eum/ui/components/Switch';
 import { SelectField, TextField } from '@eum/ui/components/TextField';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent } from 'react';
+import { Bold, ImagePlus, Italic, Link2, List, Underline } from 'lucide-react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import {
   AdminError,
   AdminLoading,
-  AdminNotice,
+  AdminEmpty,
   AdminPageHeader,
   AdminPanel,
-  AdminStatusBadge,
 } from '@/components/AdminUI';
 import { useAdminPriceVisibilityPreview } from '@/lib/admin-price-visibility-preview';
 import { getShopApi } from '@/lib/shop-api';
 import type {
   AdminProduct,
-  AdminProductSku,
+  AdminBrand,
   Category,
   ProductImage,
   ProductOption,
@@ -27,7 +27,21 @@ import type { AdminProductInput } from '@eum/api/shop-api';
 interface ProductEditorData {
   product: AdminProduct | null;
   categories: Category[];
+  brands: AdminBrand[];
 }
+
+const productSections = [
+  { id: 'basic-info', label: '기본 정보' },
+  { id: 'category-info', label: '카테고리' },
+  { id: 'price-info', label: '가격' },
+  { id: 'option-info', label: '옵션' },
+  { id: 'stock-info', label: '재고' },
+  { id: 'image-info', label: '이미지' },
+  { id: 'detail-info', label: '상세 정보' },
+] as const;
+
+type ProductSectionId = (typeof productSections)[number]['id'];
+type VisibleSalesState = 'active' | 'soldOut' | 'paused';
 
 /** 등록·수정 폼에 필요한 API 조회를 병렬로 요청합니다. */
 async function loadProductEditor(
@@ -35,14 +49,24 @@ async function loadProductEditor(
   signal: AbortSignal,
 ): Promise<ProductEditorData> {
   const api = await getShopApi();
-  const [categories, adminProducts] = await Promise.all([
+  const [categories, brands, adminProducts] = await Promise.all([
     api.categories.adminList({ signal }),
+    api.brands.adminList({ signal }),
     productId && productId !== 'new' ? api.products.adminList({ signal }) : Promise.resolve([]),
   ]);
   const product = productId
     ? (adminProducts.find((entry) => entry.id === productId) ?? null)
     : null;
-  return { product, categories };
+  return { product, categories, brands };
+}
+
+function createStableId(prefix: string): string {
+  return `${prefix}-${crypto.randomUUID()}`;
+}
+
+function getVisibleSalesState(product: AdminProduct | null): VisibleSalesState {
+  if (product?.salesStatus === 'paused' || product?.salesStatus === 'ended') return 'paused';
+  return product?.stockStatus === 'soldOut' ? 'soldOut' : 'active';
 }
 
 /** 선택한 이미지 파일을 목 API에서 사용할 수 있는 데이터 URL로 바꿉니다. */
@@ -62,10 +86,12 @@ function readImageFile(file: File): Promise<string> {
 function ProductEditor({
   product,
   categories,
+  brands,
   isNew,
 }: {
   product: AdminProduct | null;
   categories: Category[];
+  brands: AdminBrand[];
   isNew: boolean;
 }) {
   const currentCategory = categories.find((category) => category.id === product?.categoryId);
@@ -76,47 +102,169 @@ function ProductEditor({
   const initialRootId = parentCategory?.id ?? currentCategory?.id ?? '';
   const [rootCategoryId, setRootCategoryId] = useState(initialRootId);
   const [leafCategoryId, setLeafCategoryId] = useState(product?.categoryId ?? '');
+  const [salesState, setSalesState] = useState<VisibleSalesState>(() =>
+    getVisibleSalesState(product),
+  );
   const [stockStatus, setStockStatus] = useState(product?.stockStatus ?? 'inStock');
   const [salesStatus, setSalesStatus] = useState(product?.salesStatus ?? 'active');
+  const [autoSoldOut, setAutoSoldOut] = useState(product?.autoSoldOut ?? true);
   const [isVisible, setIsVisible] = useState(product?.isVisible ?? true);
+  const [productName, setProductName] = useState(product?.name ?? '');
   const [options, setOptions] = useState<ProductOption[]>(() =>
     structuredClone(product?.options ?? []),
-  );
-  const [skuRows, setSkuRows] = useState<AdminProductSku[]>(() =>
-    structuredClone(product?.skus ?? []),
   );
   const [images, setImages] = useState<ProductImage[]>(() =>
     structuredClone(product?.images ?? []),
   );
   const [demoMessage, setDemoMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isReadingImages, setIsReadingImages] = useState(false);
+  const [imageMessage, setImageMessage] = useState('');
+  const [activeSection, setActiveSection] = useState<ProductSectionId>('basic-info');
+  const [productCode] = useState(() => product?.productCode ?? createStableId('PRD').toUpperCase());
+  const [salePrice, setSalePrice] = useState(String(product?.price ?? ''));
+  const [listPrice, setListPrice] = useState(String(product?.listPrice ?? ''));
+  const [detailDescription, setDetailDescription] = useState(product?.detailDescription ?? '');
+  const [isRichDescription, setIsRichDescription] = useState(
+    () => product?.detailDescriptionFormat === 'rich-v1',
+  );
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const imageFingerprints = useRef(new Map<string, string>());
   const [isNewProductPriceVisible, setNewProductPriceVisible] = useState(true);
   const { getPreviewValue, setPreviewValue } = useAdminPriceVisibilityPreview();
   const previewPriceVisible = product ? getPreviewValue(product) : isNewProductPriceVisible;
+  const webBaseUrl = import.meta.env.VITE_WEB_BASE_URL?.trim().replace(/\/+$/, '');
+  const buyerPreviewHref =
+    product && webBaseUrl ? `${webBaseUrl}/products/${encodeURIComponent(product.id)}` : null;
+  const hasSkuInventory = Boolean(product?.skus?.length);
+  const skuStockCount = product?.skus?.reduce((total, sku) => total + sku.stockCount, 0);
   const leafOptions = categories.filter((category) => category.parentId === rootCategoryId);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') return;
+    const sectionObserver = new IntersectionObserver(
+      (entries) => {
+        const visibleSections = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top);
+        const visibleSection = visibleSections[0]?.target.id;
+        if (productSections.some((section) => section.id === visibleSection)) {
+          setActiveSection(visibleSection as ProductSectionId);
+        }
+      },
+      { rootMargin: '-12% 0px -72% 0px', threshold: 0 },
+    );
+    productSections.forEach((section) => {
+      const element = document.getElementById(section.id);
+      if (element) sectionObserver.observe(element);
+    });
+    return () => sectionObserver.disconnect();
+  }, []);
+
+  const handleVisibleSalesStateChange = (nextState: VisibleSalesState) => {
+    setSalesState(nextState);
+    setStockStatus(nextState === 'soldOut' ? 'soldOut' : 'inStock');
+    setSalesStatus(nextState === 'paused' ? 'paused' : 'active');
+  };
+
+  const handleFormatDescription = (prefix: string, suffix = prefix) => {
+    setIsRichDescription(true);
+    const textarea = descriptionRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = detailDescription.slice(start, end);
+    const replacement = `${prefix}${selectedText || '텍스트'}${suffix}`;
+    const nextValue = `${detailDescription.slice(0, start)}${replacement}${detailDescription.slice(end)}`;
+    setDetailDescription(nextValue);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + prefix.length, start + replacement.length - suffix.length);
+    });
+  };
+
+  const handleImageFiles = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const files = Array.from(input.files ?? []);
+    input.value = '';
+    if (!files.length) return;
+    const fingerprints = files.map(
+      (file) => `${file.name}:${file.size}:${file.type}:${file.lastModified}`,
+    );
+    if (
+      new Set(fingerprints).size !== fingerprints.length ||
+      fingerprints.some((fingerprint) => imageFingerprints.current.has(fingerprint))
+    ) {
+      setImageMessage('이미 선택한 이미지가 포함되어 있습니다. 중복 이미지를 제외해 주세요.');
+      return;
+    }
+    if (images.length + files.length > 10) {
+      setImageMessage('이미지는 최대 10장까지 등록할 수 있습니다.');
+      return;
+    }
+    if (files.some((file) => !['image/jpeg', 'image/png'].includes(file.type))) {
+      setImageMessage('JPG 또는 PNG 이미지 파일만 등록할 수 있습니다.');
+      return;
+    }
+    if (files.some((file) => file.size > 10 * 1024 * 1024)) {
+      setImageMessage('이미지 파일은 파일당 10MB 이하로 등록해 주세요.');
+      return;
+    }
+    setIsReadingImages(true);
+    setImageMessage('');
+    try {
+      const loadedImages = await Promise.all(
+        files.map(async (file, index) => ({
+          id: createStableId('img'),
+          url: await readImageFile(file),
+          alt: file.name.replace(/\.[^.]+$/, ''),
+          fingerprint: fingerprints[index],
+        })),
+      );
+      loadedImages.forEach(({ id, fingerprint }) => {
+        if (fingerprint) imageFingerprints.current.set(fingerprint, id);
+      });
+      setImages((current) => [
+        ...current,
+        ...loadedImages.map(({ fingerprint: _fingerprint, ...image }) => image),
+      ]);
+    } catch (error) {
+      setImageMessage(error instanceof Error ? error.message : '이미지를 읽지 못했습니다.');
+    } finally {
+      setIsReadingImages(false);
+    }
+  };
 
   const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const text = (key: string) => String(formData.get(key) ?? '').trim();
-    const price = Number(formData.get('price'));
+    const rawPrice = text('price');
+    const rawListPrice = text('listPrice');
+    const rawStockCount = text('stockCount');
+    const price = Number(rawPrice);
+    const stockCount = Number(rawStockCount);
+    const normalizedListPrice = rawListPrice ? Number(rawListPrice) : null;
+    if (!text('name') || !text('brand') || !leafCategoryId) {
+      setDemoMessage('상품명, 브랜드와 2차 카테고리를 입력해 주세요.');
+      return;
+    }
+    if (rawPrice === '' || !Number.isFinite(price) || price < 0) {
+      setDemoMessage('판매가를 0 이상의 숫자로 입력해 주세요.');
+      return;
+    }
     if (
-      !text('name') ||
-      !text('brand') ||
-      !Number.isFinite(price) ||
-      price < 0 ||
-      !leafCategoryId
+      (rawListPrice !== '' &&
+        (!Number.isFinite(normalizedListPrice) || (normalizedListPrice ?? -1) < 0)) ||
+      (!hasSkuInventory &&
+        (rawStockCount === '' || !Number.isInteger(stockCount) || stockCount < 0))
     ) {
-      setDemoMessage('상품명, 브랜드, 카테고리와 판매가를 확인해 주세요.');
+      setDemoMessage('정가와 재고 수량을 0 이상의 숫자로 입력해 주세요.');
       return;
     }
     if (isSaving) return;
-    const parseNumber = (key: string, fallback: number) => {
-      const value = Number(formData.get(key));
-      return Number.isFinite(value) ? value : fallback;
-    };
     const specificationRows: [string, string][] = [
       ['제조사', text('manufacturer')],
       ['재질', text('material')],
@@ -151,13 +299,14 @@ function ProductEditor({
       brand: text('brand'),
       categoryId: leafCategoryId,
       price,
-      listPrice: text('listPrice') ? parseNumber('listPrice', price) : null,
+      listPrice: normalizedListPrice,
       priceVisible: previewPriceVisible,
       stockStatus,
-      stockCount: parseNumber('stockCount', product?.stockCount ?? 0),
+      stockCount: hasSkuInventory ? (skuStockCount ?? 0) : stockCount,
+      autoSoldOut,
       salesStatus,
       isVisible,
-      productCode: text('productCode') || product?.productCode || '',
+      productCode: text('productCode') || productCode,
       modelName: text('modelName') || null,
       summary: text('summary'),
       certifications: text('certifications')
@@ -172,17 +321,14 @@ function ProductEditor({
           countryOfOrigin: '',
           policy: '',
         }),
-        estimate: text('shippingEstimate'),
-        fee: parseNumber('shippingFee', product?.shipping.fee ?? 0),
         countryOfOrigin: text('countryOfOrigin'),
-        policy: text('shippingPolicy'),
       },
-      detailDescription: text('description'),
+      detailDescription,
+      detailDescriptionFormat: isRichDescription ? 'rich-v1' : 'plain',
       specifications: specificationRows
         .filter((specification) => specification[1].length > 0)
         .map(([label, value]) => ({ label, value })),
       options,
-      skus: skuRows,
       images,
       thumbnailUrl: images[0]?.url ?? null,
     };
@@ -214,8 +360,11 @@ function ProductEditor({
         title={isNew ? '상품 등록' : '상품 수정'}
         action={
           <>
+            <span className="rounded-4 bg-warning-tint px-8 py-4 text-caption text-warning">
+              작성 중
+            </span>
             <Link to="/products" className={buttonClassName({ variant: 'secondary' })}>
-              목록
+              취소
             </Link>
             <Button type="submit" disabled={isSaving}>
               {isSaving ? '저장 중…' : '저장'}
@@ -223,28 +372,26 @@ function ProductEditor({
           </>
         }
       />
-      <div className="mb-16">
-        {demoMessage ? (
-          <NoticeInline role="status" tone="warning" className="mt-8">
-            {demoMessage}
-          </NoticeInline>
-        ) : null}
-      </div>
+      {demoMessage ? (
+        <NoticeInline role="status" tone="warning" className="mb-16">
+          {demoMessage}
+        </NoticeInline>
+      ) : null}
       <nav
         aria-label="상품 정보 섹션"
-        className="mb-16 flex h-44 items-center gap-20 overflow-x-auto border-b border-line text-body-s text-text-2"
+        className="mb-20 flex h-48 items-center gap-20 overflow-x-auto border-b border-line text-body-s"
       >
-        {[
-          ['#basic-info', '기본 정보'],
-          ['#category-info', '카테고리'],
-          ['#price-info', '가격'],
-          ['#option-info', '옵션'],
-          ['#stock-info', '재고'],
-          ['#image-info', '이미지'],
-          ['#detail-info', '상세 정보'],
-        ].map(([href, label]) => (
-          <a key={href} href={href} className="shrink-0 hover:text-text-1">
-            {label}
+        {productSections.map((section) => (
+          <a
+            key={section.id}
+            href={`#${section.id}`}
+            aria-current={activeSection === section.id ? 'location' : undefined}
+            onClick={() => {
+              setActiveSection(section.id);
+            }}
+            className={`inline-flex h-full shrink-0 items-center border-b-2 px-4 focus-ring ${activeSection === section.id ? 'border-text-1 text-text-1' : 'border-transparent text-text-2 hover:text-text-1'}`}
+          >
+            {section.label}
           </a>
         ))}
       </nav>
@@ -260,16 +407,19 @@ function ProductEditor({
             <TextField
               label="상품명"
               name="name"
-              defaultValue={product?.name ?? ''}
+              value={productName}
+              onChange={(event) => setProductName(event.target.value)}
               required
               className="col-span-2"
               placeholder="상품명을 입력해 주세요"
             />
-            <TextField
+            <SelectField
               label="브랜드"
               name="brand"
               defaultValue={product?.brand ?? ''}
-              placeholder="브랜드를 입력해 주세요"
+              options={brands.map((brand) => ({ value: brand.name, label: brand.name }))}
+              placeholder="브랜드를 선택해 주세요"
+              required
             />
             <TextField
               label="모델명"
@@ -280,19 +430,17 @@ function ProductEditor({
             <TextField
               label="상품 코드"
               name="productCode"
-              defaultValue={product?.id ?? ''}
-              readOnly
+              defaultValue={productCode}
               helperText={
                 product
-                  ? '등록된 상품 코드는 변경할 수 없습니다.'
-                  : '코드는 상품이 저장될 때 발급됩니다.'
+                  ? '상품 코드를 직접 수정할 수 있습니다.'
+                  : '자동 생성된 코드이며 직접 수정할 수 있습니다.'
               }
             />
             <TextField
               label="짧은 설명"
               name="summary"
               defaultValue={product?.summary ?? ''}
-              className="col-span-2"
               placeholder="상품의 주요 특징을 입력해 주세요"
             />
           </AdminPanel>
@@ -347,7 +495,8 @@ function ProductEditor({
                   name="price"
                   type="number"
                   min="0"
-                  defaultValue={product?.price ?? ''}
+                  value={salePrice}
+                  onChange={(event) => setSalePrice(event.target.value)}
                   placeholder="판매가를 입력해 주세요"
                   helperText={
                     product?.price === null
@@ -377,7 +526,8 @@ function ProductEditor({
                   name="listPrice"
                   type="number"
                   min="0"
-                  defaultValue={product?.listPrice ?? ''}
+                  value={listPrice}
+                  onChange={(event) => setListPrice(event.target.value)}
                   placeholder="정가를 입력해 주세요"
                   helperText={
                     product?.listPrice === null
@@ -386,10 +536,13 @@ function ProductEditor({
                   }
                 />
               </div>
-              <AdminNotice tone="info">
-                저장한 가격 공개 설정은 구매자 API 응답에 반영됩니다. 실제 서버 저장은 지원하지
-                않습니다.
-              </AdminNotice>
+              <p className="text-caption text-text-3">
+                금액 표시를 끄면 구매자 화면에서 가격이 숨겨집니다.
+              </p>
+              <NoticeInline tone="warning">
+                금액을 미표시로 바꾸면 사용자 화면에 ‘구매 불가’로 표시되고, 장바구니에서는 ‘주문할
+                수 없는 상품’으로 분류됩니다. 가격 값은 유지됩니다.
+              </NoticeInline>
             </div>
           </AdminPanel>
 
@@ -397,7 +550,7 @@ function ProductEditor({
             title="옵션"
             id="option-info"
             className="scroll-mt-24"
-            description="옵션 선택지와 SKU 조합별 코드·추가금·재고·판매 상태·연결 이미지를 관리합니다."
+            description="상품을 구매할 때 선택하는 옵션을 등록합니다."
             action={
               <Button
                 variant="secondary"
@@ -485,292 +638,173 @@ function ProductEditor({
             {options.length === 0 ? (
               <p className="text-body-s text-text-3">등록된 옵션이 없습니다.</p>
             ) : null}
-            <div className="border-t border-line pt-12">
-              <div className="mb-8 flex items-center justify-between">
-                <h3 className="text-label-m">SKU 조합별 판매 설정 ({skuRows.length}개)</h3>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="s"
-                  onClick={() =>
-                    setSkuRows((current) => [
-                      ...current,
-                      {
-                        id: `sku-${Date.now()}`,
-                        optionLabels: [],
-                        productCode: '',
-                        priceDelta: 0,
-                        stockCount: 0,
-                        salesStatus: 'active',
-                        imageId: null,
-                      },
-                    ])
-                  }
-                >
-                  SKU 행 추가
-                </Button>
-              </div>
-              <p className="mb-8 text-caption text-text-3">
-                {skuRows.length > 0
-                  ? '등록된 SKU 행별로 옵션 조합·코드·추가금·재고를 확인하세요.'
-                  : options.length > 0
-                    ? '옵션 조합은 자동 생성되지 않습니다. SKU 행 추가를 눌러 각 조합의 코드와 재고를 직접 입력하세요.'
-                    : '옵션별 재고를 나누려면 옵션 목록을 먼저 만든 뒤 SKU 행을 추가하세요. 옵션 없는 상품은 SKU 설정을 비워둘 수 있습니다.'}
-              </p>
-              {skuRows.map((sku, index) => (
-                <div
-                  key={sku.id}
-                  className="mb-8 grid grid-cols-3 gap-8 rounded-8 border border-line p-12"
-                >
-                  <TextField
-                    label="옵션 조합"
-                    value={sku.optionLabels.join(' / ')}
-                    onChange={(event) =>
-                      setSkuRows((current) =>
-                        current.map((row) =>
-                          row.id === sku.id
-                            ? {
-                                ...row,
-                                optionLabels: event.target.value
-                                  .split('/')
-                                  .map((label) => label.trim())
-                                  .filter(Boolean),
-                              }
-                            : row,
-                        ),
-                      )
-                    }
-                  />
-                  <TextField
-                    label="SKU 코드"
-                    value={sku.productCode}
-                    onChange={(event) =>
-                      setSkuRows((current) =>
-                        current.map((row) =>
-                          row.id === sku.id ? { ...row, productCode: event.target.value } : row,
-                        ),
-                      )
-                    }
-                  />
-                  <TextField
-                    label="추가금"
-                    type="number"
-                    value={sku.priceDelta}
-                    onChange={(event) =>
-                      setSkuRows((current) =>
-                        current.map((row) =>
-                          row.id === sku.id
-                            ? { ...row, priceDelta: Number(event.target.value) || 0 }
-                            : row,
-                        ),
-                      )
-                    }
-                  />
-                  <TextField
-                    label="재고"
-                    type="number"
-                    min="0"
-                    value={sku.stockCount}
-                    onChange={(event) =>
-                      setSkuRows((current) =>
-                        current.map((row) =>
-                          row.id === sku.id
-                            ? { ...row, stockCount: Math.max(0, Number(event.target.value) || 0) }
-                            : row,
-                        ),
-                      )
-                    }
-                  />
-                  <label className="grid gap-6 text-label-s">
-                    판매 상태
-                    <select
-                      aria-label={`SKU ${index + 1} 판매 상태`}
-                      className="h-40 rounded-8 border border-line-control bg-bg px-8"
-                      value={sku.salesStatus}
-                      onChange={(event) =>
-                        setSkuRows((current) =>
-                          current.map((row) =>
-                            row.id === sku.id
-                              ? {
-                                  ...row,
-                                  salesStatus: event.target.value as AdminProductSku['salesStatus'],
-                                }
-                              : row,
-                          ),
-                        )
-                      }
-                    >
-                      <option value="active">판매 중</option>
-                      <option value="paused">일시 중지</option>
-                      <option value="ended">판매 종료</option>
-                    </select>
-                  </label>
-                  <label className="grid gap-6 text-label-s">
-                    연결 이미지
-                    <select
-                      aria-label={`SKU ${index + 1} 연결 이미지`}
-                      className="h-40 rounded-8 border border-line-control bg-bg px-8"
-                      value={sku.imageId ?? ''}
-                      onChange={(event) =>
-                        setSkuRows((current) =>
-                          current.map((row) =>
-                            row.id === sku.id
-                              ? { ...row, imageId: event.target.value || null }
-                              : row,
-                          ),
-                        )
-                      }
-                    >
-                      <option value="">없음</option>
-                      {images.map((image, imageIndex) => (
-                        <option key={image.id} value={image.id}>
-                          이미지 {imageIndex + 1}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    type="button"
-                    className="text-label-s text-danger"
-                    onClick={() =>
-                      setSkuRows((current) => current.filter((row) => row.id !== sku.id))
-                    }
-                  >
-                    SKU 삭제
-                  </button>
-                </div>
-              ))}
-            </div>
           </AdminPanel>
 
           <AdminPanel
             id="stock-info"
-            title="재고 · 판매"
+            title="재고"
             className="scroll-mt-24"
-            bodyClassName="grid grid-cols-2 gap-16 p-20"
+            bodyClassName="space-y-16 p-20"
           >
-            <fieldset className="grid gap-8">
-              <legend className="text-label-m">판매 상태</legend>
-              <div className="flex gap-16">
-                {(
-                  [
-                    ['inStock', '판매중'],
-                    ['soldOut', '품절'],
-                  ] as const
-                ).map(([value, label]) => (
-                  <label key={value} className="flex h-40 items-center gap-8 text-body-s">
-                    <input
-                      type="radio"
-                      name="product-stock-status"
-                      value={value}
-                      checked={stockStatus === value}
-                      onChange={() => setStockStatus(value)}
-                      className="size-16 accent-text-1"
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-              <p className="text-caption text-text-3">저장 후 웹 목 상품 응답에도 적용됩니다.</p>
-            </fieldset>
             <TextField
               label="재고 수량"
               name="stockCount"
               type="number"
               min="0"
-              defaultValue={product?.stockCount ?? 0}
-              helperText="목 API 재고 수량입니다."
+              defaultValue={skuStockCount ?? product?.stockCount ?? 0}
+              step="1"
+              readOnly={hasSkuInventory}
+              helperText={
+                hasSkuInventory
+                  ? 'SKU 재고 수량의 합계입니다.'
+                  : '상품 전체 재고 수량을 입력합니다.'
+              }
             />
+            <label className="flex items-start gap-8 text-body-s">
+              <input
+                type="checkbox"
+                checked={autoSoldOut}
+                onChange={(event) => setAutoSoldOut(event.target.checked)}
+                className="mt-2 size-16 accent-text-1"
+              />
+              <span>재고 0 옵션은 품절, 모든 옵션 품절 시 상품 전체 품절</span>
+            </label>
           </AdminPanel>
 
           <AdminPanel
             id="image-info"
             title="이미지"
-            description="이미지 URL·순서·대표 이미지를 목 API에 저장합니다."
+            description="첫 번째 이미지가 대표 이미지입니다. JPG, PNG · 파일당 10MB 이하 · 최대 10장"
             className="scroll-mt-24"
             bodyClassName="p-20"
           >
-            <div className="flex flex-wrap gap-12">
+            <div className="mb-12 flex items-center justify-between text-body-s text-text-2">
+              <span>이미지를 드래그하거나 이동 버튼으로 순서를 바꿀 수 있습니다.</span>
+              <span>{images.length}/10</span>
+            </div>
+            <div className="grid grid-cols-5 gap-8">
               {images.map((image, index) => (
                 <div
                   key={image.id}
-                  className="relative flex size-96 items-center justify-center overflow-hidden rounded-8 border border-line bg-surface"
+                  role="group"
+                  aria-label={`상품 이미지 ${index + 1}`}
+                  draggable
+                  onDragStart={(event) => event.dataTransfer.setData('text/plain', String(index))}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const fromIndex = Number(event.dataTransfer.getData('text/plain'));
+                    setImages((current) => {
+                      const reordered = [...current];
+                      const [movedImage] = reordered.splice(fromIndex, 1);
+                      if (movedImage) reordered.splice(index, 0, movedImage);
+                      return reordered;
+                    });
+                  }}
+                  className="relative flex size-120 cursor-grab items-center justify-center overflow-hidden rounded-8 border border-line bg-surface active:cursor-grabbing"
                 >
                   <img src={image.url} alt={image.alt} className="size-full object-cover" />
-                  <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-bg/90 px-4 text-caption">
-                    <span>{index === 0 ? '대표' : `순서 ${index + 1}`}</span>
-                    <span className="flex gap-4">
-                      {index > 0 ? (
-                        <button
-                          type="button"
-                          aria-label={`이미지 ${index + 1} 앞당기기`}
-                          onClick={() =>
-                            setImages((current) => {
-                              const precedingImage = current[index - 1];
-                              const selectedImage = current[index];
-                              if (!precedingImage || !selectedImage) return current;
-                              const reorderedImages = [...current];
-                              reorderedImages[index - 1] = selectedImage;
-                              reorderedImages[index] = precedingImage;
-                              return reorderedImages;
-                            })
-                          }
-                        >
-                          ↑
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        aria-label={`이미지 ${index + 1} 삭제`}
-                        className="text-danger"
-                        onClick={() =>
-                          setImages((current) => current.filter((entry) => entry.id !== image.id))
-                        }
-                      >
-                        ×
-                      </button>
+                  {index === 0 ? (
+                    <span className="absolute top-4 left-4 rounded-4 bg-text-1 px-6 py-2 text-caption text-bg">
+                      대표
                     </span>
-                  </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    aria-label={`이미지 ${index + 1} 위로 이동`}
+                    disabled={index === 0}
+                    className="absolute bottom-4 left-4 rounded-4 bg-bg px-6 py-2 text-label-s disabled:opacity-40"
+                    onClick={() => {
+                      setImages((current) => {
+                        if (index < 1 || index >= current.length) return current;
+                        const reordered = [...current];
+                        const [movedImage] = reordered.splice(index, 1);
+                        if (movedImage) reordered.splice(index - 1, 0, movedImage);
+                        return reordered;
+                      });
+                    }}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`이미지 ${index + 1} 아래로 이동`}
+                    disabled={index === images.length - 1}
+                    className="absolute bottom-4 left-32 rounded-4 bg-bg px-6 py-2 text-label-s disabled:opacity-40"
+                    onClick={() => {
+                      setImages((current) => {
+                        if (index < 0 || index >= current.length - 1) return current;
+                        const reordered = [...current];
+                        const [movedImage] = reordered.splice(index, 1);
+                        if (movedImage) reordered.splice(index + 1, 0, movedImage);
+                        return reordered;
+                      });
+                    }}
+                  >
+                    ↓
+                  </button>
+                  {index > 0 ? (
+                    <button
+                      type="button"
+                      aria-label={`이미지 ${index + 1}을 대표 이미지로 설정`}
+                      className="absolute bottom-4 left-60 rounded-4 bg-bg px-6 py-2 text-label-s"
+                      onClick={() => {
+                        setImages((current) => {
+                          if (index < 1 || index >= current.length) return current;
+                          const reordered = [...current];
+                          const [representative] = reordered.splice(index, 1);
+                          if (representative) reordered.unshift(representative);
+                          return reordered;
+                        });
+                      }}
+                    >
+                      대표
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    aria-label={`이미지 ${index + 1} 삭제`}
+                    className="absolute top-4 right-4 rounded-4 bg-bg px-6 py-2 text-label-s text-danger"
+                    onClick={() => {
+                      for (const [fingerprint, imageId] of imageFingerprints.current) {
+                        if (imageId === image.id) imageFingerprints.current.delete(fingerprint);
+                      }
+                      setImages((current) => current.filter((entry) => entry.id !== image.id));
+                    }}
+                  >
+                    삭제
+                  </button>
                 </div>
               ))}
-              <label className="flex h-96 w-160 cursor-pointer items-center justify-center rounded-8 border border-dashed border-line-control text-body-s text-text-2 focus-within:ring-2 focus-within:ring-text-1">
-                이미지 파일 선택
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="sr-only"
-                  onChange={async (event) => {
-                    const files = Array.from(event.currentTarget.files ?? []);
-                    event.currentTarget.value = '';
-                    if (
-                      files.some(
-                        (file) => !file.type.startsWith('image/') || file.size > 5 * 1024 * 1024,
-                      )
-                    ) {
-                      setDemoMessage('이미지 파일은 파일당 5MB 이하로 등록해 주세요.');
-                      return;
-                    }
-                    try {
-                      const loadedImages = await Promise.all(
-                        files.map(async (file, index) => ({
-                          id: `img-${Date.now()}-${index}`,
-                          url: await readImageFile(file),
-                          alt: file.name.replace(/\.[^.]+$/, ''),
-                        })),
-                      );
-                      setImages((current) => [...current, ...loadedImages]);
-                    } catch (imageError) {
-                      setDemoMessage(
-                        imageError instanceof Error
-                          ? imageError.message
-                          : '이미지를 읽지 못했습니다.',
-                      );
-                    }
-                  }}
-                />
-              </label>
+              {Array.from(
+                { length: images.length < 10 ? Math.max(5 - images.length, 1) : 0 },
+                (_, slotIndex) => (
+                  <label
+                    key={`upload-image-${slotIndex}`}
+                    aria-label={`이미지 추가 슬롯 ${slotIndex + 1}`}
+                    className="flex size-120 cursor-pointer flex-col items-center justify-center gap-8 rounded-8 border border-dashed border-line-control bg-surface text-body-s text-text-2 focus-within:ring-2 focus-within:ring-text-1"
+                  >
+                    <ImagePlus size={24} aria-hidden="true" />
+                    <span>{isReadingImages ? '불러오는 중' : '이미지 추가'}</span>
+                    <span className="text-caption">{images.length}/10</span>
+                    <input
+                      type="file"
+                      aria-label={`이미지 슬롯 ${slotIndex + 1} 파일 선택`}
+                      accept="image/jpeg,image/png"
+                      multiple
+                      className="sr-only"
+                      disabled={isReadingImages}
+                      onChange={handleImageFiles}
+                    />
+                  </label>
+                ),
+              )}
             </div>
+            {imageMessage ? (
+              <p role="alert" className="mt-12 text-body-s text-danger">
+                {imageMessage}
+              </p>
+            ) : null}
           </AdminPanel>
 
           <AdminPanel
@@ -815,70 +849,138 @@ function ProductEditor({
               defaultValue={product?.shipping.countryOfOrigin ?? ''}
               placeholder="원산지를 입력해 주세요"
             />
-            <TextField
-              label="배송 안내"
-              name="shippingEstimate"
-              defaultValue={product?.shipping.estimate ?? ''}
-              placeholder="배송 안내를 입력해 주세요"
-            />
-            <TextField
-              label="배송비"
-              name="shippingFee"
-              type="number"
-              defaultValue={product?.shipping.fee ?? ''}
-              placeholder="배송비를 입력해 주세요"
-            />
-            <label className="col-span-2 flex flex-col gap-8 text-label-m">
-              상세 설명
+            <div className="col-span-2 overflow-hidden rounded-8 border border-line-control">
+              <div
+                role="toolbar"
+                aria-label="상세 설명 서식"
+                className="flex h-44 items-center gap-4 border-b border-line bg-surface px-8"
+              >
+                <button
+                  type="button"
+                  aria-label="굵게"
+                  className="rounded-4 p-8 focus-ring hover:bg-bg"
+                  onClick={() => handleFormatDescription('**')}
+                >
+                  <Bold size={16} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="기울임"
+                  className="rounded-4 p-8 focus-ring hover:bg-bg"
+                  onClick={() => handleFormatDescription('*')}
+                >
+                  <Italic size={16} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="밑줄"
+                  className="rounded-4 p-8 focus-ring hover:bg-bg"
+                  onClick={() => handleFormatDescription('++')}
+                >
+                  <Underline size={16} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="목록"
+                  className="rounded-4 p-8 focus-ring hover:bg-bg"
+                  onClick={() => handleFormatDescription('\n- ', '')}
+                >
+                  <List size={16} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="링크"
+                  className="rounded-4 p-8 focus-ring hover:bg-bg"
+                  onClick={() => handleFormatDescription('[', '](https://)')}
+                >
+                  <Link2 size={16} aria-hidden="true" />
+                </button>
+              </div>
+              <label className="sr-only" htmlFor="product-detail-description">
+                상세 설명
+              </label>
               <textarea
+                id="product-detail-description"
+                ref={descriptionRef}
                 name="description"
-                rows={5}
-                defaultValue={product?.summary ?? ''}
-                placeholder="상품 상세 내용을 입력해 주세요"
-                className="w-full rounded-8 border border-line-control bg-bg p-14 text-body-m outline-none focus:border-text-1"
+                rows={8}
+                value={detailDescription}
+                onChange={(event) => setDetailDescription(event.target.value)}
+                placeholder="상품의 상세 설명을 입력해 주세요"
+                className="w-full resize-y bg-bg p-16 text-body-m outline-none focus-visible:ring-2 focus-visible:ring-text-1"
               />
-            </label>
+            </div>
           </AdminPanel>
         </div>
 
         <aside className="sticky top-16 flex min-w-0 flex-col gap-16">
           <AdminPanel title="게시 설정" bodyClassName="space-y-16 p-20">
-            <div>
-              <p className="text-label-m">판매 상태</p>
-              <div className="mt-8">
-                <AdminStatusBadge status={stockStatus} kind="product" />
+            <fieldset>
+              <legend className="text-label-m">판매 상태</legend>
+              <div className="mt-8 flex flex-col gap-12">
+                {(
+                  [
+                    ['active', '판매 중'],
+                    ['soldOut', '품절'],
+                    ['paused', '판매 중단'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <label key={value} className="flex items-center gap-8 text-body-s">
+                    <input
+                      type="radio"
+                      name="visible-sales-state"
+                      value={value}
+                      checked={salesState === value}
+                      onChange={() => handleVisibleSalesStateChange(value)}
+                      className="size-16 accent-text-1"
+                    />
+                    {label}
+                  </label>
+                ))}
               </div>
-            </div>
-            <label className="flex items-center gap-8 border-t border-line pt-16 text-label-m">
-              <input
-                type="checkbox"
-                checked={isVisible}
-                onChange={(event) => setIsVisible(event.target.checked)}
-              />
-              웹에 노출
-            </label>
-            <label className="grid gap-6 border-t border-line pt-16 text-label-m">
-              판매 운영 상태
-              <select
-                className="h-40 rounded-8 border border-line-control bg-bg px-12"
-                value={salesStatus}
-                onChange={(event) => setSalesStatus(event.target.value as typeof salesStatus)}
-              >
-                <option value="active">판매 중</option>
-                <option value="paused">판매 일시 중지</option>
-                <option value="ended">판매 종료</option>
-              </select>
-            </label>
+            </fieldset>
             <div className="border-t border-line pt-16">
-              <p className="text-label-m">금액 표시</p>
+              <Switch
+                label="쇼핑몰 노출"
+                isChecked={isVisible}
+                onCheckedChange={setIsVisible}
+                onText="노출"
+                offText="미노출"
+              />
+              <p className="mt-4 text-body-s text-text-3">
+                노출을 끄면 구매자 화면에서 상품이 보이지 않습니다.
+              </p>
+            </div>
+            <div className="border-t border-line pt-16">
+              <p className="text-label-m">금액 표시 · {previewPriceVisible ? '표시' : '미표시'}</p>
               <p className="mt-4 text-body-s text-text-3">
                 {previewPriceVisible
                   ? '구매자 화면에 상품 금액을 표시합니다.'
                   : '구매자 화면에서 상품 금액을 숨깁니다.'}
               </p>
-              <a href="#price-info" className="mt-8 inline-flex text-label-s text-text-2 underline">
-                가격 섹션 보기
+              <a
+                href="#price-info"
+                className="mt-8 inline-flex text-label-s text-text-2 underline"
+                onClick={() => setActiveSection('price-info')}
+              >
+                가격에서 변경
               </a>
+            </div>
+            <div className="border-t border-line pt-16">
+              {buyerPreviewHref ? (
+                <a
+                  href={buyerPreviewHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex text-label-m text-text-1 underline focus-ring"
+                >
+                  사용자 화면 미리보기 ↗
+                </a>
+              ) : (
+                <span className="text-body-s text-text-3">
+                  저장 후 사용자 화면을 미리볼 수 있습니다.
+                </span>
+              )}
             </div>
           </AdminPanel>
         </aside>
@@ -905,12 +1007,17 @@ export function AdminProductFormPage() {
       />
     );
 
-  const { product, categories } = editorQuery.data;
+  const { product, categories, brands } = editorQuery.data;
+  if (!isNew && !product)
+    return (
+      <AdminEmpty title="상품을 찾을 수 없습니다" description="상품 목록에서 다시 선택해 주세요." />
+    );
   return (
     <ProductEditor
       key={productId ?? 'new'}
       product={product}
       categories={categories}
+      brands={brands}
       isNew={isNew}
     />
   );

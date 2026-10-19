@@ -272,6 +272,8 @@ describe('목 API 시나리오', () => {
       stockCount: 12,
       salesStatus: 'active',
       isVisible: true,
+      detailDescription: '**서식 설명**',
+      detailDescriptionFormat: 'rich-v1',
       skus: [
         {
           id: 'sku-test',
@@ -291,7 +293,13 @@ describe('목 API 시나리오', () => {
       stockCount: 12,
       skus: [{ productCode: 'SKU-TEST', priceDelta: 500, stockCount: 4 }],
     });
-    expect(buyerProduct).toMatchObject({ name: '관리자 저장 상품', price: null, listPrice: null });
+    expect(buyerProduct).toMatchObject({
+      name: '관리자 저장 상품',
+      price: null,
+      listPrice: null,
+      detailDescription: '**서식 설명**',
+      detailDescriptionFormat: 'rich-v1',
+    });
 
     await api.products.saveAdmin({ ...savedProduct, isVisible: false });
     await expect(api.products.getById(savedProduct.id)).rejects.toMatchObject({
@@ -300,6 +308,93 @@ describe('목 API 시나리오', () => {
     expect((await api.products.adminList()).some((product) => product.id === savedProduct.id)).toBe(
       true,
     );
+  });
+
+  it('재고 자동 품절 설정을 관리자 목 API에 저장하고 buyer 전체 품절 상태에 반영합니다', async () => {
+    const api = createMockApi(testConfig);
+    const product = (await api.products.adminList()).find((item) => item.id === 'prd-1001');
+    if (!product) throw new Error('SKU 테스트 상품이 필요합니다.');
+    const allOutOfStockSkus = [
+      {
+        id: 'sku-empty',
+        optionLabels: ['사이즈: 대형'],
+        productCode: 'SKU-EMPTY',
+        priceDelta: 0,
+        stockCount: 0,
+        salesStatus: 'active' as const,
+        imageId: null,
+      },
+    ];
+
+    const automatic = await api.products.saveAdmin({
+      ...product,
+      stockStatus: 'inStock',
+      autoSoldOut: true,
+      skus: allOutOfStockSkus,
+    });
+    expect(automatic.autoSoldOut).toBe(true);
+    await expect(api.products.getById(automatic.id)).resolves.toMatchObject({
+      stockStatus: 'soldOut',
+      skus: [{ isAvailable: false }],
+    });
+
+    const manual = await api.products.saveAdmin({ ...automatic, autoSoldOut: false });
+    expect(manual.autoSoldOut).toBe(false);
+    await expect(api.products.getById(manual.id)).resolves.toMatchObject({
+      stockStatus: 'inStock',
+      skus: [{ isAvailable: false }],
+    });
+  });
+
+  it('마지막 SKU 주문 후 자동 품절 설정이 켜진 상품만 전체 품절 처리합니다', async () => {
+    for (const autoSoldOut of [true, false]) {
+      const api = createMockApi(testConfig);
+      const product = (await api.products.adminList()).find((item) => item.id === 'prd-1001');
+      if (!product) throw new Error('SKU 주문 테스트 상품이 필요합니다.');
+      const saved = await api.products.saveAdmin({
+        ...product,
+        stockStatus: 'inStock',
+        salesStatus: 'active',
+        autoSoldOut,
+        options: [
+          {
+            id: 'size',
+            label: '사이즈',
+            required: true,
+            choices: [{ id: 'one', label: '원사이즈', priceDelta: 0 }],
+          },
+        ],
+        skus: [
+          {
+            id: 'sku-last-one',
+            optionLabels: ['사이즈: 원사이즈'],
+            productCode: 'SKU-LAST-ONE',
+            priceDelta: 0,
+            stockCount: 1,
+            salesStatus: 'active',
+            imageId: null,
+          },
+        ],
+      });
+      const optionId = createCartOptionId([{ optionId: 'size', choiceId: 'one' }]);
+
+      await api.orders.create({
+        lines: [{ productId: saved.id, quantity: 1, optionId }],
+        shippingAddress: mockAddresses[0]!,
+        deliveryRequest: '',
+        paymentMethod: 'creditCard',
+        couponId: null,
+        pointsToUse: 0,
+      });
+
+      const updatedProduct = (await api.products.adminList()).find((item) => item.id === saved.id);
+      expect(updatedProduct?.skus?.[0]?.stockCount).toBe(0);
+      expect(updatedProduct?.stockStatus).toBe(autoSoldOut ? 'soldOut' : 'inStock');
+      await expect(api.products.getById(saved.id)).resolves.toMatchObject({
+        stockStatus: autoSoldOut ? 'soldOut' : 'inStock',
+        skus: [{ isAvailable: false }],
+      });
+    }
   });
 
   it('SKU 추가금·이미지·판매 가능 재고를 buyer 상품, cart 합계와 주문 검증에 반영합니다', async () => {
