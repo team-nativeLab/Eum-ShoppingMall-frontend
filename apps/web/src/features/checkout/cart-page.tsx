@@ -214,17 +214,19 @@ export function CartPageView() {
               aria-label="무료 배송 혜택"
               className={cx(
                 'mb-16 rounded-12 border p-24',
-                hasFreeShipping ? 'border-success bg-success-tint' : 'border-text-1 bg-bg',
+                hasFreeShipping ? 'border-success bg-success-tint' : 'border-text-1 bg-text-1',
               )}
             >
               <div className="flex flex-wrap items-center justify-between gap-8">
-                <strong className={cx('text-h3', hasFreeShipping ? 'text-success' : 'text-text-1')}>
+                <strong
+                  className={cx('text-h3', hasFreeShipping ? 'text-success' : 'text-inverse')}
+                >
                   {remaining === 0
                     ? '무료 배송 기준을 충족했습니다.'
                     : `${formatKrw(remaining)} 더 담으면 무료배송!`}
                 </strong>
                 <span
-                  className={cx('text-caption', hasFreeShipping ? 'text-success' : 'text-text-1')}
+                  className={cx('text-caption', hasFreeShipping ? 'text-text-3' : 'text-inverse-2')}
                 >
                   {formatKrw(selectedTotals.productTotal)} /{' '}
                   {formatKrw(options.freeShippingThreshold)}
@@ -238,13 +240,13 @@ export function CartPageView() {
                 aria-valuenow={Math.round(progress)}
                 className={cx(
                   'mt-12 h-8 overflow-hidden rounded-capsule',
-                  hasFreeShipping ? 'bg-bg' : 'bg-bg-subtle',
+                  hasFreeShipping ? 'bg-bg' : 'bg-text-2',
                 )}
               >
                 <div
                   className={cx(
-                    'h-full rounded-capsule transition-[width] duration-300 motion-reduce:transition-none',
-                    hasFreeShipping ? 'bg-success' : 'bg-text-1',
+                    'h-full rounded-capsule motion-safe:transition-[width] motion-safe:duration-700',
+                    hasFreeShipping ? 'bg-success' : 'bg-inverse',
                   )}
                   style={{ width: `${progress}%` }}
                 />

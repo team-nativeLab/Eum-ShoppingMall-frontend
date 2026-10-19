@@ -924,9 +924,11 @@ describe('CartProvider', () => {
     );
     renderCart();
     await waitFor(() => expect(screen.getByText('수량 1')).toBeInTheDocument());
-    expect(JSON.parse(window.localStorage.getItem(CART_STORAGE_KEY) ?? '{}').cartItems).toEqual([
-      { productId: 'p-visible', quantity: 1, optionId: null, optionLabel: null },
-    ]);
+    await waitFor(() =>
+      expect(JSON.parse(window.localStorage.getItem(CART_STORAGE_KEY) ?? '{}').cartItems).toEqual([
+        { productId: 'p-visible', quantity: 1, optionId: null, optionLabel: null },
+      ]),
+    );
   });
 
   it('일시 API 오류면 저장 항목을 유지하고 복원 실패를 표시합니다', async () => {

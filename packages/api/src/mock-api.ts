@@ -96,6 +96,7 @@ function toBuyerProduct(product: AdminProduct): Product {
   const {
     productCode: _productCode,
     stockCount: _stockCount,
+    autoSoldOut: _autoSoldOut,
     salesStatus: _salesStatus,
     isVisible: _isVisible,
     manufacturer: _manufacturer,
@@ -110,6 +111,7 @@ function toBuyerProduct(product: AdminProduct): Product {
     price: product.priceVisible ? product.price : null,
     listPrice: product.priceVisible ? product.listPrice : null,
     stockStatus:
+      product.autoSoldOut !== false &&
       product.skus?.length &&
       product.skus.every((sku) => sku.salesStatus !== 'active' || sku.stockCount < 1)
         ? 'soldOut'
@@ -894,6 +896,7 @@ export function createMockApi(
           rating: existingProduct?.rating ?? null,
           reviewCount: existingProduct?.reviewCount ?? 0,
           isVisible: input.isVisible ?? true,
+          autoSoldOut: input.autoSoldOut ?? true,
           salesStatus: input.salesStatus ?? (input.stockStatus === 'soldOut' ? 'paused' : 'active'),
           stockCount: Math.max(0, Math.floor(input.stockCount ?? 0)),
           productCode: input.productCode?.trim() || input.id || `SKU-${productSequence}`,
@@ -1446,6 +1449,7 @@ export function createMockApi(
             const sku = reservation.product.skus?.find((item) => item.id === reservation.skuId);
             if (sku) sku.stockCount -= reservation.quantity;
             if (
+              reservation.product.autoSoldOut !== false &&
               reservation.product.skus?.length &&
               reservation.product.skus.every(
                 (item) => item.salesStatus !== 'active' || item.stockCount < 1,
@@ -1703,6 +1707,7 @@ export function createMockApi(
           const sku = restoration.product.skus?.find((item) => item.id === restoration.skuId);
           if (sku) sku.stockCount += restoration.quantity;
           if (
+            restoration.product.autoSoldOut !== false &&
             restoration.product.skus?.some(
               (item) => item.salesStatus === 'active' && item.stockCount > 0,
             )

@@ -32,6 +32,7 @@ import { useLocalCollections } from './local-collections-context';
 import { buildQuoteInquiryHref } from '@/features/company-pages/quote-inquiry-link';
 import { ProductCarouselSection } from './product-carousel';
 import { ProductImage } from './product-image';
+import { ProductDescription } from './product-description';
 import { ProductRatingStars } from './product-rating-stars';
 import { ProductReviewsSection } from './product-reviews-section';
 import { useCategoriesQuery } from './use-categories-query';
@@ -721,9 +722,10 @@ function ProductDetailContent({
                 </p>
               ) : null}
               {product.detailDescription ? (
-                <div className="mb-20 text-body-m whitespace-pre-line text-text-2">
-                  {product.detailDescription}
-                </div>
+                <ProductDescription
+                  content={product.detailDescription}
+                  format={product.detailDescriptionFormat}
+                />
               ) : null}
               <div className="mx-auto aspect-[856/1200] w-full max-w-[856px] overflow-hidden rounded-12 bg-surface">
                 <ProductImage
