@@ -60,7 +60,7 @@ const homeContent: HomeContent = {
     {
       id: 'promo-one',
       title: ['첫 번째 안내'],
-      description: '프로모션 안내입니다.',
+      description: '짧은 안내입니다.',
       imageUrl: '',
       tone: 'dark',
       destination: '/about',
@@ -68,7 +68,8 @@ const homeContent: HomeContent = {
     {
       id: 'promo-two',
       title: ['두 번째 안내'],
-      description: '프로모션 안내입니다.',
+      description:
+        '현장의 상황과 작업 환경에 맞는 안전 솔루션을 제안하며, 필요한 제품과 맞춤 서비스를 함께 안내합니다.\n이음산업건설이 현장별 선택을 돕습니다.',
       imageUrl: '',
       tone: 'light',
       destination: '/about',
@@ -166,18 +167,20 @@ describe('HomeView desktop section layout', () => {
     const promoCards = within(promoSection).getAllByRole('link');
     expect(promoCards).toHaveLength(3);
     expect(promoCards[0]).toHaveClass('h-216', 'lg:h-auto', 'lg:min-h-204');
-    for (const promoCard of promoCards) {
+    for (const [index, promoCard] of promoCards.entries()) {
       expect(promoCard).toHaveAttribute('href', '/about');
       expect(promoCard.querySelector('a, button, input, select, textarea, [tabindex]')).toBeNull();
       const promoCta = promoCard.querySelector('span[aria-hidden="true"]');
-      expect(promoCta).not.toBeNull();
-      expect(promoCta).toHaveClass(
-        'mt-auto',
-        'size-36',
-        'shrink-0',
-        'translate-y-[5px]',
-        'rounded-capsule',
+      const copyCtaGroup = promoCta?.parentElement;
+      const description = promoCard.querySelector('p');
+      expect(description?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+        homeContent.promoBanners[index]?.description.replace(/\s+/g, ' ').trim(),
       );
+      expect(copyCtaGroup).toHaveClass('mt-auto', 'flex', 'flex-col', 'gap-4');
+      expect(copyCtaGroup?.firstElementChild).toBe(description);
+      expect(copyCtaGroup?.lastElementChild).toBe(promoCta);
+      expect(promoCta).not.toBeNull();
+      expect(promoCta).toHaveClass('size-32', 'shrink-0', 'rounded-capsule');
       expect(promoCta?.querySelector('svg')).toHaveAttribute('width', '16');
       expect(promoCard).toHaveClass('focus-ring');
     }
