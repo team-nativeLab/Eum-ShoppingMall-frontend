@@ -423,25 +423,27 @@ function PromoBannerSection({ banners }: { banners: HomeContent['promoBanners'] 
                   </span>
                 ))}
               </h2>
-              <p
-                className={cx(
-                  'mt-8 text-body-s whitespace-pre-line',
-                  isLight ? 'text-text-2' : 'text-inverse-2',
-                )}
-              >
-                {banner.description}
-              </p>
-              <span
-                aria-hidden="true"
-                className={cx(
-                  'mt-auto inline-flex size-36 shrink-0 translate-y-[5px] items-center justify-center rounded-capsule border transition-colors motion-reduce:transition-none',
-                  isLight
-                    ? 'border-line-control text-text-1 group-hover:bg-text-1 group-hover:text-inverse'
-                    : 'border-inverse text-inverse group-hover:bg-bg group-hover:text-text-1',
-                )}
-              >
-                <Icon icon={ArrowRight} size={16} />
-              </span>
+              <div className="mt-auto flex flex-col gap-4">
+                <p
+                  className={cx(
+                    'text-body-s whitespace-pre-line',
+                    isLight ? 'text-text-2' : 'text-inverse-2',
+                  )}
+                >
+                  {banner.description}
+                </p>
+                <span
+                  aria-hidden="true"
+                  className={cx(
+                    'inline-flex size-32 shrink-0 items-center justify-center rounded-capsule border transition-colors motion-reduce:transition-none',
+                    isLight
+                      ? 'border-line-control text-text-1 group-hover:bg-text-1 group-hover:text-inverse'
+                      : 'border-inverse text-inverse group-hover:bg-bg group-hover:text-text-1',
+                  )}
+                >
+                  <Icon icon={ArrowRight} size={16} />
+                </span>
+              </div>
             </Link>
           );
         })}
