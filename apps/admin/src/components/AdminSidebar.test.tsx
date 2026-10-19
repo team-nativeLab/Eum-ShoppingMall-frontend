@@ -9,13 +9,7 @@ const expectedGroups = {
   '운영 콘텐츠': ['홈 편성', '이벤트 관리', '공지 관리', 'FAQ 관리'],
   '주문·견적': ['주문 관리', '취소·반품·교환', '견적 문의'],
   '문의·고객지원': ['1:1 문의', '상품 문의', '상품 리뷰'],
-  '회원·운영 설정': [
-    '회원 관리',
-    '적립금 관리',
-    '배송·할인 설정',
-    '회사·정책 정보',
-    '쿠폰 관리',
-  ],
+  '회원·운영 설정': ['회원 관리', '적립금 관리', '배송·할인 설정', '회사·정책 정보', '쿠폰 관리'],
 } as const;
 
 function CurrentPath() {
@@ -62,17 +56,14 @@ describe('관리자 사이드바 그룹 탐색', () => {
     renderSidebar('/products/new');
 
     const productGroup = screen.getByRole('region', { name: '상품 관리' });
-    expect(screen.getByRole('link', { name: '상품 관리' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
+    expect(screen.getByRole('link', { name: '상품 관리' })).toHaveAttribute('aria-current', 'page');
     expect(within(productGroup).getByRole('link', { name: '상품 등록' })).toHaveAttribute(
       'aria-current',
       'page',
     );
-    expect(
-      within(productGroup).getByRole('link', { name: '상품 목록' }),
-    ).not.toHaveAttribute('aria-current');
+    expect(within(productGroup).getByRole('link', { name: '상품 목록' })).not.toHaveAttribute(
+      'aria-current',
+    );
     expect(screen.getByRole('link', { name: '대시보드' })).not.toHaveAttribute('aria-current');
     expect(screen.getByRole('link', { name: '브랜드 관리' })).not.toHaveAttribute('aria-current');
   });
@@ -80,10 +71,7 @@ describe('관리자 사이드바 그룹 탐색', () => {
   it('상품 수정 경로에서도 상품 하위 메뉴를 유지하며 목록 링크는 활성화하지 않는다', () => {
     renderSidebar('/products/product-42');
 
-    expect(screen.getByRole('link', { name: '상품 관리' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
+    expect(screen.getByRole('link', { name: '상품 관리' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: '상품 목록' })).not.toHaveAttribute('aria-current');
     expect(screen.getByRole('link', { name: '상품 등록' })).not.toHaveAttribute('aria-current');
     expect(screen.getByRole('link', { name: '대시보드' })).not.toHaveAttribute('aria-current');

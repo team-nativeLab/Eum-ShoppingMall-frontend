@@ -210,10 +210,7 @@ export function AdminSidebar() {
         <div className="flex flex-col gap-20">
           {ADMIN_MENU_GROUPS.map((group) => (
             <section key={group.id} aria-labelledby={`admin-menu-${group.id}`}>
-              <h2
-                id={`admin-menu-${group.id}`}
-                className="mb-4 px-12 text-label-s text-text-3"
-              >
+              <h2 id={`admin-menu-${group.id}`} className="mb-4 px-12 text-label-s text-text-3">
                 {group.label}
               </h2>
               <ul className="flex flex-col gap-4">
