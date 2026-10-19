@@ -244,8 +244,10 @@ function ProductEditor({
     const rawPrice = text('price');
     const rawListPrice = text('listPrice');
     const rawStockCount = text('stockCount');
+    const rawShippingFee = text('shippingFee');
     const price = Number(rawPrice);
     const stockCount = Number(rawStockCount);
+    const shippingFee = Number(rawShippingFee);
     const normalizedListPrice = rawListPrice ? Number(rawListPrice) : null;
     if (!text('name') || !text('brand') || !leafCategoryId) {
       setDemoMessage('상품명, 브랜드와 2차 카테고리를 입력해 주세요.');
@@ -259,9 +261,12 @@ function ProductEditor({
       (rawListPrice !== '' &&
         (!Number.isFinite(normalizedListPrice) || (normalizedListPrice ?? -1) < 0)) ||
       (!hasSkuInventory &&
-        (rawStockCount === '' || !Number.isInteger(stockCount) || stockCount < 0))
+        (rawStockCount === '' || !Number.isInteger(stockCount) || stockCount < 0)) ||
+      rawShippingFee === '' ||
+      !Number.isInteger(shippingFee) ||
+      shippingFee < 0
     ) {
-      setDemoMessage('정가와 재고 수량을 0 이상의 숫자로 입력해 주세요.');
+      setDemoMessage('정가, 재고 수량과 배송비를 0 이상의 숫자로 입력해 주세요.');
       return;
     }
     if (isSaving) return;
@@ -321,6 +326,8 @@ function ProductEditor({
           countryOfOrigin: '',
           policy: '',
         }),
+        estimate: text('shippingEstimate'),
+        fee: shippingFee,
         countryOfOrigin: text('countryOfOrigin'),
       },
       detailDescription,
@@ -848,6 +855,21 @@ function ProductEditor({
               name="countryOfOrigin"
               defaultValue={product?.shipping.countryOfOrigin ?? ''}
               placeholder="원산지를 입력해 주세요"
+            />
+            <TextField
+              label="배송 예정"
+              name="shippingEstimate"
+              defaultValue={product?.shipping.estimate ?? ''}
+              placeholder="배송 일정을 입력해 주세요"
+            />
+            <TextField
+              label="배송비"
+              name="shippingFee"
+              type="number"
+              min="0"
+              step="1"
+              defaultValue={product?.shipping.fee ?? 0}
+              placeholder="배송비를 입력해 주세요"
             />
             <div className="col-span-2 overflow-hidden rounded-8 border border-line-control">
               <div

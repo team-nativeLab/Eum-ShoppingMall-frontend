@@ -177,6 +177,76 @@ describe('Admin 상품 등록·수정 폼', () => {
     );
   });
 
+  it('수정 폼에서 다른 필드를 저장해도 종료된 판매 상태를 보존한다', async () => {
+    const user = userEvent.setup();
+    products = [{ ...createProductFixture('상세 설명'), salesStatus: 'ended' }];
+    renderProductForm('/products/product-edit');
+
+    const nameInput = await screen.findByRole('textbox', { name: '상품명' });
+    await user.clear(nameInput);
+    await user.type(nameInput, '수정된 안전모');
+    await user.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(saveAdmin).toHaveBeenCalledOnce());
+    expect(saveAdmin).toHaveBeenCalledWith(
+      expect.objectContaining({ name: '수정된 안전모', salesStatus: 'ended' }),
+    );
+  });
+
+  it('신규 상품의 배송 예정과 배송비를 저장한다', async () => {
+    const user = userEvent.setup();
+    renderProductForm();
+
+    await user.type(await screen.findByRole('textbox', { name: '상품명' }), '새 안전모');
+    await user.selectOptions(screen.getByLabelText('브랜드'), '한결안전');
+    await user.selectOptions(screen.getByLabelText('1차 카테고리'), 'safety');
+    await user.selectOptions(screen.getByLabelText('2차 카테고리'), 'helmet');
+    await user.type(screen.getByLabelText('판매가'), '12000');
+    await user.type(screen.getByLabelText('배송 예정'), '2~3일');
+    await user.clear(screen.getByLabelText('배송비'));
+    await user.type(screen.getByLabelText('배송비'), '3000');
+    await user.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(saveAdmin).toHaveBeenCalledOnce());
+    expect(saveAdmin).toHaveBeenCalledWith(
+      expect.objectContaining({
+        shipping: expect.objectContaining({ estimate: '2~3일', fee: 3000 }),
+      }),
+    );
+  });
+
+  it('수정 폼의 배송 예정을 표시하고 변경한 배송 예정을 저장한다', async () => {
+    const user = userEvent.setup();
+    products = [
+      {
+        ...createProductFixture('상세 설명'),
+        shipping: {
+          method: '택배',
+          estimate: '기존 배송 일정',
+          fee: 2500,
+          countryOfOrigin: '',
+          policy: '',
+        },
+      },
+    ];
+    renderProductForm('/products/product-edit');
+
+    const estimateInput = await screen.findByLabelText('배송 예정');
+    expect(estimateInput).toHaveValue('기존 배송 일정');
+    await user.clear(estimateInput);
+    await user.type(estimateInput, '3~5일');
+    await user.clear(screen.getByLabelText('배송비'));
+    await user.type(screen.getByLabelText('배송비'), '4000');
+    await user.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(saveAdmin).toHaveBeenCalledOnce());
+    expect(saveAdmin).toHaveBeenCalledWith(
+      expect.objectContaining({
+        shipping: expect.objectContaining({ estimate: '3~5일', fee: 4000 }),
+      }),
+    );
+  });
+
   it('서식 메타데이터가 없는 기존 설명은 평문으로 유지한다', async () => {
     const user = userEvent.setup();
     const legacyDescription = '<!--eum-rich-text:v1-->\n*강조처럼 보이는 텍스트*';
