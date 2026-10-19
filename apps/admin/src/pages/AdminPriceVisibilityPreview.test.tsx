@@ -198,6 +198,9 @@ describe('admin price visibility previews', () => {
         list: apiMocks.listCategories,
         adminList: apiMocks.listCategories,
       },
+      brands: {
+        adminList: vi.fn(async () => [{ id: 'brand-test', name: '테스트 브랜드' }]),
+      },
     });
   });
 
@@ -236,7 +239,7 @@ describe('admin price visibility previews', () => {
     );
   });
 
-  it('explains that option combinations need explicit SKU rows and gives the next action', async () => {
+  it('shows option inputs without exposing the Figma-excluded SKU editing table', async () => {
     const productWithOptions: AdminProduct = {
       ...productFixtures[0]!,
       price: productFixtures[0]!.price ?? 0,
@@ -257,10 +260,9 @@ describe('admin price visibility previews', () => {
     apiMocks.getProductById.mockResolvedValueOnce(productWithOptions);
     renderAdminApp('/products/product-a');
 
-    expect(await screen.findByText(/옵션 조합은 자동 생성되지 않습니다/)).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByRole('button', { name: 'SKU 행 추가' }));
-    expect(screen.getByRole('heading', { name: 'SKU 조합별 판매 설정 (1개)' })).toBeInTheDocument();
-    expect(screen.getByText(/등록된 SKU 행별로 옵션 조합/)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '옵션' })).toBeInTheDocument();
+    expect(screen.getByLabelText('옵션명')).toHaveValue('색상');
+    expect(screen.queryByText(/SKU 조합별 판매 설정/)).not.toBeInTheDocument();
   });
 
   it('counts paused products by stock independently of exposure and sales status', async () => {
@@ -349,7 +351,7 @@ describe('admin price visibility previews', () => {
         expect.objectContaining({ id: 'product-b', priceVisible: false }),
       ),
     );
-    await user.click(screen.getByRole('link', { name: '목록' }));
+    await user.click(screen.getByRole('link', { name: '취소' }));
     const returnedRow = await screen.findByRole('row', { name: /상품 B/ });
     await waitFor(() =>
       expect(within(returnedRow).getByRole('switch', { name: '상품 B 금액 표시' })).toHaveAttribute(

@@ -81,6 +81,8 @@ export interface Product {
   summary: string;
   /** 상세 본문 콘텐츠. 없으면 summary를 노출합니다. */
   detailDescription?: string;
+  /** 상세 본문 서식. 이전 데이터처럼 없으면 평문으로 표시합니다. */
+  detailDescriptionFormat?: 'plain' | 'rich-v1';
   /** 모델명. 등록하지 않았으면 null */
   modelName: string | null;
   /** 상세 갤러리. 서버 이미지가 아직 없으면 빈 배열입니다. */
@@ -120,6 +122,8 @@ export interface AdminProduct extends Omit<Product, 'price' | 'skus'> {
   price: number;
   productCode?: string;
   stockCount?: number;
+  /** SKU 재고가 모두 0이면 구매자 상품 상태도 품절로 표시합니다. */
+  autoSoldOut?: boolean;
   salesStatus?: 'active' | 'paused' | 'ended';
   isVisible?: boolean;
   manufacturer?: string;
