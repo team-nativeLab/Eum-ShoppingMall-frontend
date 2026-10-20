@@ -15,11 +15,13 @@ test-results/
 blob-report/
 .playwright-cli/
 
-# 환경 변수 (.env.example과 Web 목 데모용 apps/web/.env.production만 커밋)
+# 환경 변수 (.env.example, Web 목 데모 및 Admin Preview용 공개 설정만 커밋)
 .env*
 !.env.example
 # Web 목 데모 배포용 공개 설정(비밀값 없음)
 !apps/web/.env.production
+# Admin env allowlist: Preview 빌드용 real 스텁 설정(공개 placeholder만 포함)
+!apps/admin/.env.production
 
 # OS·에디터
 .DS_Store

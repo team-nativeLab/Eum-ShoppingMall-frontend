@@ -21,7 +21,7 @@ test('GNB 브랜드에서 브랜드 목록 → 상세 → 브랜드 제품 목�
     await expect(allMenu).toBeVisible();
     const allBrandsLink = allMenu.getByRole('link', { name: '전체 브랜드' });
     if (!(await allBrandsLink.isVisible())) {
-      const brandDisclosure = allMenu.locator('summary').filter({ hasText: '브랜드' });
+      const brandDisclosure = allMenu.getByRole('button', { name: '브랜드' });
       await expect(brandDisclosure).toBeVisible();
       await brandDisclosure.click();
     }
