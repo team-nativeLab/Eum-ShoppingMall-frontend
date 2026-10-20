@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { assertBuildApiEnv } from '@eum/api/config';
+import { ApiConfigError, assertBuildApiEnv } from '@eum/api/config';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
@@ -22,6 +22,22 @@ function assertBuildApiConfig(viteMode: string): void {
     allowMockInProduction: readEnv('VITE_ALLOW_MOCK_IN_PRODUCTION'),
     isProduction,
   });
+  const isVercelBuild = process.env.VERCEL !== undefined || process.env.VERCEL_ENV !== undefined;
+  if (isVercelBuild) {
+    if (apiConfig.mode !== 'real') {
+      throw new ApiConfigError('Vercel 배포는 VITE_API_MODE=real만 허용합니다.');
+    }
+    const isVercelProductionBuild = process.env.VERCEL_ENV === 'production';
+    const apiHostname = new URL(apiConfig.baseUrl).hostname.toLowerCase().replace(/\.+$/, '');
+    if (
+      isVercelProductionBuild &&
+      (apiHostname === 'invalid' || apiHostname.endsWith('.invalid'))
+    ) {
+      throw new ApiConfigError(
+        'Vercel Production 배포에는 실제 VITE_API_BASE_URL이 필요합니다. Preview placeholder는 사용할 수 없습니다.',
+      );
+    }
+  }
   console.info(`[api-config] admin 빌드(${viteMode}) API 모드: ${apiConfig.mode}`);
 }
 
