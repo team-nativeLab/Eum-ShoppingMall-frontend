@@ -5,6 +5,7 @@ import { Button } from '@eum/ui/components/Button';
 import { Icon } from '@eum/ui/components/Icon';
 import { Link } from 'react-router';
 import { QUOTE_STATUS_META } from '@eum/api/quote-status';
+import { cx } from '@eum/ui/lib/cx';
 
 export const adminPanelClassName = 'rounded-12 border border-line bg-bg';
 
@@ -12,15 +13,36 @@ interface AdminPageHeaderProps {
   title: string;
   description?: string;
   action?: ReactNode;
+  leading?: ReactNode;
+  titleAdornment?: ReactNode;
+  descriptionPlacement?: 'inline' | 'below';
 }
 
 /** 관리자 화면의 페이지 제목과 주 작업을 정렬합니다. */
-export function AdminPageHeader({ title, description, action }: AdminPageHeaderProps) {
+export function AdminPageHeader({
+  title,
+  description,
+  action,
+  leading,
+  titleAdornment,
+  descriptionPlacement = 'below',
+}: AdminPageHeaderProps) {
   return (
     <div className="mb-24 flex items-start justify-between gap-24">
-      <div>
-        <h1 className="text-h1">{title}</h1>
-        {description ? <p className="mt-4 text-body-s text-text-3">{description}</p> : null}
+      <div className="flex min-w-0 items-center gap-12">
+        {leading}
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-12">
+            <h1 className="text-h1">{title}</h1>
+            {titleAdornment}
+            {description && descriptionPlacement === 'inline' ? (
+              <p className="text-caption text-text-3">{description}</p>
+            ) : null}
+          </div>
+          {description && descriptionPlacement === 'below' ? (
+            <p className="mt-4 text-body-s text-text-3">{description}</p>
+          ) : null}
+        </div>
       </div>
       {action ? <div className="flex shrink-0 items-center gap-8">{action}</div> : null}
     </div>
@@ -48,11 +70,11 @@ export function AdminPanel({
   bodyClassName = '',
 }: AdminPanelProps) {
   return (
-    <section id={id} className={`${adminPanelClassName} ${className}`}>
+    <section id={id} className={cx(adminPanelClassName, className)}>
       {title || description || action ? (
-        <div className="flex items-start justify-between gap-16 border-b border-line px-20 py-16">
+        <div className="flex items-start justify-between gap-16 px-24 pt-24">
           <div>
-            {title ? <h2 className="text-title">{title}</h2> : null}
+            {title ? <h2 className="text-h3">{title}</h2> : null}
             {description ? <p className="mt-4 text-caption text-text-3">{description}</p> : null}
           </div>
           {action ? <div className="shrink-0">{action}</div> : null}

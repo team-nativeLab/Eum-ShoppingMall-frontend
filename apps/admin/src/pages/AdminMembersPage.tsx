@@ -155,6 +155,7 @@ export function AdminMembersPage() {
       <AdminPageHeader
         title="회원 관리"
         description={`총 ${matchingMembers.length.toLocaleString('ko-KR')}명`}
+        descriptionPlacement="inline"
       />
       <AdminNotice className="mb-16">
         회원 유형·사업자 정보·계정 상태와 탈퇴 상태는 회원 API에서 제공하지 않습니다. 해당 항목은
