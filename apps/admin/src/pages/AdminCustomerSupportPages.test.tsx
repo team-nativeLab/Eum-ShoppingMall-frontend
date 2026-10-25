@@ -1,12 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { AdminLegalDocument } from '@eum/api/types';
+import type { AdminFaqInput } from '@eum/api/shop-api';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdminInquiriesPage } from './AdminInquiriesPage';
 import { AdminProductQuestionsPage } from './AdminProductQuestionsPage';
 import { AdminReviewsPage } from './AdminReviewsPage';
 import { AdminCompanyPoliciesPage } from './AdminCompanyPoliciesPage';
+import { AdminFaqsPage } from './AdminSupportContentPage';
 
 const mocks = vi.hoisted(() => ({
   getShopApi: vi.fn(),
@@ -97,6 +99,11 @@ describe('고객지원 운영 화면', () => {
         saveAdminInfo: vi.fn(async (input) => input),
       },
       legalDocuments: { adminList: async () => [], saveAdmin: vi.fn(async (input) => input) },
+      faqs: {
+        adminList: async () => [],
+        saveAdmin: vi.fn(async (input) => input),
+        deleteAdmin: vi.fn(),
+      },
     });
   });
 
@@ -174,6 +181,75 @@ describe('고객지원 운영 화면', () => {
         body: '개정 이용약관 본문',
         isPublished: true,
       }),
+    );
+  });
+
+  it('전체 보기와 빈 분류·공백 분류 필터를 구분한다', async () => {
+    const faqs = [
+      {
+        id: 'faq-empty-category',
+        category: '',
+        question: '빈 분류 질문',
+        answer: '빈 분류 답변',
+        isVisible: true,
+        sortOrder: 1,
+      },
+      {
+        id: 'faq-whitespace-category',
+        category: '   ',
+        question: '공백 분류 질문',
+        answer: '공백 분류 답변',
+        isVisible: true,
+        sortOrder: 2,
+      },
+      {
+        id: 'faq-delivery-category',
+        category: '배송',
+        question: '배송 분류 질문',
+        answer: '배송 분류 답변',
+        isVisible: true,
+        sortOrder: 3,
+      },
+    ];
+    const shopApi = await mocks.getShopApi();
+    shopApi.faqs.adminList = async () => faqs;
+    mocks.getShopApi.mockResolvedValue(shopApi);
+
+    const user = userEvent.setup();
+    renderPage(<AdminFaqsPage />);
+
+    const table = await screen.findByRole('table');
+    expect(within(table).getByText('빈 분류 질문')).toBeInTheDocument();
+    expect(within(table).getByText('공백 분류 질문')).toBeInTheDocument();
+    expect(within(table).getByText('배송 분류 질문')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '빈 분류' }));
+    expect(within(table).getByText('빈 분류 질문')).toBeInTheDocument();
+    expect(within(table).queryByText('공백 분류 질문')).not.toBeInTheDocument();
+    expect(within(table).queryByText('배송 분류 질문')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '공백 분류' }));
+    expect(within(table).getByText('공백 분류 질문')).toBeInTheDocument();
+    expect(within(table).queryByText('빈 분류 질문')).not.toBeInTheDocument();
+    expect(within(table).queryByText('배송 분류 질문')).not.toBeInTheDocument();
+  });
+
+  it('공백 FAQ 분류를 저장할 때 기존처럼 빈 문자열로 정리한다', async () => {
+    const saveFaq = vi.fn(async (input: AdminFaqInput) => input);
+    const shopApi = await mocks.getShopApi();
+    shopApi.faqs.saveAdmin = saveFaq;
+    mocks.getShopApi.mockResolvedValue(shopApi);
+
+    const user = userEvent.setup();
+    renderPage(<AdminFaqsPage />);
+    await user.click(await screen.findByRole('button', { name: '새로 등록' }));
+    await user.type(screen.getByLabelText('분류'), '   ');
+    await user.type(screen.getByLabelText('질문'), '분류 확인 질문');
+    await user.type(screen.getByLabelText('답변'), '분류 확인 답변');
+    await user.click(screen.getByRole('button', { name: '저장' }));
+
+    expect(saveFaq).toHaveBeenCalledWith(
+      expect.objectContaining({ category: '', question: '분류 확인 질문' }),
     );
   });
 });

@@ -18,6 +18,7 @@ export function AdminBrandsPage() {
     queryFn: async ({ signal }) => (await getShopApi()).brands.adminList({ signal }),
   });
   const brands = useMemo(() => brandsQuery.data ?? [], [brandsQuery.data]);
+  const featuredBrand = brands.find((brand) => brand.isFeatured);
   const filteredBrands = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLocaleLowerCase('ko-KR');
     return brands
@@ -58,6 +59,7 @@ export function AdminBrandsPage() {
       <AdminPageHeader
         title="브랜드 관리"
         description={`브랜드 ${brands.length}개 · 노출 ${brands.filter((brand) => brand.isVisible).length}개`}
+        descriptionPlacement="inline"
         action={
           <Link to="/brands/new" className={buttonClassName()}>
             브랜드 등록
@@ -68,6 +70,45 @@ export function AdminBrandsPage() {
         <p role="status" className="mb-12 text-body-s text-text-2">
           {message}
         </p>
+      ) : null}
+      {featuredBrand ? (
+        <section
+          aria-label="이달의 브랜드"
+          className="mb-16 flex min-h-96 items-center gap-16 rounded-12 border border-line bg-bg p-16"
+        >
+          <div className="w-240 shrink-0 border-r border-line pr-16">
+            <h2 className="text-label-m">이달의 브랜드</h2>
+            <p className="mt-4 text-caption text-text-3">쇼핑몰 메인에 노출 중인 브랜드입니다.</p>
+          </div>
+          <div className="flex min-w-0 flex-1 items-center gap-12">
+            {featuredBrand.logoUrl ? (
+              <img
+                src={featuredBrand.logoUrl}
+                alt=""
+                className="size-64 shrink-0 rounded-8 border border-line object-contain"
+              />
+            ) : (
+              <div
+                aria-hidden="true"
+                className="flex size-64 shrink-0 items-center justify-center rounded-8 bg-surface text-caption text-text-3"
+              >
+                로고 없음
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-label-m">{featuredBrand.name}</p>
+              <p className="mt-4 text-caption text-text-3">
+                {featuredBrand.isVisible ? '노출 중' : '숨김'}
+              </p>
+            </div>
+            <Link
+              to={`/brands/${encodeURIComponent(featuredBrand.id)}`}
+              className={buttonClassName({ variant: 'secondary', size: 's' })}
+            >
+              변경
+            </Link>
+          </div>
+        </section>
       ) : null}
       <label className="mb-16 grid max-w-480 gap-6 text-label-s">
         브랜드 검색

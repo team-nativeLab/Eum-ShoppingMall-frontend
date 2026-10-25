@@ -194,36 +194,18 @@ export function AdminCategoriesPage() {
     setExpandedCategoryIds(nextExpandedIds);
   };
 
+  const beginCategoryCreation = (parentCategoryId: string | null) => {
+    setIsCreatingCategory(true);
+    setNewCategoryName('');
+    setNewCategoryDescription('');
+    setNewCategoryParentId(parentCategoryId);
+  };
+
   return (
     <section aria-label="카테고리 관리">
       <AdminPageHeader
         title="카테고리 관리"
-        action={
-          <div className="flex gap-8">
-            <Button
-              variant="secondary"
-              disabled={!activeCategory}
-              onClick={() => {
-                setIsCreatingCategory(true);
-                setNewCategoryName('');
-                setNewCategoryDescription('');
-                setNewCategoryParentId(activeCategory?.id ?? null);
-              }}
-            >
-              하위 카테고리 추가
-            </Button>
-            <Button
-              onClick={() => {
-                setIsCreatingCategory(true);
-                setNewCategoryName('');
-                setNewCategoryDescription('');
-                setNewCategoryParentId(null);
-              }}
-            >
-              1차 카테고리 추가
-            </Button>
-          </div>
-        }
+        action={<Button onClick={() => beginCategoryCreation(null)}>1차 카테고리 추가</Button>}
       />
 
       {previewMessage ? (
@@ -331,11 +313,21 @@ export function AdminCategoriesPage() {
       ) : categories.length > 0 ? (
         <div className="grid items-start gap-16 xl:grid-cols-[minmax(320px,368px)_minmax(0,1fr)]">
           <section className="rounded-12 border border-line bg-bg p-20" aria-label="카테고리 목록">
-            <div className="mb-16 flex flex-col gap-2">
-              <h2 className="text-title">카테고리 {categories.length}개</h2>
-              <p className="text-caption text-text-3">
-                카테고리별 상품 수 집계 API가 제공되지 않습니다.
-              </p>
+            <div className="mb-16 flex items-start justify-between gap-12">
+              <div className="flex min-w-0 flex-col gap-4">
+                <h2 className="text-title">카테고리 {categories.length}개</h2>
+                <p className="text-caption text-text-3">
+                  카테고리별 상품 수 집계 API가 제공되지 않습니다.
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                size="s"
+                disabled={!activeCategory}
+                onClick={() => beginCategoryCreation(activeCategory?.id ?? null)}
+              >
+                하위 추가
+              </Button>
             </div>
             <CategoryTreeRows
               nodes={categoryTree}

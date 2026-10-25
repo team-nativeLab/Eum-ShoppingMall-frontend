@@ -38,6 +38,7 @@ export function AdminFaqsPage() {
 function AdminSupportContentPage({ mode }: { mode: ContentMode }) {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
+  const [selectedFaqCategory, setSelectedFaqCategory] = useState<string | null>(null);
   const [draft, setDraft] = useState<ContentDraft>(EMPTY_DRAFT);
   const [isOpen, setIsOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AdminNotice | AdminFaq | null>(null);
@@ -69,9 +70,21 @@ function AdminSupportContentPage({ mode }: { mode: ContentMode }) {
           mode === 'notice'
             ? `${(item as AdminNotice).title} ${(item as AdminNotice).body}`
             : `${(item as AdminFaq).category} ${(item as AdminFaq).question} ${(item as AdminFaq).answer}`;
-        return text.toLocaleLowerCase('ko-KR').includes(search.trim().toLocaleLowerCase('ko-KR'));
+        return (
+          (selectedFaqCategory === null ||
+            !('category' in item) ||
+            item.category === selectedFaqCategory) &&
+          text.toLocaleLowerCase('ko-KR').includes(search.trim().toLocaleLowerCase('ko-KR'))
+        );
       }),
-    [data, mode, search],
+    [data, mode, search, selectedFaqCategory],
+  );
+  const faqCategories = useMemo(
+    () =>
+      [...new Set(data.flatMap((item) => ('category' in item ? [item.category] : [])))].toSorted(
+        (left, right) => left.localeCompare(right, 'ko-KR'),
+      ),
+    [data],
   );
   if (isPending)
     return (
@@ -167,6 +180,7 @@ function AdminSupportContentPage({ mode }: { mode: ContentMode }) {
       <AdminPageHeader
         title={mode === 'notice' ? '공지 관리' : 'FAQ 관리'}
         description={`총 ${data.length.toLocaleString('ko-KR')}건`}
+        descriptionPlacement="inline"
         action={
           <Button
             onClick={() => {
@@ -178,61 +192,197 @@ function AdminSupportContentPage({ mode }: { mode: ContentMode }) {
           </Button>
         }
       />
-      <div className="mb-16 flex items-center gap-12">
-        <label className="flex-1">
-          <span className="sr-only">검색</span>
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder={mode === 'notice' ? '공지 제목·내용 검색' : 'FAQ 분류·질문·답변 검색'}
-            className="h-40 w-full rounded-8 border border-line-control bg-bg px-12"
-          />
-        </label>
-        <span role="status" className="text-caption text-info">
-          {message}
-        </span>
-      </div>
-      {filtered.length === 0 ? (
-        <AdminEmpty title={mode === 'notice' ? '공지가 없습니다' : 'FAQ가 없습니다'} />
-      ) : (
-        <div className="overflow-x-auto rounded-12 border border-line bg-bg">
-          <table className="w-full min-w-720 border-collapse text-left text-body-s">
-            <thead className="bg-surface text-label-s">
-              <tr>
-                <th className="px-16 py-12">정렬</th>
-                {mode === 'faq' ? <th className="px-12 py-12">분류</th> : null}
-                <th className="px-12 py-12">{mode === 'notice' ? '제목' : '질문'}</th>
-                <th className="px-12 py-12">노출</th>
-                <th className="px-12 py-12">작업</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((item) => (
-                <tr key={item.id} className="border-t border-line">
-                  <td className="px-16 py-12">{item.sortOrder}</td>
-                  {mode === 'faq' ? (
-                    <td className="px-12 py-12">{(item as AdminFaq).category}</td>
-                  ) : null}
-                  <td className="px-12 py-12">
-                    {'body' in item ? item.title : (item as AdminFaq).question}
-                  </td>
-                  <td className="px-12 py-12">{item.isVisible ? '노출' : '숨김'}</td>
-                  <td className="px-12 py-12">
-                    <div className="flex gap-8">
-                      <Button size="s" variant="secondary" onClick={() => openEdit(item)}>
-                        수정
-                      </Button>
-                      <Button size="s" variant="ghost" onClick={() => setDeleteTarget(item)}>
-                        삭제
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
+      {mode === 'faq' ? (
+        <div className="grid grid-cols-[200px_minmax(0,1fr)] items-start gap-16">
+          <aside className="rounded-12 border border-line bg-bg p-16" aria-label="FAQ 카테고리">
+            <h2 className="mb-12 text-label-m">카테고리</h2>
+            <ul className="grid gap-4">
+              <li>
+                <button
+                  type="button"
+                  aria-pressed={selectedFaqCategory === null}
+                  onClick={() => setSelectedFaqCategory(null)}
+                  className={`flex min-h-36 w-full items-center justify-between rounded-6 px-8 text-left text-body-s focus-ring ${selectedFaqCategory === null ? 'bg-surface text-text-1' : 'text-text-2 hover:bg-surface'}`}
+                >
+                  <span>전체</span>
+                  <span className="text-caption text-text-3">{data.length}</span>
+                </button>
+              </li>
+              {faqCategories.map((category) => (
+                <li key={category}>
+                  <button
+                    type="button"
+                    aria-label={
+                      category.trim() === ''
+                        ? category === ''
+                          ? '빈 분류'
+                          : '공백 분류'
+                        : category
+                    }
+                    aria-pressed={selectedFaqCategory === category}
+                    onClick={() => setSelectedFaqCategory(category)}
+                    className={`flex min-h-36 w-full items-center justify-between rounded-6 px-8 text-left text-body-s focus-ring ${selectedFaqCategory === category ? 'bg-surface text-text-1' : 'text-text-2 hover:bg-surface'}`}
+                  >
+                    <span className="truncate">{category}</span>
+                    <span className="text-caption text-text-3">
+                      {
+                        data.filter((item) => 'category' in item && item.category === category)
+                          .length
+                      }
+                    </span>
+                  </button>
+                </li>
               ))}
-            </tbody>
-          </table>
+            </ul>
+          </aside>
+          <div className="min-w-0">
+            <div className="mb-16 flex items-center gap-12 rounded-12 border border-line bg-bg p-12">
+              <label className="flex-1">
+                <span className="sr-only">질문 검색</span>
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="질문 검색"
+                  className="h-40 w-full rounded-8 border border-line-control bg-bg px-12"
+                />
+              </label>
+              <Button type="button" variant="ghost" size="s" onClick={() => setSearch('')}>
+                초기화
+              </Button>
+              <span role="status" className="text-caption text-info">
+                {message}
+              </span>
+            </div>
+            {filtered.length === 0 ? (
+              <AdminEmpty title="FAQ가 없습니다" className="rounded-12 border border-line bg-bg" />
+            ) : (
+              <div className="overflow-x-auto rounded-12 border border-line bg-bg">
+                <table className="w-full min-w-640 border-collapse text-left text-body-s">
+                  <thead className="bg-surface text-label-s text-text-2">
+                    <tr>
+                      <th scope="col" className="px-16 py-12">
+                        순서
+                      </th>
+                      <th scope="col" className="px-12 py-12">
+                        카테고리
+                      </th>
+                      <th scope="col" className="px-12 py-12">
+                        질문
+                      </th>
+                      <th scope="col" className="px-12 py-12">
+                        노출
+                      </th>
+                      <th scope="col" className="px-12 py-12">
+                        작업
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((item) => (
+                      <tr key={item.id} className="border-t border-line">
+                        <td className="px-16 py-12">{item.sortOrder}</td>
+                        <td className="px-12 py-12">{'category' in item ? item.category : ''}</td>
+                        <td className="px-12 py-12">{'question' in item ? item.question : ''}</td>
+                        <td className="px-12 py-12">{item.isVisible ? '노출' : '숨김'}</td>
+                        <td className="px-12 py-12">
+                          <div className="flex gap-8">
+                            <Button size="s" variant="secondary" onClick={() => openEdit(item)}>
+                              수정
+                            </Button>
+                            <Button size="s" variant="ghost" onClick={() => setDeleteTarget(item)}>
+                              삭제
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
+      ) : (
+        <>
+          <div className="mb-16 flex items-center gap-12">
+            <label className="flex-1">
+              <span className="sr-only">공지 검색</span>
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="공지 제목·내용 검색"
+                className="h-40 w-full rounded-8 border border-line-control bg-bg px-12"
+              />
+            </label>
+            <span role="status" className="text-caption text-info">
+              {message}
+            </span>
+          </div>
+          {filtered.length === 0 ? (
+            <AdminEmpty title="공지가 없습니다" />
+          ) : (
+            <div className="overflow-x-auto rounded-12 border border-line bg-bg">
+              <table className="w-full min-w-720 border-collapse text-left text-body-s">
+                <thead className="bg-surface text-label-s text-text-2">
+                  <tr>
+                    <th scope="col" className="px-16 py-12">
+                      번호
+                    </th>
+                    <th scope="col" className="px-12 py-12">
+                      고정
+                    </th>
+                    <th scope="col" className="px-12 py-12">
+                      제목
+                    </th>
+                    <th scope="col" className="px-12 py-12">
+                      상태
+                    </th>
+                    <th scope="col" className="px-12 py-12">
+                      조회
+                    </th>
+                    <th scope="col" className="px-12 py-12">
+                      등록일
+                    </th>
+                    <th scope="col" className="px-12 py-12">
+                      작업
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((item) => {
+                    if (!('body' in item)) return null;
+                    return (
+                      <tr key={item.id} className="border-t border-line">
+                        <td className="px-16 py-12">{item.sortOrder}</td>
+                        <td className="px-12 py-12">{item.isPinned ? '고정' : '—'}</td>
+                        <td className="px-12 py-12">{item.title}</td>
+                        <td className="px-12 py-12">{item.isVisible ? '게시' : '숨김'}</td>
+                        <td className="px-12 py-12">
+                          {item.viewCount?.toLocaleString('ko-KR') ?? '미제공'}
+                        </td>
+                        <td className="px-12 py-12 whitespace-nowrap">
+                          {item.publishedAt.slice(0, 10)}
+                        </td>
+                        <td className="px-12 py-12">
+                          <div className="flex gap-8">
+                            <Button size="s" variant="secondary" onClick={() => openEdit(item)}>
+                              수정
+                            </Button>
+                            <Button size="s" variant="ghost" onClick={() => setDeleteTarget(item)}>
+                              삭제
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
       <Modal
         isOpen={isOpen}
