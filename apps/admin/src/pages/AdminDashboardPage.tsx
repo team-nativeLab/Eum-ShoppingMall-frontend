@@ -144,6 +144,11 @@ function AdminDashboardCharts({
   const totalCount = dailyValues.reduce((sum, dailyValue) => sum + dailyValue.count, 0);
   const totalAmount = dailyValues.reduce((sum, dailyValue) => sum + dailyValue.amount, 0);
   const maxAmount = Math.max(...dailyValues.map((dailyValue) => dailyValue.amount), 1);
+  const formatChartDay = (daysBeforeToday: number) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - daysBeforeToday);
+    return new Intl.DateTimeFormat('ko-KR', { month: '2-digit', day: '2-digit' }).format(date);
+  };
   const linePoints = dailyValues
     .map(
       (dailyValue, index) => `${(index / 13) * 520},${88 - (dailyValue.amount / maxAmount) * 72}`,
@@ -178,7 +183,7 @@ function AdminDashboardCharts({
                   <span
                     key={index}
                     aria-hidden="true"
-                    className={`w-12 rounded-t-4 ${index === 13 ? 'bg-text-1' : 'bg-surface-2'}`}
+                    className={`w-12 rounded-t-4 ${index === 13 ? 'bg-info' : 'bg-info-tint'}`}
                     style={{ height: `${Math.max(4, (dailyValue.count / maxCount) * 120)}px` }}
                   />
                 ))}
@@ -191,9 +196,9 @@ function AdminDashboardCharts({
               className="-mt-12 ml-52 flex justify-between px-28 pb-12 text-caption text-text-3"
               aria-hidden="true"
             >
-              <span>14일 전</span>
-              <span>7일 전</span>
-              <span>오늘</span>
+              <span>{formatChartDay(13)}</span>
+              <span>{formatChartDay(6)}</span>
+              <span>{formatChartDay(0)}</span>
             </div>
           </>
         )}
@@ -225,13 +230,13 @@ function AdminDashboardCharts({
                 <path d="M0 48H520" stroke="var(--color-line)" strokeDasharray="3 4" />
                 <path
                   d={`M ${linePoints} L 520,96 L 0,96 Z`}
-                  fill="var(--color-surface-2)"
+                  fill="var(--color-danger-tint)"
                   opacity=".8"
                 />
                 <path
                   d={`M ${linePoints}`}
                   fill="none"
-                  stroke="var(--color-text-1)"
+                  stroke="var(--color-danger)"
                   strokeWidth="2"
                 />
               </svg>
@@ -241,9 +246,9 @@ function AdminDashboardCharts({
               className="-mt-12 ml-52 flex justify-between px-28 pb-12 text-caption text-text-3"
               aria-hidden="true"
             >
-              <span>14일 전</span>
-              <span>7일 전</span>
-              <span>오늘</span>
+              <span>{formatChartDay(13)}</span>
+              <span>{formatChartDay(6)}</span>
+              <span>{formatChartDay(0)}</span>
             </div>
           </>
         )}

@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { AdminProduct, Product } from '@eum/api/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { PriceVisibilityConfirmDialog } from '@/components/PriceVisibilityConfirmDialog';
 import {
   AdminPriceVisibilityPreviewProvider,
@@ -110,20 +110,22 @@ function renderAdminApp(initialEntry = '/products') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: 0 } },
   });
+  const router = createMemoryRouter(
+    [
+      { path: '/products', element: <AdminProductsPage /> },
+      { path: '/products/:productId', element: <AdminProductFormPage /> },
+    ],
+    { initialEntries: [initialEntry] },
+  );
 
   return render(
-    <MemoryRouter initialEntries={[initialEntry]}>
-      <QueryClientProvider client={queryClient}>
-        <AdminPriceVisibilityPreviewProvider>
-          <AdminProductExposurePreviewProvider>
-            <Routes>
-              <Route path="/products" element={<AdminProductsPage />} />
-              <Route path="/products/:productId" element={<AdminProductFormPage />} />
-            </Routes>
-          </AdminProductExposurePreviewProvider>
-        </AdminPriceVisibilityPreviewProvider>
-      </QueryClientProvider>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <AdminPriceVisibilityPreviewProvider>
+        <AdminProductExposurePreviewProvider>
+          <RouterProvider router={router} />
+        </AdminProductExposurePreviewProvider>
+      </AdminPriceVisibilityPreviewProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -204,6 +206,30 @@ describe('admin price visibility previews', () => {
     });
   });
 
+  it('filters the list by the product price and exposure fields', async () => {
+    const user = userEvent.setup();
+    const adminProducts: AdminProduct[] = productFixtures.map((product) => ({
+      ...structuredClone(product),
+      skus: [],
+      price: product.price ?? 0,
+      stockCount: 0,
+      salesStatus: 'active',
+      isVisible: product.id !== 'product-b',
+    }));
+    apiMocks.adminListProducts.mockResolvedValueOnce(adminProducts);
+    renderAdminApp();
+
+    await screen.findByRole('row', { name: /상품 A/ });
+    await user.selectOptions(screen.getByLabelText('금액 표시 필터'), 'hidden');
+    expect(await screen.findByRole('row', { name: /상품 B/ })).toBeInTheDocument();
+    expect(screen.queryByRole('row', { name: /상품 A/ })).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('금액 표시 필터'), 'all');
+    await user.selectOptions(screen.getByLabelText('노출 필터'), 'hidden');
+    expect(await screen.findByRole('row', { name: /상품 B/ })).toBeInTheDocument();
+    expect(screen.queryByRole('row', { name: /상품 A/ })).not.toBeInTheDocument();
+  });
+
   it('shows the stored Admin amount even while the buyer price is hidden', async () => {
     renderAdminApp();
 
@@ -265,7 +291,7 @@ describe('admin price visibility previews', () => {
     expect(screen.queryByText(/SKU 조합별 판매 설정/)).not.toBeInTheDocument();
   });
 
-  it('counts paused products by stock independently of exposure and sales status', async () => {
+  it('counts products by sales status independently of stock and exposure', async () => {
     const adminProducts: AdminProduct[] = productFixtures.map((product) => ({
       ...structuredClone(product),
       skus: [],
@@ -278,7 +304,7 @@ describe('admin price visibility previews', () => {
     renderAdminApp();
 
     const tabs = within(await screen.findByRole('group', { name: '상품 상태 필터' }));
-    expect(await tabs.findByRole('button', { name: /재고 있음/ })).toHaveTextContent('2');
+    expect(await tabs.findByRole('button', { name: /판매중/ })).toHaveTextContent('1');
     const hiddenTab = tabs.getByRole('button', { name: /숨김/ });
     expect(hiddenTab).toHaveTextContent('0');
     const productRow = await screen.findByRole('row', { name: /상품 A/ });
@@ -293,7 +319,7 @@ describe('admin price visibility previews', () => {
         expect.objectContaining({ id: 'product-a', salesStatus: 'active' }),
       ),
     );
-    expect(tabs.getByRole('button', { name: /재고 있음/ })).toHaveTextContent('2');
+    expect(tabs.getByRole('button', { name: /판매중/ })).toHaveTextContent('2');
     await userEvent.setup().click(hiddenTab);
     expect(await screen.findByText('검색 결과가 없습니다')).toBeInTheDocument();
   });
@@ -361,7 +387,7 @@ describe('admin price visibility previews', () => {
     );
   });
 
-  it('cancels bulk hiding without changes, confirms hiding, and previews bulk showing directly', async () => {
+  it('cancels bulk hiding without changes, confirms and saves hiding, then saves showing', async () => {
     const user = userEvent.setup();
     renderAdminApp();
 
@@ -377,9 +403,14 @@ describe('admin price visibility previews', () => {
     await user.click(screen.getByRole('button', { name: /^금액 미표시$/ }));
 
     let dialog = await screen.findByRole('dialog');
-    expect(dialog).toHaveAccessibleName('선택한 상품 2개의 금액을 미표시 상태로 미리 볼까요?');
-    expect(within(dialog).getByText(/실제 설정에 저장하면 구매자 화면에/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/실제 설정에 저장하면 구매자 화면에/)).toBeInTheDocument();
+    expect(dialog).toHaveAccessibleName('선택한 상품 2개의 금액을 숨길까요?');
+    expect(
+      within(dialog).getByText(/사용자 화면에 가격 대신 '구매 불가'로 표시됩니다/),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText(/이 설정은 목 API에 저장됩니다/)).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/이미 장바구니에 담긴 상품은 '주문할 수 없는 상품'/),
+    ).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: '취소' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(screen.getByRole('switch', { name: '상품 A 금액 표시' })).toHaveAttribute(
@@ -393,12 +424,14 @@ describe('admin price visibility previews', () => {
 
     await user.click(screen.getByRole('button', { name: /^금액 미표시$/ }));
     dialog = await screen.findByRole('dialog');
-    await user.click(within(dialog).getByRole('button', { name: '금액 미표시 미리보기' }));
+    await user.click(within(dialog).getByRole('button', { name: '금액 숨기기' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     const hideAnnouncement = screen.getByRole('status');
     expect(hideAnnouncement).toHaveAttribute('aria-live', 'polite');
     await waitFor(() =>
-      expect(hideAnnouncement).toHaveTextContent('금액 표시를 저장하고 있습니다.'),
+      expect(hideAnnouncement).toHaveTextContent(
+        '목 API에 금액 표시 2개 상품을 저장했습니다. 목록과 관련 화면을 새로고침했습니다.',
+      ),
     );
     await waitFor(() =>
       expect(screen.getByRole('switch', { name: '상품 A 금액 표시' })).toHaveAttribute(
@@ -449,19 +482,140 @@ describe('admin price visibility previews', () => {
       'aria-checked',
       'true',
     );
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      '목 API에 금액 표시 2개 상품을 저장했습니다. 목록과 관련 화면을 새로고침했습니다.',
+    );
   });
 
-  it('clears selection when search, category, stock filter, or tab changes', async () => {
+  it('locks pending product actions by ID while leaving other product rows available', async () => {
+    const user = userEvent.setup();
+    let finishPendingSave: () => void = () => {};
+    const pendingSave = new Promise<void>((resolve) => {
+      finishPendingSave = resolve;
+    });
+    apiMocks.saveAdmin.mockImplementationOnce(async (input: AdminProduct) => {
+      await pendingSave;
+      return structuredClone(input);
+    });
+    renderAdminApp();
+
+    const productARow = await screen.findByRole('row', { name: /상품 A/ });
+    const productBRow = screen.getByRole('row', { name: /상품 B/ });
+    await user.click(within(productARow).getByRole('checkbox', { name: '상품 A 선택' }));
+    await user.click(within(productARow).getByText('작업'));
+    const productAPriceSwitch = within(productARow).getByRole('switch', {
+      name: '상품 A 금액 표시',
+    });
+    await user.click(productAPriceSwitch);
+
+    await waitFor(() => expect(apiMocks.saveAdmin).toHaveBeenCalledTimes(1));
+    expect(productAPriceSwitch).toHaveAttribute('aria-busy', 'true');
+    expect(within(productARow).getByRole('switch', { name: '상품 A 상품 노출' })).toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
+    expect(within(productARow).getByRole('checkbox', { name: '상품 A 선택' })).toBeDisabled();
+    expect(within(productARow).getByText('작업').closest('summary')).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(within(productARow).getByRole('button', { name: '재고 있음으로 설정' })).toBeDisabled();
+    expect(
+      within(screen.getByRole('region', { name: '선택 상품 작업' })).getByRole('button', {
+        name: '금액 표시',
+      }),
+    ).toBeDisabled();
+
+    await user.click(productAPriceSwitch);
+    expect(apiMocks.saveAdmin).toHaveBeenCalledTimes(1);
+
+    const productBPriceSwitch = within(productBRow).getByRole('switch', {
+      name: '상품 B 금액 표시',
+    });
+    expect(productBPriceSwitch).not.toHaveAttribute('aria-busy', 'true');
+    await user.click(productBPriceSwitch);
+    await waitFor(() => expect(apiMocks.saveAdmin).toHaveBeenCalledTimes(2));
+
+    finishPendingSave();
+    await waitFor(() => expect(productAPriceSwitch).not.toHaveAttribute('aria-busy', 'true'));
+    expect(within(productARow).getByRole('checkbox', { name: '상품 A 선택' })).toBeEnabled();
+  });
+
+  it('continues after one bulk save fails, refreshes the list, and announces partial success', async () => {
+    const user = userEvent.setup();
+    apiMocks.saveAdmin.mockRejectedValueOnce(new Error('첫 상품 저장 실패'));
+    renderAdminApp();
+
+    await screen.findByRole('row', { name: /상품 A/ });
+    await user.click(screen.getByRole('checkbox', { name: '상품 A 선택' }));
+    await user.click(screen.getByRole('checkbox', { name: '상품 B 선택' }));
+    const initialListCallCount = apiMocks.adminListProducts.mock.calls.length;
+    await user.click(screen.getByRole('button', { name: /^금액 표시$/ }));
+
+    await waitFor(() => expect(apiMocks.saveAdmin).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      '목 API에 금액 표시 1개 저장, 1개 실패했습니다. 목록과 관련 화면을 새로고침했습니다.',
+    );
+    await waitFor(() =>
+      expect(apiMocks.adminListProducts.mock.calls.length).toBeGreaterThan(initialListCallCount),
+    );
+  });
+
+  it('announces total failure after refreshing the list', async () => {
+    const user = userEvent.setup();
+    apiMocks.saveAdmin.mockRejectedValue(new Error('저장 실패'));
+    renderAdminApp();
+
+    await screen.findByRole('row', { name: /상품 A/ });
+    await user.click(screen.getByRole('checkbox', { name: '상품 A 선택' }));
+    await user.click(screen.getByRole('checkbox', { name: '상품 B 선택' }));
+    const initialListCallCount = apiMocks.adminListProducts.mock.calls.length;
+    await user.click(screen.getByRole('button', { name: /^금액 표시$/ }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      '목 API에 금액 표시 2개 상품 저장이 실패했습니다. 목록과 관련 화면을 새로고침했습니다.',
+    );
+    await waitFor(() =>
+      expect(apiMocks.adminListProducts.mock.calls.length).toBeGreaterThan(initialListCallCount),
+    );
+  });
+
+  it('keeps the last list visible and distinguishes save success from a failed refresh', async () => {
+    const user = userEvent.setup();
+    const initialProducts: AdminProduct[] = productFixtures.map((product) => ({
+      ...structuredClone(product),
+      skus: [],
+      price: product.price ?? 0,
+      stockCount: 0,
+      salesStatus: 'active',
+      isVisible: true,
+    }));
+    apiMocks.adminListProducts
+      .mockResolvedValueOnce(initialProducts)
+      .mockRejectedValueOnce(new Error('refresh failed'));
+    renderAdminApp();
+
+    const productARow = await screen.findByRole('row', { name: /상품 A/ });
+    await user.click(within(productARow).getByRole('checkbox', { name: '상품 A 선택' }));
+    await user.click(screen.getByRole('button', { name: /^금액 표시$/ }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      '목 API에 금액 표시 1개 저장, 0개 실패했습니다. 저장은 처리했지만 관련 화면을 갱신하지 못했습니다. 다시 조회해 주세요.',
+    );
+    expect(screen.getByRole('row', { name: /상품 A/ })).toBeInTheDocument();
+  });
+
+  it('clears selection when search, category, sales filter, or tab changes', async () => {
     const user = userEvent.setup();
     renderAdminApp();
 
     await screen.findByRole('row', { name: /상품 A/ });
     await user.click(screen.getByRole('checkbox', { name: '상품 A 선택' }));
     expect(screen.getByRole('button', { name: '선택 해제' })).toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText('재고 상태 필터'), 'soldOut');
+    await user.selectOptions(screen.getByLabelText('판매 상태 필터'), 'paused');
     await waitFor(() => expect(screen.queryByRole('button', { name: '선택 해제' })).toBeNull());
 
-    await user.selectOptions(screen.getByLabelText('재고 상태 필터'), 'all');
+    await user.selectOptions(screen.getByLabelText('판매 상태 필터'), 'all');
     await screen.findByRole('row', { name: /상품 A/ });
     await user.click(screen.getByRole('checkbox', { name: '상품 A 선택' }));
     const statusTabs = within(screen.getByRole('group', { name: '상품 상태 필터' }));
@@ -507,12 +661,27 @@ describe('admin price visibility previews', () => {
       <PriceVisibilityConfirmDialog
         isOpen
         selectedProducts={[]}
+        persistenceTargetLabel="목 API"
         onCancel={() => undefined}
         onConfirm={() => undefined}
       />,
     );
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('explains that confirmation changes mock data instead of server data', () => {
+    render(
+      <PriceVisibilityConfirmDialog
+        isOpen
+        selectedProducts={[{ id: 'product-a', name: '상품 A', thumbnailUrl: null }]}
+        persistenceTargetLabel="목 API"
+        onCancel={() => undefined}
+        onConfirm={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText(/이 설정은 목 API에 저장됩니다/)).toBeInTheDocument();
   });
 
   it('saves product exposure and price visibility as separate fields', async () => {
@@ -525,7 +694,7 @@ describe('admin price visibility previews', () => {
     await user.click(exposureSwitch);
     await user.click(within(productRow).getByRole('checkbox', { name: '상품 A 선택' }));
     await user.click(screen.getByRole('button', { name: '금액 미표시' }));
-    await user.click(screen.getByRole('button', { name: '금액 미표시 미리보기' }));
+    await user.click(screen.getByRole('button', { name: '금액 숨기기' }));
     await waitFor(() =>
       expect(apiMocks.saveAdmin).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'product-a', isVisible: false }),

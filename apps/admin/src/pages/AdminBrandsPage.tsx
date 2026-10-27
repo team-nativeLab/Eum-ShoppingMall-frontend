@@ -18,7 +18,6 @@ export function AdminBrandsPage() {
     queryFn: async ({ signal }) => (await getShopApi()).brands.adminList({ signal }),
   });
   const brands = useMemo(() => brandsQuery.data ?? [], [brandsQuery.data]);
-  const featuredBrand = brands.find((brand) => brand.isFeatured);
   const filteredBrands = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLocaleLowerCase('ko-KR');
     return brands
@@ -29,6 +28,7 @@ export function AdminBrandsPage() {
       )
       .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0));
   }, [brands, keyword]);
+  const featuredBrand = brands.find((brand) => brand.isFeatured && brand.isVisible);
 
   const saveBrand = async (brand: AdminBrand, changes: Partial<AdminBrand>) => {
     if (changes.isVisible === false && brand.isFeatured) {
@@ -81,9 +81,9 @@ export function AdminBrandsPage() {
             <p className="mt-4 text-caption text-text-3">쇼핑몰 메인에 노출 중인 브랜드입니다.</p>
           </div>
           <div className="flex min-w-0 flex-1 items-center gap-12">
-            {featuredBrand.logoUrl ? (
+            {featuredBrand.coverImageUrl || featuredBrand.logoUrl ? (
               <img
-                src={featuredBrand.logoUrl}
+                src={featuredBrand.coverImageUrl ?? featuredBrand.logoUrl ?? undefined}
                 alt=""
                 className="size-64 shrink-0 rounded-8 border border-line object-contain"
               />
@@ -97,15 +97,20 @@ export function AdminBrandsPage() {
             )}
             <div className="min-w-0 flex-1">
               <p className="truncate text-label-m">{featuredBrand.name}</p>
-              <p className="mt-4 text-caption text-text-3">
-                {featuredBrand.isVisible ? '노출 중' : '숨김'}
-              </p>
+              {featuredBrand.tagline ? (
+                <p className="mt-4 truncate text-body-s text-text-2">{featuredBrand.tagline}</p>
+              ) : null}
+              {featuredBrand.mainField ? (
+                <p className="mt-4 text-caption text-text-3">{featuredBrand.mainField}</p>
+              ) : (
+                <p className="mt-4 text-caption text-text-3">노출 중</p>
+              )}
             </div>
             <Link
               to={`/brands/${encodeURIComponent(featuredBrand.id)}`}
               className={buttonClassName({ variant: 'secondary', size: 's' })}
             >
-              변경
+              수정
             </Link>
           </div>
         </section>

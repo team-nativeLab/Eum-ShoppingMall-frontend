@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { AdminQuote, QuoteStatus } from '@eum/api/types';
 import { QUOTE_STATUS_META } from '@eum/api/quote-status';
 import { Badge } from '@eum/ui/components/Badge';
@@ -56,8 +56,28 @@ function QuoteStatusBadge({ status }: { status: QuoteStatus }) {
   return <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>;
 }
 
+function formatQuoteElapsedDays(requestedAt: string, now: number): string {
+  const requestedTime = Date.parse(requestedAt);
+  if (!Number.isFinite(requestedTime)) return '경과 정보 없음';
+  const requestDate = new Date(requestedTime);
+  const currentDate = new Date(now);
+  const requestDay = Date.UTC(
+    requestDate.getFullYear(),
+    requestDate.getMonth(),
+    requestDate.getDate(),
+  );
+  const currentDay = Date.UTC(
+    currentDate.getFullYear(),
+    currentDate.getMonth(),
+    currentDate.getDate(),
+  );
+  const elapsedDays = Math.max(0, Math.floor((currentDay - requestDay) / 86_400_000));
+  return `${elapsedDays}일 경과`;
+}
+
 /** 견적 문의를 상태·검색어·접수일로 탐색하고 읽기 전용 상세를 표시합니다. */
 export function AdminQuotesPage() {
+  const [elapsedDayClock, setElapsedDayClock] = useState(() => Date.now());
   const [statusFilter, setStatusFilter] = useState<QuoteStatusFilter>('all');
   const [searchText, setSearchText] = useState('');
   const [startDateInput, setStartDateInput] = useState('');
@@ -65,6 +85,17 @@ export function AdminQuotesPage() {
   const [appliedFilters, setAppliedFilters] = useState({ keyword: '', startDate: '', endDate: '' });
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  useEffect(() => {
+    const currentTime = Date.now();
+    const nextMidnight = new Date(currentTime);
+    nextMidnight.setHours(24, 0, 0, 0);
+    const timeoutId = window.setTimeout(
+      () => setElapsedDayClock(Date.now()),
+      nextMidnight.getTime() - currentTime + 50,
+    );
+
+    return () => window.clearTimeout(timeoutId);
+  }, [elapsedDayClock]);
   const hasInvalidDateFilter =
     isInvalidAdminDateInput(startDateInput) || isInvalidAdminDateInput(endDateInput);
   const quotesQuery = useQuery({
@@ -245,14 +276,20 @@ export function AdminQuotesPage() {
               />
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-640 border-collapse text-left text-body-s">
+                <table className="w-full min-w-720 border-collapse text-left text-body-s">
                   <thead className="h-44 bg-surface text-label-s text-text-2">
                     <tr>
                       <th scope="col" className="px-16 font-medium">
                         접수일
                       </th>
                       <th scope="col" className="px-12 font-medium">
+                        경과
+                      </th>
+                      <th scope="col" className="px-12 font-medium">
                         문의 내용
+                      </th>
+                      <th scope="col" className="px-12 font-medium">
+                        요청 품목
                       </th>
                       <th scope="col" className="px-12 font-medium">
                         회사 / 담당자
@@ -273,6 +310,9 @@ export function AdminQuotesPage() {
                           <td className="px-16 whitespace-nowrap text-text-2">
                             {formatAdminDate(quote.requestedAt)}
                           </td>
+                          <td className="px-12 whitespace-nowrap text-text-2">
+                            {formatQuoteElapsedDays(quote.requestedAt, elapsedDayClock)}
+                          </td>
                           <td className="min-w-160 px-12">
                             <button
                               type="button"
@@ -285,6 +325,9 @@ export function AdminQuotesPage() {
                             <span className="mt-2 block truncate text-caption text-text-3">
                               {quote.id}
                             </span>
+                          </td>
+                          <td className="px-12 whitespace-nowrap text-text-2">
+                            {quote.requestedItems.length.toLocaleString('ko-KR')}개
                           </td>
                           <td className="min-w-132 px-12">
                             <span className="block truncate font-medium">{quote.companyName}</span>
