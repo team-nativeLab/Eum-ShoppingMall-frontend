@@ -35,7 +35,7 @@ function toAdminOrder(order: Order): AdminOrder {
     trackingCarrier: '',
     trackingNumber: '',
     adminMemo: '',
-    statusHistory: [{ status: order.status, occurredAt: order.orderedAt, note: '' }],
+    statusHistory: [],
   };
 }
 
@@ -293,11 +293,47 @@ export function AdminOrderDetailPage() {
           </AdminPanel>
 
           <AdminPanel title="변경 이력">
-            <AdminEmpty
-              title="처리 이력 데이터가 없습니다"
-              description="주문 상태 변경 이력은 현재 API에서 제공하지 않습니다."
-              className="min-h-120"
-            />
+            {order.statusHistory.length === 0 ? (
+              <AdminEmpty
+                title="처리 이력 데이터가 없습니다"
+                description="주문 상태 변경 이력은 현재 API에서 제공하지 않습니다."
+                className="min-h-120"
+              />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-520 border-collapse text-left text-body-s">
+                  <thead className="bg-surface text-caption text-text-2">
+                    <tr>
+                      <th scope="col" className="px-20 py-10 font-normal">
+                        상태
+                      </th>
+                      <th scope="col" className="px-12 py-10 font-normal">
+                        변경 일시
+                      </th>
+                      <th scope="col" className="px-20 py-10 font-normal">
+                        메모
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {order.statusHistory.map((history, index) => (
+                      <tr
+                        key={`${history.occurredAt}-${history.status}-${index}`}
+                        className="border-t border-line"
+                      >
+                        <td className="px-20 py-12 whitespace-nowrap">
+                          <AdminStatusBadge status={history.status} kind="order" />
+                        </td>
+                        <td className="px-12 py-12 whitespace-nowrap text-text-3">
+                          {formatAdminDateTime(history.occurredAt)}
+                        </td>
+                        <td className="px-20 py-12 text-text-2">{history.note || '메모 없음'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </AdminPanel>
         </div>
 

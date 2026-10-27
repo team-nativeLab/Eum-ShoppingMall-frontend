@@ -1,11 +1,12 @@
 import { Button, buttonClassName } from '@eum/ui/components/Button';
+import { Modal } from '@eum/ui/components/Modal';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { Switch } from '@eum/ui/components/Switch';
 import { SelectField, TextField } from '@eum/ui/components/TextField';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bold, ChevronLeft, ImagePlus, Italic, Link2, List, Underline } from 'lucide-react';
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useBlocker, useNavigate, useParams } from 'react-router';
 import {
   AdminError,
   AdminLoading,
@@ -118,6 +119,8 @@ function ProductEditor({
   );
   const [demoMessage, setDemoMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const shouldBlockNavigation = useRef(false);
   const [isReadingImages, setIsReadingImages] = useState(false);
   const [imageMessage, setImageMessage] = useState('');
   const [activeSection, setActiveSection] = useState<ProductSectionId>('basic-info');
@@ -141,6 +144,29 @@ function ProductEditor({
   const leafOptions = categories.filter((category) => category.parentId === rootCategoryId);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const blocker = useBlocker(() => shouldBlockNavigation.current);
+
+  const handleContinueEditing = () => {
+    if (blocker.state === 'blocked') blocker.reset();
+  };
+  const handleLeaveEditor = () => {
+    if (blocker.state === 'blocked') blocker.proceed();
+  };
+
+  const markDirty = () => {
+    shouldBlockNavigation.current = true;
+    setIsDirty(true);
+  };
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
 
   useEffect(() => {
     if (typeof IntersectionObserver === 'undefined') return;
@@ -164,12 +190,14 @@ function ProductEditor({
   }, []);
 
   const handleVisibleSalesStateChange = (nextState: VisibleSalesState) => {
+    markDirty();
     setSalesState(nextState);
     setStockStatus(nextState === 'soldOut' ? 'soldOut' : 'inStock');
     setSalesStatus(nextState === 'paused' ? 'paused' : 'active');
   };
 
   const handleFormatDescription = (prefix: string, suffix = prefix) => {
+    markDirty();
     setIsRichDescription(true);
     const textarea = descriptionRef.current;
     if (!textarea) return;
@@ -230,6 +258,7 @@ function ProductEditor({
         ...current,
         ...loadedImages.map(({ fingerprint: _fingerprint, ...image }) => image),
       ]);
+      markDirty();
     } catch (error) {
       setImageMessage(error instanceof Error ? error.message : '이미지를 읽지 못했습니다.');
     } finally {
@@ -344,6 +373,8 @@ function ProductEditor({
     try {
       const api = await getShopApi();
       const savedProduct = await api.products.saveAdmin(nextProduct);
+      shouldBlockNavigation.current = false;
+      setIsDirty(false);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['admin', 'products'] }),
         queryClient.invalidateQueries({ queryKey: ['admin', 'product-editor'] }),
@@ -362,7 +393,7 @@ function ProductEditor({
   };
 
   return (
-    <form onSubmit={handleSave}>
+    <form onSubmit={handleSave} onChangeCapture={markDirty}>
       <AdminPageHeader
         title={isNew ? '상품 등록' : '상품 수정'}
         leading={
@@ -526,6 +557,7 @@ function ProductEditor({
                   label="금액 표시"
                   isChecked={previewPriceVisible}
                   onCheckedChange={(nextValue) => {
+                    markDirty();
                     if (product) {
                       setPreviewValue([product], nextValue);
                     } else {
@@ -574,6 +606,7 @@ function ProductEditor({
                 variant="secondary"
                 size="s"
                 onClick={() => {
+                  markDirty();
                   const optionId = `option-${Date.now()}`;
                   setOptions((current) => [
                     ...current,
@@ -629,9 +662,10 @@ function ProductEditor({
                 <button
                   type="button"
                   className="text-label-s text-danger"
-                  onClick={() =>
-                    setOptions((current) => current.filter((entry) => entry.id !== option.id))
-                  }
+                  onClick={() => {
+                    markDirty();
+                    setOptions((current) => current.filter((entry) => entry.id !== option.id));
+                  }}
                 >
                   옵션 삭제
                 </button>
@@ -711,6 +745,7 @@ function ProductEditor({
                   onDragOver={(event) => event.preventDefault()}
                   onDrop={(event) => {
                     event.preventDefault();
+                    markDirty();
                     const fromIndex = Number(event.dataTransfer.getData('text/plain'));
                     setImages((current) => {
                       const reordered = [...current];
@@ -733,6 +768,7 @@ function ProductEditor({
                     disabled={index === 0}
                     className="absolute bottom-4 left-4 rounded-4 bg-bg px-6 py-2 text-label-s disabled:opacity-40"
                     onClick={() => {
+                      markDirty();
                       setImages((current) => {
                         if (index < 1 || index >= current.length) return current;
                         const reordered = [...current];
@@ -750,6 +786,7 @@ function ProductEditor({
                     disabled={index === images.length - 1}
                     className="absolute bottom-4 left-32 rounded-4 bg-bg px-6 py-2 text-label-s disabled:opacity-40"
                     onClick={() => {
+                      markDirty();
                       setImages((current) => {
                         if (index < 0 || index >= current.length - 1) return current;
                         const reordered = [...current];
@@ -767,6 +804,7 @@ function ProductEditor({
                       aria-label={`이미지 ${index + 1}을 대표 이미지로 설정`}
                       className="absolute bottom-4 left-60 rounded-4 bg-bg px-6 py-2 text-label-s"
                       onClick={() => {
+                        markDirty();
                         setImages((current) => {
                           if (index < 1 || index >= current.length) return current;
                           const reordered = [...current];
@@ -784,6 +822,7 @@ function ProductEditor({
                     aria-label={`이미지 ${index + 1} 삭제`}
                     className="absolute top-4 right-4 rounded-4 bg-bg px-6 py-2 text-label-s text-danger"
                     onClick={() => {
+                      markDirty();
                       for (const [fingerprint, imageId] of imageFingerprints.current) {
                         if (imageId === image.id) imageFingerprints.current.delete(fingerprint);
                       }
@@ -976,7 +1015,10 @@ function ProductEditor({
               <Switch
                 label="쇼핑몰 노출"
                 isChecked={isVisible}
-                onCheckedChange={setIsVisible}
+                onCheckedChange={(nextValue) => {
+                  markDirty();
+                  setIsVisible(nextValue);
+                }}
                 onText="노출"
                 offText="미노출"
               />
@@ -1018,6 +1060,25 @@ function ProductEditor({
           </AdminPanel>
         </aside>
       </div>
+      <Modal
+        isOpen={blocker.state === 'blocked'}
+        onClose={handleContinueEditing}
+        title="작성 중인 내용을 버리고 나갈까요?"
+        actions={
+          <>
+            <Button type="button" variant="secondary" onClick={handleContinueEditing}>
+              계속 작성
+            </Button>
+            <Button type="button" onClick={handleLeaveEditor}>
+              나가기
+            </Button>
+          </>
+        }
+      >
+        <NoticeInline tone="info" className="mt-16">
+          저장하지 않고 나가면 상품 등록 화면을 닫습니다.
+        </NoticeInline>
+      </Modal>
     </form>
   );
 }
