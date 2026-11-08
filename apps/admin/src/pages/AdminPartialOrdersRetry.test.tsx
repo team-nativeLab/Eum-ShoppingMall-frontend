@@ -181,6 +181,33 @@ describe('partial order lookup retry actions', () => {
     });
   });
 
+  it('explains the mock data persistence range to mouse, keyboard, and screen reader users', () => {
+    const router = createMemoryRouter([{ path: '/', element: <AdminTopBar /> }], {
+      initialEntries: ['/'],
+    });
+    render(
+      <QueryClientProvider client={createAdminQueryClient()}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    const mockDataBadge = screen.getByText('목 데이터');
+    const descriptionId = mockDataBadge.getAttribute('aria-describedby');
+
+    expect(mockDataBadge.tagName).toBe('SUMMARY');
+    expect(mockDataBadge).toHaveAttribute(
+      'title',
+      '목 API 변경 사항은 앱을 실행하는 동안에만 유지되며, 새로고침하거나 앱을 종료하면 사라집니다.',
+    );
+    expect(descriptionId).toBeTruthy();
+    expect(document.getElementById(descriptionId ?? '')).toHaveTextContent(
+      '목 API 변경 사항은 앱을 실행하는 동안에만 유지되며, 새로고침하거나 앱을 종료하면 사라집니다.',
+    );
+    mockDataBadge.focus();
+    expect(mockDataBadge).toHaveFocus();
+    expect(mockDataBadge.parentElement).toHaveClass('group');
+  });
+
   it('saves only selected orders and clears selection when the filter changes', async () => {
     const user = userEvent.setup();
     apiMocks.membersList.mockResolvedValue([memberA, memberB]);

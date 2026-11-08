@@ -124,10 +124,10 @@ export function AdminCompanyPoliciesPage() {
           {message}
         </p>
       ) : null}
-      <div className="grid gap-20">
+      <div className="grid items-start gap-16 xl:grid-cols-[240px_minmax(0,1fr)]">
         <form
           onSubmit={(event) => void saveCompany(event)}
-          className="rounded-12 border border-line bg-bg p-20"
+          className="rounded-12 border border-line bg-bg p-20 xl:col-span-2"
         >
           <h2 className="text-h3">회사·고객센터 정보</h2>
           <div className="mt-16 grid gap-12 md:grid-cols-2">
@@ -147,26 +147,38 @@ export function AdminCompanyPoliciesPage() {
             회사 정보 저장
           </Button>
         </form>
+        <aside className="rounded-12 border border-line bg-bg p-16" aria-label="정책 문서 목록">
+          <h2 className="text-label-m">문서 목록</h2>
+          <nav className="mt-12 grid gap-4">
+            {DOCUMENT_OPTIONS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                aria-pressed={documentId === item.id}
+                onClick={() => setDocumentId(item.id)}
+                className={`rounded-8 px-12 py-10 text-left text-body-s ${documentId === item.id ? 'bg-surface text-text-1' : 'text-text-2 hover:bg-surface'}`}
+              >
+                {item.title}
+              </button>
+            ))}
+          </nav>
+        </aside>
         <form
           onSubmit={(event) => void saveLegal(event)}
           className="rounded-12 border border-line bg-bg p-20"
         >
-          <h2 className="text-h3">약관·정책 문서</h2>
+          <div className="flex flex-wrap items-start justify-between gap-12">
+            <div>
+              <h2 className="text-h3">{option?.title}</h2>
+              <p className="mt-4 text-caption text-text-3">{option?.route}</p>
+            </div>
+            <span
+              className={`rounded-6 px-8 py-4 text-caption ${legal.isPublished ? 'bg-success-tint text-success' : 'bg-surface text-text-3'}`}
+            >
+              {legal.isPublished ? '공개 중' : '비공개'}
+            </span>
+          </div>
           <div className="mt-16 grid gap-12 md:grid-cols-2">
-            <label className="grid gap-6 text-label-s">
-              문서 종류
-              <select
-                value={documentId}
-                onChange={(event) => setDocumentId(event.target.value as LegalDocumentId)}
-                className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
-              >
-                {DOCUMENT_OPTIONS.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.title} · {item.route}
-                  </option>
-                ))}
-              </select>
-            </label>
             <label className="grid gap-6 text-label-s">
               문서 제목
               <input

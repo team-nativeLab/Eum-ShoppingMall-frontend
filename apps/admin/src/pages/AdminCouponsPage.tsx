@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@eum/ui/components/Button';
 import { Modal } from '@eum/ui/components/Modal';
+import { Pagination } from '@eum/ui/components/Pagination';
 import {
   AdminEmpty,
   AdminError,
@@ -54,14 +55,48 @@ export function AdminCouponsPage() {
     queryFn: async ({ signal }) => (await getShopApi()).coupons.adminList({ signal }),
   });
   const [filter, setFilter] = useState<AdminCouponStatus | 'all'>('all');
+  const [search, setSearch] = useState('');
+  const [benefitFilter, setBenefitFilter] = useState<'all' | 'rate' | 'amount'>('all');
+  const [issueFilter, setIssueFilter] = useState<'all' | AdminCoupon['issueMethod']>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [sortOrder, setSortOrder] = useState<'recent' | 'name'>('recent');
+  const [pageSize, setPageSize] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [errors, setErrors] = useState<string[]>([]);
   const [message, setMessage] = useState('');
   const coupons = useMemo(() => couponsQuery.data ?? [], [couponsQuery.data]);
-  const visible = useMemo(
-    () => coupons.filter((coupon) => filter === 'all' || coupon.status === filter),
-    [coupons, filter],
+  const filteredCoupons = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase('ko-KR');
+    return coupons
+      .filter((coupon) => filter === 'all' || coupon.status === filter)
+      .filter((coupon) => benefitFilter === 'all' || coupon.benefitType === benefitFilter)
+      .filter((coupon) => issueFilter === 'all' || coupon.issueMethod === issueFilter)
+      .filter(
+        (coupon) =>
+          !query || `${coupon.name} ${coupon.code}`.toLocaleLowerCase('ko-KR').includes(query),
+      )
+      .filter(
+        (coupon) =>
+          coupon.validityMode !== 'period' || !dateFrom || coupon.endsAt.slice(0, 10) >= dateFrom,
+      )
+      .filter(
+        (coupon) =>
+          coupon.validityMode !== 'period' || !dateTo || coupon.startsAt.slice(0, 10) <= dateTo,
+      )
+      .sort((first, second) =>
+        sortOrder === 'name'
+          ? first.name.localeCompare(second.name, 'ko-KR')
+          : second.startsAt.localeCompare(first.startsAt),
+      );
+  }, [benefitFilter, coupons, dateFrom, dateTo, filter, issueFilter, search, sortOrder]);
+  const totalPages = Math.max(1, Math.ceil(filteredCoupons.length / pageSize));
+  const safeCurrentPage = Math.max(1, Math.min(currentPage, totalPages));
+  const visible = filteredCoupons.slice(
+    (safeCurrentPage - 1) * pageSize,
+    safeCurrentPage * pageSize,
   );
   const close = () => {
     setIsOpen(false);
@@ -160,17 +195,126 @@ export function AdminCouponsPage() {
               : coupons.filter((coupon) => coupon.status === option.value).length,
         }))}
         value={filter}
-        onChange={setFilter}
+        onChange={(value) => {
+          setFilter(value);
+          setCurrentPage(1);
+        }}
       />
+      <div className="mt-16 grid gap-8 rounded-12 border border-line bg-bg p-16 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+        <label className="grid gap-4 text-caption text-text-2">
+          쿠폰명·코드 검색
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setCurrentPage(1);
+            }}
+            placeholder="쿠폰명 또는 코드"
+            className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
+          />
+        </label>
+        <label className="grid gap-4 text-caption text-text-2">
+          혜택 유형
+          <select
+            value={benefitFilter}
+            onChange={(event) => {
+              setBenefitFilter(event.target.value as typeof benefitFilter);
+              setCurrentPage(1);
+            }}
+            className="h-40 rounded-8 border border-line-control bg-bg px-8 text-body-s"
+          >
+            <option value="all">전체</option>
+            <option value="rate">정률 할인</option>
+            <option value="amount">정액 할인</option>
+          </select>
+        </label>
+        <label className="grid gap-4 text-caption text-text-2">
+          발급 방식 필터
+          <select
+            value={issueFilter}
+            onChange={(event) => {
+              setIssueFilter(event.target.value as typeof issueFilter);
+              setCurrentPage(1);
+            }}
+            className="h-40 rounded-8 border border-line-control bg-bg px-8 text-body-s"
+          >
+            <option value="all">전체</option>
+            <option value="automatic">자동</option>
+            <option value="download">다운로드</option>
+            <option value="code">코드</option>
+          </select>
+        </label>
+        <label className="grid gap-4 text-caption text-text-2">
+          사용 시작일 이후
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(event) => {
+              setDateFrom(event.target.value);
+              setCurrentPage(1);
+            }}
+            className="h-40 rounded-8 border border-line-control bg-bg px-8 text-body-s"
+          />
+        </label>
+        <label className="grid gap-4 text-caption text-text-2">
+          사용 종료일 이전
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(event) => {
+              setDateTo(event.target.value);
+              setCurrentPage(1);
+            }}
+            className="h-40 rounded-8 border border-line-control bg-bg px-8 text-body-s"
+          />
+        </label>
+        <label className="grid gap-4 text-caption text-text-2">
+          정렬
+          <select
+            value={sortOrder}
+            onChange={(event) => setSortOrder(event.target.value as typeof sortOrder)}
+            className="h-40 rounded-8 border border-line-control bg-bg px-8 text-body-s"
+          >
+            <option value="recent">시작일순</option>
+            <option value="name">이름순</option>
+          </select>
+        </label>
+        <label className="grid gap-4 text-caption text-text-2">
+          페이지당 표시
+          <select
+            value={pageSize}
+            onChange={(event) => {
+              setPageSize(Number(event.target.value));
+              setCurrentPage(1);
+            }}
+            className="h-40 rounded-8 border border-line-control bg-bg px-8 text-body-s"
+          >
+            <option value={10}>10개</option>
+            <option value={20}>20개</option>
+            <option value={50}>50개</option>
+          </select>
+        </label>
+      </div>
       {visible.length === 0 ? (
-        <AdminEmpty title="해당 쿠폰이 없습니다" />
+        <AdminEmpty title="검색 조건에 맞는 쿠폰이 없습니다" />
       ) : (
         <div className="mt-16 overflow-x-auto rounded-12 border border-line bg-bg">
-          <table className="w-full min-w-760 border-collapse text-left text-body-s">
+          <table className="w-full table-fixed border-collapse text-left text-body-s">
+            <colgroup>
+              <col className="w-[18%]" />
+              <col className="w-[15%]" />
+              <col className="w-[10%]" />
+              <col className="w-[12%]" />
+              <col className="w-[14%]" />
+              <col className="w-[11%]" />
+              <col className="w-[12%]" />
+              <col className="w-[8%]" />
+            </colgroup>
             <thead className="bg-surface text-caption text-text-2">
               <tr>
                 {[
-                  '쿠폰명',
+                  '쿠폰명 / 코드',
                   '혜택',
                   '발급 방식',
                   '대상 / 적용 범위',
@@ -190,6 +334,9 @@ export function AdminCouponsPage() {
                 <tr key={coupon.id} className="border-t border-line">
                   <td className="px-16 py-12 font-medium">
                     {coupon.name}
+                    <span className="mt-4 block font-mono text-caption font-normal break-all text-text-3">
+                      {coupon.code}
+                    </span>
                     {coupon.notice ? (
                       <span className="mt-4 block max-w-240 text-caption font-normal break-words text-text-3">
                         {coupon.notice}
@@ -202,10 +349,10 @@ export function AdminCouponsPage() {
                         ? `${coupon.benefitValue}%`
                         : `${coupon.benefitValue.toLocaleString('ko-KR')}원`}
                     </span>
-                    <span className="mt-4 block text-caption whitespace-nowrap text-text-3">
+                    <span className="mt-4 block text-caption text-text-3">
                       최대 할인 {coupon.maxDiscountAmount.toLocaleString('ko-KR')}원
                     </span>
-                    <span className="block text-caption whitespace-nowrap text-text-3">
+                    <span className="block text-caption text-text-3">
                       최소 주문 {coupon.minimumOrderAmount.toLocaleString('ko-KR')}원
                     </span>
                   </td>
@@ -229,7 +376,7 @@ export function AdminCouponsPage() {
                         ? '카테고리'
                         : '상품 선택'}
                   </td>
-                  <td className="px-16 py-12 whitespace-nowrap">
+                  <td className="px-16 py-12 break-words">
                     {coupon.startsAt} ~ {coupon.endsAt}
                   </td>
                   <td className="px-16 py-12">
@@ -251,7 +398,7 @@ export function AdminCouponsPage() {
                       onChange={(event) =>
                         void updateStatus(coupon, event.target.value as AdminCouponStatus)
                       }
-                      className="h-32 rounded-6 border border-line-control bg-bg px-8"
+                      className="h-32 max-w-full rounded-6 border border-line-control bg-bg px-4 text-caption"
                     >
                       <option value="active">사용 중</option>
                       <option value="scheduled">예약</option>
@@ -265,6 +412,17 @@ export function AdminCouponsPage() {
           </table>
         </div>
       )}
+      <div className="mt-16 flex items-center justify-between gap-16">
+        <p className="text-caption text-text-3">
+          총 {filteredCoupons.length.toLocaleString('ko-KR')}개 중{' '}
+          {visible.length.toLocaleString('ko-KR')}개 표시
+        </p>
+        <Pagination
+          currentPage={safeCurrentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+        />
+      </div>
       <Modal
         isOpen={isOpen}
         onClose={close}

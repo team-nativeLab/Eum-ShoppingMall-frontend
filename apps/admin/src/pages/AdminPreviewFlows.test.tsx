@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider } from 'react-router';
@@ -73,6 +73,75 @@ function renderSettings() {
 }
 
 describe('Admin demo preview flows', () => {
+  it('refreshes quote elapsed days at local midnight and keeps invalid date fallback', async () => {
+    vi.useFakeTimers();
+    const beforeMidnight = new Date(2026, 9, 26, 23, 59, 30);
+    vi.setSystemTime(beforeMidnight);
+    const requestDate = new Date(2026, 9, 26, 12, 0).toISOString();
+    const quotes = [
+      {
+        id: 'quote-midnight',
+        title: '자정 경과 견적',
+        companyName: '이음 회사',
+        contactName: '담당자',
+        status: 'received',
+        requestedAt: requestDate,
+        memberId: null,
+        inquiryBody: '자재 견적을 문의합니다.',
+        requestedItems: [{ name: '테스트 자재', quantity: 1 }],
+        attachments: [],
+        internalMemo: '',
+        publicMessage: null,
+        quoteAmount: null,
+        expiresAt: null,
+      },
+      {
+        id: 'quote-invalid-date',
+        title: '날짜 누락 견적',
+        companyName: '이음 회사',
+        contactName: '담당자',
+        status: 'received',
+        requestedAt: 'invalid-date',
+        memberId: null,
+        inquiryBody: '자재 견적을 문의합니다.',
+        requestedItems: [{ name: '테스트 자재', quantity: 1 }],
+        attachments: [],
+        internalMemo: '',
+        publicMessage: null,
+        quoteAmount: null,
+        expiresAt: null,
+      },
+    ];
+    shopMocks.quotesAdminList.mockResolvedValue(quotes);
+    shopMocks.getShopApi.mockResolvedValue({ quotes: { adminList: shopMocks.quotesAdminList } });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+    });
+    const rendered = render(
+      <QueryClientProvider client={queryClient}>
+        <AdminQuotesPage />
+      </QueryClientProvider>,
+    );
+
+    try {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(screen.getByText('0일 경과')).toBeInTheDocument();
+      expect(screen.getByText('경과 정보 없음')).toBeInTheDocument();
+
+      await act(async () => {
+        vi.advanceTimersByTime(30_050);
+      });
+
+      expect(screen.getByText('1일 경과')).toBeInTheDocument();
+    } finally {
+      rendered.unmount();
+      queryClient.clear();
+      vi.useRealTimers();
+    }
+  });
+
   it('shows a navigation warning only while settings differ from the current preview', async () => {
     const user = userEvent.setup();
     const { router } = renderSettings();
@@ -372,6 +441,10 @@ describe('Admin demo preview flows', () => {
         status: 'received',
         requestedAt: '2026-10-18T00:00:00Z',
         memberId: 'member-a',
+        requestedItems: [
+          { name: '안전모', quantity: 10 },
+          { name: '안전모 턱끈', quantity: 10 },
+        ],
       },
     ]);
     shopMocks.getShopApi.mockResolvedValue({
@@ -396,6 +469,8 @@ describe('Admin demo preview flows', () => {
     expect(screen.getByText('20261018-0001')).toBeInTheDocument();
     expect(screen.queryByText('20261018-0002')).not.toBeInTheDocument();
     expect(screen.getByText('quote-a')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '품목 수' })).toBeInTheDocument();
+    expect(screen.getByText('2개')).toBeInTheDocument();
   });
 
   it('shows a settled error state when member order or quote history requests fail', async () => {
@@ -562,5 +637,63 @@ describe('Admin demo preview flows', () => {
     await user.click(screen.getByRole('button', { name: '취소' }));
     await user.click(screen.getByRole('button', { name: '취소 요청 처리' }));
     expect(screen.getByLabelText(/취소 사유/)).toHaveValue('');
+    expect(screen.getByText('처리 이력 데이터가 없습니다')).toBeInTheDocument();
+  });
+
+  it('renders actual Admin order status history and only the fields supplied by the API', async () => {
+    const adminOrder = {
+      id: 'order-history',
+      orderNumber: 'ORDER-HISTORY',
+      orderedAt: '2026-10-01T09:00:00Z',
+      status: 'shipping',
+      memberId: 'member-a',
+      lines: [],
+      productTotal: 1000,
+      shippingFee: 0,
+      discountTotal: 0,
+      pointUsed: 0,
+      paymentTotal: 1000,
+      shippingAddress: {
+        recipientName: '수령인',
+        phone: '010-0000-0000',
+        postalCode: '00000',
+        address1: '주소',
+        address2: '',
+      },
+      trackingCarrier: null,
+      trackingNumber: null,
+      adminMemo: '',
+      statusHistory: [
+        { status: 'paid', occurredAt: '2026-10-01T09:05:00Z', note: '결제 확인' },
+        { status: 'shipping', occurredAt: '2026-10-02T10:30:00Z', note: '송장 등록' },
+      ],
+    };
+    shopMocks.orderGet.mockResolvedValue(adminOrder);
+    shopMocks.membersList.mockResolvedValue([
+      { id: 'member-a', name: '회원 A', email: 'member@example.com', phone: '010-0000-0000' },
+    ]);
+    shopMocks.claimsList.mockResolvedValue([]);
+    shopMocks.getShopApi.mockResolvedValue({
+      orders: { adminGetById: shopMocks.orderGet },
+      members: { adminList: shopMocks.membersList },
+      claims: { listByMember: shopMocks.claimsList },
+    });
+    const router = createMemoryRouter(
+      [{ path: '/orders/:orderId', element: <AdminOrderDetailPage /> }],
+      { initialEntries: ['/orders/order-history'] },
+    );
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText('결제 확인')).toBeInTheDocument();
+    expect(screen.getByText('송장 등록')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '변경 일시' })).toBeInTheDocument();
+    expect(screen.queryByText('관리자')).not.toBeInTheDocument();
+    expect(screen.queryByText('처리 이력 데이터가 없습니다')).not.toBeInTheDocument();
   });
 });

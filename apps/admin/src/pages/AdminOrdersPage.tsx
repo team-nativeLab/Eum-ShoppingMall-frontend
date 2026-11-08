@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Ellipsis } from 'lucide-react';
 import { Link } from 'react-router';
 import { Button } from '@eum/ui/components/Button';
 import { Pagination } from '@eum/ui/components/Pagination';
@@ -592,6 +593,9 @@ export function AdminOrdersPage() {
                   <th scope="col" className="px-20 py-12 font-medium">
                     상태
                   </th>
+                  <th scope="col" className="px-12 py-12 text-right font-medium">
+                    작업
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -644,6 +648,25 @@ export function AdminOrdersPage() {
                       <td className="px-12 py-12 text-text-3">미제공</td>
                       <td className="px-20 py-12">
                         <AdminStatusBadge status={order.status} kind="order" />
+                      </td>
+                      <td className="px-12 py-8 text-right">
+                        <details className="relative inline-block text-left">
+                          <summary
+                            aria-label={`${order.orderNumber} 작업`}
+                            title={`${order.orderNumber} 작업`}
+                            className="flex size-32 cursor-pointer list-none items-center justify-center rounded-6 text-text-2 focus-ring hover:bg-surface [&::-webkit-details-marker]:hidden"
+                          >
+                            <Ellipsis aria-hidden="true" size={16} />
+                          </summary>
+                          <div className="absolute top-full right-0 z-10 mt-4 min-w-144 rounded-8 border border-line bg-bg p-4 shadow-2">
+                            <Link
+                              to={`/orders/${order.id}`}
+                              className="block rounded-4 px-8 py-6 text-left text-caption text-text-1 focus-ring hover:bg-surface"
+                            >
+                              주문 상세 보기
+                            </Link>
+                          </div>
+                        </details>
                       </td>
                     </tr>
                   );

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AdminBrand, AdminProduct, Category } from '@eum/api/types';
 import { AdminPriceVisibilityPreviewProvider } from '@/lib/admin-price-visibility-preview';
@@ -78,20 +78,29 @@ function createProductFixture(
   };
 }
 
-function renderProductForm(path = '/products/new') {
+function renderProductForm(
+  path = '/products/new',
+  initialEntries = [path],
+  initialIndex = initialEntries.length - 1,
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const router = createMemoryRouter(
+    [
+      { path: '/products', element: <h1>상품 목록</h1> },
+      { path: '/products/new', element: <AdminProductFormPage /> },
+      { path: '/products/:productId', element: <AdminProductFormPage /> },
+      { path: '*', element: <h1>다른 페이지</h1> },
+    ],
+    { initialEntries, initialIndex },
+  );
+  const rendered = render(
     <QueryClientProvider client={queryClient}>
       <AdminPriceVisibilityPreviewProvider>
-        <MemoryRouter initialEntries={[path]}>
-          <Routes>
-            <Route path="/products/new" element={<AdminProductFormPage />} />
-            <Route path="/products/:productId" element={<AdminProductFormPage />} />
-          </Routes>
-        </MemoryRouter>
+        <RouterProvider router={router} />
       </AdminPriceVisibilityPreviewProvider>
     </QueryClientProvider>,
   );
+  return { ...rendered, router };
 }
 
 describe('Admin 상품 등록·수정 폼', () => {
@@ -175,6 +184,83 @@ describe('Admin 상품 등록·수정 폼', () => {
         detailDescriptionFormat: 'rich-v1',
       }),
     );
+  });
+
+  it('변경 후 취소 링크를 막고 계속 작성 또는 이탈 확인을 제공한다', async () => {
+    const user = userEvent.setup();
+    renderProductForm();
+
+    const nameInput = await screen.findByRole('textbox', { name: '상품명' });
+    await user.type(nameInput, '새 상품');
+    await user.click(screen.getByRole('link', { name: '취소' }));
+
+    const exitDialog = await screen.findByRole('dialog', {
+      name: '작성 중인 내용을 버리고 나갈까요?',
+    });
+    expect(
+      within(exitDialog).getByText('저장하지 않고 나가면 상품 등록 화면을 닫습니다.'),
+    ).toBeInTheDocument();
+    await user.click(within(exitDialog).getByRole('button', { name: '계속 작성' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(nameInput).toHaveValue('새 상품');
+
+    await user.click(screen.getByRole('link', { name: '취소' }));
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: '나가기' }),
+    );
+    expect(await screen.findByRole('heading', { name: '상품 목록' })).toBeInTheDocument();
+  });
+
+  it('뒤로 가기와 새로고침 이탈을 막고 저장 성공 후에는 경고하지 않는다', async () => {
+    const user = userEvent.setup();
+    products = [createProductFixture('기존 설명')];
+    const { router } = renderProductForm(
+      '/products/product-edit',
+      ['/products', '/products/product-edit'],
+      1,
+    );
+
+    const nameInput = await screen.findByRole('textbox', { name: '상품명' });
+    await user.clear(nameInput);
+    await user.type(nameInput, '저장할 이름');
+    const unloadEvent = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(unloadEvent);
+    expect(unloadEvent.defaultPrevented).toBe(true);
+
+    router.navigate(-1);
+    const exitDialog = await screen.findByRole('dialog', {
+      name: '작성 중인 내용을 버리고 나갈까요?',
+    });
+    await user.click(within(exitDialog).getByRole('button', { name: '계속 작성' }));
+    expect(router.state.location.pathname).toBe('/products/product-edit');
+
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(saveAdmin).toHaveBeenCalledOnce());
+    const savedUnloadEvent = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(savedUnloadEvent);
+    expect(savedUnloadEvent.defaultPrevented).toBe(false);
+
+    router.navigate('/products');
+    expect(await screen.findByRole('heading', { name: '상품 목록' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('저장 실패 시 작성 중 이탈 경고를 유지한다', async () => {
+    const user = userEvent.setup();
+    products = [createProductFixture('기존 설명')];
+    saveAdmin.mockRejectedValueOnce(new Error('저장 실패'));
+    renderProductForm('/products/product-edit');
+
+    const nameInput = await screen.findByRole('textbox', { name: '상품명' });
+    await user.clear(nameInput);
+    await user.type(nameInput, '저장 실패 상품');
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('저장 실패');
+
+    await user.click(screen.getByRole('link', { name: '취소' }));
+    expect(
+      await screen.findByRole('dialog', { name: '작성 중인 내용을 버리고 나갈까요?' }),
+    ).toBeInTheDocument();
   });
 
   it('수정 폼에서 다른 필드를 저장해도 종료된 판매 상태를 보존한다', async () => {

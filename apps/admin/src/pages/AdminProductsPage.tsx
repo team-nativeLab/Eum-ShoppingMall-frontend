@@ -3,7 +3,7 @@ import { Pagination } from '@eum/ui/components/Pagination';
 import { Switch } from '@eum/ui/components/Switch';
 import { Modal } from '@eum/ui/components/Modal';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import {
   AdminEmpty,
@@ -18,21 +18,28 @@ import {
 } from '@/components/AdminUI';
 import { PriceVisibilityConfirmDialog } from '@/components/PriceVisibilityConfirmDialog';
 import { getShopApi } from '@/lib/shop-api';
+import { getAdminApiConfig } from '@/lib/api-config';
 import type { AdminProduct, Category, Product } from '@eum/api/types';
 
-type ProductTab = 'all' | 'inStock' | 'soldOut' | 'hiddenPrice' | 'hiddenExposure';
+type ProductTab = 'all' | 'active' | 'soldOut' | 'hiddenPrice' | 'hiddenExposure';
 interface ProductListData {
   products: AdminProduct[];
   categories: Category[];
   totalCount: number;
 }
 
+interface AdminProductSaveOutcome {
+  savedCount: number;
+  failedProducts: AdminProduct[];
+  isCacheRefreshSuccessful: boolean;
+}
+
 const PRODUCT_TABS = [
   { value: 'all', label: '전체' },
-  { value: 'inStock', label: '재고 있음' },
-  { value: 'soldOut', label: '재고 없음' },
-  { value: 'hiddenPrice', label: '금액 미표시' },
+  { value: 'active', label: '판매중' },
+  { value: 'soldOut', label: '품절' },
   { value: 'hiddenExposure', label: '숨김' },
+  { value: 'hiddenPrice', label: '금액 미표시' },
 ] as const satisfies readonly { value: ProductTab; label: string }[];
 
 /** 목록 조회 API 결과에서 필요한 상품과 카테고리를 함께 불러옵니다. */
@@ -78,12 +85,15 @@ function categoryPath(categoryId: string, categories: Category[]): string {
   return parent ? parent.name + ' > ' + category.name : category.name;
 }
 
-/** Admin 상품 목록과 상품 금액 표시의 세션 내 미리보기를 제공합니다. */
+/** Admin 상품을 조회하고, API를 통해 상품 설정을 저장합니다. */
 export function AdminProductsPage() {
+  const persistenceTargetLabel = getAdminApiConfig().mode === 'mock' ? '목 API' : '서버 API';
   const [searchText, setSearchText] = useState('');
   const [keyword, setKeyword] = useState('');
   const [categoryId, setCategoryId] = useState('');
-  const [stockStatus, setStockStatus] = useState('all');
+  const [salesStatus, setSalesStatus] = useState('all');
+  const [priceVisibility, setPriceVisibility] = useState('all');
+  const [exposure, setExposure] = useState('all');
   const [tab, setTab] = useState<ProductTab>('all');
   const [sortOrder, setSortOrder] = useState('recent');
   const [pageSize, setPageSize] = useState(20);
@@ -96,6 +106,8 @@ export function AdminProductsPage() {
   >({});
   const [pendingHideProducts, setPendingHideProducts] = useState<AdminProduct[]>([]);
   const [priceVisibilityAnnouncement, setPriceVisibilityAnnouncement] = useState('');
+  const [savingProductIds, setSavingProductIds] = useState<ReadonlySet<string>>(() => new Set());
+  const savingProductIdsRef = useRef(new Set<string>());
   const productQuery = useQuery({
     queryKey: ['admin', 'products', keyword, categoryId],
     queryFn: ({ signal }) => loadProducts(keyword, categoryId, signal),
@@ -110,19 +122,39 @@ export function AdminProductsPage() {
         stockStatus: stockStatusOverrides[product.id] ?? product.stockStatus,
       }))
       .filter((product) => {
-        if (tab === 'inStock') return product.stockStatus === 'inStock';
+        if (tab === 'active') return (product.salesStatus ?? 'active') === 'active';
         if (tab === 'soldOut') return product.stockStatus === 'soldOut';
         if (tab === 'hiddenPrice') return !product.priceVisible;
         if (tab === 'hiddenExposure') return !(product.isVisible ?? true);
         return true;
       })
-      .filter((product) => stockStatus === 'all' || product.stockStatus === stockStatus)
+      .filter(
+        (product) => salesStatus === 'all' || (product.salesStatus ?? 'active') === salesStatus,
+      )
+      .filter(
+        (product) =>
+          priceVisibility === 'all' ||
+          (priceVisibility === 'visible' ? product.priceVisible : !product.priceVisible),
+      )
+      .filter(
+        (product) =>
+          exposure === 'all' ||
+          (exposure === 'visible' ? (product.isVisible ?? true) : !(product.isVisible ?? true)),
+      )
       .toSorted((left, right) =>
         sortOrder === 'oldest'
           ? left.createdAt.localeCompare(right.createdAt)
           : right.createdAt.localeCompare(left.createdAt),
       );
-  }, [productQuery.data, stockStatus, sortOrder, stockStatusOverrides, tab]);
+  }, [
+    productQuery.data,
+    salesStatus,
+    priceVisibility,
+    exposure,
+    sortOrder,
+    stockStatusOverrides,
+    tab,
+  ]);
   const allFilteredProducts = useMemo(() => {
     if (!productQuery.data) return [];
     return productQuery.data.products
@@ -130,11 +162,24 @@ export function AdminProductsPage() {
         ...product,
         stockStatus: stockStatusOverrides[product.id] ?? product.stockStatus,
       }))
-      .filter((product) => stockStatus === 'all' || product.stockStatus === stockStatus);
-  }, [productQuery.data, stockStatus, stockStatusOverrides]);
+      .filter(
+        (product) => salesStatus === 'all' || (product.salesStatus ?? 'active') === salesStatus,
+      )
+      .filter(
+        (product) =>
+          priceVisibility === 'all' ||
+          (priceVisibility === 'visible' ? product.priceVisible : !product.priceVisible),
+      )
+      .filter(
+        (product) =>
+          exposure === 'all' ||
+          (exposure === 'visible' ? (product.isVisible ?? true) : !(product.isVisible ?? true)),
+      );
+  }, [productQuery.data, salesStatus, priceVisibility, exposure, stockStatusOverrides]);
 
   if (productQuery.isPending) return <AdminLoading label="상품 목록을 불러오고 있습니다." />;
-  if (productQuery.isError) return <AdminError onRetry={() => void productQuery.refetch()} />;
+  if (productQuery.isError && !productQuery.data)
+    return <AdminError onRetry={() => void productQuery.refetch()} />;
 
   const totalPages = Math.max(1, Math.ceil(visibleProducts.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -144,57 +189,124 @@ export function AdminProductsPage() {
     ...option,
     count: allFilteredProducts.filter((product) => {
       const currentStatus = stockStatusOverrides[product.id] ?? product.stockStatus;
-      if (option.value === 'inStock') return currentStatus === 'inStock';
+      if (option.value === 'active') return (product.salesStatus ?? 'active') === 'active';
       if (option.value === 'soldOut') return currentStatus === 'soldOut';
       if (option.value === 'hiddenPrice') return !product.priceVisible;
       if (option.value === 'hiddenExposure') return !(product.isVisible ?? true);
       return true;
     }).length,
   }));
-  const saveAdminProducts = async (products: AdminProduct[], update: Partial<AdminProduct>) => {
+  const saveAdminProducts = async (
+    products: AdminProduct[],
+    update: Partial<AdminProduct>,
+  ): Promise<AdminProductSaveOutcome> => {
     const api = await getShopApi();
-    await Promise.all(products.map((product) => api.products.saveAdmin({ ...product, ...update })));
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['admin', 'products'] }),
-      queryClient.invalidateQueries({ queryKey: ['products'] }),
-      queryClient.invalidateQueries({ queryKey: ['home', 'content'] }),
+    let savedCount = 0;
+    const failedProducts: AdminProduct[] = [];
+    for (const product of products) {
+      try {
+        await api.products.saveAdmin({ ...product, ...update });
+        savedCount += 1;
+      } catch {
+        failedProducts.push(product);
+      }
+    }
+    const invalidationResults = await Promise.allSettled([
+      queryClient.invalidateQueries({ queryKey: ['admin', 'products'] }, { throwOnError: true }),
+      queryClient.invalidateQueries({ queryKey: ['products'] }, { throwOnError: true }),
+      queryClient.invalidateQueries({ queryKey: ['home', 'content'] }, { throwOnError: true }),
     ]);
+    return {
+      savedCount,
+      failedProducts,
+      isCacheRefreshSuccessful: invalidationResults.every(
+        (result) => result.status === 'fulfilled',
+      ),
+    };
   };
-  const handleExposureChange = (product: AdminProduct, nextValue: boolean) => {
-    setPriceVisibilityAnnouncement(`${product.name} 노출 상태를 저장하고 있습니다.`);
-    void saveAdminProducts([product], { isVisible: nextValue }).catch((saveError: unknown) => {
+
+  const announceProductSave = (
+    label: string,
+    productCount: number,
+    outcome: AdminProductSaveOutcome,
+  ) => {
+    const failedCount = outcome.failedProducts.length;
+    const refreshMessage = outcome.isCacheRefreshSuccessful
+      ? '목록과 관련 화면을 새로고침했습니다.'
+      : '저장은 처리했지만 관련 화면을 갱신하지 못했습니다. 다시 조회해 주세요.';
+    if (failedCount === 0 && outcome.isCacheRefreshSuccessful) {
       setPriceVisibilityAnnouncement(
-        saveError instanceof Error ? saveError.message : '노출 상태를 저장하지 못했습니다.',
+        `${persistenceTargetLabel}에 ${label} ${productCount}개 상품을 저장했습니다. ${refreshMessage}`,
       );
-    });
-  };
-  const handleBulkShow = () => {
-    if (selectedProducts.length === 0) return;
-    void saveAdminProducts(selectedProducts, { priceVisible: true }).catch((saveError: unknown) => {
+      return;
+    }
+    if (outcome.savedCount === 0) {
       setPriceVisibilityAnnouncement(
-        saveError instanceof Error ? saveError.message : '금액 표시를 저장하지 못했습니다.',
+        `${persistenceTargetLabel}에 ${label} ${failedCount}개 상품 저장이 실패했습니다. ${refreshMessage}`,
       );
-    });
+      return;
+    }
     setPriceVisibilityAnnouncement(
-      `${selectedProducts.length.toLocaleString('ko-KR')}개 상품의 금액 표시를 저장하고 있습니다.`,
+      `${persistenceTargetLabel}에 ${label} ${outcome.savedCount}개 저장, ${failedCount}개 실패했습니다. ${refreshMessage}`,
     );
   };
+
+  const persistAdminProducts = async (
+    products: AdminProduct[],
+    update: Partial<AdminProduct>,
+    label: string,
+  ): Promise<AdminProductSaveOutcome | null> => {
+    if (products.length === 0) return null;
+    const productIds = [...new Set(products.map((product) => product.id))];
+    if (productIds.some((productId) => savingProductIdsRef.current.has(productId))) {
+      setPriceVisibilityAnnouncement('저장 중인 상품이 있습니다. 작업 완료 후 다시 시도해 주세요.');
+      return null;
+    }
+    const nextSavingProductIds = new Set(savingProductIdsRef.current);
+    productIds.forEach((productId) => nextSavingProductIds.add(productId));
+    savingProductIdsRef.current = nextSavingProductIds;
+    setSavingProductIds(nextSavingProductIds);
+    setPriceVisibilityAnnouncement(
+      `${products.length.toLocaleString('ko-KR')}개 상품의 ${label} 설정을 저장하고 있습니다.`,
+    );
+    try {
+      const outcome = await saveAdminProducts(products, update);
+      announceProductSave(label, products.length, outcome);
+      return outcome;
+    } catch (saveError: unknown) {
+      setPriceVisibilityAnnouncement(
+        saveError instanceof Error ? saveError.message : `${label}을(를) 저장하지 못했습니다.`,
+      );
+      return null;
+    } finally {
+      const remainingSavingProductIds = new Set(savingProductIdsRef.current);
+      productIds.forEach((productId) => remainingSavingProductIds.delete(productId));
+      savingProductIdsRef.current = remainingSavingProductIds;
+      setSavingProductIds(remainingSavingProductIds);
+    }
+  };
+
+  const isProductPending = (productId: string) =>
+    savingProductIds.has(productId) ||
+    pendingHideProducts.some((product) => product.id === productId);
+  const hasPendingSelectedProducts = selectedProducts.some((product) =>
+    isProductPending(product.id),
+  );
+
+  const handleExposureChange = (product: AdminProduct, nextValue: boolean) => {
+    void persistAdminProducts([product], { isVisible: nextValue }, '노출 상태');
+  };
+  const handleBulkShow = () => {
+    if (selectedProducts.length === 0 || hasPendingSelectedProducts) return;
+    void persistAdminProducts(selectedProducts, { priceVisible: true }, '금액 표시');
+  };
   const handleOpenBulkHide = () => {
-    if (selectedProducts.length === 0) return;
+    if (selectedProducts.length === 0 || hasPendingSelectedProducts) return;
     setPendingHideProducts(selectedProducts);
   };
   const handleConfirmBulkHide = () => {
     if (pendingHideProducts.length === 0) return;
-    void saveAdminProducts(pendingHideProducts, { priceVisible: false }).catch(
-      (saveError: unknown) => {
-        setPriceVisibilityAnnouncement(
-          saveError instanceof Error ? saveError.message : '금액 표시를 저장하지 못했습니다.',
-        );
-      },
-    );
-    setPriceVisibilityAnnouncement(
-      `${pendingHideProducts.length.toLocaleString('ko-KR')}개 상품의 금액 표시를 저장하고 있습니다.`,
-    );
+    void persistAdminProducts(pendingHideProducts, { priceVisible: false }, '금액 표시');
     setPendingHideProducts([]);
   };
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {
@@ -207,14 +319,18 @@ export function AdminProductsPage() {
     setSearchText('');
     setKeyword('');
     setCategoryId('');
-    setStockStatus('all');
+    setSalesStatus('all');
+    setPriceVisibility('all');
+    setExposure('all');
     setTab('all');
     setPage(1);
     setSelectedIds([]);
     setPendingHideProducts([]);
   };
   const handleSelectPage = (checked: boolean) => {
-    const pageIds = pageProducts.map((product) => product.id);
+    const pageIds = pageProducts
+      .filter((product) => !isProductPending(product.id))
+      .map((product) => product.id);
     setSelectedIds((previous) =>
       checked
         ? [...new Set([...previous, ...pageIds])]
@@ -290,23 +406,60 @@ export function AdminProductsPage() {
             </option>
           ))}
         </select>
-        <label className="sr-only" htmlFor="admin-product-stock-status">
-          재고 상태 필터
+        <label className="sr-only" htmlFor="admin-product-sales-status">
+          판매 상태 필터
         </label>
         <select
-          id="admin-product-stock-status"
-          value={stockStatus}
+          id="admin-product-sales-status"
+          value={salesStatus}
           onChange={(event) => {
-            setStockStatus(event.target.value);
+            setSalesStatus(event.target.value);
             setPage(1);
             setSelectedIds([]);
             setPendingHideProducts([]);
           }}
           className="h-40 w-144 rounded-8 border border-line-control bg-bg px-12 text-body-s"
         >
-          <option value="all">재고 상태 전체</option>
-          <option value="inStock">재고 있음</option>
-          <option value="soldOut">재고 없음</option>
+          <option value="all">판매 상태 전체</option>
+          <option value="active">판매중</option>
+          <option value="paused">판매 중지</option>
+          <option value="ended">판매 종료</option>
+        </select>
+        <label className="sr-only" htmlFor="admin-product-price-visibility">
+          금액 표시 필터
+        </label>
+        <select
+          id="admin-product-price-visibility"
+          value={priceVisibility}
+          onChange={(event) => {
+            setPriceVisibility(event.target.value);
+            setPage(1);
+            setSelectedIds([]);
+            setPendingHideProducts([]);
+          }}
+          className="h-40 w-144 rounded-8 border border-line-control bg-bg px-12 text-body-s"
+        >
+          <option value="all">금액 표시 전체</option>
+          <option value="visible">금액 표시</option>
+          <option value="hidden">금액 미표시</option>
+        </select>
+        <label className="sr-only" htmlFor="admin-product-exposure">
+          노출 필터
+        </label>
+        <select
+          id="admin-product-exposure"
+          value={exposure}
+          onChange={(event) => {
+            setExposure(event.target.value);
+            setPage(1);
+            setSelectedIds([]);
+            setPendingHideProducts([]);
+          }}
+          className="h-40 w-144 rounded-8 border border-line-control bg-bg px-12 text-body-s"
+        >
+          <option value="all">노출 전체</option>
+          <option value="visible">노출</option>
+          <option value="hidden">숨김</option>
         </select>
         <Button type="button" variant="ghost" size="s" onClick={handleReset}>
           초기화
@@ -364,10 +517,20 @@ export function AdminProductsPage() {
               {selectedProducts.length.toLocaleString('ko-KR')}개 상품 선택
             </p>
             <div className="flex items-center gap-8">
-              <Button variant="secondary" size="s" onClick={handleBulkShow}>
+              <Button
+                variant="secondary"
+                size="s"
+                onClick={handleBulkShow}
+                disabled={hasPendingSelectedProducts}
+              >
                 금액 표시
               </Button>
-              <Button variant="secondary" size="s" onClick={handleOpenBulkHide}>
+              <Button
+                variant="secondary"
+                size="s"
+                onClick={handleOpenBulkHide}
+                disabled={hasPendingSelectedProducts}
+              >
                 금액 미표시
               </Button>
               <Button
@@ -404,9 +567,12 @@ export function AdminProductsPage() {
                         aria-label="현재 페이지 전체 선택"
                         checked={
                           pageProducts.length > 0 &&
-                          pageProducts.every((product) => selectedIds.includes(product.id))
+                          pageProducts
+                            .filter((product) => !isProductPending(product.id))
+                            .every((product) => selectedIds.includes(product.id))
                         }
                         onChange={(event) => handleSelectPage(event.target.checked)}
+                        disabled={pageProducts.every((product) => isProductPending(product.id))}
                         className="size-20 accent-text-1"
                       />
                     </th>
@@ -449,6 +615,7 @@ export function AdminProductsPage() {
                   {pageProducts.map((product) => {
                     const isPriceVisible = product.priceVisible;
                     const isProductExposed = product.isVisible ?? true;
+                    const isProductSaving = isProductPending(product.id);
                     return (
                       <tr
                         key={product.id}
@@ -459,6 +626,7 @@ export function AdminProductsPage() {
                             type="checkbox"
                             checked={selectedIds.includes(product.id)}
                             aria-label={product.name + ' 선택'}
+                            disabled={isProductSaving}
                             onChange={(event) =>
                               setSelectedIds((previous) =>
                                 event.target.checked
@@ -485,7 +653,11 @@ export function AdminProductsPage() {
                         <td className="max-w-160 px-8 py-6">
                           <Link
                             to={'/products/' + product.id}
-                            className="block truncate font-medium hover:underline"
+                            aria-disabled={isProductSaving || undefined}
+                            onClick={(event) => {
+                              if (isProductSaving) event.preventDefault();
+                            }}
+                            className={`block truncate font-medium hover:underline ${isProductSaving ? 'pointer-events-none text-text-disabled' : ''}`}
                             title={product.name}
                           >
                             {product.name}
@@ -512,15 +684,12 @@ export function AdminProductsPage() {
                           <Switch
                             label={`${product.name} 금액 표시`}
                             isChecked={isPriceVisible}
+                            isPending={isProductSaving}
                             onCheckedChange={(nextValue) => {
-                              void saveAdminProducts([product], { priceVisible: nextValue }).catch(
-                                (saveError: unknown) => {
-                                  setPriceVisibilityAnnouncement(
-                                    saveError instanceof Error
-                                      ? saveError.message
-                                      : '금액 표시를 저장하지 못했습니다.',
-                                  );
-                                },
+                              void persistAdminProducts(
+                                [product],
+                                { priceVisible: nextValue },
+                                '금액 표시',
                               );
                             }}
                             onText="표시"
@@ -531,6 +700,7 @@ export function AdminProductsPage() {
                           <Switch
                             label={`${product.name} 상품 노출`}
                             isChecked={isProductExposed}
+                            isPending={isProductSaving}
                             onCheckedChange={(nextValue) =>
                               handleExposureChange(product, nextValue)
                             }
@@ -547,104 +717,88 @@ export function AdminProductsPage() {
                         </td>
                         <td className="sticky right-0 z-10 bg-bg px-8 py-6 shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.45)] group-hover:bg-bg-subtle">
                           <details className="relative">
-                            <summary className="cursor-pointer list-none rounded-6 border border-line-control px-10 py-6 text-caption focus-ring">
+                            <summary
+                              aria-disabled={isProductSaving || undefined}
+                              tabIndex={isProductSaving ? -1 : 0}
+                              onClick={(event) => {
+                                if (isProductSaving) event.preventDefault();
+                              }}
+                              className={`list-none rounded-6 border border-line-control px-10 py-6 text-caption focus-ring ${isProductSaving ? 'cursor-not-allowed text-text-disabled' : 'cursor-pointer'}`}
+                            >
                               작업
                             </summary>
                             <div className="shadow-lg absolute right-0 z-10 mt-4 grid min-w-144 gap-2 rounded-8 border border-line bg-bg p-6">
                               <button
                                 type="button"
+                                disabled={isProductSaving}
                                 className="rounded-4 px-8 py-6 text-left text-caption focus-ring hover:bg-surface"
                                 onClick={() => {
-                                  void saveAdminProducts([product], { stockStatus: 'inStock' })
-                                    .then(() => {
-                                      setStockStatusOverrides((previous) => ({
-                                        ...previous,
-                                        [product.id]: 'inStock',
-                                      }));
-                                      setPriceVisibilityAnnouncement(
-                                        `${product.name} 재고 상태를 있음으로 저장했습니다.`,
-                                      );
-                                    })
-                                    .catch((saveError: unknown) => {
-                                      setPriceVisibilityAnnouncement(
-                                        saveError instanceof Error
-                                          ? saveError.message
-                                          : '재고 상태를 저장하지 못했습니다.',
-                                      );
-                                    });
+                                  void persistAdminProducts(
+                                    [product],
+                                    { stockStatus: 'inStock' },
+                                    '재고 상태',
+                                  ).then((outcome) => {
+                                    if (!outcome || outcome.savedCount === 0) return;
+                                    setStockStatusOverrides((previous) => ({
+                                      ...previous,
+                                      [product.id]: 'inStock',
+                                    }));
+                                  });
                                 }}
                               >
                                 재고 있음으로 설정
                               </button>
                               <button
                                 type="button"
+                                disabled={isProductSaving}
                                 className="rounded-4 px-8 py-6 text-left text-caption focus-ring hover:bg-surface"
                                 onClick={() => {
-                                  void saveAdminProducts([product], { stockStatus: 'soldOut' })
-                                    .then(() => {
-                                      setStockStatusOverrides((previous) => ({
-                                        ...previous,
-                                        [product.id]: 'soldOut',
-                                      }));
-                                      setPriceVisibilityAnnouncement(
-                                        `${product.name} 재고 상태를 없음으로 저장했습니다.`,
-                                      );
-                                    })
-                                    .catch((saveError: unknown) => {
-                                      setPriceVisibilityAnnouncement(
-                                        saveError instanceof Error
-                                          ? saveError.message
-                                          : '재고 상태를 저장하지 못했습니다.',
-                                      );
-                                    });
+                                  void persistAdminProducts(
+                                    [product],
+                                    { stockStatus: 'soldOut' },
+                                    '재고 상태',
+                                  ).then((outcome) => {
+                                    if (!outcome || outcome.savedCount === 0) return;
+                                    setStockStatusOverrides((previous) => ({
+                                      ...previous,
+                                      [product.id]: 'soldOut',
+                                    }));
+                                  });
                                 }}
                               >
                                 재고 없음으로 설정
                               </button>
                               <button
                                 type="button"
+                                disabled={isProductSaving}
                                 className="rounded-4 px-8 py-6 text-left text-caption focus-ring hover:bg-surface"
                                 onClick={() =>
-                                  void saveAdminProducts([product], { salesStatus: 'active' })
-                                    .then(() => {
-                                      setPriceVisibilityAnnouncement(
-                                        `${product.name} 판매 상태를 판매중으로 저장했습니다.`,
-                                      );
-                                    })
-                                    .catch((saveError: unknown) => {
-                                      setPriceVisibilityAnnouncement(
-                                        saveError instanceof Error
-                                          ? saveError.message
-                                          : '판매 상태를 저장하지 못했습니다.',
-                                      );
-                                    })
+                                  void persistAdminProducts(
+                                    [product],
+                                    { salesStatus: 'active' },
+                                    '판매 상태',
+                                  )
                                 }
                               >
                                 판매 재개
                               </button>
                               <button
                                 type="button"
+                                disabled={isProductSaving}
                                 className="rounded-4 px-8 py-6 text-left text-caption focus-ring hover:bg-surface"
                                 onClick={() =>
-                                  void saveAdminProducts([product], { salesStatus: 'paused' })
-                                    .then(() => {
-                                      setPriceVisibilityAnnouncement(
-                                        `${product.name} 판매 상태를 일시중지로 저장했습니다.`,
-                                      );
-                                    })
-                                    .catch((saveError: unknown) => {
-                                      setPriceVisibilityAnnouncement(
-                                        saveError instanceof Error
-                                          ? saveError.message
-                                          : '판매 상태를 저장하지 못했습니다.',
-                                      );
-                                    })
+                                  void persistAdminProducts(
+                                    [product],
+                                    { salesStatus: 'paused' },
+                                    '판매 상태',
+                                  )
                                 }
                               >
                                 판매 일시중지
                               </button>
                               <button
                                 type="button"
+                                disabled={isProductSaving}
                                 className="rounded-4 px-8 py-6 text-left text-caption text-danger focus-ring hover:bg-surface"
                                 onClick={() => setDeleteTarget(product)}
                               >
@@ -671,6 +825,7 @@ export function AdminProductsPage() {
       <PriceVisibilityConfirmDialog
         isOpen={pendingHideProducts.length > 0}
         selectedProducts={pendingHideProducts}
+        persistenceTargetLabel={persistenceTargetLabel}
         onCancel={() => setPendingHideProducts([])}
         onConfirm={handleConfirmBulkHide}
       />

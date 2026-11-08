@@ -1,14 +1,53 @@
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import {
+  BriefcaseMedical,
+  Cctv,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  FireExtinguisher,
+  HardHat,
+  Leaf,
+  Package,
+  Shirt,
+  TrafficCone,
+  type LucideIcon,
+} from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Category } from '@eum/api/types';
 import { Button } from '@eum/ui/components/Button';
+import { Icon } from '@eum/ui/components/Icon';
 import { AdminEmpty, AdminError, AdminLoading, AdminPageHeader } from '@/components/AdminUI';
 import { getShopApi } from '@/lib/shop-api';
+import { getAdminApiConfig } from '@/lib/api-config';
 
 interface CategoryTreeNode {
   category: Category;
   children: CategoryTreeNode[];
+}
+
+type CategoryPreviewTone = 'warning' | 'info' | 'success' | 'error';
+
+const CATEGORY_PREVIEW_TONE_CLASS: Record<CategoryPreviewTone, string> = {
+  warning: 'text-warning',
+  info: 'text-info',
+  success: 'text-success',
+  error: 'text-danger',
+};
+
+const CATEGORY_ICONS_BY_KEY: Record<string, LucideIcon> = {
+  'hard-hat': HardHat,
+  shirt: Shirt,
+  'traffic-cone': TrafficCone,
+  'fire-extinguisher': FireExtinguisher,
+  'briefcase-medical': BriefcaseMedical,
+  cctv: Cctv,
+  leaf: Leaf,
+  package: Package,
+};
+
+function getCategoryIcon(iconKey: string | null): LucideIcon {
+  return (iconKey ? CATEGORY_ICONS_BY_KEY[iconKey] : undefined) ?? Package;
 }
 
 /** 카테고리 조회 API 결과를 이름을 바꾸지 않고 계층 구조로 구성합니다. */
@@ -35,9 +74,12 @@ function buildCategoryTree(categories: Category[]): CategoryTreeNode[] {
     };
   };
 
-  const rootCategories = categories.filter(
-    (category) => !category.parentId || !categoryById.has(category.parentId),
-  );
+  const sortByOrder = (left: Category, right: Category) =>
+    (left.sortOrder ?? 0) - (right.sortOrder ?? 0);
+  for (const siblings of childrenByParentId.values()) siblings.sort(sortByOrder);
+  const rootCategories = categories
+    .filter((category) => !category.parentId || !categoryById.has(category.parentId))
+    .toSorted(sortByOrder);
   const tree = rootCategories.map(createTreeNode);
 
   // 연결이 끊긴 데이터도 목록에서 숨기지 않고 별도 루트로 보여 줍니다.
@@ -54,6 +96,8 @@ interface CategoryTreeRowsProps {
   expandedCategoryIds: ReadonlySet<string>;
   onSelect: (categoryId: string) => void;
   onToggle: (categoryId: string) => void;
+  onMove: (categoryId: string, direction: -1 | 1, siblings: Category[]) => void;
+  isReordering: boolean;
   depth?: number;
 }
 
@@ -64,6 +108,8 @@ function CategoryTreeRows({
   expandedCategoryIds,
   onSelect,
   onToggle,
+  onMove,
+  isReordering,
   depth = 0,
 }: CategoryTreeRowsProps) {
   return (
@@ -72,6 +118,10 @@ function CategoryTreeRows({
         const hasChildren = children.length > 0;
         const isExpanded = expandedCategoryIds.has(category.id);
         const isSelected = category.id === selectedCategoryId;
+        const siblingCategories = nodes
+          .map((node) => node.category)
+          .filter((sibling) => sibling.parentId === category.parentId);
+        const siblingIndex = siblingCategories.findIndex((sibling) => sibling.id === category.id);
 
         return (
           <li key={category.id}>
@@ -86,7 +136,8 @@ function CategoryTreeRows({
                   type="button"
                   aria-label={`${category.name} 하위 카테고리 ${isExpanded ? '접기' : '펼치기'}`}
                   aria-expanded={isExpanded}
-                  className="flex size-24 shrink-0 items-center justify-center rounded-4 text-text-2 focus-ring"
+                  disabled={isReordering}
+                  className="flex size-24 shrink-0 items-center justify-center rounded-4 text-text-2 focus-ring disabled:cursor-not-allowed disabled:text-text-disabled"
                   onClick={() => onToggle(category.id)}
                 >
                   {isExpanded ? (
@@ -101,9 +152,15 @@ function CategoryTreeRows({
               <button
                 type="button"
                 aria-pressed={isSelected}
+                disabled={isReordering}
                 className="flex min-w-0 flex-1 items-center justify-between gap-12 text-left focus-ring"
                 onClick={() => onSelect(category.id)}
               >
+                <Icon
+                  icon={getCategoryIcon(category.iconKey)}
+                  size={16}
+                  className="shrink-0 text-text-3"
+                />
                 <span className={`truncate text-body-s ${depth === 0 ? 'font-medium' : ''}`}>
                   {category.name}
                 </span>
@@ -111,6 +168,26 @@ function CategoryTreeRows({
                   —
                 </span>
               </button>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  aria-label={`${category.name} 순서 위로 이동`}
+                  disabled={isReordering || siblingIndex === 0}
+                  className="flex size-24 cursor-pointer items-center justify-center rounded-4 text-text-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled"
+                  onClick={() => onMove(category.id, -1, siblingCategories)}
+                >
+                  <ChevronUp size={16} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  aria-label={`${category.name} 순서 아래로 이동`}
+                  disabled={isReordering || siblingIndex === siblingCategories.length - 1}
+                  className="flex size-24 cursor-pointer items-center justify-center rounded-4 text-text-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled"
+                  onClick={() => onMove(category.id, 1, siblingCategories)}
+                >
+                  <ChevronDown size={16} aria-hidden="true" />
+                </button>
+              </div>
             </div>
             {hasChildren && isExpanded ? (
               <div className="mt-2">
@@ -120,6 +197,8 @@ function CategoryTreeRows({
                   expandedCategoryIds={expandedCategoryIds}
                   onSelect={onSelect}
                   onToggle={onToggle}
+                  onMove={onMove}
+                  isReordering={isReordering}
                   depth={depth + 1}
                 />
               </div>
@@ -137,8 +216,9 @@ async function loadCategories(signal: AbortSignal): Promise<Category[]> {
   return api.categories.adminList({ signal });
 }
 
-/** 카테고리 목록·상세를 탐색하는 읽기 전용 관리자 화면입니다. */
+/** Admin API를 통해 카테고리와 정렬 순서를 관리합니다. */
 export function AdminCategoriesPage() {
+  const persistenceTargetLabel = getAdminApiConfig().mode === 'mock' ? '목 API' : '서버 API';
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [expandedCategoryIds, setExpandedCategoryIds] = useState<ReadonlySet<string> | null>(null);
   const [categoryDrafts, setCategoryDrafts] = useState<
@@ -148,9 +228,12 @@ export function AdminCategoriesPage() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryDescription, setNewCategoryDescription] = useState('');
   const [previewMessage, setPreviewMessage] = useState('');
+  const [previewMessageTone, setPreviewMessageTone] = useState<CategoryPreviewTone>('warning');
   const [newCategoryParentId, setNewCategoryParentId] = useState<string | null>(null);
   const [filterDrafts, setFilterDrafts] = useState<Record<string, string>>({});
   const [sortDrafts, setSortDrafts] = useState<Record<string, number>>({});
+  const [reorderingCategoryId, setReorderingCategoryId] = useState<string | null>(null);
+  const isReorderingCategoryRef = useRef(false);
   const queryClient = useQueryClient();
   const categoryQuery = useQuery({
     queryKey: ['admin', 'categories', 'list'],
@@ -161,7 +244,7 @@ export function AdminCategoriesPage() {
     return <AdminLoading label="카테고리 목록을 불러오고 있습니다." />;
   }
 
-  if (categoryQuery.isError) {
+  if (categoryQuery.isError && !categoryQuery.data) {
     return <AdminError onRetry={() => void categoryQuery.refetch()} />;
   }
 
@@ -183,15 +266,102 @@ export function AdminCategoriesPage() {
         : [],
   );
   const effectiveExpandedIds = expandedCategoryIds ?? defaultExpandedIds;
+  const isReordering = reorderingCategoryId !== null;
+  const showPreviewMessage = (message: string, tone: CategoryPreviewTone = 'warning') => {
+    setPreviewMessageTone(tone);
+    setPreviewMessage(message);
+  };
   const parentCategory = activeCategory?.parentId
     ? categoryById.get(activeCategory.parentId)
     : undefined;
-
   const handleToggleCategory = (categoryId: string) => {
+    if (isReorderingCategoryRef.current) return;
     const nextExpandedIds = new Set(effectiveExpandedIds);
     if (nextExpandedIds.has(categoryId)) nextExpandedIds.delete(categoryId);
     else nextExpandedIds.add(categoryId);
     setExpandedCategoryIds(nextExpandedIds);
+  };
+  const handleSelectCategory = (categoryId: string) => {
+    if (isReorderingCategoryRef.current) return;
+    setSelectedCategoryId(categoryId);
+  };
+  const handleMoveCategory = async (
+    categoryId: string,
+    direction: -1 | 1,
+    siblings: Category[],
+  ) => {
+    if (isReorderingCategoryRef.current) return;
+    const categoryById = new Map(categoryQuery.data.map((category) => [category.id, category]));
+    const authoritativeSiblings = siblings.flatMap((sibling) => {
+      const category = categoryById.get(sibling.id);
+      return category ? [category] : [];
+    });
+    const categoryIndex = authoritativeSiblings.findIndex((category) => category.id === categoryId);
+    const targetIndex = categoryIndex + direction;
+    if (
+      categoryIndex < 0 ||
+      authoritativeSiblings.length !== siblings.length ||
+      targetIndex < 0 ||
+      targetIndex >= authoritativeSiblings.length ||
+      authoritativeSiblings.some(
+        (category) => category.parentId !== authoritativeSiblings[categoryIndex]?.parentId,
+      )
+    ) {
+      return;
+    }
+    if (authoritativeSiblings.some((sibling) => sortDrafts[sibling.id] !== undefined)) {
+      showPreviewMessage(
+        '정렬 순서 초안이 있습니다. 초안을 저장하거나 취소한 뒤 순서를 변경해 주세요.',
+      );
+      return;
+    }
+
+    const reorderedSiblings = [...authoritativeSiblings];
+    const [movedCategory] = reorderedSiblings.splice(categoryIndex, 1);
+    if (!movedCategory) return;
+    reorderedSiblings.splice(targetIndex, 0, movedCategory);
+    isReorderingCategoryRef.current = true;
+    setReorderingCategoryId(categoryId);
+    showPreviewMessage('카테고리 순서를 저장하고 있습니다.', 'info');
+
+    let savedCount = 0;
+    let saveFailure: unknown;
+    try {
+      const api = await getShopApi();
+      for (const [sortOrder, sibling] of reorderedSiblings.entries()) {
+        await api.categories.save({ ...sibling, sortOrder });
+        savedCount += 1;
+      }
+    } catch (error: unknown) {
+      saveFailure = error;
+    }
+
+    const refreshResults = await Promise.allSettled([
+      categoryQuery.refetch({ throwOnError: true }),
+      queryClient.invalidateQueries({ queryKey: ['categories'] }, { throwOnError: true }),
+      queryClient.invalidateQueries({ queryKey: ['products'] }, { throwOnError: true }),
+    ]);
+    const isRefreshSuccessful = refreshResults.every((result) => result.status === 'fulfilled');
+    try {
+      if (saveFailure !== undefined) {
+        showPreviewMessage(
+          isRefreshSuccessful
+            ? `카테고리 순서를 모두 저장하지 못했습니다. 저장 요청 성공 응답 ${savedCount}건. 최신 목록을 다시 불러왔습니다.`
+            : `카테고리 순서를 모두 저장하지 못했습니다. 저장 요청 성공 응답 ${savedCount}건이고 최신 목록도 불러오지 못했습니다. 다시 조회해 주세요.`,
+          'error',
+        );
+      } else if (!isRefreshSuccessful) {
+        showPreviewMessage(
+          `${persistenceTargetLabel}에 카테고리 순서를 저장했지만 최신 목록을 불러오지 못했습니다. 다시 조회해 주세요.`,
+          'error',
+        );
+      } else {
+        showPreviewMessage(`${persistenceTargetLabel}에 카테고리 순서를 저장했습니다.`, 'success');
+      }
+    } finally {
+      isReorderingCategoryRef.current = false;
+      setReorderingCategoryId(null);
+    }
   };
 
   const beginCategoryCreation = (parentCategoryId: string | null) => {
@@ -205,11 +375,24 @@ export function AdminCategoriesPage() {
     <section aria-label="카테고리 관리">
       <AdminPageHeader
         title="카테고리 관리"
-        action={<Button onClick={() => beginCategoryCreation(null)}>1차 카테고리 추가</Button>}
+        action={
+          <Button
+            disabled={isReordering}
+            onClick={() => {
+              if (isReorderingCategoryRef.current) return;
+              beginCategoryCreation(null);
+            }}
+          >
+            1차 카테고리 추가
+          </Button>
+        }
       />
 
       {previewMessage ? (
-        <p role="status" className="mb-16 text-body-s text-warning">
+        <p
+          role="status"
+          className={`mb-16 text-body-s ${CATEGORY_PREVIEW_TONE_CLASS[previewMessageTone]}`}
+        >
           {previewMessage}
         </p>
       ) : null}
@@ -227,7 +410,11 @@ export function AdminCategoriesPage() {
               카테고리명
               <input
                 value={newCategoryName}
-                onChange={(event) => setNewCategoryName(event.target.value)}
+                disabled={isReordering}
+                onChange={(event) => {
+                  if (reorderingCategoryId) return;
+                  setNewCategoryName(event.target.value);
+                }}
                 className="h-48 rounded-8 border border-line-control bg-bg px-14 text-body-s"
               />
             </label>
@@ -235,7 +422,11 @@ export function AdminCategoriesPage() {
               부제
               <input
                 value={newCategoryDescription}
-                onChange={(event) => setNewCategoryDescription(event.target.value)}
+                disabled={isReordering}
+                onChange={(event) => {
+                  if (reorderingCategoryId) return;
+                  setNewCategoryDescription(event.target.value);
+                }}
                 className="h-48 rounded-8 border border-line-control bg-bg px-14 text-body-s"
               />
             </label>
@@ -244,7 +435,11 @@ export function AdminCategoriesPage() {
               <select
                 aria-label="상위 카테고리 선택"
                 value={newCategoryParentId ?? ''}
-                onChange={(event) => setNewCategoryParentId(event.target.value || null)}
+                disabled={isReordering}
+                onChange={(event) => {
+                  if (reorderingCategoryId) return;
+                  setNewCategoryParentId(event.target.value || null);
+                }}
                 className="h-48 rounded-8 border border-line-control bg-bg px-14 text-body-s"
               >
                 <option value="">최상위 카테고리</option>
@@ -259,12 +454,20 @@ export function AdminCategoriesPage() {
             </label>
           </div>
           <div className="mt-16 flex justify-end gap-8">
-            <Button variant="secondary" onClick={() => setIsCreatingCategory(false)}>
+            <Button
+              variant="secondary"
+              disabled={isReordering}
+              onClick={() => {
+                if (reorderingCategoryId) return;
+                setIsCreatingCategory(false);
+              }}
+            >
               취소
             </Button>
             <Button
-              disabled={!newCategoryName.trim()}
+              disabled={!newCategoryName.trim() || isReordering}
               onClick={async () => {
+                if (reorderingCategoryId) return;
                 const slug =
                   newCategoryName
                     .trim()
@@ -288,9 +491,9 @@ export function AdminCategoriesPage() {
                   await queryClient.invalidateQueries({ queryKey: ['products'] });
                   setSelectedCategoryId(createdCategory.id);
                   setIsCreatingCategory(false);
-                  setPreviewMessage('카테고리를 목 API에 저장했습니다.');
+                  showPreviewMessage(`${persistenceTargetLabel}에 카테고리를 저장했습니다.`);
                 } catch (createError) {
-                  setPreviewMessage(
+                  showPreviewMessage(
                     createError instanceof Error
                       ? createError.message
                       : '카테고리를 저장하지 못했습니다.',
@@ -323,18 +526,25 @@ export function AdminCategoriesPage() {
               <Button
                 variant="secondary"
                 size="s"
-                disabled={!activeCategory}
-                onClick={() => beginCategoryCreation(activeCategory?.id ?? null)}
+                disabled={!activeCategory || isReordering}
+                onClick={() => {
+                  if (isReorderingCategoryRef.current) return;
+                  beginCategoryCreation(activeCategory?.id ?? null);
+                }}
               >
-                하위 추가
+                하위 카테고리 추가
               </Button>
             </div>
             <CategoryTreeRows
               nodes={categoryTree}
               selectedCategoryId={activeCategory?.id ?? ''}
               expandedCategoryIds={effectiveExpandedIds}
-              onSelect={setSelectedCategoryId}
+              onSelect={handleSelectCategory}
               onToggle={handleToggleCategory}
+              onMove={(categoryId, direction, siblings) =>
+                void handleMoveCategory(categoryId, direction, siblings)
+              }
+              isReordering={isReordering}
             />
           </section>
 
@@ -358,7 +568,9 @@ export function AdminCategoriesPage() {
                   카테고리명
                   <input
                     value={categoryDrafts[activeCategory.id]?.name ?? activeCategory.name}
-                    onChange={(event) =>
+                    disabled={isReordering}
+                    onChange={(event) => {
+                      if (reorderingCategoryId) return;
                       setCategoryDrafts((previous) => ({
                         ...previous,
                         [activeCategory.id]: {
@@ -368,8 +580,8 @@ export function AdminCategoriesPage() {
                             activeCategory.description ??
                             '',
                         },
-                      }))
-                    }
+                      }));
+                    }}
                     className="h-48 min-w-0 rounded-8 border border-line-control bg-bg px-14 text-body-s"
                   />
                 </label>
@@ -390,15 +602,17 @@ export function AdminCategoriesPage() {
                       activeCategory.description ??
                       ''
                     }
-                    onChange={(event) =>
+                    disabled={isReordering}
+                    onChange={(event) => {
+                      if (reorderingCategoryId) return;
                       setCategoryDrafts((previous) => ({
                         ...previous,
                         [activeCategory.id]: {
                           name: previous[activeCategory.id]?.name ?? activeCategory.name,
                           description: event.target.value,
                         },
-                      }))
-                    }
+                      }));
+                    }}
                     className="h-48 min-w-0 rounded-8 border border-line-control bg-bg px-14 text-body-s"
                   />
                   <span className="text-caption text-text-3">현재 화면에서만 편집됩니다.</span>
@@ -409,8 +623,15 @@ export function AdminCategoriesPage() {
                 <div>
                   <p className="mb-8 text-label-m">아이콘</p>
                   <div className="flex size-120 items-center justify-center rounded-8 bg-gradient-to-br from-surface to-surface-2 p-8 text-center text-caption text-text-3">
-                    {activeCategory.iconKey ?? '아이콘 정보 없음'}
+                    <Icon
+                      icon={getCategoryIcon(activeCategory.iconKey)}
+                      size={24}
+                      className="size-40"
+                    />
                   </div>
+                  <p className="mt-4 max-w-120 truncate text-caption text-text-3">
+                    {activeCategory.iconKey ?? '기본 아이콘'}
+                  </p>
                 </div>
                 <div>
                   <p className="mb-8 text-label-m">노출</p>
@@ -418,7 +639,9 @@ export function AdminCategoriesPage() {
                     <input
                       type="checkbox"
                       checked={activeCategory.isVisible !== false}
+                      disabled={isReordering}
                       onChange={async (event) => {
+                        if (reorderingCategoryId) return;
                         try {
                           const api = await getShopApi();
                           await api.categories.save({
@@ -429,9 +652,11 @@ export function AdminCategoriesPage() {
                             queryKey: ['admin', 'categories'],
                           });
                           await queryClient.invalidateQueries({ queryKey: ['categories'] });
-                          setPreviewMessage('카테고리 노출 상태를 목 API에 저장했습니다.');
+                          showPreviewMessage(
+                            `${persistenceTargetLabel}에 카테고리 노출 상태를 저장했습니다.`,
+                          );
                         } catch (updateError) {
-                          setPreviewMessage(
+                          showPreviewMessage(
                             updateError instanceof Error
                               ? updateError.message
                               : '노출 상태를 저장하지 못했습니다.',
@@ -451,12 +676,14 @@ export function AdminCategoriesPage() {
                     type="number"
                     min="0"
                     value={sortDrafts[activeCategory.id] ?? activeCategory.sortOrder ?? 0}
-                    onChange={(event) =>
+                    disabled={isReordering}
+                    onChange={(event) => {
+                      if (reorderingCategoryId) return;
                       setSortDrafts((previous) => ({
                         ...previous,
                         [activeCategory.id]: Number(event.target.value) || 0,
-                      }))
-                    }
+                      }));
+                    }}
                     className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
                   />
                 </label>
@@ -470,12 +697,14 @@ export function AdminCategoriesPage() {
                         .join('; ') ??
                       ''
                     }
-                    onChange={(event) =>
+                    disabled={isReordering}
+                    onChange={(event) => {
+                      if (reorderingCategoryId) return;
                       setFilterDrafts((previous) => ({
                         ...previous,
                         [activeCategory.id]: event.target.value,
-                      }))
-                    }
+                      }));
+                    }}
                     className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
                     placeholder="인증:KCs,자율안전"
                   />
@@ -487,7 +716,9 @@ export function AdminCategoriesPage() {
                   type="button"
                   variant="danger"
                   size="s"
+                  disabled={isReordering}
                   onClick={async () => {
+                    if (reorderingCategoryId) return;
                     try {
                       const api = await getShopApi();
                       await api.categories.delete(activeCategory.id);
@@ -495,11 +726,11 @@ export function AdminCategoriesPage() {
                       await queryClient.invalidateQueries({ queryKey: ['categories'] });
                       await queryClient.invalidateQueries({ queryKey: ['products'] });
                       setSelectedCategoryId(null);
-                      setPreviewMessage(
+                      showPreviewMessage(
                         '카테고리를 삭제했습니다. 연결된 하위 분류나 상품이 있으면 삭제되지 않습니다.',
                       );
                     } catch (deleteError) {
-                      setPreviewMessage(
+                      showPreviewMessage(
                         deleteError instanceof Error
                           ? deleteError.message
                           : '카테고리를 삭제하지 못했습니다.',
@@ -511,7 +742,9 @@ export function AdminCategoriesPage() {
                 </Button>
                 <Button
                   type="button"
+                  disabled={isReordering}
                   onClick={async () => {
+                    if (reorderingCategoryId) return;
                     const filterAttributes = (filterDrafts[activeCategory.id] ?? '')
                       .split(';')
                       .map((part, index) => {
@@ -555,9 +788,11 @@ export function AdminCategoriesPage() {
                         delete next[activeCategory.id];
                         return next;
                       });
-                      setPreviewMessage('카테고리 변경 사항을 목 API에 저장했습니다.');
+                      showPreviewMessage(
+                        `${persistenceTargetLabel}에 카테고리 변경 사항을 저장했습니다.`,
+                      );
                     } catch (saveError) {
-                      setPreviewMessage(
+                      showPreviewMessage(
                         saveError instanceof Error
                           ? saveError.message
                           : '카테고리를 저장하지 못했습니다.',

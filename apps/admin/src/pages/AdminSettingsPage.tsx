@@ -277,11 +277,12 @@ export function AdminSettingsPage() {
       <AdminNotice className="mb-16" tone="warning">
         입력한 값과 미리보기는 현재 화면에만 유지되며 실제 주문 계산·운영 설정에 반영되지 않습니다.
       </AdminNotice>
-      <div className="grid grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] items-start gap-16">
-        <div className="grid gap-16">
+      <div className="grid items-start gap-32 xl:grid-cols-[minmax(0,2.14fr)_minmax(280px,1fr)]">
+        <div className="min-w-0">
           {SECTION_FIELDS.map((section) => (
             <AdminPanel
               key={section.title}
+              className="mb-16"
               title={section.title}
               description={
                 isDirty ? '저장되지 않은 변경 사항이 있습니다.' : '현재 목 API에 저장된 설정입니다.'
@@ -305,7 +306,7 @@ export function AdminSettingsPage() {
                   : undefined
               }
             >
-              <div className="grid gap-16 p-24 md:grid-cols-2">
+              <div className="grid gap-16 p-20 md:grid-cols-2">
                 {section.fields.map(input)}
                 {section.title === '기본 배송비'
                   ? choice('baseFeeMode', '기본 배송비 처리', [
@@ -313,12 +314,14 @@ export function AdminSettingsPage() {
                       ['included', '상품별 부과'],
                     ])
                   : null}
-                {section.title === '무료배송 기준'
-                  ? choice('freeShippingScope', '무료배송 적용 범위', [
+                {section.title === '무료배송 기준' ? (
+                  <>
+                    {choice('freeShippingScope', '무료배송 적용 범위', [
                       ['all', '할인 전 금액 기준'],
                       ['cart', '장바구니 금액 기준'],
-                    ])
-                  : null}
+                    ])}
+                  </>
+                ) : null}
                 {section.title === '지역 추가 배송비' ? (
                   <p className="text-caption text-text-3">
                     지역별 추가 배송비는 데모 설정 두 항목으로만 미리봅니다.
@@ -351,49 +354,73 @@ export function AdminSettingsPage() {
               </div>
             </AdminPanel>
           ))}
+          {validationErrors.length ? (
+            <ul role="alert" className="mt-12 grid gap-4 text-body-s text-danger">
+              {validationErrors.map((error) => (
+                <li key={error}>{error}</li>
+              ))}
+            </ul>
+          ) : null}
         </div>
-        <aside className="sticky top-16">
-          <AdminPanel title="사용자 화면 미리보기" className="mb-16">
-            <dl className="grid grid-cols-[200px_1fr] gap-12 p-20 text-body-s">
-              <dt>기본 배송비</dt>
-              <dd>
-                {savedPreview.baseShippingFee}원 ·{' '}
-                {savedPreview.baseFeeMode === 'customer' ? '주문자 별도 부담' : '상품별 부과'}
-              </dd>
-              <dt>무료배송 기준</dt>
-              <dd>
-                {savedPreview.freeShippingEnabled === 'true'
-                  ? `${savedPreview.freeShippingThreshold}원 · ${savedPreview.freeShippingScope === 'all' ? '할인 전 금액 기준' : '장바구니 금액 기준'}`
-                  : '사용 안 함'}
-              </dd>
-              <dt>제주 / 도서산간</dt>
-              <dd>
-                {savedPreview.remoteFeeEnabled === 'true'
-                  ? `${savedPreview.jejuFee}원 / ${savedPreview.islandFee}원`
-                  : '사용 안 함'}
-              </dd>
-              <dt>반품 / 교환</dt>
-              <dd>
-                {savedPreview.returnFee}원 / {savedPreview.exchangeFee}원 · 최초 배송비 청구{' '}
-                {savedPreview.combineReturnShipping === 'true' ? '포함' : '미포함'}
-              </dd>
-              <dt>사업자 할인</dt>
-              <dd>
-                {savedPreview.businessDiscountEnabled === 'true'
-                  ? `${savedPreview.businessDiscountRate}% · ${savedPreview.businessDiscountScope === 'direct' ? '금액 표시 상품 전체' : '카테고리 선택'} · 쿠폰 ${savedPreview.businessCouponStacking === 'true' ? '중복 적용' : '중복 불가'}`
-                  : '사용 안 함'}
-              </dd>
-              <dt>첫 구매 혜택</dt>
-              <dd>
-                {savedPreview.firstPurchaseEnabled === 'true'
-                  ? `${savedPreview.firstPurchaseBenefitValue}${savedPreview.firstPurchaseBenefitType === 'rate' ? '%' : '원'} · 최대 ${savedPreview.firstPurchaseMaxDiscount}원 · 최소 주문 ${savedPreview.firstPurchaseMinimumOrder}원 · ${savedPreview.firstPurchasePaymentScope === 'all' ? '결제 시 사용' : '가입 시 쿠폰 발급'}`
-                  : '사용 안 함'}
-              </dd>
-            </dl>
+        <aside className="xl:sticky xl:top-16">
+          <AdminPanel title="고객 화면 미리보기" description="저장된 설정을 기준으로 표시합니다.">
+            <div className="grid gap-16 p-16">
+              <div className="flex rounded-8 bg-surface p-4 text-caption">
+                <span className="flex-1 rounded-6 bg-bg px-8 py-6 text-center text-text-1">
+                  상품 화면
+                </span>
+                <span className="flex-1 px-8 py-6 text-center text-text-3">장바구니</span>
+              </div>
+              <div className="rounded-8 border border-line p-16">
+                <p className="text-label-s">배송 안내</p>
+                <p className="mt-8 text-body-s text-text-2">
+                  {savedPreview.baseShippingFee}원 배송비 ·{' '}
+                  {savedPreview.baseFeeMode === 'customer' ? '주문자 별도 부담' : '상품별 부과'}
+                </p>
+                <p className="mt-4 text-caption text-text-3">
+                  {savedPreview.freeShippingEnabled === 'true'
+                    ? `${Number(savedPreview.freeShippingThreshold).toLocaleString('ko-KR')}원 이상 ${savedPreview.freeShippingScope === 'all' ? '무료배송' : '장바구니 기준 무료배송'}`
+                    : '무료배송 혜택을 제공하지 않습니다.'}
+                </p>
+              </div>
+              <div className="rounded-8 border border-line p-16">
+                <p className="text-label-s">지역 추가 배송비</p>
+                <dl className="mt-8 grid grid-cols-[1fr_auto] gap-y-8 text-body-s">
+                  <dt className="text-text-2">제주</dt>
+                  <dd>
+                    {savedPreview.remoteFeeEnabled === 'true'
+                      ? `${Number(savedPreview.jejuFee).toLocaleString('ko-KR')}원`
+                      : '적용 안 함'}
+                  </dd>
+                  <dt className="text-text-2">도서·산간</dt>
+                  <dd>
+                    {savedPreview.remoteFeeEnabled === 'true'
+                      ? `${Number(savedPreview.islandFee).toLocaleString('ko-KR')}원`
+                      : '적용 안 함'}
+                  </dd>
+                </dl>
+              </div>
+              <div className="rounded-8 border border-line p-16">
+                <p className="text-label-s">할인 혜택</p>
+                <p className="mt-8 text-body-s text-text-2">
+                  {savedPreview.businessDiscountEnabled === 'true'
+                    ? `사업자 회원 ${savedPreview.businessDiscountRate}% 할인`
+                    : '사업자 회원 할인 미적용'}
+                </p>
+                <p className="mt-4 text-body-s text-text-2">
+                  {savedPreview.firstPurchaseEnabled === 'true'
+                    ? `첫 구매 ${savedPreview.firstPurchaseBenefitValue}${savedPreview.firstPurchaseBenefitType === 'rate' ? '%' : '원'} 혜택`
+                    : '첫 구매 혜택 미적용'}
+                </p>
+              </div>
+              <p className="text-caption text-text-3">
+                배송비와 할인 혜택은 주문 단계에서 최종 확인됩니다.
+              </p>
+            </div>
           </AdminPanel>
         </aside>
       </div>
-      <div className="flex justify-end gap-8 rounded-12 border border-line bg-bg p-12">
+      <div className="sticky bottom-0 z-10 mt-16 flex justify-end gap-8 border border-line bg-bg/95 p-12 shadow-1 backdrop-blur">
         <span className="mr-auto self-center text-caption text-text-3">
           {isDirty ? '저장되지 않은 변경 사항이 있습니다.' : '설정은 목 API에 저장됩니다.'}
         </span>
@@ -407,13 +434,6 @@ export function AdminSettingsPage() {
           {isSaving ? '저장 중…' : '설정 저장'}
         </Button>
       </div>
-      {validationErrors.length ? (
-        <ul role="alert" className="mt-12 grid gap-4 text-body-s text-danger">
-          {validationErrors.map((error) => (
-            <li key={error}>{error}</li>
-          ))}
-        </ul>
-      ) : null}
       <p role="status" aria-live="polite" className="mt-8 text-body-s text-text-2">
         {announcement}
       </p>

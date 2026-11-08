@@ -235,14 +235,14 @@ export function AdminMemberDetailPage() {
               <AdminEmpty title="견적 문의 이력이 없습니다" />
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-520 border-collapse text-left text-body-s">
+                <table className="w-full min-w-600 border-collapse text-left text-body-s">
                   <thead className="bg-surface text-caption text-text-2">
                     <tr>
                       <th scope="col" className="px-20 py-10 font-normal">
                         문의번호 / 제목
                       </th>
                       <th scope="col" className="px-12 py-10 font-normal">
-                        회사명
+                        품목 수
                       </th>
                       <th scope="col" className="px-12 py-10 font-normal">
                         접수일
@@ -263,7 +263,9 @@ export function AdminMemberDetailPage() {
                               {quote.title}
                             </span>
                           </td>
-                          <td className="px-12 py-12">{quote.companyName}</td>
+                          <td className="px-12 py-12 whitespace-nowrap">
+                            {quote.requestedItems.length.toLocaleString('ko-KR')}개
+                          </td>
                           <td className="px-12 py-12 whitespace-nowrap text-text-3">
                             {formatAdminDate(quote.requestedAt)}
                           </td>

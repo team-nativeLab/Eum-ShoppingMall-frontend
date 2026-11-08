@@ -76,6 +76,21 @@ describe('ShopApi 기반 브랜드 관리', () => {
     expect(screen.getByText('검색 결과가 없습니다')).toBeInTheDocument();
   });
 
+  it('대표로 지정한 노출 브랜드를 이달의 브랜드 영역에 표시한다', async () => {
+    brands = [{ ...structuredClone(fixtureBrand), isFeatured: true }];
+    renderBrandApp();
+
+    expect(await screen.findByRole('heading', { name: '이달의 브랜드' })).toBeInTheDocument();
+    expect(
+      await within(screen.getByRole('region', { name: '이달의 브랜드' })).findByText('한결안전'),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: '이달의 브랜드' })).getByRole('link', {
+        name: '수정',
+      }),
+    ).toHaveAttribute('href', '/brands/brand-one');
+  });
+
   it('노출 상태 변경을 ShopApi에 저장한다', async () => {
     const user = userEvent.setup();
     renderBrandApp();
