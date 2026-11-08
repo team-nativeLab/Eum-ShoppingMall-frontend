@@ -3,6 +3,7 @@ import { ApiConfigError, assertBuildApiEnv } from '@eum/api/config';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
+import type { UserConfigFn } from 'vite';
 
 /**
  * 운영 빌드 시점에 API 설정을 검증하는 함수. 런타임(src/lib/api-config.ts)과 같은 resolveApiConfig를 씁니다.
@@ -42,7 +43,7 @@ function assertBuildApiConfig(viteMode: string): void {
 }
 
 // admin SPA 설정. Tailwind v4는 Vite 플러그인으로 처리하고, "@/"는 src를 가리킵니다(tsconfig paths와 같음).
-export default defineConfig(({ command, mode }) => {
+const adminConfig: UserConfigFn = ({ command, mode }) => {
   if (command === 'build') assertBuildApiConfig(mode);
   return {
     plugins: [react(), tailwindcss()],
@@ -52,4 +53,6 @@ export default defineConfig(({ command, mode }) => {
     server: { port: 5173, strictPort: true },
     preview: { port: 4173, strictPort: true },
   };
-});
+};
+
+export default defineConfig(adminConfig);
