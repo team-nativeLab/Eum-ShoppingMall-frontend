@@ -4,7 +4,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useMatches, useNavigate } from 'react-router';
 import { endAdminSession } from '@/lib/admin-request-lifecycle';
 import { currentAdminQueryKey, getAdminAuth } from '@/lib/admin-auth';
-import { getAdminApiConfig } from '@/lib/api-config';
 import type { AdminRouteHandle } from '@/routes';
 
 // route handle에 제목이 있는지 확인하는 타입 가드
@@ -30,7 +29,6 @@ export function AdminTopBar() {
     queryFn: async () => (await getAdminAuth()).getCurrentUser(),
   });
   const webBaseUrl = import.meta.env.VITE_WEB_BASE_URL;
-  const isMockMode = getAdminApiConfig().mode === 'mock';
 
   const breadcrumbItems: BreadcrumbItem[] = [{ label: '관리자', href: '/' }];
   if (currentHandle?.section) breadcrumbItems.push({ label: currentHandle.section });
@@ -61,11 +59,6 @@ export function AdminTopBar() {
         )}
       />
       <div className="flex items-center gap-8">
-        {isMockMode ? (
-          <span className="rounded-6 bg-warning-tint px-8 py-4 text-caption text-warning">
-            목 데이터
-          </span>
-        ) : null}
         {webBaseUrl ? (
           <a
             href={webBaseUrl}

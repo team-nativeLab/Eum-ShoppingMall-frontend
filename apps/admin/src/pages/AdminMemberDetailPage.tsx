@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router';
+import { ChevronLeft } from 'lucide-react';
 import { Button } from '@eum/ui/components/Button';
 import { Modal } from '@eum/ui/components/Modal';
 import {
@@ -77,14 +78,19 @@ export function AdminMemberDetailPage() {
     <section aria-label="회원 상세">
       <AdminPageHeader
         title={member.name}
-        description={`가입일 ${formatAdminDate(member.joinedAt)}`}
-        action={
+        leading={
           <Link
             to="/members"
-            className="inline-flex h-36 items-center rounded-8 border border-line-strong px-12 text-body-s focus-ring hover:bg-surface"
+            aria-label="회원 목록으로 돌아가기"
+            className="flex size-32 shrink-0 items-center justify-center rounded-8 border border-line-strong focus-ring"
           >
-            회원 목록
+            <ChevronLeft size={18} aria-hidden="true" />
           </Link>
+        }
+        action={
+          <span className="text-caption text-text-3">
+            가입일 {formatAdminDate(member.joinedAt)}
+          </span>
         }
       />
       <AdminNotice className="mb-16">

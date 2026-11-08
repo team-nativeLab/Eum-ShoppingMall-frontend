@@ -373,6 +373,7 @@ export function AdminOrdersPage() {
       <AdminPageHeader
         title="주문 관리"
         description={`총 ${matchingOrders.length.toLocaleString('ko-KR')}건`}
+        descriptionPlacement="inline"
       />
       <AdminNotice
         className="mb-16"

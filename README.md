@@ -271,6 +271,13 @@ Web(`apps/web`)은 Vercel의 GitHub 연동으로 목 데모를 배포합니다.
 - 워크스페이스 패키지(`@eum/ui`, `@eum/api`)는 TypeScript 소스로 배포되며 `next.config.ts`의 `transpilePackages`가 함께 변환합니다.
 - `next.config.ts`가 모든 경로에 보안 헤더(CSP, `Referrer-Policy`, `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Permissions-Policy`)를 붙이고 `X-Powered-By`를 끕니다. CSP는 nonce 없이 인라인 스크립트·스타일을 허용하는 방식이며, `connect-src`에는 설정된 API 주소의 origin이 추가됩니다.
 
+### Admin Preview scaffold (비기능)
+
+- `apps/admin/.env.production`은 Admin Vercel Preview 빌드가 설정 검사를 통과하도록 `VITE_API_MODE=real`과 예약된 `https://api-admin-preview.invalid`만 제공합니다. 비밀값이나 목 데이터는 포함하지 않습니다. Vite는 `apps/admin`의 `.env.production`을 읽고, Vercel 빌드 환경변수가 파일 값보다 우선합니다. Vercel 배포는 Preview와 Production 모두 `VITE_API_MODE=real`만 허용하므로, 환경변수로 mock 모드를 선택할 수 없습니다. 로컬 개발과 테스트의 기존 mock 동작은 유지됩니다.
+- Admin real API와 관리자 인증은 아직 `NOT_IMPLEMENTED` 스텁입니다. 로그인과 모든 관리자 조회·변경은 동작하지 않으며, real 빌드 산출물에는 목 API·목 인증이 포함되지 않습니다.
+- Vercel SSO의 `all_except_custom_domains` 범위는 custom domain을 제외하므로, Vercel 보호를 Admin 인증/인가로 간주하지 않습니다. scaffold는 공개 도메인에서 목 계정·목 데이터가 노출되지 않도록 real 모드로 빌드합니다.
+- `.invalid` placeholder가 남아 있으면 Vercel Production 빌드를 거부합니다. 실제 Admin 배포 전에 Vercel의 Production 환경에 실제 `VITE_API_MODE=real`과 `VITE_API_BASE_URL`을 설정해야 합니다. 실제 인증을 연결할 때 서버 측 인가와 HttpOnly 세션을 구현하고, scaffold 값을 제거해야 합니다.
+
 ## 테스트와 CI
 ### 단위 테스트 (Vitest)
 `vitest.config.ts`가 워크스페이스별 project를 나눠 실행합니다.

@@ -277,119 +277,122 @@ export function AdminSettingsPage() {
       <AdminNotice className="mb-16" tone="warning">
         입력한 값과 미리보기는 현재 화면에만 유지되며 실제 주문 계산·운영 설정에 반영되지 않습니다.
       </AdminNotice>
-      {SECTION_FIELDS.map((section) => (
-        <AdminPanel
-          key={section.title}
-          className="mb-16"
-          title={section.title}
-          description={
-            isDirty ? '저장되지 않은 변경 사항이 있습니다.' : '현재 목 API에 저장된 설정입니다.'
-          }
-          action={
-            section.title.includes('무료') ||
-            section.title.includes('지역') ||
-            section.title.includes('사업자') ||
-            section.title.includes('첫 구매')
-              ? toggle(
-                  (
-                    {
-                      '무료배송 기준': 'freeShippingEnabled',
-                      '지역 추가 배송비': 'remoteFeeEnabled',
-                      '사업자 회원 할인': 'businessDiscountEnabled',
-                      '첫 구매 할인': 'firstPurchaseEnabled',
-                    } as Record<string, SettingKey>
-                  )[section.title] ?? 'freeShippingEnabled',
-                  '표시',
-                )
-              : undefined
-          }
-        >
-          <div className="grid gap-16 p-20 md:grid-cols-2">
-            {section.fields.map(input)}
-            {section.title === '기본 배송비'
-              ? choice('baseFeeMode', '기본 배송비 처리', [
-                  ['customer', '주문자 별도 부담'],
-                  ['included', '상품별 부과'],
-                ])
-              : null}
-            {section.title === '무료배송 기준' ? (
-              <>
-                {choice('freeShippingScope', '무료배송 적용 범위', [
-                  ['all', '할인 전 금액 기준'],
-                  ['cart', '장바구니 금액 기준'],
-                ])}
-              </>
-            ) : null}
-            {section.title === '지역 추가 배송비' ? (
-              <p className="text-caption text-text-3">
-                지역별 추가 배송비는 데모 설정 두 항목으로만 미리봅니다.
-              </p>
-            ) : null}
-            {section.title === '반품·교환 배송비'
-              ? toggle('combineReturnShipping', '무료배송 주문 반품 시 최초 배송비 청구')
-              : null}
-            {section.title === '사업자 회원 할인' ? (
-              <>
-                {choice('businessDiscountScope', '적용 범위', [
-                  ['direct', '금액 표시 상품 전체'],
-                  ['category', '카테고리 선택'],
-                ])}
-                {toggle('businessCouponStacking', '쿠폰과 중복 적용')}
-              </>
-            ) : null}
-            {section.title === '첫 구매 할인' ? (
-              <>
-                {choice('firstPurchaseBenefitType', '혜택 유형', [
-                  ['rate', '정률(%)'],
-                  ['amount', '정액(원)'],
-                ])}
-                {choice('firstPurchasePaymentScope', '결제 적용 범위', [
-                  ['all', '결제 시 사용 적용'],
-                  ['newOnly', '가입 시 쿠폰 발급'],
-                ])}
-              </>
-            ) : null}
-          </div>
-        </AdminPanel>
-      ))}
-      <AdminPanel title="사용자 화면 미리보기" className="mb-16">
-        <dl className="grid grid-cols-[200px_1fr] gap-12 p-20 text-body-s">
-          <dt>기본 배송비</dt>
-          <dd>
-            {savedPreview.baseShippingFee}원 ·{' '}
-            {savedPreview.baseFeeMode === 'customer' ? '주문자 별도 부담' : '상품별 부과'}
-          </dd>
-          <dt>무료배송 기준</dt>
-          <dd>
-            {savedPreview.freeShippingEnabled === 'true'
-              ? `${savedPreview.freeShippingThreshold}원 · ${savedPreview.freeShippingScope === 'all' ? '할인 전 금액 기준' : '장바구니 금액 기준'}`
-              : '사용 안 함'}
-          </dd>
-          <dt>제주 / 도서산간</dt>
-          <dd>
-            {savedPreview.remoteFeeEnabled === 'true'
-              ? `${savedPreview.jejuFee}원 / ${savedPreview.islandFee}원`
-              : '사용 안 함'}
-          </dd>
-          <dt>반품 / 교환</dt>
-          <dd>
-            {savedPreview.returnFee}원 / {savedPreview.exchangeFee}원 · 최초 배송비 청구{' '}
-            {savedPreview.combineReturnShipping === 'true' ? '포함' : '미포함'}
-          </dd>
-          <dt>사업자 할인</dt>
-          <dd>
-            {savedPreview.businessDiscountEnabled === 'true'
-              ? `${savedPreview.businessDiscountRate}% · ${savedPreview.businessDiscountScope === 'direct' ? '금액 표시 상품 전체' : '카테고리 선택'} · 쿠폰 ${savedPreview.businessCouponStacking === 'true' ? '중복 적용' : '중복 불가'}`
-              : '사용 안 함'}
-          </dd>
-          <dt>첫 구매 혜택</dt>
-          <dd>
-            {savedPreview.firstPurchaseEnabled === 'true'
-              ? `${savedPreview.firstPurchaseBenefitValue}${savedPreview.firstPurchaseBenefitType === 'rate' ? '%' : '원'} · 최대 ${savedPreview.firstPurchaseMaxDiscount}원 · 최소 주문 ${savedPreview.firstPurchaseMinimumOrder}원 · ${savedPreview.firstPurchasePaymentScope === 'all' ? '결제 시 사용' : '가입 시 쿠폰 발급'}`
-              : '사용 안 함'}
-          </dd>
-        </dl>
-      </AdminPanel>
+      <div className="grid grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] items-start gap-16">
+        <div className="grid gap-16">
+          {SECTION_FIELDS.map((section) => (
+            <AdminPanel
+              key={section.title}
+              title={section.title}
+              description={
+                isDirty ? '저장되지 않은 변경 사항이 있습니다.' : '현재 목 API에 저장된 설정입니다.'
+              }
+              action={
+                section.title.includes('무료') ||
+                section.title.includes('지역') ||
+                section.title.includes('사업자') ||
+                section.title.includes('첫 구매')
+                  ? toggle(
+                      (
+                        {
+                          '무료배송 기준': 'freeShippingEnabled',
+                          '지역 추가 배송비': 'remoteFeeEnabled',
+                          '사업자 회원 할인': 'businessDiscountEnabled',
+                          '첫 구매 할인': 'firstPurchaseEnabled',
+                        } as Record<string, SettingKey>
+                      )[section.title] ?? 'freeShippingEnabled',
+                      '표시',
+                    )
+                  : undefined
+              }
+            >
+              <div className="grid gap-16 p-24 md:grid-cols-2">
+                {section.fields.map(input)}
+                {section.title === '기본 배송비'
+                  ? choice('baseFeeMode', '기본 배송비 처리', [
+                      ['customer', '주문자 별도 부담'],
+                      ['included', '상품별 부과'],
+                    ])
+                  : null}
+                {section.title === '무료배송 기준'
+                  ? choice('freeShippingScope', '무료배송 적용 범위', [
+                      ['all', '할인 전 금액 기준'],
+                      ['cart', '장바구니 금액 기준'],
+                    ])
+                  : null}
+                {section.title === '지역 추가 배송비' ? (
+                  <p className="text-caption text-text-3">
+                    지역별 추가 배송비는 데모 설정 두 항목으로만 미리봅니다.
+                  </p>
+                ) : null}
+                {section.title === '반품·교환 배송비'
+                  ? toggle('combineReturnShipping', '무료배송 주문 반품 시 최초 배송비 청구')
+                  : null}
+                {section.title === '사업자 회원 할인' ? (
+                  <>
+                    {choice('businessDiscountScope', '적용 범위', [
+                      ['direct', '금액 표시 상품 전체'],
+                      ['category', '카테고리 선택'],
+                    ])}
+                    {toggle('businessCouponStacking', '쿠폰과 중복 적용')}
+                  </>
+                ) : null}
+                {section.title === '첫 구매 할인' ? (
+                  <>
+                    {choice('firstPurchaseBenefitType', '혜택 유형', [
+                      ['rate', '정률(%)'],
+                      ['amount', '정액(원)'],
+                    ])}
+                    {choice('firstPurchasePaymentScope', '결제 적용 범위', [
+                      ['all', '결제 시 사용 적용'],
+                      ['newOnly', '가입 시 쿠폰 발급'],
+                    ])}
+                  </>
+                ) : null}
+              </div>
+            </AdminPanel>
+          ))}
+        </div>
+        <aside className="sticky top-16">
+          <AdminPanel title="사용자 화면 미리보기" className="mb-16">
+            <dl className="grid grid-cols-[200px_1fr] gap-12 p-20 text-body-s">
+              <dt>기본 배송비</dt>
+              <dd>
+                {savedPreview.baseShippingFee}원 ·{' '}
+                {savedPreview.baseFeeMode === 'customer' ? '주문자 별도 부담' : '상품별 부과'}
+              </dd>
+              <dt>무료배송 기준</dt>
+              <dd>
+                {savedPreview.freeShippingEnabled === 'true'
+                  ? `${savedPreview.freeShippingThreshold}원 · ${savedPreview.freeShippingScope === 'all' ? '할인 전 금액 기준' : '장바구니 금액 기준'}`
+                  : '사용 안 함'}
+              </dd>
+              <dt>제주 / 도서산간</dt>
+              <dd>
+                {savedPreview.remoteFeeEnabled === 'true'
+                  ? `${savedPreview.jejuFee}원 / ${savedPreview.islandFee}원`
+                  : '사용 안 함'}
+              </dd>
+              <dt>반품 / 교환</dt>
+              <dd>
+                {savedPreview.returnFee}원 / {savedPreview.exchangeFee}원 · 최초 배송비 청구{' '}
+                {savedPreview.combineReturnShipping === 'true' ? '포함' : '미포함'}
+              </dd>
+              <dt>사업자 할인</dt>
+              <dd>
+                {savedPreview.businessDiscountEnabled === 'true'
+                  ? `${savedPreview.businessDiscountRate}% · ${savedPreview.businessDiscountScope === 'direct' ? '금액 표시 상품 전체' : '카테고리 선택'} · 쿠폰 ${savedPreview.businessCouponStacking === 'true' ? '중복 적용' : '중복 불가'}`
+                  : '사용 안 함'}
+              </dd>
+              <dt>첫 구매 혜택</dt>
+              <dd>
+                {savedPreview.firstPurchaseEnabled === 'true'
+                  ? `${savedPreview.firstPurchaseBenefitValue}${savedPreview.firstPurchaseBenefitType === 'rate' ? '%' : '원'} · 최대 ${savedPreview.firstPurchaseMaxDiscount}원 · 최소 주문 ${savedPreview.firstPurchaseMinimumOrder}원 · ${savedPreview.firstPurchasePaymentScope === 'all' ? '결제 시 사용' : '가입 시 쿠폰 발급'}`
+                  : '사용 안 함'}
+              </dd>
+            </dl>
+          </AdminPanel>
+        </aside>
+      </div>
       <div className="flex justify-end gap-8 rounded-12 border border-line bg-bg p-12">
         <span className="mr-auto self-center text-caption text-text-3">
           {isDirty ? '저장되지 않은 변경 사항이 있습니다.' : '설정은 목 API에 저장됩니다.'}

@@ -3,7 +3,7 @@ import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { Switch } from '@eum/ui/components/Switch';
 import { SelectField, TextField } from '@eum/ui/components/TextField';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bold, ImagePlus, Italic, Link2, List, Underline } from 'lucide-react';
+import { Bold, ChevronLeft, ImagePlus, Italic, Link2, List, Underline } from 'lucide-react';
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import {
@@ -365,11 +365,22 @@ function ProductEditor({
     <form onSubmit={handleSave}>
       <AdminPageHeader
         title={isNew ? '상품 등록' : '상품 수정'}
+        leading={
+          <Link
+            to="/products"
+            aria-label="상품 목록으로 돌아가기"
+            className="flex size-32 shrink-0 items-center justify-center rounded-8 border border-line-strong focus-ring"
+          >
+            <ChevronLeft size={18} aria-hidden="true" />
+          </Link>
+        }
+        titleAdornment={
+          <span className="rounded-4 bg-surface-2 px-6 py-2 text-label-xs text-text-2">
+            작성 중
+          </span>
+        }
         action={
           <>
-            <span className="rounded-4 bg-warning-tint px-8 py-4 text-caption text-warning">
-              작성 중
-            </span>
             <Link to="/products" className={buttonClassName({ variant: 'secondary' })}>
               취소
             </Link>
@@ -386,7 +397,7 @@ function ProductEditor({
       ) : null}
       <nav
         aria-label="상품 정보 섹션"
-        className="mb-20 flex h-48 items-center gap-20 overflow-x-auto border-b border-line text-body-s"
+        className="mb-20 flex h-48 items-center overflow-x-auto border-b border-line text-body-s"
       >
         {productSections.map((section) => (
           <a
@@ -396,7 +407,7 @@ function ProductEditor({
             onClick={() => {
               setActiveSection(section.id);
             }}
-            className={`inline-flex h-full shrink-0 items-center border-b-2 px-4 focus-ring ${activeSection === section.id ? 'border-text-1 text-text-1' : 'border-transparent text-text-2 hover:text-text-1'}`}
+            className={`inline-flex h-full shrink-0 items-center border-b-2 px-16 focus-ring ${activeSection === section.id ? 'border-text-1 text-text-1' : 'border-transparent text-text-2 hover:text-text-1'}`}
           >
             {section.label}
           </a>
@@ -409,7 +420,7 @@ function ProductEditor({
             id="basic-info"
             title="기본 정보"
             className="scroll-mt-24"
-            bodyClassName="grid grid-cols-2 gap-16 p-20"
+            bodyClassName="grid grid-cols-2 gap-16 p-24"
           >
             <TextField
               label="상품명"
@@ -456,7 +467,7 @@ function ProductEditor({
             id="category-info"
             title="카테고리"
             className="scroll-mt-24"
-            bodyClassName="grid grid-cols-2 gap-16 p-20"
+            bodyClassName="grid grid-cols-2 gap-16 p-24"
           >
             <SelectField
               label="1차 카테고리"
@@ -489,7 +500,7 @@ function ProductEditor({
             title="가격"
             description="판매가와 금액 표시 상태를 함께 확인합니다."
             className="scroll-mt-24"
-            bodyClassName="p-20"
+            bodyClassName="p-24"
           >
             <div className="space-y-16">
               <div
@@ -573,7 +584,7 @@ function ProductEditor({
                 옵션 목록 만들기
               </Button>
             }
-            bodyClassName="space-y-12 p-20"
+            bodyClassName="space-y-12 p-24"
           >
             {options.map((option) => (
               <div
@@ -651,7 +662,7 @@ function ProductEditor({
             id="stock-info"
             title="재고"
             className="scroll-mt-24"
-            bodyClassName="space-y-16 p-20"
+            bodyClassName="space-y-16 p-24"
           >
             <TextField
               label="재고 수량"
@@ -683,7 +694,7 @@ function ProductEditor({
             title="이미지"
             description="첫 번째 이미지가 대표 이미지입니다. JPG, PNG · 파일당 10MB 이하 · 최대 10장"
             className="scroll-mt-24"
-            bodyClassName="p-20"
+            bodyClassName="p-24"
           >
             <div className="mb-12 flex items-center justify-between text-body-s text-text-2">
               <span>이미지를 드래그하거나 이동 버튼으로 순서를 바꿀 수 있습니다.</span>
@@ -818,7 +829,7 @@ function ProductEditor({
             id="detail-info"
             title="상세 정보 · 고시"
             className="scroll-mt-24"
-            bodyClassName="grid grid-cols-2 gap-16 p-20"
+            bodyClassName="grid grid-cols-2 gap-16 p-24"
           >
             <TextField
               label="제조사"
@@ -936,7 +947,7 @@ function ProductEditor({
         </div>
 
         <aside className="sticky top-16 flex min-w-0 flex-col gap-16">
-          <AdminPanel title="게시 설정" bodyClassName="space-y-16 p-20">
+          <AdminPanel title="게시 설정" bodyClassName="space-y-16 p-24">
             <fieldset>
               <legend className="text-label-m">판매 상태</legend>
               <div className="mt-8 flex flex-col gap-12">

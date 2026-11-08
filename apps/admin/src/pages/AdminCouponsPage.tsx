@@ -129,6 +129,7 @@ export function AdminCouponsPage() {
       <AdminPageHeader
         title="쿠폰 관리"
         description={`총 ${coupons.length.toLocaleString('ko-KR')}개`}
+        descriptionPlacement="inline"
         action={
           <Button
             onClick={() => {

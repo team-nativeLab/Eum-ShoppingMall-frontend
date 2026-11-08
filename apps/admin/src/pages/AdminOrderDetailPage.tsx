@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router';
+import { ChevronLeft } from 'lucide-react';
 import { Button } from '@eum/ui/components/Button';
 import { Modal } from '@eum/ui/components/Modal';
 import {
@@ -126,20 +127,26 @@ export function AdminOrderDetailPage() {
     <section aria-label="주문 상세">
       <AdminPageHeader
         title={`주문 ${order.orderNumber}`}
-        description={`주문일시 ${formatAdminDateTime(order.orderedAt)}`}
-        action={
+        leading={
           <Link
             to="/orders"
-            className="inline-flex h-36 items-center rounded-8 border border-line-strong px-12 text-body-s focus-ring hover:bg-surface"
+            aria-label="주문 목록으로 돌아가기"
+            className="flex size-32 shrink-0 items-center justify-center rounded-8 border border-line-strong focus-ring"
           >
-            주문 목록
+            <ChevronLeft size={18} aria-hidden="true" />
           </Link>
         }
+        titleAdornment={
+          <span role="status" aria-label="현재 주문 상태">
+            <AdminStatusBadge status={previewStatus} kind="order" />
+          </span>
+        }
+        action={
+          <span className="text-caption text-text-3">
+            주문일시 {formatAdminDateTime(order.orderedAt)}
+          </span>
+        }
       />
-      <div className="mb-16 flex items-center gap-8">
-        <span className="text-body-s text-text-2">현재 주문 상태</span>
-        <AdminStatusBadge status={previewStatus} kind="order" />
-      </div>
       <AdminNotice className="mb-16" tone="warning">
         결제 취소·환불 및 택배사 전송은 이 화면에서 지원하지 않습니다.
       </AdminNotice>

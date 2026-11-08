@@ -157,6 +157,7 @@ export function AdminQuotesPage() {
       <AdminPageHeader
         title="견적 문의"
         description={`총 ${allQuotes.length.toLocaleString('ko-KR')}건`}
+        descriptionPlacement="inline"
       />
 
       <AdminTabs

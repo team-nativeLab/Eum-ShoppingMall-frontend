@@ -226,7 +226,12 @@ export function AdminProductsPage() {
     <section>
       <AdminPageHeader
         title="상품 관리"
-        description={`검색 조건 일치 ${productQuery.data.totalCount.toLocaleString('ko-KR')}개 · ${productQuery.data.products.length}개 조회 · 재고 상태, 판매 상태, 웹 노출, 금액 공개는 각각 별도 설정입니다.`}
+        titleAdornment={
+          <span className="text-caption text-text-3">
+            총 {productQuery.data.totalCount.toLocaleString('ko-KR')}개
+          </span>
+        }
+        description={`검색 조건 일치 상품 ${productQuery.data.products.length}개를 조회했습니다. 재고 상태, 판매 상태, 웹 노출, 금액 공개는 각각 별도 설정입니다.`}
         action={
           <Link to="/products/new" className={buttonClassName()}>
             상품 등록
