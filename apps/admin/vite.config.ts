@@ -25,18 +25,27 @@ function assertBuildApiConfig(viteMode: string): void {
   });
   const isVercelBuild = process.env.VERCEL !== undefined || process.env.VERCEL_ENV !== undefined;
   if (isVercelBuild) {
-    if (apiConfig.mode !== 'real') {
-      throw new ApiConfigError('Vercel 배포는 VITE_API_MODE=real만 허용합니다.');
-    }
     const isVercelProductionBuild = process.env.VERCEL_ENV === 'production';
-    const apiHostname = new URL(apiConfig.baseUrl).hostname.toLowerCase().replace(/\.+$/, '');
-    if (
-      isVercelProductionBuild &&
-      (apiHostname === 'invalid' || apiHostname.endsWith('.invalid'))
-    ) {
-      throw new ApiConfigError(
-        'Vercel Production 배포에는 실제 VITE_API_BASE_URL이 필요합니다. Preview placeholder는 사용할 수 없습니다.',
-      );
+
+    if (apiConfig.mode === 'mock') {
+      if (!isVercelProductionBuild) {
+        throw new ApiConfigError('Vercel Preview 배포에는 VITE_API_MODE=real이 필요합니다.');
+      }
+      if (readEnv('VITE_ALLOW_MOCK_IN_PRODUCTION') !== 'true') {
+        throw new ApiConfigError(
+          'Vercel Production mock 배포에는 VITE_ALLOW_MOCK_IN_PRODUCTION=true가 필요합니다.',
+        );
+      }
+    } else {
+      const apiHostname = new URL(apiConfig.baseUrl).hostname.toLowerCase().replace(/\.+$/, '');
+      if (
+        isVercelProductionBuild &&
+        (apiHostname === 'invalid' || apiHostname.endsWith('.invalid'))
+      ) {
+        throw new ApiConfigError(
+          'Vercel Production 배포에는 실제 VITE_API_BASE_URL이 필요합니다. Preview placeholder는 사용할 수 없습니다.',
+        );
+      }
     }
   }
   console.info(`[api-config] admin 빌드(${viteMode}) API 모드: ${apiConfig.mode}`);
