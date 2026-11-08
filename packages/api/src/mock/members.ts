@@ -22,7 +22,7 @@ export const mockMembers: Member[] = [
   },
   {
     id: 'mem-003',
-    email: 'ttagno4230@gmail.com',
+    email: 'demo-member@example.test',
     name: '데모 회원',
     phone: '010-0000-0003',
     joinedAt: '2026-10-01T09:00:00+09:00',
