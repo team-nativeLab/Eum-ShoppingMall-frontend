@@ -409,10 +409,17 @@ describe('MyPageScreen quote detail', () => {
 
 describe('MyPageScreen claim list', () => {
   it('keeps the claim detail link target at least 44px high', () => {
-    renderMyPageSection('claims');
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-12T12:00:00+09:00'));
 
-    const claimLink = screen.getByRole('link', { name: '신청 상세' });
-    expect(claimLink).toHaveAttribute('href', '/mypage/claims/claim-1');
-    expect(claimLink).toHaveClass('min-h-44');
+    try {
+      renderMyPageSection('claims');
+
+      const claimLink = screen.getByRole('link', { name: '신청 상세' });
+      expect(claimLink).toHaveAttribute('href', '/mypage/claims/claim-1');
+      expect(claimLink).toHaveClass('min-h-44');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
