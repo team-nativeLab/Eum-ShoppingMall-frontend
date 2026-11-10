@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "peerDependencies": {
-    "lucide-react": "^1.59.0",
+    "lucide-react": "^1.67.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   }
