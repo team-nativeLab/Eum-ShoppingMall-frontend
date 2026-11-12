@@ -3,7 +3,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { Category } from '@eum/api/types';
 import { Button } from '@eum/ui/components/Button';
-import { AdminEmpty, AdminError, AdminLoading, AdminPageHeader } from '@/components/AdminUI';
+import {
+  AdminEmpty,
+  AdminError,
+  AdminLoading,
+  AdminPageHeader,
+  AdminSelect,
+} from '@/components/AdminUI';
 import { getShopApi } from '@/lib/shop-api';
 
 interface CategoryTreeNode {
@@ -241,7 +247,7 @@ export function AdminCategoriesPage() {
             </label>
             <label className="grid gap-8 text-label-m">
               상위 카테고리
-              <select
+              <AdminSelect
                 aria-label="상위 카테고리 선택"
                 value={newCategoryParentId ?? ''}
                 onChange={(event) => setNewCategoryParentId(event.target.value || null)}
@@ -255,7 +261,7 @@ export function AdminCategoriesPage() {
                       {category.name}
                     </option>
                   ))}
-              </select>
+              </AdminSelect>
             </label>
           </div>
           <div className="mt-16 flex justify-end gap-8">

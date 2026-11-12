@@ -11,6 +11,7 @@ import {
   AdminLoading,
   AdminNotice,
   AdminPageHeader,
+  AdminSelect,
   AdminStatusBadge,
   AdminTabs,
   formatAdminCurrency,
@@ -272,7 +273,7 @@ export function AdminProductsPage() {
         <label className="sr-only" htmlFor="admin-product-category">
           카테고리 필터
         </label>
-        <select
+        <AdminSelect
           id="admin-product-category"
           value={categoryId}
           onChange={(event) => {
@@ -281,7 +282,8 @@ export function AdminProductsPage() {
             setSelectedIds([]);
             setPendingHideProducts([]);
           }}
-          className="h-40 w-160 rounded-8 border border-line-control bg-bg px-12 text-body-s"
+          wrapperClassName="w-160"
+          className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
         >
           <option value="">카테고리 전체</option>
           {productQuery.data.categories.map((category) => (
@@ -289,11 +291,11 @@ export function AdminProductsPage() {
               {category.name}
             </option>
           ))}
-        </select>
+        </AdminSelect>
         <label className="sr-only" htmlFor="admin-product-stock-status">
           재고 상태 필터
         </label>
-        <select
+        <AdminSelect
           id="admin-product-stock-status"
           value={stockStatus}
           onChange={(event) => {
@@ -302,17 +304,18 @@ export function AdminProductsPage() {
             setSelectedIds([]);
             setPendingHideProducts([]);
           }}
-          className="h-40 w-144 rounded-8 border border-line-control bg-bg px-12 text-body-s"
+          wrapperClassName="w-144"
+          className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
         >
           <option value="all">재고 상태 전체</option>
           <option value="inStock">재고 있음</option>
           <option value="soldOut">재고 없음</option>
-        </select>
-        <Button type="button" variant="ghost" size="s" onClick={handleReset}>
-          초기화
-        </Button>
+        </AdminSelect>
         <Button type="submit" size="s">
           검색
+        </Button>
+        <Button type="button" variant="secondary" size="s" onClick={handleReset}>
+          초기화
         </Button>
       </form>
 
@@ -328,7 +331,7 @@ export function AdminProductsPage() {
             <label className="sr-only" htmlFor="admin-product-sort">
               정렬 기준
             </label>
-            <select
+            <AdminSelect
               id="admin-product-sort"
               value={sortOrder}
               onChange={(event) => setSortOrder(event.target.value)}
@@ -336,11 +339,11 @@ export function AdminProductsPage() {
             >
               <option value="recent">최근 등록순</option>
               <option value="oldest">오래된 순</option>
-            </select>
+            </AdminSelect>
             <label className="sr-only" htmlFor="admin-product-page-size">
               페이지당 표시 수
             </label>
-            <select
+            <AdminSelect
               id="admin-product-page-size"
               value={pageSize}
               onChange={(event) => {
@@ -352,7 +355,7 @@ export function AdminProductsPage() {
               <option value={10}>10개씩</option>
               <option value={20}>20개씩</option>
               <option value={50}>50개씩</option>
-            </select>
+            </AdminSelect>
           </div>
         </div>
         {selectedProducts.length > 0 ? (

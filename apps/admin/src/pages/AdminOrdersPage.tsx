@@ -5,12 +5,13 @@ import { Button } from '@eum/ui/components/Button';
 import { Pagination } from '@eum/ui/components/Pagination';
 import { Modal } from '@eum/ui/components/Modal';
 import {
-  AdminEmpty,
   AdminDateInput,
+  AdminEmpty,
   AdminError,
   AdminLoading,
   AdminNotice,
   AdminPageHeader,
+  AdminSelect,
   AdminStatusBadge,
   AdminTabs,
   formatAdminCurrency,
@@ -458,11 +459,11 @@ export function AdminOrdersPage() {
             className="w-132"
           />
         </div>
-        <Button type="button" variant="ghost" size="s" onClick={handleReset}>
-          초기화
-        </Button>
         <Button type="submit" size="s">
           검색
+        </Button>
+        <Button type="button" variant="secondary" size="s" onClick={handleReset}>
+          초기화
         </Button>
       </form>
       {hasInvalidDateFilter ? (
@@ -483,7 +484,7 @@ export function AdminOrdersPage() {
             <label className="sr-only" htmlFor="admin-order-sort">
               정렬 기준
             </label>
-            <select
+            <AdminSelect
               id="admin-order-sort"
               value={sortOrder}
               onChange={(event) => {
@@ -494,11 +495,11 @@ export function AdminOrdersPage() {
             >
               <option value="recent">최근 주문순</option>
               <option value="oldest">오래된 순</option>
-            </select>
+            </AdminSelect>
             <label className="sr-only" htmlFor="admin-order-page-size">
               페이지당 표시 수
             </label>
-            <select
+            <AdminSelect
               id="admin-order-page-size"
               value={pageSize}
               onChange={(event) => {
@@ -511,7 +512,7 @@ export function AdminOrdersPage() {
               <option value={20}>20개씩</option>
               <option value={50}>50개씩</option>
               <option value={100}>100개씩</option>
-            </select>
+            </AdminSelect>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-8 border-b border-line px-20 py-10">

@@ -8,6 +8,7 @@ import {
   AdminLoading,
   AdminNotice,
   AdminPageHeader,
+  AdminSelect,
   AdminTabs,
 } from '@/components/AdminUI';
 import type { AdminCoupon, AdminCouponStatus } from '@eum/api/types';
@@ -245,7 +246,7 @@ export function AdminCouponsPage() {
                     <label className="sr-only" htmlFor={`coupon-status-${coupon.id}`}>
                       {coupon.name} 상태
                     </label>
-                    <select
+                    <AdminSelect
                       id={`coupon-status-${coupon.id}`}
                       value={coupon.status}
                       onChange={(event) =>
@@ -257,7 +258,7 @@ export function AdminCouponsPage() {
                       <option value="scheduled">예약</option>
                       <option value="paused">중지</option>
                       <option value="ended">종료</option>
-                    </select>
+                    </AdminSelect>
                   </td>
                 </tr>
               ))}
@@ -291,7 +292,7 @@ export function AdminCouponsPage() {
           </label>
           <label className="grid gap-4 text-body-s">
             발급 방식
-            <select
+            <AdminSelect
               aria-label="발급 방식"
               value={draft.issueMethod}
               onChange={(event) =>
@@ -305,11 +306,11 @@ export function AdminCouponsPage() {
               <option value="automatic">자동 발급</option>
               <option value="download">다운로드</option>
               <option value="code">코드 입력</option>
-            </select>
+            </AdminSelect>
           </label>
           <label className="grid gap-4 text-body-s">
             대상 회원
-            <select
+            <AdminSelect
               aria-label="대상 회원"
               value={draft.target}
               onChange={(event) =>
@@ -323,11 +324,11 @@ export function AdminCouponsPage() {
               <option value="all">전체</option>
               <option value="business">사업자</option>
               <option value="personal">개인</option>
-            </select>
+            </AdminSelect>
           </label>
           <label className="grid gap-4 text-body-s">
             적용 상품
-            <select
+            <AdminSelect
               aria-label="적용 상품"
               value={draft.productScope}
               onChange={(event) =>
@@ -341,7 +342,7 @@ export function AdminCouponsPage() {
               <option value="all">전체 상품</option>
               <option value="category">카테고리 선택</option>
               <option value="products">상품 선택</option>
-            </select>
+            </AdminSelect>
             <span className="text-caption text-text-3">
               실제 카테고리·상품 목록은 연결하지 않습니다.
             </span>
@@ -382,7 +383,7 @@ export function AdminCouponsPage() {
           </label>
           <label className="grid gap-4 text-body-s">
             사용 기간 방식
-            <select
+            <AdminSelect
               value={draft.validityMode}
               onChange={(event) =>
                 setDraft((current) => ({
@@ -394,7 +395,7 @@ export function AdminCouponsPage() {
             >
               <option value="period">기간 지정</option>
               <option value="issueDays">발급일로부터</option>
-            </select>
+            </AdminSelect>
           </label>
           {draft.validityMode === 'issueDays' ? (
             <label className="grid gap-4 text-body-s">
@@ -412,7 +413,7 @@ export function AdminCouponsPage() {
           ) : null}
           <label className="grid gap-4 text-body-s">
             혜택 유형
-            <select
+            <AdminSelect
               value={draft.benefitType}
               onChange={(event) =>
                 setDraft((current) => ({
@@ -424,7 +425,7 @@ export function AdminCouponsPage() {
             >
               <option value="rate">정률 할인</option>
               <option value="amount">정액 할인</option>
-            </select>
+            </AdminSelect>
           </label>
           <label className="grid gap-4 text-body-s">
             혜택 값

@@ -407,6 +407,21 @@ export function SiteHeader() {
 
   return (
     <>
+      {/* 메뉴가 열리면 본문을 흐리게 합니다. 헤더(z-50)가 이 오버레이(z-40) 위에 있어 헤더는 선명합니다.
+          오버레이를 헤더 안에 두면 짧은 페이지에서 문서 높이가 늘고, 헤더에 opacity·filter를 주면 backdrop-filter가 막히므로 형제로 둡니다.
+          클릭 닫기는 pointerdown 핸들러가 맡습니다. */}
+      {isMenuMounted ? (
+        <div
+          aria-hidden="true"
+          data-menu-backdrop
+          style={{ transitionDuration: `${MENU_TRANSITION_DURATION_MS}ms` }}
+          className={cx(
+            'fixed inset-0 z-40 bg-text-1/10 backdrop-blur-sm transition-opacity ease-out motion-reduce:transition-none',
+            isMenuMotionOpen ? 'opacity-100' : 'opacity-0',
+            !isMenuVisible && 'pointer-events-none',
+          )}
+        />
+      ) : null}
       <header
         className={cx(
           'sticky top-0 border-line bg-bg transition-[box-shadow] duration-200 ease-[cubic-bezier(.2,0,0,1)] motion-reduce:transition-none lg:border-b',

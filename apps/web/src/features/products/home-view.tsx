@@ -396,7 +396,7 @@ function PromoBannerSection({ banners }: { banners: HomeContent['promoBanners'] 
             <Link
               key={banner.id}
               href={banner.destination}
-              className="group relative isolate flex h-216 w-300 shrink-0 snap-start flex-col overflow-hidden rounded-12 bg-surface px-32 py-24 focus-ring lg:h-auto lg:min-h-204 lg:w-auto"
+              className="group relative isolate flex h-216 w-300 shrink-0 snap-start flex-col overflow-hidden rounded-12 bg-surface px-32 pt-24 pb-20 focus-ring lg:h-auto lg:min-h-204 lg:w-auto"
             >
               {banner.imageUrl ? (
                 // CMS가 제공한 배너 이미지 URL을 직접 사용합니다. 첫 화면 아래라 지연 로드합니다.
@@ -423,7 +423,7 @@ function PromoBannerSection({ banners }: { banners: HomeContent['promoBanners'] 
                   </span>
                 ))}
               </h2>
-              <div className="mt-auto flex flex-col gap-4">
+              <div className="mt-auto flex flex-col gap-8">
                 <p
                   className={cx(
                     'text-body-s whitespace-pre-line',

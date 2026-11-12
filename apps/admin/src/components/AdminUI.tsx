@@ -1,5 +1,5 @@
-import { AlertCircle, CalendarDays, LoaderCircle } from 'lucide-react';
-import { useRef, type ReactNode } from 'react';
+import { AlertCircle, CalendarDays, ChevronDown, LoaderCircle } from 'lucide-react';
+import { useRef, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { Badge, type BadgeTone } from '@eum/ui/components/Badge';
 import { Button } from '@eum/ui/components/Button';
 import { Icon } from '@eum/ui/components/Icon';
@@ -261,6 +261,42 @@ export function AdminTabs<TValue extends string>({
         );
       })}
     </div>
+  );
+}
+
+interface AdminSelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
+  /** 래퍼에 적용할 폭·마진 클래스. 높이·테두리·패딩은 className으로 넘깁니다. */
+  wrapperClassName?: string;
+}
+
+/** 네이티브 화살표를 숨기고 오른쪽 테두리에서 띄운 화살표를 그리는 관리자용 select입니다. */
+export function AdminSelect({
+  wrapperClassName = '',
+  className = '',
+  disabled,
+  children,
+  ...selectProps
+}: AdminSelectProps) {
+  return (
+    <span className={cx('relative inline-block', wrapperClassName)}>
+      {/* cx는 클래스 충돌을 해결하지 않으므로, 호출부의 px-* 뒤에 pr-32가 적용되는 CSS 순서에 의존합니다. */}
+      <select
+        {...selectProps}
+        disabled={disabled}
+        className={cx('w-full appearance-none pr-32', className)}
+      >
+        {children}
+      </select>
+      {/* 웹 드롭다운(right-12)과 화살표 간격을 통일합니다. pr-32는 12px 간격 + 16px 아이콘보다 넓어 텍스트와 겹치지 않습니다. */}
+      <Icon
+        icon={ChevronDown}
+        size={16}
+        className={cx(
+          'pointer-events-none absolute top-1/2 right-12 -translate-y-1/2',
+          disabled ? 'text-text-disabled' : 'text-text-1',
+        )}
+      />
+    </span>
   );
 }
 

@@ -7,6 +7,7 @@ import {
   AdminLoading,
   AdminPageHeader,
   AdminPanel,
+  AdminSelect,
 } from '@/components/AdminUI';
 import { getShopApi } from '@/lib/shop-api';
 import type { AdminHomeContentInput, AdminProduct } from '@eum/api/types';
@@ -474,7 +475,7 @@ export function AdminHomePage() {
                   </label>
                   <label className="grid gap-4 text-label-s">
                     톤
-                    <select
+                    <AdminSelect
                       value={banner.tone}
                       onChange={(event) =>
                         updatePromo(index, (value) => ({
@@ -486,7 +487,7 @@ export function AdminHomePage() {
                     >
                       <option value="dark">어두움</option>
                       <option value="light">밝음</option>
-                    </select>
+                    </AdminSelect>
                   </label>
                 </div>
                 <Button

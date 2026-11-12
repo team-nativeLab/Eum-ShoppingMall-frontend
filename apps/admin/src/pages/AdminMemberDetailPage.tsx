@@ -11,6 +11,7 @@ import {
   AdminNotice,
   AdminPageHeader,
   AdminPanel,
+  AdminSelect,
   AdminStatusBadge,
   formatAdminCurrency,
   formatAdminDate,
@@ -317,7 +318,7 @@ function MemberAccountPanel() {
         </AdminNotice>
         <label className="grid gap-6 text-label-s">
           계정 상태 미리보기
-          <select
+          <AdminSelect
             value={accountState}
             onChange={(event) => setAccountState(event.target.value)}
             className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
@@ -325,7 +326,7 @@ function MemberAccountPanel() {
             <option value="unchanged">상태 미선택</option>
             <option value="active">활성 · 미리보기</option>
             <option value="restricted">이용 제한 · 미리보기</option>
-          </select>
+          </AdminSelect>
         </label>
         <label className="grid gap-6 text-label-s">
           관리자 메모 미리보기

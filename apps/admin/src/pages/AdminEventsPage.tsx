@@ -9,6 +9,7 @@ import {
   AdminLoading,
   AdminPageHeader,
   AdminPanel,
+  AdminSelect,
 } from '@/components/AdminUI';
 import { getShopApi } from '@/lib/shop-api';
 import type { AdminShopEvent } from '@eum/api/types';
@@ -261,7 +262,7 @@ export function AdminEventsPage() {
                   </label>
                   <label className="grid gap-4 text-label-s">
                     진행 상태
-                    <select
+                    <AdminSelect
                       name="status"
                       defaultValue={draft.status}
                       className="h-40 rounded-8 border border-line-control px-12"
@@ -269,7 +270,7 @@ export function AdminEventsPage() {
                       <option value="upcoming">예정</option>
                       <option value="ongoing">진행중</option>
                       <option value="ended">종료</option>
-                    </select>
+                    </AdminSelect>
                   </label>
                   <label className="flex items-center gap-8 border-t border-line pt-12 text-label-s">
                     <input name="isVisible" type="checkbox" defaultChecked={draft.isVisible} />
@@ -292,16 +293,17 @@ export function AdminEventsPage() {
             <div className="mb-12 flex items-center justify-between">
               <label className="text-label-s">
                 상태 필터{' '}
-                <select
+                <AdminSelect
                   value={statusFilter}
                   onChange={(change) => setStatusFilter(change.target.value)}
-                  className="ml-8 h-36 rounded-6 border border-line-control px-8"
+                  wrapperClassName="ml-8"
+                  className="h-36 rounded-6 border border-line-control px-8"
                 >
                   <option value="all">전체</option>
                   <option value="ongoing">진행중</option>
                   <option value="upcoming">예정</option>
                   <option value="ended">종료</option>
-                </select>
+                </AdminSelect>
               </label>
               <p className="text-caption text-text-3">{status.length}개</p>
             </div>

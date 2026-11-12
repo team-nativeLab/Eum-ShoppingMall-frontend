@@ -819,6 +819,72 @@ describe('SiteHeader product and brand navigation', () => {
     expect(outsideLink).toHaveFocus();
   });
 
+  it('blurs the page behind the open popup and removes the backdrop after the exit motion', () => {
+    vi.useFakeTimers();
+    const { unmount } = render(<SiteHeader />, { wrapper: createWrapper() });
+
+    try {
+      expect(document.querySelector('[data-menu-backdrop]')).toBeNull();
+
+      const [desktopMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
+      if (!desktopMenuButton) throw new Error('데스크톱 메뉴 버튼을 찾을 수 없습니다.');
+      fireEvent.click(desktopMenuButton);
+      const menuBackdrop = document.querySelector('[data-menu-backdrop]');
+      if (!menuBackdrop) throw new Error('메뉴 배경 오버레이를 찾을 수 없습니다.');
+      const menuPanel = document.getElementById('site-header-all-menu');
+      if (!menuPanel) throw new Error('전체 메뉴 패널을 찾을 수 없습니다.');
+
+      expect(menuBackdrop).toHaveAttribute('aria-hidden', 'true');
+      expect(menuBackdrop).toHaveClass('backdrop-blur-sm', 'fixed', 'opacity-0');
+      expect(menuBackdrop).not.toHaveClass('pointer-events-none');
+      expect(menuBackdrop.compareDocumentPosition(menuPanel)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+
+      act(() => vi.advanceTimersByTime(32));
+      expect(menuBackdrop).toHaveClass('opacity-100');
+      expect(menuBackdrop).not.toHaveClass('pointer-events-none');
+
+      fireEvent.click(desktopMenuButton);
+      expect(menuBackdrop).toBeInTheDocument();
+      expect(menuBackdrop).toHaveClass('opacity-0', 'pointer-events-none');
+
+      act(() => vi.advanceTimersByTime(MENU_TRANSITION_DURATION_MS - 1));
+      expect(menuBackdrop).toBeInTheDocument();
+      act(() => vi.advanceTimersByTime(1));
+      expect(document.querySelector('[data-menu-backdrop]')).toBeNull();
+    } finally {
+      unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it('closes the popup when the blurred backdrop is pressed', () => {
+    vi.useFakeTimers();
+    const { unmount } = render(<SiteHeader />, { wrapper: createWrapper() });
+
+    try {
+      const [desktopMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
+      if (!desktopMenuButton) throw new Error('데스크톱 메뉴 버튼을 찾을 수 없습니다.');
+      fireEvent.click(desktopMenuButton);
+      act(() => vi.advanceTimersByTime(32));
+      act(() => vi.advanceTimersByTime(MENU_TRANSITION_DURATION_MS));
+      const menuBackdrop = document.querySelector('[data-menu-backdrop]');
+      if (!menuBackdrop) throw new Error('메뉴 배경 오버레이를 찾을 수 없습니다.');
+      const menuPanel = document.getElementById('site-header-all-menu');
+      if (!menuPanel) throw new Error('전체 메뉴 패널을 찾을 수 없습니다.');
+      expect(menuPanel).toHaveAttribute('aria-hidden', 'false');
+
+      fireEvent.pointerDown(menuBackdrop);
+
+      expect(menuPanel).toHaveAttribute('aria-hidden', 'true');
+      expect(menuBackdrop).toHaveClass('opacity-0', 'pointer-events-none');
+    } finally {
+      unmount();
+      vi.useRealTimers();
+    }
+  });
+
   it('closes the search suggestions when the popup opens and closes the popup when search opens', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
     apiMocks.suggestProducts.mockResolvedValue([
