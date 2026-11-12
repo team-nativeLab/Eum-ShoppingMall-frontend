@@ -1,7 +1,13 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { Button } from '@eum/ui/components/Button';
-import { AdminError, AdminLoading, AdminNotice, AdminPageHeader } from '@/components/AdminUI';
+import {
+  AdminError,
+  AdminLoading,
+  AdminNotice,
+  AdminPageHeader,
+  AdminSelect,
+} from '@/components/AdminUI';
 import { getShopApi } from '@/lib/shop-api';
 import type { AdminLegalDocument, CompanyInfo, LegalDocumentId } from '@eum/api/types';
 
@@ -155,7 +161,7 @@ export function AdminCompanyPoliciesPage() {
           <div className="mt-16 grid gap-12 md:grid-cols-2">
             <label className="grid gap-6 text-label-s">
               문서 종류
-              <select
+              <AdminSelect
                 value={documentId}
                 onChange={(event) => setDocumentId(event.target.value as LegalDocumentId)}
                 className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
@@ -165,7 +171,7 @@ export function AdminCompanyPoliciesPage() {
                     {item.title} · {item.route}
                   </option>
                 ))}
-              </select>
+              </AdminSelect>
             </label>
             <label className="grid gap-6 text-label-s">
               문서 제목

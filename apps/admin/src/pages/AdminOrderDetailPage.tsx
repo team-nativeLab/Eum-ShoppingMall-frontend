@@ -11,6 +11,7 @@ import {
   AdminNotice,
   AdminPageHeader,
   AdminPanel,
+  AdminSelect,
   AdminStatusBadge,
   formatAdminCurrency,
   formatAdminDateTime,
@@ -402,7 +403,7 @@ export function AdminOrderDetailPage() {
           </dl>
           <label className="grid gap-6">
             취소 사유 <span className="text-danger">*</span>
-            <select
+            <AdminSelect
               value={cancelReason}
               onChange={(event) => setCancelReason(event.target.value)}
               className="h-40 rounded-8 border border-line-control bg-bg px-12"
@@ -410,7 +411,7 @@ export function AdminOrderDetailPage() {
               <option value="">사유를 선택해 주세요</option>
               <option value="요청 내용 확인">요청 내용 확인</option>
               <option value="고객 연락 확인">고객 연락 확인</option>
-            </select>
+            </AdminSelect>
           </label>
         </div>
       </Modal>
@@ -462,17 +463,18 @@ function OrderProcessingPanel({
       <div className="grid gap-12 px-20 py-16">
         <label className="grid gap-6 text-label-s">
           주문 상태
-          <select
+          <AdminSelect
             value={status}
             onChange={(event) => setStatus(event.target.value as OrderStatus)}
-            className="h-40 w-full rounded-8 border border-line-control bg-bg px-12 text-body-s"
+            wrapperClassName="w-full"
+            className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
           >
             {ORDER_STATUS_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
-          </select>
+          </AdminSelect>
         </label>
         <label className="grid gap-6 text-label-s">
           택배사

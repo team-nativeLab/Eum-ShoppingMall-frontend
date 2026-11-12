@@ -7,12 +7,13 @@ import { Button } from '@eum/ui/components/Button';
 import { Modal } from '@eum/ui/components/Modal';
 import { Pagination } from '@eum/ui/components/Pagination';
 import {
-  AdminEmpty,
   AdminDateInput,
+  AdminEmpty,
   AdminError,
   AdminLoading,
   AdminNotice,
   AdminPageHeader,
+  AdminSelect,
   AdminTabs,
   formatAdminDate,
   formatAdminDateTime,
@@ -205,23 +206,24 @@ export function AdminQuotesPage() {
         <label className="sr-only" htmlFor="quote-type-unavailable">
           견적 유형
         </label>
-        <select
+        <AdminSelect
           id="quote-type-unavailable"
           disabled
           aria-describedby="quote-type-unavailable-help"
-          className="h-40 w-160 rounded-8 border border-line-control bg-bg px-12 text-body-s text-text-3 disabled:cursor-not-allowed"
+          wrapperClassName="w-160"
+          className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s text-text-3 disabled:cursor-not-allowed"
         >
           <option>유형 정보 없음</option>
-        </select>
+        </AdminSelect>
         <span id="quote-type-unavailable-help" className="sr-only">
           Quote API가 견적 유형을 제공하지 않습니다.
         </span>
         <div className="ml-auto flex items-center gap-8">
-          <Button type="button" variant="ghost" size="s" onClick={handleReset}>
-            초기화
-          </Button>
           <Button type="submit" size="s">
             검색
+          </Button>
+          <Button type="button" variant="secondary" size="s" onClick={handleReset}>
+            초기화
           </Button>
         </div>
       </form>
@@ -450,11 +452,12 @@ function QuoteDetailPanel({ quote }: { quote: AdminQuote }) {
         <label htmlFor="quote-status-preview" className="text-label-m">
           상태 변경
         </label>
-        <select
+        <AdminSelect
           id="quote-status-preview"
           value={draftStatus}
           onChange={(event) => setDraftStatus(event.target.value as QuoteStatus)}
-          className="h-48 w-full rounded-8 border border-line-control bg-bg px-14 text-body-s text-text-1"
+          wrapperClassName="w-full"
+          className="h-48 rounded-8 border border-line-control bg-bg px-14 text-body-s text-text-1"
         >
           {!QUOTE_STATUS_META[draftStatus] ? (
             <option value={draftStatus}>{String(draftStatus)} · 알 수 없는 상태</option>
@@ -464,7 +467,7 @@ function QuoteDetailPanel({ quote }: { quote: AdminQuote }) {
               {statusMeta.label}
             </option>
           ))}
-        </select>
+        </AdminSelect>
       </div>
       <div className="mt-16 flex flex-col gap-8">
         <label htmlFor="quote-admin-memo" className="text-label-m">

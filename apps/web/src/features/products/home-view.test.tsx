@@ -176,7 +176,7 @@ describe('HomeView desktop section layout', () => {
       expect(description?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
         homeContent.promoBanners[index]?.description.replace(/\s+/g, ' ').trim(),
       );
-      expect(copyCtaGroup).toHaveClass('mt-auto', 'flex', 'flex-col', 'gap-4');
+      expect(copyCtaGroup).toHaveClass('mt-auto', 'flex', 'flex-col', 'gap-8');
       expect(copyCtaGroup?.firstElementChild).toBe(description);
       expect(copyCtaGroup?.lastElementChild).toBe(promoCta);
       expect(promoCta).not.toBeNull();

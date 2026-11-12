@@ -247,7 +247,7 @@ function AdminSupportContentPage({ mode }: { mode: ContentMode }) {
                   className="h-40 w-full rounded-8 border border-line-control bg-bg px-12"
                 />
               </label>
-              <Button type="button" variant="ghost" size="s" onClick={() => setSearch('')}>
+              <Button type="button" variant="secondary" size="s" onClick={() => setSearch('')}>
                 초기화
               </Button>
               <span role="status" className="text-caption text-info">

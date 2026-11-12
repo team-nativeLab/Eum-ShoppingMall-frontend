@@ -4,12 +4,13 @@ import { Link } from 'react-router';
 import { Button } from '@eum/ui/components/Button';
 import { Pagination } from '@eum/ui/components/Pagination';
 import {
-  AdminEmpty,
   AdminDateInput,
+  AdminEmpty,
   AdminError,
   AdminLoading,
   AdminNotice,
   AdminPageHeader,
+  AdminSelect,
   AdminTabs,
   formatAdminDate,
   getAdminLocalDateKey,
@@ -286,11 +287,11 @@ export function AdminMembersPage() {
               className="w-132"
             />
           </div>
-          <Button type="button" variant="ghost" size="s" onClick={handleReset}>
-            초기화
-          </Button>
           <Button type="submit" size="s">
             검색
+          </Button>
+          <Button type="button" variant="secondary" size="s" onClick={handleReset}>
+            초기화
           </Button>
         </form>
       ) : null}
@@ -313,7 +314,7 @@ export function AdminMembersPage() {
               <label className="sr-only" htmlFor="admin-member-sort">
                 정렬 기준
               </label>
-              <select
+              <AdminSelect
                 id="admin-member-sort"
                 value={sortOrder}
                 onChange={(event) => setSortOrder(event.target.value as 'recent' | 'oldest')}
@@ -321,11 +322,11 @@ export function AdminMembersPage() {
               >
                 <option value="recent">최근 가입순</option>
                 <option value="oldest">오래된 순</option>
-              </select>
+              </AdminSelect>
               <label className="sr-only" htmlFor="admin-member-page-size">
                 페이지당 표시 수
               </label>
-              <select
+              <AdminSelect
                 id="admin-member-page-size"
                 value={pageSize}
                 onChange={(event) => {
@@ -337,7 +338,7 @@ export function AdminMembersPage() {
                 <option value={20}>20개씩</option>
                 <option value={50}>50개씩</option>
                 <option value={100}>100개씩</option>
-              </select>
+              </AdminSelect>
             </div>
           </div>
           {visibleMembers.length === 0 ? (
