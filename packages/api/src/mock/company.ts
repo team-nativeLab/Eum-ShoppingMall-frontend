@@ -2,7 +2,7 @@ import type { CompanyInfo } from '../types';
 
 /** 목 사업자 정보. 실제 값은 서버(관리자 설정)에서 오며, 지금은 디자인 자리표시 값을 씁니다. */
 export const mockCompanyInfo: CompanyInfo = {
-  companyName: '이음산업건설',
+  companyName: '안전맛집',
   representative: '000',
   businessRegistrationNumber: '000-00-00000',
   mailOrderSalesNumber: '제0000-서울00-0000호',

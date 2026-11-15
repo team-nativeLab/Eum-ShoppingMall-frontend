@@ -16,6 +16,11 @@ function notImplemented(endpointName: string): () => Promise<never> {
  */
 export function createRealApi(_config: ApiConfig): ShopApi {
   return {
+    suppliers: {
+      adminList: notImplemented('suppliers.adminList'),
+      saveAdmin: notImplemented('suppliers.saveAdmin'),
+      deleteAdmin: notImplemented('suppliers.deleteAdmin'),
+    },
     products: {
       list: notImplemented('products.list'),
       getById: notImplemented('products.getById'),

@@ -69,7 +69,7 @@ const homeContent: HomeContent = {
       id: 'promo-two',
       title: ['두 번째 안내'],
       description:
-        '현장의 상황과 작업 환경에 맞는 안전 솔루션을 제안하며, 필요한 제품과 맞춤 서비스를 함께 안내합니다.\n이음산업건설이 현장별 선택을 돕습니다.',
+        '현장의 상황과 작업 환경에 맞는 안전 솔루션을 제안하며, 필요한 제품과 맞춤 서비스를 함께 안내합니다.\n안전맛집이 현장별 선택을 돕습니다.',
       imageUrl: '',
       tone: 'light',
       destination: '/about',

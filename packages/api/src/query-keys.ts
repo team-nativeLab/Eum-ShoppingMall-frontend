@@ -20,6 +20,7 @@ export const queryKeys = {
       ['products', 'related', productId, params] as const,
     recommended: (params: ProductLimitParams = {}) => ['products', 'recommended', params] as const,
   },
+  suppliers: { adminList: ['admin', 'suppliers'] as const },
   brands: {
     all: ['brands'] as const,
     list: ['brands', 'list'] as const,

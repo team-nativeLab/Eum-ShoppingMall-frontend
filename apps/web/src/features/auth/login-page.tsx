@@ -7,9 +7,10 @@ import { TextField } from '@eum/ui/components/TextField';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
+import { SignupPageView } from './signup-page';
 import { PageContainer } from '@/components/page-container';
 import { useMemberSession } from './member-session';
-import { getMemberAuth } from '@/lib/member-auth';
+import { getUnifiedAuth } from '@/lib/member-auth';
 
 /** W-09: 목 회원 로그인을 처리하고 안전한 내부 경로로 돌아갑니다. */
 export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
@@ -22,6 +23,7 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
   const [rememberLogin, setRememberLogin] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [isSignup, setIsSignup] = useState(false);
   const redirectPath = sanitizeRedirectPath(rawRedirect, '/');
   const recoveryRedirectQuery = `?redirect=${encodeURIComponent(redirectPath)}`;
 
@@ -56,11 +58,15 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
 
     setIsSubmitting(true);
     try {
-      const memberAuth = await getMemberAuth();
-      const member = await memberAuth.login({ email, password });
-      if (!rememberLogin) await memberAuth.logout();
-      setMember(member);
-      router.replace(redirectPath);
+      const auth = await getUnifiedAuth();
+      const loginResult = await auth.login({ email, password });
+      if (loginResult.role === 'admin') {
+        router.replace(redirectPath.startsWith('/admin') ? redirectPath : '/admin');
+      } else {
+        if (!rememberLogin) await auth.logout();
+        setMember(loginResult.user);
+        router.replace(redirectPath.startsWith('/admin') ? '/' : redirectPath);
+      }
     } catch (loginFailure: unknown) {
       const code =
         typeof loginFailure === 'object' && loginFailure !== null && 'code' in loginFailure
@@ -78,14 +84,37 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
     }
   };
 
+  if (isSignup) {
+    return <SignupPageView rawRedirect={rawRedirect} onBackToLogin={() => setIsSignup(false)} />;
+  }
+
   return (
     <PageContainer className="py-40 lg:pt-96 lg:pb-120">
       <section className="mx-auto flex w-full max-w-400 flex-col gap-32">
         <header className="flex flex-col items-start gap-8">
-          <p className="text-h3 text-text-3">이음산업건설</p>
+          <p className="text-h3 text-text-3">안전맛집</p>
           <h1 className="text-h1">로그인</h1>
-          <p className="text-body-s text-text-2">이음산업건설 계정으로 로그인하세요.</p>
+          <p className="text-body-s text-text-2">안전맛집 계정으로 로그인하세요.</p>
         </header>
+        <div role="tablist" aria-label="계정" className="grid grid-cols-2 rounded-8 bg-surface p-4">
+          <button
+            type="button"
+            role="tab"
+            aria-selected="true"
+            className="rounded-6 bg-bg px-12 py-8 text-label-m"
+          >
+            로그인
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected="false"
+            onClick={() => setIsSignup(true)}
+            className="rounded-6 px-12 py-8 text-label-m text-text-2"
+          >
+            회원가입
+          </button>
+        </div>
         <form
           className="flex flex-col gap-24"
           onSubmit={(submitEvent) => void handleSubmit(submitEvent)}
@@ -159,6 +188,10 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
               <span aria-hidden="true">|</span>
               <Link
                 href={`/signup?redirect=${encodeURIComponent(redirectPath)}`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  setIsSignup(true);
+                }}
                 className="rounded-4 underline focus-ring"
               >
                 회원가입

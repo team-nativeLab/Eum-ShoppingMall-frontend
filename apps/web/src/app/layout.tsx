@@ -10,8 +10,8 @@ import { Providers } from './providers';
 
 export const metadata: Metadata = {
   title: {
-    default: '이음산업건설 쇼핑몰',
-    template: '%s | 이음산업건설 쇼핑몰',
+    default: '안전맛집 쇼핑몰',
+    template: '%s | 안전맛집 쇼핑몰',
   },
   description: '산업 안전용품 온라인 쇼핑몰',
 };

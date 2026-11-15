@@ -4,6 +4,7 @@ import type {
   AdminBrand,
   AdminHomeContentInput,
   AdminShopEvent,
+  AdminSupplier,
   AdminOrder,
   AdminClaim,
   AdminQuote,
@@ -58,6 +59,7 @@ export interface ProductListParams {
   sortBy?: 'recommended' | 'priceAsc' | 'priceDesc' | 'newest' | 'ratingDesc';
   page?: number;
   pageSize?: number;
+  collection?: 'featured' | 'today';
 }
 
 /** 필터 개수 조회 조건. 개수는 브랜드·인증·가격 선택과 무관하게 카테고리·검색어 범위에서 셉니다. */
@@ -87,6 +89,7 @@ export type AdminProductInput = Omit<
 > & {
   id?: string;
 };
+export type AdminSupplierInput = Omit<AdminSupplier, 'id'> & { id?: string };
 export type AdminBrandInput = Omit<AdminBrand, 'id' | 'productCount'> & { id?: string };
 export type AdminShopEventInput = Omit<AdminShopEvent, 'id'> & { id?: string };
 export type AdminOrderUpdate = Partial<
@@ -122,6 +125,11 @@ export type AdminProductQuestionUpdate = Partial<
  * real 빌드에서는 목 구현과 목 데이터가 번들에서 빠지게 합니다.
  */
 export interface ShopApi {
+  suppliers: {
+    adminList(options?: RequestOptions): Promise<AdminSupplier[]>;
+    saveAdmin(input: AdminSupplierInput, options?: RequestOptions): Promise<AdminSupplier>;
+    deleteAdmin(supplierId: string, options?: RequestOptions): Promise<void>;
+  };
   products: {
     list(params?: ProductListParams, options?: RequestOptions): Promise<PagedResult<Product>>;
     getById(productId: string, options?: RequestOptions): Promise<Product>;

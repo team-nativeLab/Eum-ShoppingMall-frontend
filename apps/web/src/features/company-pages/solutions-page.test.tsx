@@ -84,7 +84,7 @@ const member: Member = {
 };
 
 const companyInfo: CompanyInfo = {
-  companyName: '이음산업건설',
+  companyName: '안전맛집',
   representative: '',
   businessRegistrationNumber: '',
   mailOrderSalesNumber: '',

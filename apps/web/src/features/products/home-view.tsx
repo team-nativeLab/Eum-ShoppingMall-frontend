@@ -42,7 +42,7 @@ export function HomeView() {
   return (
     <>
       {/* 히어로 제목은 배너마다 바뀌므로 페이지 제목(h1)은 고정해 둡니다. */}
-      <h1 className="sr-only">이음산업건설 쇼핑몰 홈</h1>
+      <h1 className="sr-only">안전맛집 쇼핑몰 홈</h1>
       {homeQuery.isPending ? (
         <div aria-busy="true" className="space-y-24">
           <div className="h-340 animate-pulse bg-surface lg:h-480" />

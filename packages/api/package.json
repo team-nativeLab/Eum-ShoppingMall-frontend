@@ -16,6 +16,7 @@
     "./mock-api": "./src/mock-api.ts",
     "./real-api": "./src/real-api.ts",
     "./auth": "./src/auth.ts",
+    "./unified-auth": "./src/unified-auth.ts",
     "./mock-auth": "./src/mock-auth.ts",
     "./redirect": "./src/redirect.ts",
     "./query-keys": "./src/query-keys.ts"

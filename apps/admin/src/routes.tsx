@@ -1,6 +1,5 @@
 import type { RouteObject } from 'react-router';
 import { AdminLayout } from './layouts/AdminLayout';
-import { LoginPage } from './pages/LoginPage';
 import { AdminCategoriesPage } from './pages/AdminCategoriesPage';
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { AdminProductFormPage } from './pages/AdminProductFormPage';
@@ -25,6 +24,15 @@ import { AdminInquiriesPage } from './pages/AdminInquiriesPage';
 import { AdminReviewsPage } from './pages/AdminReviewsPage';
 import { AdminProductQuestionsPage } from './pages/AdminProductQuestionsPage';
 import { AdminCompanyPoliciesPage } from './pages/AdminCompanyPoliciesPage';
+import { AdminSuppliersPage } from './pages/AdminSuppliersPage';
+import { useEffect } from 'react';
+
+function SharedLoginRedirect() {
+  useEffect(() => {
+    window.location.replace('/login');
+  }, []);
+  return <main className="p-32">통합 로그인 화면으로 이동하고 있습니다.</main>;
+}
 
 /** 화면 제목·상위 메뉴를 route handle에 담아 TopBar 경로 표시에 씁니다. */
 export interface AdminRouteHandle {
@@ -34,7 +42,7 @@ export interface AdminRouteHandle {
 
 /** Admin 라우트(HANDOFF 9절 및 Stage 6 화면) */
 export const adminRoutes: RouteObject[] = [
-  { path: '/login', element: <LoginPage />, handle: { title: '관리자 로그인' } },
+  { path: '/login', element: <SharedLoginRedirect />, handle: { title: '로그인' } },
   {
     path: '/',
     element: <AdminLayout />,
@@ -68,6 +76,11 @@ export const adminRoutes: RouteObject[] = [
         path: 'brands',
         handle: { title: '브랜드 관리', section: '브랜드 관리' },
         element: <AdminBrandsPage />,
+      },
+      {
+        path: 'suppliers',
+        handle: { title: '발주 관리', section: '상품 관리' },
+        element: <AdminSuppliersPage />,
       },
       {
         path: 'brands/new',

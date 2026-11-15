@@ -85,7 +85,7 @@ export function AboutPageContent() {
             </h1>
           </div>
           <p className="max-w-[640px] text-body-m text-text-2 lg:text-web-body-xl">
-            이음산업건설은 현장과 사람을 잇는 안전용품 전문 기업입니다.
+            안전맛집은 현장과 사람을 잇는 안전용품 전문 기업입니다.
           </p>
         </PageContainer>
       </section>
@@ -106,9 +106,8 @@ export function AboutPageContent() {
             <div className="max-w-[636px] space-y-16 leading-[26px]">
               <h3 className="text-h3">작은 변화가 큰 안전을 만듭니다.</h3>
               <p className="text-body-l text-text-2">
-                이음산업건설은 개인보호장비부터 현장 안전용품, 맞춤 제작까지 현장에 필요한 안전
-                솔루션을 제공합니다. 고객의 현장 환경을 이해하고, 가장 알맞은 제품과 서비스를
-                제안합니다.
+                안전맛집은 개인보호장비부터 현장 안전용품, 맞춤 제작까지 현장에 필요한 안전 솔루션을
+                제공합니다. 고객의 현장 환경을 이해하고, 가장 알맞은 제품과 서비스를 제안합니다.
               </p>
             </div>
           </div>

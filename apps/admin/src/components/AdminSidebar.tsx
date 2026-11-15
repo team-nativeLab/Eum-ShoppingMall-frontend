@@ -97,7 +97,8 @@ const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
 
 function AdminMenuLink({ menuItem }: { menuItem: AdminMenuItem }) {
   const location = useLocation();
-  const isProductSection = location.pathname.startsWith('/products');
+  const isProductSection =
+    location.pathname.startsWith('/products') || location.pathname.startsWith('/suppliers');
   const isBrandSection = location.pathname.startsWith('/brands');
   const hasSubmenu = menuItem.to === '/products' || menuItem.to === '/brands';
   const isCurrentSection =
@@ -152,6 +153,19 @@ function AdminMenuLink({ menuItem }: { menuItem: AdminMenuItem }) {
                   상품 등록
                 </NavLink>
               </li>
+              <li>
+                <NavLink
+                  to="/suppliers"
+                  className={({ isActive }) =>
+                    cx(
+                      'flex min-h-36 items-center rounded-6 px-8 py-6 text-body-s focus-ring',
+                      isActive ? 'font-medium text-text-1' : 'text-text-3 hover:text-text-1',
+                    )
+                  }
+                >
+                  발주 관리
+                </NavLink>
+              </li>
             </>
           ) : (
             <>
@@ -195,7 +209,7 @@ export function AdminSidebar() {
   return (
     <aside className="sticky top-0 flex h-dvh w-240 shrink-0 flex-col overflow-y-auto border-r border-line bg-bg">
       <div className="flex h-64 shrink-0 items-center gap-8 px-20">
-        <span className="text-title">이음산업건설</span>
+        <span className="text-title">안전맛집</span>
         <Badge tone="outline">관리자</Badge>
       </div>
       <nav aria-label="관리자 메뉴" className="px-12 pt-8 pb-16">
