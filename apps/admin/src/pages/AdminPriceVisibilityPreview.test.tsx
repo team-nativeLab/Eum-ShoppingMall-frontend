@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { AdminProduct, Product } from '@eum/api/types';
+import type { AdminProduct, AdminSupplier, Product } from '@eum/api/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { PriceVisibilityConfirmDialog } from '@/components/PriceVisibilityConfirmDialog';
@@ -21,6 +21,19 @@ const apiMocks = vi.hoisted(() => ({
   listCategories: vi.fn(),
   saveAdmin: vi.fn(),
 }));
+
+const supplierFixture: AdminSupplier = {
+  id: 'supplier-test',
+  companyName: '테스트 발주처',
+  contactName: '담당자',
+  contactPhone: '010-0000-0000',
+  contactEmail: 'contact@example.com',
+  orderChannel: 'email',
+  orderEmail: 'orders@example.com',
+  orderFax: null,
+  address: '',
+  memo: '',
+};
 
 vi.mock('@/lib/shop-api', () => ({
   getShopApi: apiMocks.getShopApi,
@@ -158,6 +171,7 @@ describe('admin price visibility previews', () => {
     Object.values(apiMocks).forEach((mock) => mock.mockReset());
     const adminProducts: AdminProduct[] = productFixtures.map((product) => ({
       ...structuredClone(product),
+      supplierId: supplierFixture.id,
       skus: [],
       price: product.price ?? 0,
       stockCount: 0,
@@ -201,6 +215,7 @@ describe('admin price visibility previews', () => {
       brands: {
         adminList: vi.fn(async () => [{ id: 'brand-test', name: '테스트 브랜드' }]),
       },
+      suppliers: { adminList: vi.fn(async () => [supplierFixture]) },
     });
   });
 
@@ -268,6 +283,7 @@ describe('admin price visibility previews', () => {
   it('counts paused products by stock independently of exposure and sales status', async () => {
     const adminProducts: AdminProduct[] = productFixtures.map((product) => ({
       ...structuredClone(product),
+      supplierId: supplierFixture.id,
       skus: [],
       price: product.price ?? 0,
       stockCount: 0,
@@ -332,11 +348,14 @@ describe('admin price visibility previews', () => {
 
     await user.click(within(productRow).getByRole('link', { name: '상품 B' }));
     const formSwitch = await screen.findByRole('switch', { name: '금액 표시' });
-    const priceGroup = screen.getByRole('group', { name: '판매가 및 금액 표시' });
+    const priceGroup = screen.getByRole('group', { name: '판매가 및 정가' });
     expect(within(priceGroup).getByRole('spinbutton', { name: '판매가' })).toBeInTheDocument();
-    expect(within(priceGroup).getByRole('switch', { name: '금액 표시' })).toBe(formSwitch);
+    expect(formSwitch).toBeInTheDocument();
     expect(screen.getByRole('spinbutton', { name: '정가' })).toBeInTheDocument();
-    expect(screen.getByText('정가', { selector: 'p' })).toHaveClass('text-caption', 'text-text-3');
+    expect(screen.getByText(/실제 금액 미제공: API 응답에 정가/)).toHaveClass(
+      'text-caption',
+      'text-text-3',
+    );
     expect(screen.queryByRole('heading', { name: '데모 안내' })).not.toBeInTheDocument();
     expect(formSwitch).toHaveAttribute('aria-checked', 'true');
     expect(apiMocks.saveAdmin).toHaveBeenCalledWith(

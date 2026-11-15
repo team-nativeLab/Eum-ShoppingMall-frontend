@@ -28,31 +28,7 @@ afterEach(() => {
 });
 
 describe('Admin Vercel build API configuration', () => {
-  it('allows mock mode in Vercel Production only with the explicit flag and no API URL', async () => {
-    await expect(
-      resolveAdminBuildConfig({
-        NODE_ENV: 'production',
-        VERCEL: '1',
-        VERCEL_ENV: 'production',
-        VITE_API_MODE: 'mock',
-        VITE_API_BASE_URL: '',
-        VITE_ALLOW_MOCK_IN_PRODUCTION: 'true',
-      }),
-    ).resolves.toBeDefined();
-  });
-
-  it('requires the explicit mock flag for Vercel Production even when NODE_ENV is not production', async () => {
-    await expect(
-      resolveAdminBuildConfig({
-        NODE_ENV: 'test',
-        VERCEL: '1',
-        VERCEL_ENV: 'production',
-        VITE_API_MODE: 'mock',
-      }),
-    ).rejects.toThrow('VITE_ALLOW_MOCK_IN_PRODUCTION=true');
-  });
-
-  it('rejects mock mode in Vercel Preview even when the explicit flag is set', async () => {
+  it('allows mock mode in Vercel Preview for the protected test deployment', async () => {
     await expect(
       resolveAdminBuildConfig({
         NODE_ENV: 'production',
@@ -62,7 +38,31 @@ describe('Admin Vercel build API configuration', () => {
         VITE_API_BASE_URL: '',
         VITE_ALLOW_MOCK_IN_PRODUCTION: 'true',
       }),
-    ).rejects.toThrow('Vercel Preview 배포에는 VITE_API_MODE=real이 필요합니다.');
+    ).resolves.toBeDefined();
+  });
+
+  it('rejects mock mode in Vercel Production even when NODE_ENV is not production', async () => {
+    await expect(
+      resolveAdminBuildConfig({
+        NODE_ENV: 'test',
+        VERCEL: '1',
+        VERCEL_ENV: 'production',
+        VITE_API_MODE: 'mock',
+      }),
+    ).rejects.toThrow('Vercel에서는 Preview에서만 mock을 허용합니다.');
+  });
+
+  it('allows mock mode in Vercel Preview even when the explicit flag is set', async () => {
+    await expect(
+      resolveAdminBuildConfig({
+        NODE_ENV: 'production',
+        VERCEL: '1',
+        VERCEL_ENV: 'preview',
+        VITE_API_MODE: 'mock',
+        VITE_API_BASE_URL: '',
+        VITE_ALLOW_MOCK_IN_PRODUCTION: 'true',
+      }),
+    ).resolves.toBeDefined();
   });
 
   it('rejects mock mode when Vercel does not identify the deployment environment', async () => {
@@ -74,7 +74,7 @@ describe('Admin Vercel build API configuration', () => {
         VITE_API_BASE_URL: '',
         VITE_ALLOW_MOCK_IN_PRODUCTION: 'true',
       }),
-    ).rejects.toThrow('Vercel Preview 배포에는 VITE_API_MODE=real이 필요합니다.');
+    ).rejects.toThrow('Vercel에서는 Preview에서만 mock을 허용합니다.');
   });
 
   it('rejects a Production real mode that still uses the reserved placeholder host', async () => {
@@ -87,6 +87,18 @@ describe('Admin Vercel build API configuration', () => {
         VITE_API_BASE_URL: 'https://api-admin-preview.invalid',
       }),
     ).rejects.toThrow('실제 VITE_API_BASE_URL이 필요합니다.');
+  });
+
+  it('rejects an HTTP real API address in Vercel Production', async () => {
+    await expect(
+      resolveAdminBuildConfig({
+        NODE_ENV: 'production',
+        VERCEL: '1',
+        VERCEL_ENV: 'production',
+        VITE_API_MODE: 'real',
+        VITE_API_BASE_URL: 'http://api.example.com',
+      }),
+    ).rejects.toThrow('VITE_API_BASE_URL은 https 주소여야 합니다.');
   });
 
   it('keeps the real API scaffold available for Vercel Preview', async () => {

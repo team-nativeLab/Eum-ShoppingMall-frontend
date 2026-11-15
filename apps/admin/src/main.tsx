@@ -20,7 +20,9 @@ const queryClient = new QueryClient({
   },
 });
 
-const router = createBrowserRouter(adminRoutes);
+const router = createBrowserRouter(adminRoutes, {
+  basename: import.meta.env.BASE_URL.replace(/\/$/, '') || '/',
+});
 
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('#root 요소를 찾을 수 없습니다.');

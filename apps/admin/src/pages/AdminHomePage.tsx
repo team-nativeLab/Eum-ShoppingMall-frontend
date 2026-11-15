@@ -42,6 +42,7 @@ export function AdminHomePage() {
   };
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
+  const [productSearch, setProductSearch] = useState('');
   if (contentQuery.isPending || productsQuery.isPending)
     return <AdminLoading label="홈 편성을 불러오는 중입니다." />;
   if (contentQuery.isError || productsQuery.isError)
@@ -608,9 +609,26 @@ export function AdminHomePage() {
           title="홈 추천 상품"
           description="웹 홈의 베스트셀러 영역에서 표시할 상품을 선택합니다."
         >
+          <div className="px-16 pt-16">
+            <label className="grid gap-4 text-label-s">
+              상품 검색
+              <input
+                type="search"
+                value={productSearch}
+                onChange={(event) => setProductSearch(event.target.value)}
+                placeholder="상품명 또는 브랜드를 검색해 주세요"
+                className="h-40 rounded-6 border border-line-control px-12"
+              />
+            </label>
+          </div>
           <div className="grid gap-8 p-16 md:grid-cols-2">
             {products
               .filter((product) => product.isVisible !== false)
+              .filter((product) =>
+                `${product.name} ${product.brand}`
+                  .toLocaleLowerCase('ko-KR')
+                  .includes(productSearch.trim().toLocaleLowerCase('ko-KR')),
+              )
               .map((product) => (
                 <label
                   key={product.id}

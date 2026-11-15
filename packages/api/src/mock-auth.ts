@@ -104,7 +104,10 @@ export function createMemberMockAuth(
       const hasFixture = mockMembers.some(
         (candidate) => candidate.email.toLowerCase() === normalizedEmail,
       );
-      return !hasFixture && !transientSignupMembers.has(normalizedEmail);
+      const hasAdminReservation = mockAdminUsers.some(
+        (candidate) => candidate.email?.toLowerCase() === normalizedEmail,
+      );
+      return !hasFixture && !hasAdminReservation && !transientSignupMembers.has(normalizedEmail);
     },
     async signup({ email, password, name, phone, accountType }) {
       assertFilled([email, password, name, phone]);
@@ -112,7 +115,10 @@ export function createMemberMockAuth(
       const isEmailTaken = mockMembers.some(
         (candidate) => candidate.email.toLowerCase() === normalizedEmail,
       );
-      if (isEmailTaken || transientSignupMembers.has(normalizedEmail)) {
+      const isEmailReservedForAdmin = mockAdminUsers.some(
+        (candidate) => candidate.email?.toLowerCase() === normalizedEmail,
+      );
+      if (isEmailTaken || isEmailReservedForAdmin || transientSignupMembers.has(normalizedEmail)) {
         throw new ApiError('VALIDATION', '이미 사용 중인 이메일입니다.');
       }
       const member = {

@@ -287,12 +287,12 @@ export function AdminSelect({
       >
         {children}
       </select>
-      {/* 웹 드롭다운(right-12)과 화살표 간격을 통일합니다. pr-32는 12px 간격 + 16px 아이콘보다 넓어 텍스트와 겹치지 않습니다. */}
+      {/* 웹 드롭다운보다 화살표를 4px 안쪽에 둡니다. pr-32는 아이콘과 텍스트가 겹치지 않게 합니다. */}
       <Icon
         icon={ChevronDown}
         size={16}
         className={cx(
-          'pointer-events-none absolute top-1/2 right-12 -translate-y-1/2',
+          'pointer-events-none absolute top-1/2 right-16 -translate-y-1/2',
           disabled ? 'text-text-disabled' : 'text-text-1',
         )}
       />

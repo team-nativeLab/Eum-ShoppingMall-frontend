@@ -122,7 +122,7 @@ export function LoginPage() {
       >
         <div className="mb-32">
           <div className="flex items-center gap-8">
-            <span className="text-title">이음산업건설</span>
+            <span className="text-title">안전맛집</span>
             <Badge tone="outline">관리자</Badge>
           </div>
           <h1 id="login-title" className="mt-16 text-h2">

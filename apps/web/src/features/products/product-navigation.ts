@@ -1,6 +1,6 @@
 export type SearchParamValue = string | string[] | undefined;
 
-export type PrimaryNavigationKey = 'products' | 'brands' | 'solutions' | 'support' | 'about';
+export type PrimaryNavigationKey = 'products' | 'best' | 'today' | 'brands';
 
 export interface PrimaryNavigationItem {
   key: PrimaryNavigationKey;
@@ -52,14 +52,13 @@ export function buildBrandSelectionHref(
   return query ? pathname + '?' + query : pathname;
 }
 
-/** 주요 GNB 항목. 브랜드는 분리된 디렉터리로 이동합니다. */
+/** 안전맛집 주요 탐색 링크 */
 export function getPrimaryNavigationItems(): PrimaryNavigationItem[] {
   return [
     { key: 'products', label: '제품', href: '/search' },
-    { key: 'brands', label: '브랜드', href: buildBrandHref() },
-    { key: 'solutions', label: '안전 솔루션', href: '/solutions' },
-    { key: 'support', label: '고객지원', href: '/support/notices' },
-    { key: 'about', label: '회사소개', href: '/about' },
+    { key: 'best', label: '베스트', href: '/best' },
+    { key: 'today', label: '오늘의 상품', href: '/today' },
+    { key: 'brands', label: '브랜드몰', href: buildBrandHref() },
   ];
 }
 
@@ -75,10 +74,9 @@ export function isPrimaryNavigationItemActive(
 ): boolean {
   const activePathPrefixes: Record<PrimaryNavigationKey, string[]> = {
     products: ['/search', '/category', '/products'],
+    best: ['/best'],
+    today: ['/today'],
     brands: ['/brands'],
-    solutions: ['/solutions'],
-    support: ['/support'],
-    about: ['/about'],
   };
   return activePathPrefixes[item.key].some((pathPrefix) => isPathWithin(pathname, pathPrefix));
 }

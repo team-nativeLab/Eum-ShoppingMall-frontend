@@ -84,7 +84,7 @@ describe('고객지원 운영 화면', () => {
       },
       company: {
         getAdminInfo: async () => ({
-          companyName: '이음산업건설',
+          companyName: '안전맛집',
           representative: '대표',
           businessRegistrationNumber: '000-00-00000',
           mailOrderSalesNumber: '',

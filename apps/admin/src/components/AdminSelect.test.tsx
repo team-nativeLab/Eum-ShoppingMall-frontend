@@ -112,7 +112,7 @@ describe('AdminSelect', () => {
     expect(typeSelect.parentElement?.querySelector('svg')).toHaveClass('text-text-disabled');
   });
 
-  it('활성 상태의 화살표는 장식용이며 클릭을 가로채지 않고 웹 드롭다운과 같은 12px 간격으로 띄운다', () => {
+  it('활성 상태의 화살표는 장식용이며 클릭을 가로채지 않고 테두리에서 16px 간격으로 띄운다', () => {
     render(
       <AdminSelect aria-label="정렬 기준">
         <option value="recent">최근 주문순</option>
@@ -122,7 +122,7 @@ describe('AdminSelect', () => {
     const sortSelect = screen.getByRole('combobox', { name: '정렬 기준' });
     const arrowIcon = sortSelect.parentElement?.querySelector('svg');
     expect(arrowIcon).toHaveAttribute('aria-hidden', 'true');
-    expect(arrowIcon).toHaveClass('pointer-events-none', 'right-12', 'text-text-1');
+    expect(arrowIcon).toHaveClass('pointer-events-none', 'right-16', 'text-text-1');
     expect(arrowIcon).not.toHaveClass('text-text-disabled');
   });
 });

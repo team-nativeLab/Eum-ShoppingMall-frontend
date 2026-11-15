@@ -63,7 +63,7 @@ describe('법률 문서 페이지', () => {
     ).toBeTruthy();
     expect(
       screen.getByText(
-        '이 약관은 이음산업건설 쇼핑몰 이용 조건과 절차를 정합니다. 조항 내용이 들어갑니다.',
+        '이 약관은 안전맛집 쇼핑몰 이용 조건과 절차를 정합니다. 조항 내용이 들어갑니다.',
       ),
     ).toBeInTheDocument();
   });

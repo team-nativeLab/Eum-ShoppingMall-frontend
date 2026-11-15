@@ -24,8 +24,10 @@ function getActiveKeys(pathname: string): string[] {
 }
 
 describe('product and brand navigation', () => {
-  it('Product goes to the full listing and Brand goes to the separate brand directory', () => {
+  it('provides product, best, today and brand mall routes', () => {
     expect(findNavigationItem('products').href).toBe('/search');
+    expect(findNavigationItem('best').href).toBe('/best');
+    expect(findNavigationItem('today').href).toBe('/today');
     expect(findNavigationItem('brands').href).toBe('/brands');
   });
 
@@ -59,15 +61,17 @@ describe('product and brand navigation', () => {
     expect(isPrimaryNavigationItemActive(brandsItem, '/')).toBe(false);
   });
 
-  it('keeps Product active on listing routes even when a brand filter is selected', () => {
+  it('keeps legacy company and support pages outside the primary product navigation', () => {
     // 활성 판단은 경로만 보므로 /search?brand=X, /category/*?brand=X는 모두 「제품」입니다.
     expect(getActiveKeys('/search')).toEqual(['products']);
     expect(getActiveKeys('/category/gloves')).toEqual(['products']);
     expect(getActiveKeys('/products/prd-1001')).toEqual(['products']);
     expect(getActiveKeys('/brands')).toEqual(['brands']);
     expect(getActiveKeys('/brands/brd-1')).toEqual(['brands']);
-    expect(getActiveKeys('/about')).toEqual(['about']);
-    expect(getActiveKeys('/support/faq')).toEqual(['support']);
+    expect(getActiveKeys('/about')).toEqual([]);
+    expect(getActiveKeys('/support/faq')).toEqual([]);
+    expect(getActiveKeys('/best')).toEqual(['best']);
+    expect(getActiveKeys('/today')).toEqual(['today']);
     expect(getActiveKeys('/')).toEqual([]);
   });
 });

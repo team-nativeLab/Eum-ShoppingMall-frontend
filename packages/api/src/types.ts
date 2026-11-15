@@ -106,6 +106,25 @@ export interface Product {
   createdAt: string;
   /** 홈 베스트 상품에 포함할지 여부 */
   isFeatured: boolean;
+  /** 오늘의 상품에 노출할지 여부 */
+  isTodayDeal?: boolean;
+}
+
+/** 발주처 주문 수신 채널 */
+export type SupplierOrderChannel = 'email' | 'fax';
+
+/** 관리자 발주처 관리 정보 */
+export interface AdminSupplier {
+  id: string;
+  companyName: string;
+  contactName: string;
+  contactPhone: string;
+  contactEmail: string;
+  orderChannel: SupplierOrderChannel;
+  orderEmail: string | null;
+  orderFax: string | null;
+  address: string;
+  memo: string;
 }
 
 /** 구매자에게 공개할 옵션 조합별 판매 정보 */
@@ -120,6 +139,8 @@ export interface ProductSku {
 /** 구매자 응답과 별도로 실제 가격을 보관하는 Admin 편집 모델 */
 export interface AdminProduct extends Omit<Product, 'price' | 'skus'> {
   price: number;
+  /** 관리자용 상품 응답에서만 쓰는 발주처 ID */
+  supplierId?: string;
   productCode?: string;
   stockCount?: number;
   /** SKU 재고가 모두 0이면 구매자 상품 상태도 품절로 표시합니다. */
@@ -673,6 +694,7 @@ export type AdminRole = 'owner' | 'manager';
 export interface AdminUser {
   id: string;
   loginId: string;
+  email?: string;
   name: string;
   role: AdminRole;
 }

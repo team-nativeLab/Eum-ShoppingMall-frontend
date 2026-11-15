@@ -16,7 +16,7 @@ const routerMock = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: routerMock.push }) }));
 
 const companyInfo: CompanyInfo = {
-  companyName: '이음산업건설',
+  companyName: '안전맛집',
   representative: '',
   businessRegistrationNumber: '',
   mailOrderSalesNumber: '',
@@ -227,9 +227,7 @@ describe('company support routes', () => {
         .getAllByRole('button', { name: /^\d+페이지$/ })
         .map((button) => button.getAttribute('aria-label')),
     ).toEqual(['1페이지', '2페이지', '3페이지', '10페이지']);
-    expect(
-      screen.queryByText('이음산업건설의 소식과 이용 안내를 확인하세요.'),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('안전맛집의 소식과 이용 안내를 확인하세요.')).not.toBeInTheDocument();
     expect(screen.queryByText(/전체\s*100건/)).not.toBeInTheDocument();
   });
 

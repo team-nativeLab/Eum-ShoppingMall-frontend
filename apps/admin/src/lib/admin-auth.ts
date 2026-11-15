@@ -1,4 +1,4 @@
-import { createMemoryStore, createRealAdminAuth, type AdminAuthClient } from '@eum/api/auth';
+import { getBrowserStore, createRealAdminAuth, type AdminAuthClient } from '@eum/api/auth';
 import { getAdminApiConfig } from './api-config';
 
 let adminAuthPromise: Promise<AdminAuthClient> | null = null;
@@ -8,8 +8,8 @@ async function loadAdminAuth(): Promise<AdminAuthClient> {
   const apiConfig = getAdminApiConfig();
   if (import.meta.env.VITE_API_MODE !== 'real' && apiConfig.mode === 'mock') {
     const { createAdminMockAuth } = await import('@eum/api/mock-auth');
-    // Admin 데모 세션은 SPA 메모리에만 유지해 브라우저 저장소에 기록하지 않습니다.
-    return createAdminMockAuth(apiConfig, createMemoryStore());
+    // 목 환경에서 Web 통합 로그인과 동일한 user ID 세션을 공유합니다. 실제 인가는 서버가 담당합니다.
+    return createAdminMockAuth(apiConfig, getBrowserStore());
   }
   return createRealAdminAuth(apiConfig);
 }

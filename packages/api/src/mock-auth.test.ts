@@ -9,6 +9,7 @@ import {
 } from './mock-auth';
 import { mockAdminUsers, mockMembers } from './mock/members';
 import { buildMockConfig } from './test-fixtures';
+import { createMockUnifiedAuth } from './unified-auth';
 
 const sampleMember = mockMembers[0]!;
 const sampleAdmin = mockAdminUsers[0]!;
@@ -136,6 +137,23 @@ describe('일반 회원 목 인증', () => {
       }),
     ).rejects.toMatchObject({ code: 'VALIDATION' });
   });
+
+  it('목 관리자 이메일은 일반 회원 가입 주소로 예약합니다', async () => {
+    const memberAuth = createMemberMockAuth(mockConfig, createMemoryStore());
+    const reservedEmail = sampleAdmin.email;
+    if (!reservedEmail) throw new Error('관리자 목 계정에 예약 이메일이 필요합니다.');
+
+    expect(await memberAuth.isEmailAvailable(reservedEmail)).toBe(false);
+    await expect(
+      memberAuth.signup({
+        email: ` ${reservedEmail.toUpperCase()} `,
+        password: 'password123',
+        name: '일반 가입자',
+        phone: '010-1234-5678',
+        accountType: 'personal',
+      }),
+    ).rejects.toMatchObject({ code: 'VALIDATION' });
+  });
 });
 
 describe('관리자 목 인증 — 일반 회원과 분리', () => {
@@ -157,6 +175,59 @@ describe('관리자 목 인증 — 일반 회원과 분리', () => {
     ).rejects.toMatchObject({
       code: 'INVALID_CREDENTIALS',
     });
+  });
+});
+
+describe('목 통합 로그인 역할 세션 전환', () => {
+  it('회원 로그인에 성공하면 Admin 세션을 제거합니다', async () => {
+    const store = createMemoryStore();
+    await createAdminMockAuth(mockConfig, store).login({
+      loginId: sampleAdmin.loginId,
+      password: 'x',
+    });
+
+    const unifiedAuth = await createMockUnifiedAuth(mockConfig, store);
+    const loginResult = await unifiedAuth.login({ email: sampleMember.email, password: 'x' });
+
+    expect(loginResult.role).toBe('member');
+    expect(store.getItem(ADMIN_SESSION_KEY)).toBeNull();
+    expect(store.getItem(MEMBER_SESSION_KEY)).not.toBeNull();
+  });
+
+  it('Admin 로그인에 성공하면 회원 세션을 제거합니다', async () => {
+    const store = createMemoryStore();
+    await createMemberMockAuth(mockConfig, store).login({
+      email: sampleMember.email,
+      password: 'x',
+    });
+    const adminEmail = sampleAdmin.email;
+    if (!adminEmail) throw new Error('관리자 목 계정에 이메일이 필요합니다.');
+
+    const unifiedAuth = await createMockUnifiedAuth(mockConfig, store);
+    const loginResult = await unifiedAuth.login({ email: adminEmail, password: 'x' });
+
+    expect(loginResult.role).toBe('admin');
+    expect(store.getItem(MEMBER_SESSION_KEY)).toBeNull();
+    expect(store.getItem(ADMIN_SESSION_KEY)).not.toBeNull();
+  });
+
+  it('로그인이 실패하면 기존 역할 세션을 보존합니다', async () => {
+    const store = createMemoryStore();
+    await createMemberMockAuth(mockConfig, store).login({
+      email: sampleMember.email,
+      password: 'x',
+    });
+    const existingMemberSession = store.getItem(MEMBER_SESSION_KEY);
+    store.setItem(ADMIN_SESSION_KEY, JSON.stringify({ version: 1, userId: sampleAdmin.id }));
+    const existingAdminSession = store.getItem(ADMIN_SESSION_KEY);
+    const unifiedAuth = await createMockUnifiedAuth(mockConfig, store);
+
+    await expect(
+      unifiedAuth.login({ email: 'unknown@example.test', password: 'x' }),
+    ).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
+
+    expect(store.getItem(MEMBER_SESSION_KEY)).toBe(existingMemberSession);
+    expect(store.getItem(ADMIN_SESSION_KEY)).toBe(existingAdminSession);
   });
 });
 

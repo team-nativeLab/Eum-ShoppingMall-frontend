@@ -101,6 +101,7 @@ const baseMockProducts: AdminProduct[] = [
     reviewCount: 3,
     createdAt: '2026-09-12T09:00:00.000Z',
     isFeatured: true,
+    isTodayDeal: true,
   },
   {
     id: 'prd-1002',
@@ -146,6 +147,7 @@ const baseMockProducts: AdminProduct[] = [
     reviewCount: 6,
     createdAt: '2026-09-20T09:00:00.000Z',
     isFeatured: true,
+    isTodayDeal: true,
   },
   {
     id: 'prd-1003',

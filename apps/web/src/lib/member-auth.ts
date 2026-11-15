@@ -4,8 +4,10 @@ import {
   type MemberAuthClientWithSignup,
 } from '@eum/api/auth';
 import { getWebApiConfig } from './api-config';
+import { createRealUnifiedAuth, type UnifiedAuthClient } from '@eum/api/unified-auth';
 
 let memberAuthPromise: Promise<MemberAuthClientWithSignup> | null = null;
+let unifiedAuthPromise: Promise<UnifiedAuthClient> | null = null;
 
 // 설정에 맞는 일반 회원 인증 구현을 만드는 함수. real 빌드에서는 목 인증 chunk가 빠집니다.
 async function loadMemberAuth(): Promise<MemberAuthClientWithSignup> {
@@ -27,4 +29,19 @@ export function getMemberAuth(): Promise<MemberAuthClientWithSignup> {
     throw loadError;
   });
   return memberAuthPromise;
+}
+
+export function getUnifiedAuth(): Promise<UnifiedAuthClient> {
+  unifiedAuthPromise ??= (async () => {
+    const apiConfig = getWebApiConfig();
+    if (process.env.NEXT_PUBLIC_API_MODE !== 'real' && apiConfig.mode === 'mock') {
+      const { createMockUnifiedAuth } = await import('@eum/api/unified-auth');
+      return createMockUnifiedAuth(apiConfig, getBrowserStore());
+    }
+    return createRealUnifiedAuth(apiConfig);
+  })().catch((loadError: unknown) => {
+    unifiedAuthPromise = null;
+    throw loadError;
+  });
+  return unifiedAuthPromise;
 }
