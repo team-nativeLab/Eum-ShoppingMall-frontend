@@ -25,6 +25,13 @@ export default defineConfig({
         },
       },
       {
+        test: {
+          name: 'scripts',
+          environment: 'node',
+          include: ['scripts/**/*.test.ts'],
+        },
+      },
+      {
         plugins: [react()],
         test: {
           name: 'ui',
