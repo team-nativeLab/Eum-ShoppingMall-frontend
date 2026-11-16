@@ -41,7 +41,7 @@ describe('Admin Vercel build API configuration', () => {
     ).resolves.toBeDefined();
   });
 
-  it('allows mock mode in Vercel Production only with the explicit opt-in flag', async () => {
+  it('rejects mock mode in Vercel Production even with the explicit opt-in flag', async () => {
     await expect(
       resolveAdminBuildConfig({
         NODE_ENV: 'production',
@@ -51,7 +51,7 @@ describe('Admin Vercel build API configuration', () => {
         VITE_API_BASE_URL: '',
         VITE_ALLOW_MOCK_IN_PRODUCTION: 'true',
       }),
-    ).resolves.toBeDefined();
+    ).rejects.toThrow('Production은 VITE_API_MODE=real이 필요합니다.');
   });
 
   it('rejects Vercel Production mock mode when the opt-in flag is missing', async () => {
@@ -75,7 +75,7 @@ describe('Admin Vercel build API configuration', () => {
         VITE_API_MODE: 'mock',
         VITE_API_BASE_URL: '',
       }),
-    ).rejects.toThrow('VITE_ALLOW_MOCK_IN_PRODUCTION=true');
+    ).rejects.toThrow('Production은 VITE_API_MODE=real이 필요합니다.');
   });
 
   it('rejects mock mode when Vercel does not identify the deployment environment', async () => {

@@ -17,6 +17,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -46,6 +47,7 @@ import {
 
 const ALL_MENU_ID = 'site-header-all-menu';
 const MENU_TRANSITION_DURATION_MS = 160;
+const SAFETY_MATJIP_LOGO_SRC = '/assets/web/safety-matjip-logo.png';
 
 /** 데스크톱 GNB 주요 메뉴. 활성 메뉴는 경로만으로 정하므로 쿼리(useSearchParams)·Suspense가 필요 없습니다. */
 function PrimaryNavigation({ pathname, onNavigate }: { pathname: string; onNavigate: () => void }) {
@@ -359,9 +361,15 @@ export function SiteHeader() {
           <Link
             href="/"
             ref={checkoutLogoRef}
-            className="self-start rounded-4 text-h3 whitespace-nowrap focus-ring sm:self-auto"
+            className="self-start rounded-4 focus-ring sm:self-auto"
           >
-            안전맛집
+            <Image
+              src={SAFETY_MATJIP_LOGO_SRC}
+              alt="안전맛집"
+              width={902}
+              height={366}
+              className="h-40 w-96 object-contain object-left"
+            />
           </Link>
           <ol
             aria-label="주문 진행 단계"
@@ -407,21 +415,6 @@ export function SiteHeader() {
 
   return (
     <>
-      {/* 메뉴가 열리면 본문을 흐리게 합니다. 헤더(z-50)가 이 오버레이(z-40) 위에 있어 헤더는 선명합니다.
-          오버레이를 헤더 안에 두면 짧은 페이지에서 문서 높이가 늘고, 헤더에 opacity·filter를 주면 backdrop-filter가 막히므로 형제로 둡니다.
-          클릭 닫기는 pointerdown 핸들러가 맡습니다. */}
-      {isMenuMounted ? (
-        <div
-          aria-hidden="true"
-          data-menu-backdrop
-          style={{ transitionDuration: `${MENU_TRANSITION_DURATION_MS}ms` }}
-          className={cx(
-            'fixed inset-0 z-40 bg-text-1/10 backdrop-blur-sm transition-opacity ease-out motion-reduce:transition-none',
-            isMenuMotionOpen ? 'opacity-100' : 'opacity-0',
-            !isMenuVisible && 'pointer-events-none',
-          )}
-        />
-      ) : null}
       <header
         className={cx(
           'sticky top-0 border-line bg-bg transition-[box-shadow] duration-200 ease-[cubic-bezier(.2,0,0,1)] motion-reduce:transition-none lg:border-b',
@@ -444,8 +437,14 @@ export function SiteHeader() {
         >
           {/* 로고·메뉴·아이콘은 줄지 않고, 남는 폭은 검색바가 받습니다(1024~1440 어느 폭에서도 겹치지 않음). */}
           <div className="flex w-160 shrink-0 items-center min-[1440px]:w-220">
-            <Link href="/" className="rounded-4 text-h3 whitespace-nowrap focus-ring">
-              안전맛집
+            <Link href="/" className="rounded-4 focus-ring">
+              <Image
+                src={SAFETY_MATJIP_LOGO_SRC}
+                alt="안전맛집"
+                width={902}
+                height={366}
+                className="h-48 w-120 object-contain object-left"
+              />
             </Link>
           </div>
           <PrimaryNavigation pathname={pathname} onNavigate={() => closeMenu()} />
@@ -504,8 +503,14 @@ export function SiteHeader() {
                 >
                   <Icon icon={Menu} size={24} />
                 </button>
-                <Link href="/" className="rounded-4 text-h3 whitespace-nowrap focus-ring">
-                  안전맛집
+                <Link href="/" className="rounded-4 focus-ring">
+                  <Image
+                    src={SAFETY_MATJIP_LOGO_SRC}
+                    alt="안전맛집"
+                    width={902}
+                    height={366}
+                    className="h-32 w-80 object-contain object-left"
+                  />
                 </Link>
               </div>
               <div className="flex items-center">

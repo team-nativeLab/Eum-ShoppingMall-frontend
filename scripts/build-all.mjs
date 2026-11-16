@@ -2,8 +2,8 @@
 //
 // 실제 API가 아직 없으므로, 로컬 검증과 Vercel Preview에서 목 모드 빌드를 지원합니다.
 // - Preview는 테스트용 목 데이터만 사용합니다. 실제 고객 데이터를 넣지 마세요.
-// - Production은 real 모드 또는 *_ALLOW_MOCK_IN_PRODUCTION=true를 동반한 mock 모드만 허용합니다.
-//   real 모드의 API 주소와 HTTPS 검증은 각 앱 빌드 설정이, mock opt-in 검증은 runner와 앱 설정이 합니다.
+// - Production은 두 앱 모두 real 모드와 실제 API 주소를 요구합니다.
+//   모드와 API 주소 검증은 각 앱 빌드 설정이 합니다.
 // - 셸이나 CI에서 *_API_MODE를 지정하면(빈 문자열 포함) 그 값을 그대로 넘깁니다.
 // - 일반 CI(CI=true)에서는 기본값을 넣지 않고 실패합니다. CI는 워크플로 env에 모드를 명시해야 합니다.
 // 크로스 플랫폼(Windows 포함)으로 환경변수를 넘기려고 셸 문법 대신 Node 스크립트를 씁니다.

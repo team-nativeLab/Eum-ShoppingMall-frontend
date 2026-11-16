@@ -62,6 +62,8 @@ jobs:
         run: npm run format:check
 
       - name: 단위 테스트
+        env:
+          TZ: Asia/Seoul
         run: npm run test
 
       - name: 빌드 (web · admin)

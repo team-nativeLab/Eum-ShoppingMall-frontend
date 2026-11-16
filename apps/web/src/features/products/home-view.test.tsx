@@ -147,8 +147,8 @@ beforeEach(() => {
   vi.mocked(getShopApi).mockResolvedValue(createApi());
 });
 
-describe('HomeView desktop section layout', () => {
-  it('follows the W-01 section order and promo geometry without changing mobile sizing', async () => {
+describe('HomeView section layout and responsive promo copy spacing', () => {
+  it('preserves section order, desktop promo geometry, and responsive promo copy spacing', async () => {
     render(<HomeView />, { wrapper: createWrapper() });
 
     const heroSection = await screen.findByRole('region', { name: '주요 프로모션' });
@@ -176,7 +176,7 @@ describe('HomeView desktop section layout', () => {
       expect(description?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
         homeContent.promoBanners[index]?.description.replace(/\s+/g, ' ').trim(),
       );
-      expect(copyCtaGroup).toHaveClass('mt-auto', 'flex', 'flex-col', 'gap-8');
+      expect(copyCtaGroup).toHaveClass('mt-auto', 'flex', 'flex-col', 'gap-8', 'lg:gap-4');
       expect(copyCtaGroup?.firstElementChild).toBe(description);
       expect(copyCtaGroup?.lastElementChild).toBe(promoCta);
       expect(promoCta).not.toBeNull();

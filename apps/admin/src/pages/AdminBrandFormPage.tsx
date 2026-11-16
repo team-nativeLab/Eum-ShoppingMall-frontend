@@ -199,7 +199,10 @@ export function AdminBrandFormPage() {
       <form onSubmit={submit}>
         <div className="grid items-start gap-16 xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,0.85fr)]">
           <div className="grid gap-16">
-            <AdminPanel title="브랜드 기본 정보" bodyClassName="grid gap-16 px-20 py-16">
+            <AdminPanel
+              title="브랜드 기본 정보"
+              bodyClassName="grid gap-16 px-20 py-16 xl:grid-cols-2"
+            >
               <label className="grid gap-6 text-label-s">
                 브랜드명 *
                 <input
@@ -237,64 +240,85 @@ export function AdminBrandFormPage() {
                   className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
                 />
               </label>
-              <label className="grid gap-6 text-label-s">
-                브랜드 로고 URL
-                <input
-                  type="url"
-                  value={logoUrl.startsWith('data:') ? '' : logoUrl}
-                  onChange={(event) => setLogoUrl(event.target.value)}
-                  placeholder="https://…"
-                  className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
-                />
-              </label>
-              <label htmlFor="brand-logo-file" className="grid gap-6 text-label-s">
-                로고 파일 선택 (SVG, PNG · 2MB 이하)
-                <input
-                  id="brand-logo-file"
-                  type="file"
-                  accept="image/svg+xml,image/png"
-                  onChange={(event) =>
-                    void handleImageFile(event, setLogoUrl, 2 * 1024 * 1024, [
-                      'image/svg+xml',
-                      'image/png',
-                    ])
-                  }
-                  className="text-body-s"
-                />
-              </label>
-              {logoUrl ? (
-                <img
-                  src={logoUrl}
-                  alt="브랜드 로고 미리보기"
-                  className="size-80 rounded-8 border border-line object-contain"
-                />
-              ) : null}
-              <label className="grid gap-6 text-label-s">
-                커버 이미지 URL
-                <input
-                  type="url"
-                  value={coverImageUrl.startsWith('data:') ? '' : coverImageUrl}
-                  onChange={(event) => setCoverImageUrl(event.target.value)}
-                  placeholder="https://…"
-                  className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
-                />
-              </label>
-              <label htmlFor="brand-cover-file" className="grid gap-6 text-label-s">
-                커버 파일 선택 (JPG, PNG, WebP · 10MB 이하)
-                <input
-                  id="brand-cover-file"
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  onChange={(event) =>
-                    void handleImageFile(event, setCoverImageUrl, 10 * 1024 * 1024, [
-                      'image/jpeg',
-                      'image/png',
-                      'image/webp',
-                    ])
-                  }
-                  className="text-body-s"
-                />
-              </label>
+              <fieldset className="grid content-start gap-8 rounded-8 border border-line p-12">
+                <legend className="px-4 text-label-s">브랜드 로고</legend>
+                <div className="flex min-h-120 items-center justify-center rounded-8 bg-surface p-12">
+                  {logoUrl ? (
+                    <img
+                      src={logoUrl}
+                      alt="브랜드 로고 미리보기"
+                      className="max-h-96 max-w-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-caption text-text-3">로고 미리보기</span>
+                  )}
+                </div>
+                <label className="grid gap-4 text-caption text-text-2">
+                  로고 이미지 URL
+                  <input
+                    type="url"
+                    value={logoUrl.startsWith('data:') ? '' : logoUrl}
+                    onChange={(event) => setLogoUrl(event.target.value)}
+                    placeholder="https://…"
+                    className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
+                  />
+                </label>
+                <label htmlFor="brand-logo-file" className="grid gap-4 text-caption text-text-2">
+                  로고 파일 선택 (SVG, PNG · 2MB 이하)
+                  <input
+                    id="brand-logo-file"
+                    type="file"
+                    accept="image/svg+xml,image/png"
+                    onChange={(event) =>
+                      void handleImageFile(event, setLogoUrl, 2 * 1024 * 1024, [
+                        'image/svg+xml',
+                        'image/png',
+                      ])
+                    }
+                    className="text-body-s"
+                  />
+                </label>
+              </fieldset>
+              <fieldset className="grid content-start gap-8 rounded-8 border border-line p-12">
+                <legend className="px-4 text-label-s">커버 이미지</legend>
+                <div className="flex min-h-120 items-center justify-center overflow-hidden rounded-8 bg-surface p-12">
+                  {coverImageUrl ? (
+                    <img
+                      src={coverImageUrl}
+                      alt="브랜드 커버 미리보기"
+                      className="max-h-96 max-w-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-caption text-text-3">커버 미리보기</span>
+                  )}
+                </div>
+                <label className="grid gap-4 text-caption text-text-2">
+                  커버 이미지 URL
+                  <input
+                    type="url"
+                    value={coverImageUrl.startsWith('data:') ? '' : coverImageUrl}
+                    onChange={(event) => setCoverImageUrl(event.target.value)}
+                    placeholder="https://…"
+                    className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
+                  />
+                </label>
+                <label htmlFor="brand-cover-file" className="grid gap-4 text-caption text-text-2">
+                  커버 파일 선택 (JPG, PNG, WebP · 10MB 이하)
+                  <input
+                    id="brand-cover-file"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(event) =>
+                      void handleImageFile(event, setCoverImageUrl, 10 * 1024 * 1024, [
+                        'image/jpeg',
+                        'image/png',
+                        'image/webp',
+                      ])
+                    }
+                    className="text-body-s"
+                  />
+                </label>
+              </fieldset>
               <label className="grid gap-6 text-label-s">
                 원산지
                 <input
@@ -363,7 +387,7 @@ export function AdminBrandFormPage() {
                 {message}
               </p>
             ) : null}
-            <div className="flex justify-end gap-8">
+            <div className="sticky bottom-0 flex justify-end gap-8 border border-line bg-bg/95 p-12 backdrop-blur">
               <Link to="/brands" className={buttonClassName({ variant: 'secondary' })}>
                 취소
               </Link>

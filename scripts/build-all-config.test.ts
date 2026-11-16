@@ -13,7 +13,7 @@ describe.each(APP_TARGETS)('$workspace build environment', (appTarget) => {
     expect(buildEnvironment.env?.[appTarget.modeEnv]).toBe('real');
   });
 
-  it('allows Production mock mode only with its app-specific opt-in flag', () => {
+  it('rejects Production mock mode even when its app-specific opt-in flag is set', () => {
     const buildEnvironment = resolveBuildEnvironment(appTarget, {
       VERCEL: '1',
       VERCEL_ENV: 'production',
@@ -21,8 +21,7 @@ describe.each(APP_TARGETS)('$workspace build environment', (appTarget) => {
       [appTarget.allowEnv]: 'true',
     });
 
-    expect(buildEnvironment.error).toBeUndefined();
-    expect(buildEnvironment.env?.[appTarget.allowEnv]).toBe('true');
+    expect(buildEnvironment.error).toContain(`${appTarget.modeEnv}=real`);
   });
 
   it('rejects Production mock mode when its app-specific opt-in flag is missing', () => {
@@ -32,7 +31,7 @@ describe.each(APP_TARGETS)('$workspace build environment', (appTarget) => {
       [appTarget.modeEnv]: 'mock',
     });
 
-    expect(buildEnvironment.error).toContain(`${appTarget.allowEnv}=true`);
+    expect(buildEnvironment.error).toContain(`${appTarget.modeEnv}=real`);
   });
 
   it.each([undefined, ''])('rejects Production when mode is %s', (apiMode) => {
@@ -81,7 +80,6 @@ describe.each(APP_TARGETS)('$workspace build environment', (appTarget) => {
     const buildEnvironment = resolveBuildEnvironment(appTarget, {
       ...vercelEnvironment,
       [appTarget.modeEnv]: 'mock',
-      [appTarget.allowEnv]: 'true',
     });
 
     expect(buildEnvironment.error).toContain('VERCEL_ENV=preview 또는 production');
@@ -117,8 +115,7 @@ describe.each(APP_TARGETS)('$workspace build environment', (appTarget) => {
       [appTarget.allowEnv]: 'true',
     });
 
-    expect(buildEnvironment.error).toBeUndefined();
-    expect(buildEnvironment.env?.[appTarget.modeEnv]).toBe('mock');
+    expect(buildEnvironment.error).toContain(`${appTarget.modeEnv}=real`);
   });
 
   it('defaults an unset local mode to a verification-only mock build', () => {

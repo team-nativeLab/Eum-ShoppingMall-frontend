@@ -22,16 +22,8 @@ export function resolveBuildEnvironment(appTarget, sourceEnv) {
 
   if (isVercelProduction) {
     if (apiMode === 'real') return { env: buildEnv };
-    if (apiMode === 'mock' && buildEnv[appTarget.allowEnv] === 'true') {
-      return { env: buildEnv };
-    }
-    if (apiMode === 'mock') {
-      return {
-        error: `Vercel Production mock 배포에는 ${appTarget.allowEnv}=true가 필요합니다.`,
-      };
-    }
     return {
-      error: `Vercel Production은 ${appTarget.modeEnv}=real 또는 ${appTarget.modeEnv}=mock와 ${appTarget.allowEnv}=true 설정이 필요합니다.`,
+      error: `Vercel Production은 ${appTarget.modeEnv}=real 설정이 필요합니다.`,
     };
   }
 

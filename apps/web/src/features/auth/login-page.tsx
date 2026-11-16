@@ -4,6 +4,7 @@ import { sanitizeRedirectPath } from '@eum/api/redirect';
 import { Button } from '@eum/ui/components/Button';
 import { Checkbox } from '@eum/ui/components/Checkbox';
 import { TextField } from '@eum/ui/components/TextField';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
@@ -92,7 +93,13 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
     <PageContainer className="py-40 lg:pt-96 lg:pb-120">
       <section className="mx-auto flex w-full max-w-400 flex-col gap-32">
         <header className="flex flex-col items-start gap-8">
-          <p className="text-h3 text-text-3">안전맛집</p>
+          <Image
+            src="/assets/web/safety-matjip-logo.png"
+            alt="안전맛집"
+            width={902}
+            height={366}
+            className="h-32 w-80 object-contain object-left"
+          />
           <h1 className="text-h1">로그인</h1>
           <p className="text-body-s text-text-2">안전맛집 계정으로 로그인하세요.</p>
         </header>

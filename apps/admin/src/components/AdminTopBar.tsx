@@ -3,6 +3,7 @@ import { Button, buttonClassName } from '@eum/ui/components/Button';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useMatches, useNavigate } from 'react-router';
 import { endAdminSession } from '@/lib/admin-request-lifecycle';
+import { getAdminApiConfig } from '@/lib/api-config';
 import { currentAdminQueryKey, getAdminAuth } from '@/lib/admin-auth';
 import type { AdminRouteHandle } from '@/routes';
 
@@ -29,6 +30,7 @@ export function AdminTopBar() {
     queryFn: async () => (await getAdminAuth()).getCurrentUser(),
   });
   const webBaseUrl = import.meta.env.VITE_WEB_BASE_URL;
+  const isMockMode = getAdminApiConfig().mode === 'mock';
 
   const breadcrumbItems: BreadcrumbItem[] = [{ label: '관리자', href: '/' }];
   if (currentHandle?.section) breadcrumbItems.push({ label: currentHandle.section });
@@ -59,6 +61,28 @@ export function AdminTopBar() {
         )}
       />
       <div className="flex items-center gap-8">
+        {isMockMode ? (
+          <details className="group relative inline-flex">
+            <summary
+              aria-describedby="admin-mock-data-storage-help"
+              title="목 API 변경 사항은 앱을 실행하는 동안에만 유지되며, 새로고침하거나 앱을 종료하면 사라집니다."
+              className="list-none rounded-6 bg-warning-tint px-8 py-4 text-caption text-warning focus-ring [&::-webkit-details-marker]:hidden"
+            >
+              목 데이터
+            </summary>
+            <span
+              role="tooltip"
+              className="pointer-events-none invisible absolute top-full right-0 z-20 mt-8 w-240 rounded-8 bg-text-1 px-12 py-8 text-caption text-inverse group-open:visible group-focus-within:visible group-hover:visible"
+            >
+              목 API 변경 사항은 앱을 실행하는 동안에만 유지되며, 새로고침하거나 앱을 종료하면
+              사라집니다.
+            </span>
+            <span id="admin-mock-data-storage-help" className="sr-only">
+              목 API 변경 사항은 앱을 실행하는 동안에만 유지되며, 새로고침하거나 앱을 종료하면
+              사라집니다.
+            </span>
+          </details>
+        ) : null}
         {webBaseUrl ? (
           <a
             href={webBaseUrl}

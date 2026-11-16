@@ -1,4 +1,4 @@
-import { assertBuildApiEnv } from '@eum/api/config';
+import { ApiConfigError, assertBuildApiEnv } from '@eum/api/config';
 import type { NextConfig } from 'next';
 import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 
@@ -92,6 +92,10 @@ const nextConfig: NextConfig = {
  * 모드 미지정, mock인데 NEXT_PUBLIC_ALLOW_MOCK_IN_PRODUCTION=true 없음, real인데 baseUrl 없음이면 빌드를 실패시킵니다.
  */
 function assertProductionApiConfig(): void {
+  const isVercelProductionBuild = process.env.VERCEL_ENV === 'production';
+  if (isVercelProductionBuild && process.env.NEXT_PUBLIC_API_MODE !== 'real') {
+    throw new ApiConfigError('Vercel Production 배포는 NEXT_PUBLIC_API_MODE=real만 허용합니다.');
+  }
   const apiConfig = assertBuildApiEnv({
     mode: process.env.NEXT_PUBLIC_API_MODE,
     baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL,
@@ -99,7 +103,17 @@ function assertProductionApiConfig(): void {
     allowMockInProduction: process.env.NEXT_PUBLIC_ALLOW_MOCK_IN_PRODUCTION,
     isProduction: true,
   });
-  if (apiConfig.mode === 'real') assertRealApiBaseUrl(apiConfig.baseUrl);
+  if (apiConfig.mode === 'real') {
+    assertRealApiBaseUrl(apiConfig.baseUrl);
+    if (isVercelProductionBuild) {
+      const apiUrl = new URL(apiConfig.baseUrl);
+      if (apiUrl.hostname.toLowerCase().replace(/\.+$/, '').endsWith('.invalid')) {
+        throw new ApiConfigError(
+          'Vercel Production 배포에는 실제 NEXT_PUBLIC_API_BASE_URL이 필요합니다. Preview placeholder는 사용할 수 없습니다.',
+        );
+      }
+    }
+  }
   console.info(`[api-config] web 운영 빌드 API 모드: ${apiConfig.mode}`);
 }
 

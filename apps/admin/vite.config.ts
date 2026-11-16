@@ -3,7 +3,6 @@ import { ApiConfigError, assertBuildApiEnv } from '@eum/api/config';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
-import type { UserConfigFn } from 'vite';
 
 /**
  * 운영 빌드 시점에 API 설정을 검증하는 함수. 런타임(src/lib/api-config.ts)과 같은 resolveApiConfig를 씁니다.
@@ -25,33 +24,30 @@ function assertBuildApiConfig(viteMode: string): void {
   });
   const isVercelBuild = process.env.VERCEL !== undefined || process.env.VERCEL_ENV !== undefined;
   if (isVercelBuild) {
-    const isVercelPreviewBuild = process.env.VERCEL_ENV === 'preview';
+    const isVercelPreview = process.env.VERCEL_ENV === 'preview';
     const isVercelProductionBuild = process.env.VERCEL_ENV === 'production';
-
-    if (apiConfig.mode === 'mock') {
-      if (!isVercelPreviewBuild && !isVercelProductionBuild) {
-        throw new ApiConfigError(
-          'Vercel mock 배포에는 VERCEL_ENV=preview 또는 production 식별이 필요합니다.',
-        );
+    if (!isVercelPreview && !isVercelProductionBuild) {
+      throw new ApiConfigError(
+        'Vercel 빌드는 VERCEL_ENV=preview 또는 production 식별이 필요합니다.',
+      );
+    }
+    if (apiConfig.mode !== 'real' && !isVercelPreview) {
+      throw new ApiConfigError(
+        'Vercel mock 빌드는 Preview 환경에서만 허용됩니다. Production은 VITE_API_MODE=real이 필요합니다.',
+      );
+    }
+    if (isVercelProductionBuild) {
+      if (apiConfig.mode !== 'real') {
+        throw new ApiConfigError('Vercel Production 배포는 VITE_API_MODE=real만 허용합니다.');
       }
-
-      if (isVercelProductionBuild && readEnv('VITE_ALLOW_MOCK_IN_PRODUCTION') !== 'true') {
-        throw new ApiConfigError(
-          'Vercel Production mock 배포에는 VITE_ALLOW_MOCK_IN_PRODUCTION=true가 필요합니다.',
-        );
-      }
-    } else {
       const apiUrl = new URL(apiConfig.baseUrl);
       const apiHostname = apiUrl.hostname.toLowerCase().replace(/\.+$/, '');
-      if (
-        isVercelProductionBuild &&
-        (apiHostname === 'invalid' || apiHostname.endsWith('.invalid'))
-      ) {
+      if (apiHostname === 'invalid' || apiHostname.endsWith('.invalid')) {
         throw new ApiConfigError(
           'Vercel Production 배포에는 실제 VITE_API_BASE_URL이 필요합니다. Preview placeholder는 사용할 수 없습니다.',
         );
       }
-      if (isVercelProductionBuild && apiUrl.protocol !== 'https:') {
+      if (apiUrl.protocol !== 'https:') {
         throw new ApiConfigError(
           'Vercel Production real 모드의 VITE_API_BASE_URL은 https 주소여야 합니다.',
         );
@@ -62,7 +58,7 @@ function assertBuildApiConfig(viteMode: string): void {
 }
 
 // admin SPA 설정. Tailwind v4는 Vite 플러그인으로 처리하고, "@/"는 src를 가리킵니다(tsconfig paths와 같음).
-const adminConfig: UserConfigFn = ({ command, mode }) => {
+export default defineConfig(({ command, mode }) => {
   if (command === 'build') assertBuildApiConfig(mode);
   return {
     base: command === 'build' ? '/admin/' : '/',
@@ -73,6 +69,4 @@ const adminConfig: UserConfigFn = ({ command, mode }) => {
     server: { port: 5173, strictPort: true },
     preview: { port: 4173, strictPort: true },
   };
-};
-
-export default defineConfig(adminConfig);
+});

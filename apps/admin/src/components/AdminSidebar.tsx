@@ -1,6 +1,7 @@
 import { Badge } from '@eum/ui/components/Badge';
 import { Icon } from '@eum/ui/components/Icon';
 import { cx } from '@eum/ui/lib/cx';
+import safetyMatjipLogoUrl from '@/assets/safety-matjip-logo.png';
 import {
   Building2,
   CalendarDays,
@@ -55,42 +56,44 @@ const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
     ],
   },
   {
-    id: 'operating-content',
-    label: '운영 콘텐츠',
-    items: [
-      { label: '홈 편성', to: '/home-content', icon: PanelsTopLeft },
-      { label: '이벤트 관리', to: '/events', icon: CalendarDays },
-      { label: '공지 관리', to: '/content/notices', icon: Newspaper },
-      { label: 'FAQ 관리', to: '/content/faqs', icon: CircleHelp },
-    ],
-  },
-  {
-    id: 'orders-quotes',
-    label: '주문·견적',
+    id: 'orders',
+    label: '주문 관리',
     items: [
       { label: '주문 관리', to: '/orders', icon: Receipt },
       { label: '취소·반품·교환', to: '/claims', icon: RotateCcw },
-      { label: '견적 문의', to: '/quotes', icon: MessageSquareText },
     ],
   },
   {
-    id: 'inquiries-support',
-    label: '문의·고객지원',
+    id: 'quotes',
+    label: '견적 문의',
+    items: [{ label: '견적 문의', to: '/quotes', icon: MessageSquareText }],
+  },
+  {
+    id: 'members',
+    label: '회원 관리',
+    items: [{ label: '회원 관리', to: '/members', icon: Users }],
+  },
+  {
+    id: 'content',
+    label: '콘텐츠',
     items: [
+      { label: '공지 관리', to: '/content/notices', icon: Newspaper },
+      { label: 'FAQ 관리', to: '/content/faqs', icon: CircleHelp },
+      { label: '회사·정책 정보', to: '/settings/company-policies', icon: Building2 },
       { label: '1:1 문의', to: '/content/inquiries', icon: MessagesSquare },
       { label: '상품 문의', to: '/content/product-questions', icon: MessageCircleQuestion },
       { label: '상품 리뷰', to: '/content/reviews', icon: Star },
+      { label: '홈 편성', to: '/home-content', icon: PanelsTopLeft },
+      { label: '이벤트 관리', to: '/events', icon: CalendarDays },
     ],
   },
   {
-    id: 'members-operations',
-    label: '회원·운영 설정',
+    id: 'operations',
+    label: '운영 설정',
     items: [
-      { label: '회원 관리', to: '/members', icon: Users },
-      { label: '적립금 관리', to: '/points', icon: CircleDollarSign },
       { label: '배송·할인 설정', to: '/settings/shipping-discount', icon: Truck },
-      { label: '회사·정책 정보', to: '/settings/company-policies', icon: Building2 },
       { label: '쿠폰 관리', to: '/coupons', icon: TicketPercent },
+      { label: '적립금 관리', to: '/points', icon: CircleDollarSign },
     ],
   },
 ];
@@ -209,7 +212,13 @@ export function AdminSidebar() {
   return (
     <aside className="sticky top-0 flex h-dvh w-240 shrink-0 flex-col overflow-y-auto border-r border-line bg-bg">
       <div className="flex h-64 shrink-0 items-center gap-8 px-20">
-        <span className="text-title">안전맛집</span>
+        <img
+          src={safetyMatjipLogoUrl}
+          alt="안전맛집"
+          width={902}
+          height={366}
+          className="h-32 w-80 object-contain"
+        />
         <Badge tone="outline">관리자</Badge>
       </div>
       <nav aria-label="관리자 메뉴" className="px-12 pt-8 pb-16">

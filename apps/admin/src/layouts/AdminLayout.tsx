@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AdminSidebar } from '@/components/AdminSidebar';
 import { AdminTopBar } from '@/components/AdminTopBar';
-import { AdminError, AdminLoading, AdminNotice } from '@/components/AdminUI';
+import { AdminError, AdminLoading } from '@/components/AdminUI';
 import { AdminPriceVisibilityPreviewProvider } from '@/lib/admin-price-visibility-preview';
 import { AdminProductExposurePreviewProvider } from '@/lib/admin-product-exposure-preview';
 import { currentAdminQueryKey, getAdminAuth } from '@/lib/admin-auth';
@@ -67,10 +67,6 @@ export function AdminLayout() {
             <AdminTopBar />
             <main id="admin-main-content" tabIndex={-1} className="flex-1 p-32">
               <div className="mx-auto w-full max-w-admin-content">
-                <AdminNotice tone="warning" className="mb-16">
-                  데모 목 데이터입니다. 변경은 현재 앱 런타임에만 저장되며 실제 서버 저장·인가
-                  검증·다른 앱 프로세스와 데이터 공유는 지원하지 않습니다.
-                </AdminNotice>
                 <Outlet />
               </div>
             </main>

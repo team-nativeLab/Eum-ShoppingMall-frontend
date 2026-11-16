@@ -41,7 +41,7 @@ const claim: Claim = {
   type: 'exchange',
   status: 'processing',
   reason: '사이즈 교환',
-  requestedAt: '2026-10-01T00:00:00+09:00',
+  requestedAt: '2026-10-10T12:00:00+09:00',
 };
 
 const address: Address = {

@@ -2,6 +2,7 @@ import { Badge } from '@eum/ui/components/Badge';
 import { Button } from '@eum/ui/components/Button';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { TextField } from '@eum/ui/components/TextField';
+import safetyMatjipLogoUrl from '@/assets/safety-matjip-logo.png';
 import { ApiError } from '@eum/api/errors';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
@@ -122,7 +123,13 @@ export function LoginPage() {
       >
         <div className="mb-32">
           <div className="flex items-center gap-8">
-            <span className="text-title">안전맛집</span>
+            <img
+              src={safetyMatjipLogoUrl}
+              alt="안전맛집"
+              width={902}
+              height={366}
+              className="h-32 w-80 object-contain"
+            />
             <Badge tone="outline">관리자</Badge>
           </div>
           <h1 id="login-title" className="mt-16 text-h2">
