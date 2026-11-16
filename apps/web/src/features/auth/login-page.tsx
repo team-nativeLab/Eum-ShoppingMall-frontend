@@ -96,9 +96,9 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
           <Image
             src="/assets/web/safety-matjip-logo.png"
             alt="안전맛집"
-            width={902}
-            height={366}
-            className="h-32 w-80 object-contain object-left"
+            width={2000}
+            height={667}
+            className="h-32 w-96 object-contain object-left"
           />
           <h1 className="text-h1">로그인</h1>
           <p className="text-body-s text-text-2">안전맛집 계정으로 로그인하세요.</p>

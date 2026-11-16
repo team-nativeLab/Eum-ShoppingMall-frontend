@@ -176,7 +176,7 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
       expect(description?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
         homeContent.promoBanners[index]?.description.replace(/\s+/g, ' ').trim(),
       );
-      expect(copyCtaGroup).toHaveClass('mt-auto', 'flex', 'flex-col', 'gap-8', 'lg:gap-4');
+      expect(copyCtaGroup).toHaveClass('mt-auto', 'flex', 'flex-col', 'gap-11', 'lg:gap-7');
       expect(copyCtaGroup?.firstElementChild).toBe(description);
       expect(copyCtaGroup?.lastElementChild).toBe(promoCta);
       expect(promoCta).not.toBeNull();

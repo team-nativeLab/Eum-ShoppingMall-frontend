@@ -19,6 +19,11 @@ import { ProductCarouselTrack, useCarouselPaging, useHomeCarouselLayout } from '
 import { useCategoriesQuery } from './use-categories-query';
 import { heroSlideStyle, useHeroSlides } from './use-hero-slides';
 import { useHomeQuery } from './use-home-query';
+import { useProductsQuery } from './use-products-query';
+import { useRecommendedProductsQuery } from './use-recommended-products-query';
+
+/** 홈 「오늘의 상품」·「추천상품」 섹션에 가져올 최대 개수 */
+const HOME_SHOWCASE_LIMIT = 10;
 
 const HOME_ERROR_COPY: Record<string, string> = {
   config: '서비스 설정 문제로 홈 콘텐츠를 불러올 수 없습니다.',
@@ -104,6 +109,8 @@ function HomeContentView({ content }: { content: HomeContent }) {
       <PromoBannerSection banners={content.promoBanners} />
 
       <BestSellerSection products={content.featuredProducts} categories={categories} />
+
+      <HomeShowcaseSections />
 
       {content.ctaBand ? (
         <PageContainer className="hidden lg:block">
@@ -396,7 +403,7 @@ function PromoBannerSection({ banners }: { banners: HomeContent['promoBanners'] 
             <Link
               key={banner.id}
               href={banner.destination}
-              className="group relative isolate flex h-216 w-300 shrink-0 snap-start flex-col overflow-hidden rounded-12 bg-surface px-32 py-24 focus-ring lg:h-auto lg:min-h-204 lg:w-auto"
+              className="group relative isolate flex h-216 w-300 shrink-0 snap-start flex-col overflow-hidden rounded-12 bg-surface px-32 pt-24 pb-21 focus-ring lg:h-auto lg:min-h-204 lg:w-auto"
             >
               {banner.imageUrl ? (
                 // CMS가 제공한 배너 이미지 URL을 직접 사용합니다. 첫 화면 아래라 지연 로드합니다.
@@ -423,7 +430,7 @@ function PromoBannerSection({ banners }: { banners: HomeContent['promoBanners'] 
                   </span>
                 ))}
               </h2>
-              <div className="mt-auto flex flex-col gap-8 lg:gap-4">
+              <div className="mt-auto flex flex-col gap-11 lg:gap-7">
                 <p
                   className={cx(
                     'text-body-s whitespace-pre-line',
@@ -601,6 +608,134 @@ function BestSellerSection({
         </Link>
       </section>
     </PageContainer>
+  );
+}
+
+/**
+ * 베스트 셀러 아래의 「오늘의 상품」·「추천상품」 캐러셀. 기존 상품 목록(collection=today)과 추천 API를 그대로 씁니다.
+ * 목록이 비어 있으면 해당 섹션은 그리지 않습니다. 「추천상품」은 헤더 링크(/#recommended-products)의 도착점입니다.
+ */
+function HomeShowcaseSections() {
+  const todayProductsQuery = useProductsQuery({
+    collection: 'today',
+    pageSize: HOME_SHOWCASE_LIMIT,
+  });
+  const recommendedProductsQuery = useRecommendedProductsQuery({ limit: HOME_SHOWCASE_LIMIT });
+  const todayProducts = todayProductsQuery.data?.items ?? [];
+  const recommendedProducts = recommendedProductsQuery.data ?? [];
+
+  return (
+    <>
+      {todayProducts.length > 0 ? (
+        <PageContainer className="mt-48 lg:mt-64">
+          <HomeProductShowcase
+            headingId="today-products-heading"
+            title="오늘의 상품"
+            products={todayProducts}
+            viewAllHref="/today"
+          />
+        </PageContainer>
+      ) : null}
+      {recommendedProducts.length > 0 ? (
+        <PageContainer className="mt-48 lg:mt-64">
+          {/* 고정 헤더에 가리지 않도록 스크롤 위치에 여백을 둡니다. */}
+          <div id="recommended-products" className="scroll-mt-96">
+            <HomeProductShowcase
+              headingId="recommended-products-heading"
+              title="추천상품"
+              products={recommendedProducts}
+              viewAllHref="/search"
+            />
+          </div>
+        </PageContainer>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * 베스트 셀러와 같은 카드·캐러셀 방식의 홈 상품 섹션. 카테고리 탭 없이 제목·전체 보기·이전/다음만 둡니다.
+ * 데스크톱은 홈 전용 캐러셀 레이아웃, 모바일은 2×2 카드 페이지를 스와이프로 넘깁니다.
+ */
+function HomeProductShowcase({
+  headingId,
+  title,
+  products,
+  viewAllHref,
+}: {
+  headingId: string;
+  title: string;
+  products: Product[];
+  viewAllHref: string;
+}) {
+  const desktopLayout = useHomeCarouselLayout();
+  const carouselPaging = useCarouselPaging(
+    Math.ceil(products.length / desktopLayout.pageSize),
+    desktopLayout.pageSize,
+  );
+
+  return (
+    <section aria-labelledby={headingId}>
+      <div className="flex items-center gap-32">
+        <h2 id={headingId} className="shrink-0 text-h2 lg:text-h1">
+          {title}
+        </h2>
+        <Link
+          href={viewAllHref}
+          className="ml-auto hidden shrink-0 items-center gap-4 rounded-4 text-label-m focus-ring hover:text-text-2 lg:inline-flex"
+        >
+          전체 보기
+          <Icon icon={ArrowRight} size={16} />
+        </Link>
+      </div>
+
+      <div className="relative mt-16 lg:mt-24">
+        <ProductCarouselTrack
+          products={products}
+          pageIndex={carouselPaging.pageIndex}
+          direction={carouselPaging.direction}
+          mobileLayout="grid"
+          desktopLayout={desktopLayout}
+          label={title}
+        />
+        {carouselPaging.pageCount > 1 ? (
+          <>
+            <button
+              type="button"
+              onClick={carouselPaging.goToPrevious}
+              disabled={!carouselPaging.canGoPrevious}
+              aria-label={`이전 ${title}`}
+              className="absolute top-1/2 -left-20 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
+            >
+              <Icon icon={ChevronLeft} size={20} />
+            </button>
+            <button
+              type="button"
+              onClick={carouselPaging.goToNext}
+              disabled={!carouselPaging.canGoNext}
+              aria-label={`다음 ${title}`}
+              className="absolute top-1/2 -right-20 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
+            >
+              <Icon icon={ChevronRight} size={20} />
+            </button>
+            <p aria-live="polite" className="sr-only">
+              {carouselPaging.direction === 'none'
+                ? ''
+                : `${carouselPaging.pageCount}페이지 중 ${carouselPaging.pageIndex + 1}페이지`}
+            </p>
+          </>
+        ) : null}
+      </div>
+      <Link
+        href={viewAllHref}
+        className={cx(
+          buttonClassName({ variant: 'secondary', size: 'm', isFullWidth: true }),
+          'mt-16 lg:hidden',
+        )}
+      >
+        {title} 전체 보기
+      </Link>
+    </section>
   );
 }
 

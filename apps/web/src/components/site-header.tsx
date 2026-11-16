@@ -366,9 +366,9 @@ export function SiteHeader() {
             <Image
               src={SAFETY_MATJIP_LOGO_SRC}
               alt="안전맛집"
-              width={902}
-              height={366}
-              className="h-40 w-96 object-contain object-left"
+              width={2000}
+              height={667}
+              className="h-40 w-120 object-contain object-left"
             />
           </Link>
           <ol
@@ -441,9 +441,9 @@ export function SiteHeader() {
               <Image
                 src={SAFETY_MATJIP_LOGO_SRC}
                 alt="안전맛집"
-                width={902}
-                height={366}
-                className="h-48 w-120 object-contain object-left"
+                width={2000}
+                height={667}
+                className="h-48 w-144 object-contain object-left"
               />
             </Link>
           </div>
@@ -507,9 +507,9 @@ export function SiteHeader() {
                   <Image
                     src={SAFETY_MATJIP_LOGO_SRC}
                     alt="안전맛집"
-                    width={902}
-                    height={366}
-                    className="h-32 w-80 object-contain object-left"
+                    width={2000}
+                    height={667}
+                    className="h-32 w-96 object-contain object-left"
                   />
                 </Link>
               </div>

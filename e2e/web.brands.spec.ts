@@ -47,9 +47,9 @@ test('GNB 브랜드에서 브랜드 목록 → 상세 → 브랜드 제품 목�
   await productsCta.click();
   await expect(page).toHaveURL(/\/search\?brand=%EC%9B%8C%ED%81%AC%ED%95%8F$/);
   if (testInfo.project.name === 'web-desktop') {
-    // 브랜드 필터가 걸린 상품 목록은 「제품」이 활성입니다.
+    // 브랜드 필터가 걸린 상품 목록은 「전체상품」이 활성입니다.
     await expect(
-      page.getByRole('navigation', { name: '주요 메뉴' }).getByRole('link', { name: '제품' }),
+      page.getByRole('navigation', { name: '주요 메뉴' }).getByRole('link', { name: '전체상품' }),
     ).toHaveAttribute('aria-current', 'page');
   }
 });
