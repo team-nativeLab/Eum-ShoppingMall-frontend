@@ -22,7 +22,7 @@ export const mockMembers: Member[] = [
   },
   {
     id: 'mem-003',
-    email: 'ttagno4230@gmail.com',
+    email: 'demo-member@example.test',
     name: '데모 회원',
     phone: '010-0000-0003',
     joinedAt: '2026-10-01T09:00:00+09:00',
@@ -32,6 +32,12 @@ export const mockMembers: Member[] = [
 
 /** 목 관리자 계정. 일반 회원과 완전히 분리된 목록입니다. */
 export const mockAdminUsers: AdminUser[] = [
-  { id: 'adm-001', loginId: 'admin', name: '관리자', role: 'owner' },
-  { id: 'adm-002', loginId: 'manager', name: '운영 담당', role: 'manager' },
+  { id: 'adm-001', loginId: 'admin', email: 'admin@example.com', name: '관리자', role: 'owner' },
+  {
+    id: 'adm-002',
+    loginId: 'manager',
+    email: 'manager@example.com',
+    name: '운영 담당',
+    role: 'manager',
+  },
 ];

@@ -8,6 +8,7 @@ import {
   AdminLoading,
   AdminNotice,
   AdminPageHeader,
+  AdminSelect,
   formatAdminDateTime,
 } from '@/components/AdminUI';
 import { getShopApi } from '@/lib/shop-api';
@@ -303,7 +304,7 @@ function ClaimDetails({
         <label htmlFor="claim-status" className="text-label-m">
           처리 상태
         </label>
-        <select
+        <AdminSelect
           id="claim-status"
           value={status}
           disabled={claim.type === 'cancel' && status === 'completed'}
@@ -320,7 +321,7 @@ function ClaimDetails({
               {option.label}
             </option>
           ))}
-        </select>
+        </AdminSelect>
         {claim.type === 'cancel' ? (
           <p className="text-caption text-text-3">
             취소 완료는 주문·재고·쿠폰·적립금을 함께 처리하는 전용 동작으로만 진행합니다.

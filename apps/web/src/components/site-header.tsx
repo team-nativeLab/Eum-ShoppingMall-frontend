@@ -17,6 +17,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -46,6 +47,7 @@ import {
 
 const ALL_MENU_ID = 'site-header-all-menu';
 const MENU_TRANSITION_DURATION_MS = 160;
+const SAFETY_MATJIP_LOGO_SRC = '/assets/web/safety-matjip-logo.png';
 
 /** 데스크톱 GNB 주요 메뉴. 활성 메뉴는 경로만으로 정하므로 쿼리(useSearchParams)·Suspense가 필요 없습니다. */
 function PrimaryNavigation({ pathname, onNavigate }: { pathname: string; onNavigate: () => void }) {
@@ -359,9 +361,15 @@ export function SiteHeader() {
           <Link
             href="/"
             ref={checkoutLogoRef}
-            className="self-start rounded-4 text-h3 whitespace-nowrap focus-ring sm:self-auto"
+            className="self-start rounded-4 focus-ring sm:self-auto"
           >
-            이음산업건설
+            <Image
+              src={SAFETY_MATJIP_LOGO_SRC}
+              alt="안전맛집"
+              width={902}
+              height={366}
+              className="h-40 w-96 object-contain object-left"
+            />
           </Link>
           <ol
             aria-label="주문 진행 단계"
@@ -429,8 +437,14 @@ export function SiteHeader() {
         >
           {/* 로고·메뉴·아이콘은 줄지 않고, 남는 폭은 검색바가 받습니다(1024~1440 어느 폭에서도 겹치지 않음). */}
           <div className="flex w-160 shrink-0 items-center min-[1440px]:w-220">
-            <Link href="/" className="rounded-4 text-h3 whitespace-nowrap focus-ring">
-              이음산업건설
+            <Link href="/" className="rounded-4 focus-ring">
+              <Image
+                src={SAFETY_MATJIP_LOGO_SRC}
+                alt="안전맛집"
+                width={902}
+                height={366}
+                className="h-48 w-120 object-contain object-left"
+              />
             </Link>
           </div>
           <PrimaryNavigation pathname={pathname} onNavigate={() => closeMenu()} />
@@ -465,7 +479,7 @@ export function SiteHeader() {
               aria-label={isMenuVisible ? '전체 메뉴 닫기' : '전체 메뉴 열기'}
               aria-controls={ALL_MENU_ID}
               aria-expanded={isMenuVisible}
-              className="inline-flex size-44 items-center justify-center rounded-8 focus-ring hover:bg-surface"
+              className="site-mega-menu-trigger inline-flex size-44 items-center justify-center rounded-8 focus-ring hover:bg-surface"
             >
               <Icon icon={Menu} size={24} />
             </button>
@@ -489,8 +503,14 @@ export function SiteHeader() {
                 >
                   <Icon icon={Menu} size={24} />
                 </button>
-                <Link href="/" className="rounded-4 text-h3 whitespace-nowrap focus-ring">
-                  이음산업건설
+                <Link href="/" className="rounded-4 focus-ring">
+                  <Image
+                    src={SAFETY_MATJIP_LOGO_SRC}
+                    alt="안전맛집"
+                    width={902}
+                    height={366}
+                    className="h-32 w-80 object-contain object-left"
+                  />
                 </Link>
               </div>
               <div className="flex items-center">
@@ -861,41 +881,21 @@ function AllMenuDropdown({
       ],
     },
     {
-      title: '브랜드',
+      title: '베스트',
+      items: [{ label: '베스트 상품', href: '/best' }],
+    },
+    {
+      title: '오늘의 상품',
+      items: [{ label: '오늘의 상품 모두 보기', href: '/today' }],
+    },
+    {
+      title: '브랜드몰',
       items: [
         ...brandList.map((brandSummary) => ({
           label: brandSummary.name,
           href: buildBrandHref(brandSummary.id),
         })),
         { label: '전체 브랜드', href: buildBrandHref() },
-      ],
-    },
-    {
-      title: '안전 솔루션',
-      items: [
-        { label: '맞춤 제작/납품', href: '/solutions' },
-        { label: '견적 문의', href: '/solutions' },
-        { label: '도입 사례', href: '/solutions' },
-      ],
-    },
-    {
-      title: '고객지원',
-      items: [
-        { label: '공지사항', href: '/support/notices' },
-        { label: 'FAQ', href: '/support/faq' },
-        { label: '1:1 문의', href: '/support/inquiry' },
-        { label: '이벤트', href: '/events' },
-      ],
-    },
-    {
-      title: '회사소개',
-      items: [
-        { label: '개요', href: '/about' },
-        { label: '사업분야', href: '/about' },
-        { label: '연혁', href: '/about' },
-        { label: '인증', href: '/about' },
-        { label: '파트너', href: '/about' },
-        { label: '오시는 길', href: '/about' },
       ],
     },
   ];
@@ -919,7 +919,7 @@ function AllMenuDropdown({
           </button>
         </div>
       </div>
-      <div className="grid grid-cols-1 content-start gap-x-16 gap-y-8 px-16 py-12 lg:grid-cols-5 lg:gap-x-24 lg:gap-y-0 lg:px-24 lg:py-24">
+      <div className="grid grid-cols-1 content-start gap-x-16 gap-y-8 px-16 py-12 lg:grid-cols-4 lg:gap-x-24 lg:gap-y-0 lg:px-24 lg:py-24">
         {menuSections.map((menuSection) => (
           <MenuColumn
             key={menuSection.title}

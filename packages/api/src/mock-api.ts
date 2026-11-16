@@ -19,6 +19,7 @@ import { mockMembers } from './mock/members';
 import { mockClaims, mockOrders } from './mock/orders';
 import { mockProducts } from './mock/products';
 import { mockReviews } from './mock/reviews';
+import { mockSuppliers } from './mock/suppliers';
 import { mockRecommendedKeywords } from './mock/search';
 import {
   mockEvents,
@@ -37,6 +38,7 @@ import type {
   AdminProductQuestionUpdate,
   AdminNoticeInput,
   AdminProductInput,
+  AdminSupplierInput,
   QuoteSubmitInput,
   ProductFacetParams,
   RequestOptions,
@@ -44,6 +46,7 @@ import type {
 } from './shop-api';
 import type {
   AdminProduct,
+  AdminSupplier,
   AdminCoupon,
   AdminPoint,
   AdminHomeContentInput,
@@ -104,6 +107,7 @@ function toBuyerProduct(product: AdminProduct): Product {
     dimensions: _dimensions,
     weight: _weight,
     skus: adminSkus,
+    supplierId: _supplierId,
     ...buyerFields
   } = product;
   return {
@@ -361,6 +365,8 @@ export function createMockApi(
   assertMockAllowed(config);
   let orderSequence = 0;
   const products = structuredClone(mockProducts);
+  const suppliers = structuredClone(mockSuppliers);
+  for (const product of products) product.supplierId ??= suppliers[0]?.id;
   const categories = structuredClone(mockCategories);
   const brands = structuredClone(mockBrands);
   const adminCoupons = structuredClone(mockAdminCoupons);
@@ -458,6 +464,7 @@ export function createMockApi(
     ctaBand: structuredClone(mockHomeCtaBand),
   };
   let productSequence = products.length + 1;
+  let supplierSequence = suppliers.length + 1;
   let categorySequence = categories.length + 1;
   let brandSequence = brands.length + 1;
   let eventSequence = events.length + 1;
@@ -631,6 +638,45 @@ export function createMockApi(
   }
 
   return {
+    suppliers: {
+      adminList: (options) => respondList(suppliers, options),
+      async saveAdmin(input: AdminSupplierInput, options) {
+        await prepareMutation(options, '발주처');
+        if (
+          !input.companyName.trim() ||
+          !input.contactName.trim() ||
+          !input.contactPhone.trim() ||
+          !input.contactEmail.trim() ||
+          (input.orderChannel === 'email' && !input.orderEmail?.trim()) ||
+          (input.orderChannel === 'fax' && !input.orderFax?.trim())
+        ) {
+          throw new ApiError('VALIDATION', '발주처 필수 정보를 입력해 주세요.');
+        }
+        const currentIndex = input.id
+          ? suppliers.findIndex((supplier) => supplier.id === input.id)
+          : -1;
+        if (input.id && currentIndex < 0)
+          throw new ApiError('NOT_FOUND', '발주처를 찾을 수 없습니다.');
+        const nextSupplier: AdminSupplier = {
+          ...structuredClone(input),
+          id: input.id ?? `sup-${String(supplierSequence++).padStart(3, '0')}`,
+          orderEmail: input.orderChannel === 'email' ? (input.orderEmail?.trim() ?? null) : null,
+          orderFax: input.orderChannel === 'fax' ? (input.orderFax?.trim() ?? null) : null,
+        };
+        if (currentIndex < 0) suppliers.unshift(nextSupplier);
+        else suppliers[currentIndex] = nextSupplier;
+        return structuredClone(nextSupplier);
+      },
+      async deleteAdmin(supplierId, options) {
+        await prepareMutation(options, '발주처');
+        const supplierIndex = suppliers.findIndex((supplier) => supplier.id === supplierId);
+        if (supplierIndex < 0) throw new ApiError('NOT_FOUND', '발주처를 찾을 수 없습니다.');
+        if (products.some((product) => product.supplierId === supplierId)) {
+          throw new ApiError('VALIDATION', '상품에 연결된 발주처는 삭제할 수 없습니다.');
+        }
+        suppliers.splice(supplierIndex, 1);
+      },
+    },
     products: {
       async list(params = {}, options): Promise<PagedResult<Product>> {
         const keyword = params.keyword?.trim().toLowerCase() ?? '';
@@ -639,6 +685,8 @@ export function createMockApi(
         const certificationFilters = new Set(params.certification ?? []);
         const filteredProducts = products.filter((product) => {
           if (!isBuyerVisibleProduct(product)) return false;
+          if (params.collection === 'featured' && !product.isFeatured) return false;
+          if (params.collection === 'today' && !product.isTodayDeal) return false;
           const matchesCategory = categoryIds === null || categoryIds.has(product.categoryId);
           const matchesBrand = brandFilters.size === 0 || brandFilters.has(product.brand);
           const matchesCertification =
@@ -875,14 +923,17 @@ export function createMockApi(
       },
       async saveAdmin(input: AdminProductInput, options) {
         await prepareMutation(options, '상품');
-        if (!input.name.trim() || !input.brand.trim() || !input.categoryId) {
-          throw new ApiError('VALIDATION', '상품명·브랜드·카테고리를 입력해 주세요.');
+        if (!input.name.trim() || !input.brand.trim() || !input.categoryId || !input.supplierId) {
+          throw new ApiError('VALIDATION', '상품명·브랜드·카테고리·발주처를 입력해 주세요.');
         }
         if (!Number.isFinite(input.price) || input.price < 0) {
           throw new ApiError('VALIDATION', '판매가를 확인해 주세요.');
         }
         if (!categories.some((category) => category.id === input.categoryId)) {
           throw new ApiError('VALIDATION', '존재하는 카테고리를 선택해 주세요.');
+        }
+        if (!suppliers.some((supplier) => supplier.id === input.supplierId)) {
+          throw new ApiError('VALIDATION', '등록된 발주처를 선택해 주세요.');
         }
         const existingProduct = input.id
           ? products.find((product) => product.id === input.id)

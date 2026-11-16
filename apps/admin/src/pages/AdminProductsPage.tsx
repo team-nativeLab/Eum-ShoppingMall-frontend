@@ -11,6 +11,7 @@ import {
   AdminLoading,
   AdminNotice,
   AdminPageHeader,
+  AdminSelect,
   AdminStatusBadge,
   AdminTabs,
   formatAdminCurrency,
@@ -91,6 +92,7 @@ export function AdminProductsPage() {
   const [searchText, setSearchText] = useState('');
   const [keyword, setKeyword] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [stockStatus, setStockStatus] = useState('all');
   const [salesStatus, setSalesStatus] = useState('all');
   const [priceVisibility, setPriceVisibility] = useState('all');
   const [exposure, setExposure] = useState('all');
@@ -128,6 +130,7 @@ export function AdminProductsPage() {
         if (tab === 'hiddenExposure') return !(product.isVisible ?? true);
         return true;
       })
+      .filter((product) => stockStatus === 'all' || product.stockStatus === stockStatus)
       .filter(
         (product) => salesStatus === 'all' || (product.salesStatus ?? 'active') === salesStatus,
       )
@@ -148,6 +151,7 @@ export function AdminProductsPage() {
       );
   }, [
     productQuery.data,
+    stockStatus,
     salesStatus,
     priceVisibility,
     exposure,
@@ -162,6 +166,7 @@ export function AdminProductsPage() {
         ...product,
         stockStatus: stockStatusOverrides[product.id] ?? product.stockStatus,
       }))
+      .filter((product) => stockStatus === 'all' || product.stockStatus === stockStatus)
       .filter(
         (product) => salesStatus === 'all' || (product.salesStatus ?? 'active') === salesStatus,
       )
@@ -175,7 +180,14 @@ export function AdminProductsPage() {
           exposure === 'all' ||
           (exposure === 'visible' ? (product.isVisible ?? true) : !(product.isVisible ?? true)),
       );
-  }, [productQuery.data, salesStatus, priceVisibility, exposure, stockStatusOverrides]);
+  }, [
+    productQuery.data,
+    stockStatus,
+    salesStatus,
+    priceVisibility,
+    exposure,
+    stockStatusOverrides,
+  ]);
 
   if (productQuery.isPending) return <AdminLoading label="상품 목록을 불러오고 있습니다." />;
   if (productQuery.isError && !productQuery.data)
@@ -319,6 +331,7 @@ export function AdminProductsPage() {
     setSearchText('');
     setKeyword('');
     setCategoryId('');
+    setStockStatus('all');
     setSalesStatus('all');
     setPriceVisibility('all');
     setExposure('all');
@@ -372,7 +385,7 @@ export function AdminProductsPage() {
         </AdminNotice>
       ) : null}
       <form
-        className="mt-16 flex items-center gap-8 rounded-12 border border-line bg-bg p-12"
+        className="mt-16 flex flex-wrap items-center gap-8 rounded-12 border border-line bg-bg p-12"
         onSubmit={handleSearch}
       >
         <label className="flex h-40 min-w-240 flex-1 items-center rounded-8 border border-line-control px-12">
@@ -388,7 +401,7 @@ export function AdminProductsPage() {
         <label className="sr-only" htmlFor="admin-product-category">
           카테고리 필터
         </label>
-        <select
+        <AdminSelect
           id="admin-product-category"
           value={categoryId}
           onChange={(event) => {
@@ -397,7 +410,8 @@ export function AdminProductsPage() {
             setSelectedIds([]);
             setPendingHideProducts([]);
           }}
-          className="h-40 w-160 rounded-8 border border-line-control bg-bg px-12 text-body-s"
+          wrapperClassName="w-160"
+          className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
         >
           <option value="">카테고리 전체</option>
           {productQuery.data.categories.map((category) => (
@@ -405,11 +419,30 @@ export function AdminProductsPage() {
               {category.name}
             </option>
           ))}
-        </select>
+        </AdminSelect>
+        <label className="sr-only" htmlFor="admin-product-stock-status">
+          재고 상태 필터
+        </label>
+        <AdminSelect
+          id="admin-product-stock-status"
+          value={stockStatus}
+          onChange={(event) => {
+            setStockStatus(event.target.value);
+            setPage(1);
+            setSelectedIds([]);
+            setPendingHideProducts([]);
+          }}
+          wrapperClassName="w-144"
+          className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
+        >
+          <option value="all">재고 상태 전체</option>
+          <option value="inStock">재고 있음</option>
+          <option value="soldOut">재고 없음</option>
+        </AdminSelect>
         <label className="sr-only" htmlFor="admin-product-sales-status">
           판매 상태 필터
         </label>
-        <select
+        <AdminSelect
           id="admin-product-sales-status"
           value={salesStatus}
           onChange={(event) => {
@@ -418,17 +451,18 @@ export function AdminProductsPage() {
             setSelectedIds([]);
             setPendingHideProducts([]);
           }}
-          className="h-40 w-144 rounded-8 border border-line-control bg-bg px-12 text-body-s"
+          wrapperClassName="w-144"
+          className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
         >
           <option value="all">판매 상태 전체</option>
           <option value="active">판매중</option>
           <option value="paused">판매 중지</option>
           <option value="ended">판매 종료</option>
-        </select>
+        </AdminSelect>
         <label className="sr-only" htmlFor="admin-product-price-visibility">
           금액 표시 필터
         </label>
-        <select
+        <AdminSelect
           id="admin-product-price-visibility"
           value={priceVisibility}
           onChange={(event) => {
@@ -437,16 +471,17 @@ export function AdminProductsPage() {
             setSelectedIds([]);
             setPendingHideProducts([]);
           }}
-          className="h-40 w-144 rounded-8 border border-line-control bg-bg px-12 text-body-s"
+          wrapperClassName="w-144"
+          className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
         >
           <option value="all">금액 표시 전체</option>
           <option value="visible">금액 표시</option>
           <option value="hidden">금액 미표시</option>
-        </select>
+        </AdminSelect>
         <label className="sr-only" htmlFor="admin-product-exposure">
           노출 필터
         </label>
-        <select
+        <AdminSelect
           id="admin-product-exposure"
           value={exposure}
           onChange={(event) => {
@@ -455,17 +490,18 @@ export function AdminProductsPage() {
             setSelectedIds([]);
             setPendingHideProducts([]);
           }}
-          className="h-40 w-144 rounded-8 border border-line-control bg-bg px-12 text-body-s"
+          wrapperClassName="w-144"
+          className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
         >
           <option value="all">노출 전체</option>
           <option value="visible">노출</option>
           <option value="hidden">숨김</option>
-        </select>
-        <Button type="button" variant="ghost" size="s" onClick={handleReset}>
-          초기화
-        </Button>
+        </AdminSelect>
         <Button type="submit" size="s">
           검색
+        </Button>
+        <Button type="button" variant="secondary" size="s" onClick={handleReset}>
+          초기화
         </Button>
       </form>
 
@@ -481,7 +517,7 @@ export function AdminProductsPage() {
             <label className="sr-only" htmlFor="admin-product-sort">
               정렬 기준
             </label>
-            <select
+            <AdminSelect
               id="admin-product-sort"
               value={sortOrder}
               onChange={(event) => setSortOrder(event.target.value)}
@@ -489,11 +525,11 @@ export function AdminProductsPage() {
             >
               <option value="recent">최근 등록순</option>
               <option value="oldest">오래된 순</option>
-            </select>
+            </AdminSelect>
             <label className="sr-only" htmlFor="admin-product-page-size">
               페이지당 표시 수
             </label>
-            <select
+            <AdminSelect
               id="admin-product-page-size"
               value={pageSize}
               onChange={(event) => {
@@ -505,7 +541,7 @@ export function AdminProductsPage() {
               <option value={10}>10개씩</option>
               <option value={20}>20개씩</option>
               <option value={50}>50개씩</option>
-            </select>
+            </AdminSelect>
           </div>
         </div>
         {selectedProducts.length > 0 ? (

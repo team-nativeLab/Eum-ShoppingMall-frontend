@@ -100,7 +100,7 @@ export function EventsPage() {
   return (
     <PageContainer className="px-16 pt-24 pb-64 sm:px-20 lg:pt-40 lg:pb-80">
       <header className="mb-24 flex flex-col gap-8 lg:mb-32">
-        <p className="text-caption text-text-3">이음산업건설</p>
+        <p className="text-caption text-text-3">안전맛집</p>
         <h1 className="text-h1 lg:text-web-h2">이벤트</h1>
         <p className="max-w-560 text-body-m text-text-2">현장에 필요한 상품과 소식을 만나보세요.</p>
       </header>

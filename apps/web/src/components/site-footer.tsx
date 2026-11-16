@@ -9,6 +9,12 @@ import { useCompanyInfoQuery } from '@/features/company/use-company-info-query';
 import { PageContainer } from './page-container';
 
 const FOOTER_LINKS = [
+  { label: '제품', href: '/search', isEmphasized: false, isDesktopOnly: false },
+  { label: '베스트', href: '/best', isEmphasized: false, isDesktopOnly: false },
+  { label: '오늘의 상품', href: '/today', isEmphasized: false, isDesktopOnly: false },
+  { label: '브랜드몰', href: '/brands', isEmphasized: false, isDesktopOnly: false },
+  { label: '안전 솔루션', href: '/solutions', isEmphasized: false, isDesktopOnly: true },
+  { label: '회사소개', href: '/about', isEmphasized: false, isDesktopOnly: true },
   { label: '이용약관', href: '/terms', isEmphasized: false, isDesktopOnly: false },
   { label: '개인정보처리방침', href: '/privacy', isEmphasized: true, isDesktopOnly: false },
   { label: '이용안내', href: '/guide', isEmphasized: false, isDesktopOnly: true },
@@ -114,7 +120,7 @@ export function SiteFooter() {
       <PageContainer className="hidden pt-56 pb-48 lg:block">
         <div className="flex items-center justify-between gap-24">
           <Link href="/" className="rounded-4 text-h3 focus-ring">
-            이음산업건설
+            안전맛집
           </Link>
           <nav aria-label="푸터 메뉴" className="flex items-center gap-24">
             {FOOTER_LINKS.map((footerLink) => (
@@ -152,7 +158,7 @@ export function SiteFooter() {
 
       <PageContainer className="flex flex-col gap-12 pt-32 pb-40 lg:hidden">
         <Link href="/" className="self-start rounded-4 text-h3 focus-ring">
-          이음산업건설
+          안전맛집
         </Link>
         {companyInfoQuery.isError ? <CompanyInfoError onRetry={retryCompanyInfo} /> : null}
         {companyInfo ? (

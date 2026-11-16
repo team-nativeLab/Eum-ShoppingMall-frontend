@@ -24,18 +24,34 @@ function assertBuildApiConfig(viteMode: string): void {
   });
   const isVercelBuild = process.env.VERCEL !== undefined || process.env.VERCEL_ENV !== undefined;
   if (isVercelBuild) {
-    if (apiConfig.mode !== 'real') {
-      throw new ApiConfigError('Vercel 배포는 VITE_API_MODE=real만 허용합니다.');
-    }
+    const isVercelPreview = process.env.VERCEL_ENV === 'preview';
     const isVercelProductionBuild = process.env.VERCEL_ENV === 'production';
-    const apiHostname = new URL(apiConfig.baseUrl).hostname.toLowerCase().replace(/\.+$/, '');
-    if (
-      isVercelProductionBuild &&
-      (apiHostname === 'invalid' || apiHostname.endsWith('.invalid'))
-    ) {
+    if (!isVercelPreview && !isVercelProductionBuild) {
       throw new ApiConfigError(
-        'Vercel Production 배포에는 실제 VITE_API_BASE_URL이 필요합니다. Preview placeholder는 사용할 수 없습니다.',
+        'Vercel 빌드는 VERCEL_ENV=preview 또는 production 식별이 필요합니다.',
       );
+    }
+    if (apiConfig.mode !== 'real' && !isVercelPreview) {
+      throw new ApiConfigError(
+        'Vercel mock 빌드는 Preview 환경에서만 허용됩니다. Production은 VITE_API_MODE=real이 필요합니다.',
+      );
+    }
+    if (isVercelProductionBuild) {
+      if (apiConfig.mode !== 'real') {
+        throw new ApiConfigError('Vercel Production 배포는 VITE_API_MODE=real만 허용합니다.');
+      }
+      const apiUrl = new URL(apiConfig.baseUrl);
+      const apiHostname = apiUrl.hostname.toLowerCase().replace(/\.+$/, '');
+      if (apiHostname === 'invalid' || apiHostname.endsWith('.invalid')) {
+        throw new ApiConfigError(
+          'Vercel Production 배포에는 실제 VITE_API_BASE_URL이 필요합니다. Preview placeholder는 사용할 수 없습니다.',
+        );
+      }
+      if (apiUrl.protocol !== 'https:') {
+        throw new ApiConfigError(
+          'Vercel Production real 모드의 VITE_API_BASE_URL은 https 주소여야 합니다.',
+        );
+      }
     }
   }
   console.info(`[api-config] admin 빌드(${viteMode}) API 모드: ${apiConfig.mode}`);
@@ -45,6 +61,7 @@ function assertBuildApiConfig(viteMode: string): void {
 export default defineConfig(({ command, mode }) => {
   if (command === 'build') assertBuildApiConfig(mode);
   return {
+    base: command === 'build' ? '/admin/' : '/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },

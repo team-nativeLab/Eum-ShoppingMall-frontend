@@ -69,7 +69,7 @@ const homeContent: HomeContent = {
       id: 'promo-two',
       title: ['두 번째 안내'],
       description:
-        '현장의 상황과 작업 환경에 맞는 안전 솔루션을 제안하며, 필요한 제품과 맞춤 서비스를 함께 안내합니다.\n이음산업건설이 현장별 선택을 돕습니다.',
+        '현장의 상황과 작업 환경에 맞는 안전 솔루션을 제안하며, 필요한 제품과 맞춤 서비스를 함께 안내합니다.\n안전맛집이 현장별 선택을 돕습니다.',
       imageUrl: '',
       tone: 'light',
       destination: '/about',
@@ -147,8 +147,8 @@ beforeEach(() => {
   vi.mocked(getShopApi).mockResolvedValue(createApi());
 });
 
-describe('HomeView desktop section layout', () => {
-  it('follows the W-01 section order and promo geometry without changing mobile sizing', async () => {
+describe('HomeView section layout and responsive promo copy spacing', () => {
+  it('preserves section order, desktop promo geometry, and responsive promo copy spacing', async () => {
     render(<HomeView />, { wrapper: createWrapper() });
 
     const heroSection = await screen.findByRole('region', { name: '주요 프로모션' });
@@ -176,7 +176,7 @@ describe('HomeView desktop section layout', () => {
       expect(description?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
         homeContent.promoBanners[index]?.description.replace(/\s+/g, ' ').trim(),
       );
-      expect(copyCtaGroup).toHaveClass('mt-auto', 'flex', 'flex-col', 'gap-4');
+      expect(copyCtaGroup).toHaveClass('mt-auto', 'flex', 'flex-col', 'gap-8', 'lg:gap-4');
       expect(copyCtaGroup?.firstElementChild).toBe(description);
       expect(copyCtaGroup?.lastElementChild).toBe(promoCta);
       expect(promoCta).not.toBeNull();

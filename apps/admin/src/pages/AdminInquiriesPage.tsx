@@ -8,6 +8,7 @@ import {
   AdminLoading,
   AdminNotice,
   AdminPageHeader,
+  AdminSelect,
   formatAdminDateTime,
 } from '@/components/AdminUI';
 import { getShopApi } from '@/lib/shop-api';
@@ -136,14 +137,14 @@ export function AdminInquiriesPage() {
             </label>
             <label className="mt-16 grid gap-8 text-label-m">
               처리 상태
-              <select
+              <AdminSelect
                 value={activeStatus}
                 onChange={(event) => setStatus(event.target.value as InquiryStatus)}
                 className="h-40 rounded-8 border border-line-control bg-bg px-12"
               >
                 <option value="waiting">답변 대기</option>
                 <option value="answered">답변 완료</option>
-              </select>
+              </AdminSelect>
             </label>
             <div className="mt-16 flex items-center justify-between">
               <span className="text-caption text-text-3">

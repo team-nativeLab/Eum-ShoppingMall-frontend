@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AdminBrand, AdminProduct, Category } from '@eum/api/types';
+import type { AdminBrand, AdminProduct, AdminSupplier, Category } from '@eum/api/types';
 import { AdminPriceVisibilityPreviewProvider } from '@/lib/admin-price-visibility-preview';
 import { AdminProductFormPage } from './AdminProductFormPage';
 
@@ -45,12 +45,26 @@ const brandFixture: AdminBrand = {
   isFeatured: false,
 };
 
+const supplierFixture: AdminSupplier = {
+  id: 'supplier-one',
+  companyName: '안전 공급사',
+  contactName: '담당자',
+  contactPhone: '010-0000-0000',
+  contactEmail: 'contact@example.com',
+  orderChannel: 'email',
+  orderEmail: 'orders@example.com',
+  orderFax: null,
+  address: '',
+  memo: '',
+};
+
 function createProductFixture(
   detailDescription: string,
   detailDescriptionFormat?: AdminProduct['detailDescriptionFormat'],
 ): AdminProduct {
   return {
     id: 'product-edit',
+    supplierId: supplierFixture.id,
     name: '기존 안전모',
     brand: brandFixture.name,
     categoryId: 'helmet',
@@ -123,6 +137,7 @@ describe('Admin 상품 등록·수정 폼', () => {
     shopMocks.getShopApi.mockResolvedValue({
       categories: { adminList: vi.fn(async () => structuredClone(categoriesFixture)) },
       brands: { adminList: vi.fn(async () => [structuredClone(brandFixture)]) },
+      suppliers: { adminList: vi.fn(async () => [structuredClone(supplierFixture)]) },
       products: { adminList: vi.fn(async () => structuredClone(products)), saveAdmin },
     });
     HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -150,12 +165,18 @@ describe('Admin 상품 등록·수정 폼', () => {
     await user.click(screen.getByRole('radio', { name: '품절' }));
     await user.clear(screen.getByLabelText('상품 코드'));
     await user.type(screen.getByLabelText('상품 코드'), 'CUSTOM-100');
+    await user.selectOptions(await screen.findByLabelText('발주처'), supplierFixture.id);
+    await user.click(screen.getAllByLabelText('베스트 상품')[0]!);
+    await user.click(screen.getAllByLabelText('오늘의 상품')[0]!);
     await user.click(screen.getByRole('button', { name: '저장' }));
 
     await waitFor(() => expect(saveAdmin).toHaveBeenCalledOnce());
     expect(saveAdmin).toHaveBeenCalledWith(
       expect.objectContaining({
         brand: '한결안전',
+        supplierId: supplierFixture.id,
+        isFeatured: true,
+        isTodayDeal: true,
         categoryId: 'helmet',
         summary: '가벼운 안전모',
         detailDescription: '**제품 상세 사양입니다.**',
@@ -291,6 +312,7 @@ describe('Admin 상품 등록·수정 폼', () => {
     await user.type(screen.getByLabelText('배송 예정'), '2~3일');
     await user.clear(screen.getByLabelText('배송비'));
     await user.type(screen.getByLabelText('배송비'), '3000');
+    await user.selectOptions(await screen.findByLabelText('발주처'), supplierFixture.id);
     await user.click(screen.getByRole('button', { name: '저장' }));
 
     await waitFor(() => expect(saveAdmin).toHaveBeenCalledOnce());

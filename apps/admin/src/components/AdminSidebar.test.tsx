@@ -87,6 +87,19 @@ describe('관리자 사이드바 그룹 탐색', () => {
     expect(screen.getByRole('link', { name: '대시보드' })).not.toHaveAttribute('aria-current');
   });
 
+  it('발주처 경로에서 상품 관리 하위 메뉴를 유지하고 발주 관리를 활성화한다', () => {
+    renderSidebar('/suppliers/supplier-42');
+
+    const productGroup = screen.getByRole('region', { name: '상품 관리' });
+    expect(within(productGroup).getByRole('link', { name: '발주 관리' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(within(productGroup).getByRole('link', { name: '상품 등록' })).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
   it('브랜드 목록·등록·수정 경로를 브랜드 메뉴와 하위 메뉴에 반영한다', () => {
     const renderedBrandRegistration = renderSidebar('/brands/new');
 

@@ -17,7 +17,13 @@ import { useRef, useState } from 'react';
 import type { Category } from '@eum/api/types';
 import { Button } from '@eum/ui/components/Button';
 import { Icon } from '@eum/ui/components/Icon';
-import { AdminEmpty, AdminError, AdminLoading, AdminPageHeader } from '@/components/AdminUI';
+import {
+  AdminEmpty,
+  AdminError,
+  AdminLoading,
+  AdminPageHeader,
+  AdminSelect,
+} from '@/components/AdminUI';
 import { getShopApi } from '@/lib/shop-api';
 import { getAdminApiConfig } from '@/lib/api-config';
 
@@ -432,7 +438,7 @@ export function AdminCategoriesPage() {
             </label>
             <label className="grid gap-8 text-label-m">
               상위 카테고리
-              <select
+              <AdminSelect
                 aria-label="상위 카테고리 선택"
                 value={newCategoryParentId ?? ''}
                 disabled={isReordering}
@@ -450,7 +456,7 @@ export function AdminCategoriesPage() {
                       {category.name}
                     </option>
                   ))}
-              </select>
+              </AdminSelect>
             </label>
           </div>
           <div className="mt-16 flex justify-end gap-8">

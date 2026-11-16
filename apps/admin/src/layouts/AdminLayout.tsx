@@ -1,4 +1,5 @@
-import { Outlet, Navigate, useLocation } from 'react-router';
+import { Outlet } from 'react-router';
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AdminSidebar } from '@/components/AdminSidebar';
 import { AdminTopBar } from '@/components/AdminTopBar';
@@ -14,11 +15,17 @@ import { currentAdminQueryKey, getAdminAuth } from '@/lib/admin-auth';
  * 최소 폭 1280(흔한 노트북 해상도)까지는 내용 폭이 976으로 줄며 대응하고, 더 좁으면 가로 스크롤합니다.
  */
 export function AdminLayout() {
-  const currentLocation = useLocation();
   const currentAdminQuery = useQuery({
     queryKey: currentAdminQueryKey,
     queryFn: async () => (await getAdminAuth()).getCurrentUser(),
   });
+
+  useEffect(() => {
+    if (currentAdminQuery.isSuccess && !currentAdminQuery.data) {
+      const target = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      window.location.replace(`/login?redirect=${encodeURIComponent(target)}`);
+    }
+  }, [currentAdminQuery.data, currentAdminQuery.isSuccess]);
 
   if (currentAdminQuery.isPending) {
     return (
@@ -42,10 +49,8 @@ export function AdminLayout() {
       </main>
     );
   }
-  if (!currentAdminQuery.data) {
-    const redirectTarget = `${currentLocation.pathname}${currentLocation.search}${currentLocation.hash}`;
-    return <Navigate to={`/login?redirect=${encodeURIComponent(redirectTarget)}`} replace />;
-  }
+  if (!currentAdminQuery.data)
+    return <AdminLoading label="통합 로그인 화면으로 이동하고 있습니다." />;
 
   return (
     <AdminPriceVisibilityPreviewProvider>

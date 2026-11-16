@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Member } from '@eum/api/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getMemberAuth } from '@/lib/member-auth';
+import { getMemberAuth, getUnifiedAuth } from '@/lib/member-auth';
 import { LoginPageView } from './login-page';
 import { MemberSessionProvider } from './member-session';
 
@@ -17,7 +17,7 @@ const authMock = vi.hoisted(() => ({
 
 const routerMock = vi.hoisted(() => ({ replace: vi.fn() }));
 
-vi.mock('@/lib/member-auth', () => ({ getMemberAuth: vi.fn() }));
+vi.mock('@/lib/member-auth', () => ({ getMemberAuth: vi.fn(), getUnifiedAuth: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: routerMock.replace }) }));
 
 const member: Member = {
@@ -44,8 +44,9 @@ function renderLoginPage(rawRedirect?: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   authMock.getCurrentUser.mockResolvedValue(null);
-  authMock.login.mockResolvedValue(member);
+  authMock.login.mockResolvedValue({ role: 'member', user: member });
   authMock.logout.mockResolvedValue(undefined);
+  vi.mocked(getUnifiedAuth).mockResolvedValue(authMock as never);
   vi.mocked(getMemberAuth).mockResolvedValue(authMock as never);
 });
 
@@ -128,6 +129,19 @@ describe('W-09 login form validation', () => {
     );
     expect(authMock.logout).not.toHaveBeenCalled();
     expect(routerMock.replace).toHaveBeenCalledWith('/orders');
+  });
+
+  it('preserves an admin mock session when remember login is unchecked', async () => {
+    const user = userEvent.setup();
+    authMock.login.mockResolvedValue({ role: 'admin', user: null });
+    renderLoginPage();
+
+    await user.type(screen.getByRole('textbox', { name: '이메일' }), 'admin@example.com');
+    await user.type(screen.getByLabelText('비밀번호'), 'password');
+    await user.click(screen.getByRole('button', { name: '로그인' }));
+
+    await waitFor(() => expect(routerMock.replace).toHaveBeenCalledWith('/admin'));
+    expect(authMock.logout).not.toHaveBeenCalled();
   });
 
   it('preserves a safe redirect while opening account recovery', () => {

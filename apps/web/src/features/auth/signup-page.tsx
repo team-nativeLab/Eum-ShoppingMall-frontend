@@ -18,7 +18,13 @@ type AccountType = MemberSignupInput['accountType'];
 type ConsentDocument = 'terms' | 'privacy' | 'marketing';
 
 /** W-10: 이메일 중복 확인·메모리 휴대폰 코드 확인을 거치는 mock 가입 화면입니다. */
-export function SignupPageView({ rawRedirect }: { rawRedirect?: string }) {
+export function SignupPageView({
+  rawRedirect,
+  onBackToLogin,
+}: {
+  rawRedirect?: string;
+  onBackToLogin?: () => void;
+}) {
   const router = useRouter();
   const { setMember } = useMemberSession();
   const [accountType, setAccountType] = useState<AccountType>('personal');
@@ -189,10 +195,33 @@ export function SignupPageView({ rawRedirect }: { rawRedirect?: string }) {
       <section className="mx-auto w-full max-w-480">
         <header className="flex flex-col items-start gap-8">
           <h1 className="text-h1">회원가입</h1>
-          <p className="text-body-s text-text-2">
-            안전한 현장을 위한 이음산업건설 회원이 되어 보세요.
-          </p>
+          <p className="text-body-s text-text-2">안전한 현장을 위한 안전맛집 회원이 되어 보세요.</p>
         </header>
+        {onBackToLogin ? (
+          <div
+            role="tablist"
+            aria-label="계정"
+            className="mt-24 grid grid-cols-2 rounded-8 bg-surface p-4"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected="false"
+              onClick={onBackToLogin}
+              className="rounded-6 px-12 py-8 text-label-m text-text-2"
+            >
+              로그인
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected="true"
+              className="rounded-6 bg-bg px-12 py-8 text-label-m"
+            >
+              회원가입
+            </button>
+          </div>
+        ) : null}
         <form
           className="mt-24 flex flex-col gap-16"
           onSubmit={(submitEvent) => void handleSubmit(submitEvent)}

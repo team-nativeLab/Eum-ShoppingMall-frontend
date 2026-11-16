@@ -22,13 +22,16 @@ import type {
   Category,
   ProductImage,
   ProductOption,
+  AdminSupplier,
 } from '@eum/api/types';
 import type { AdminProductInput } from '@eum/api/shop-api';
+import { formatKrw, getPriceDisplay } from '@eum/api/price';
 
 interface ProductEditorData {
   product: AdminProduct | null;
   categories: Category[];
   brands: AdminBrand[];
+  suppliers: AdminSupplier[];
 }
 
 const productSections = [
@@ -50,15 +53,16 @@ async function loadProductEditor(
   signal: AbortSignal,
 ): Promise<ProductEditorData> {
   const api = await getShopApi();
-  const [categories, brands, adminProducts] = await Promise.all([
+  const [categories, brands, suppliers, adminProducts] = await Promise.all([
     api.categories.adminList({ signal }),
     api.brands.adminList({ signal }),
+    api.suppliers.adminList({ signal }),
     productId && productId !== 'new' ? api.products.adminList({ signal }) : Promise.resolve([]),
   ]);
   const product = productId
     ? (adminProducts.find((entry) => entry.id === productId) ?? null)
     : null;
-  return { product, categories, brands };
+  return { product, categories, brands, suppliers };
 }
 
 function createStableId(prefix: string): string {
@@ -88,11 +92,13 @@ function ProductEditor({
   product,
   categories,
   brands,
+  suppliers,
   isNew,
 }: {
   product: AdminProduct | null;
   categories: Category[];
   brands: AdminBrand[];
+  suppliers: AdminSupplier[];
   isNew: boolean;
 }) {
   const currentCategory = categories.find((category) => category.id === product?.categoryId);
@@ -127,6 +133,16 @@ function ProductEditor({
   const [productCode] = useState(() => product?.productCode ?? createStableId('PRD').toUpperCase());
   const [salePrice, setSalePrice] = useState(String(product?.price ?? ''));
   const [listPrice, setListPrice] = useState(String(product?.listPrice ?? ''));
+  const salePriceNumber = Number(salePrice);
+  const listPriceNumber = Number(listPrice);
+  const priceDisplay = getPriceDisplay({
+    price: salePrice !== '' && Number.isFinite(salePriceNumber) ? salePriceNumber : null,
+    listPrice:
+      listPrice !== '' && Number.isFinite(listPriceNumber) && listPriceNumber > 0
+        ? listPriceNumber
+        : null,
+    priceVisible: true,
+  });
   const [detailDescription, setDetailDescription] = useState(product?.detailDescription ?? '');
   const [isRichDescription, setIsRichDescription] = useState(
     () => product?.detailDescriptionFormat === 'rich-v1',
@@ -272,14 +288,15 @@ function ProductEditor({
     const text = (key: string) => String(formData.get(key) ?? '').trim();
     const rawPrice = text('price');
     const rawListPrice = text('listPrice');
+    const supplierId = text('supplierId');
     const rawStockCount = text('stockCount');
     const rawShippingFee = text('shippingFee');
     const price = Number(rawPrice);
     const stockCount = Number(rawStockCount);
     const shippingFee = Number(rawShippingFee);
     const normalizedListPrice = rawListPrice ? Number(rawListPrice) : null;
-    if (!text('name') || !text('brand') || !leafCategoryId) {
-      setDemoMessage('상품명, 브랜드와 2차 카테고리를 입력해 주세요.');
+    if (!text('name') || !text('brand') || !leafCategoryId || !supplierId) {
+      setDemoMessage('상품명, 브랜드, 2차 카테고리와 발주처를 입력해 주세요.');
       return;
     }
     if (rawPrice === '' || !Number.isFinite(price) || price < 0) {
@@ -327,10 +344,15 @@ function ProductEditor({
         rating: null,
         reviewCount: 0,
         isFeatured: false,
+        isTodayDeal: false,
+        supplierId,
       }),
       ...(product ? { id: product.id } : {}),
       name: text('name'),
       brand: text('brand'),
+      supplierId,
+      isFeatured: formData.get('isFeatured') === 'on',
+      isTodayDeal: formData.get('isTodayDeal') === 'on',
       categoryId: leafCategoryId,
       price,
       listPrice: normalizedListPrice,
@@ -470,6 +492,17 @@ function ProductEditor({
               placeholder="브랜드를 선택해 주세요"
               required
             />
+            <SelectField
+              label="발주처"
+              name="supplierId"
+              defaultValue={product?.supplierId ?? ''}
+              options={suppliers.map((supplier) => ({
+                value: supplier.id,
+                label: supplier.companyName,
+              }))}
+              placeholder="발주처를 선택해 주세요"
+              required
+            />
             <TextField
               label="모델명"
               name="modelName"
@@ -513,6 +546,27 @@ function ProductEditor({
               }))}
               placeholder="카테고리를 선택해 주세요"
             />
+            <div className="col-span-2 flex flex-wrap gap-16 rounded-8 border border-line bg-surface p-16">
+              <label className="flex items-center gap-8 text-label-m">
+                <input
+                  type="checkbox"
+                  name="isFeatured"
+                  defaultChecked={product?.isFeatured ?? false}
+                />
+                베스트 상품
+              </label>
+              <label className="flex items-center gap-8 text-label-m">
+                <input
+                  type="checkbox"
+                  name="isTodayDeal"
+                  defaultChecked={product?.isTodayDeal ?? false}
+                />
+                오늘의 상품
+              </label>
+              <p className="w-full text-caption text-text-3">
+                브랜드몰 노출은 선택한 브랜드 상품으로 자동 구성됩니다.
+              </p>
+            </div>
             <SelectField
               label="2차 카테고리"
               name="categoryId"
@@ -524,21 +578,38 @@ function ProductEditor({
               ).map((category) => ({ value: category.id, label: category.name }))}
               placeholder="카테고리를 선택해 주세요"
             />
+            <div className="col-span-2 flex flex-wrap gap-16 rounded-8 border border-line bg-surface p-16">
+              <label className="flex items-center gap-8 text-label-m">
+                <input
+                  type="checkbox"
+                  name="isFeatured"
+                  defaultChecked={product?.isFeatured ?? false}
+                />
+                베스트 상품
+              </label>
+              <label className="flex items-center gap-8 text-label-m">
+                <input
+                  type="checkbox"
+                  name="isTodayDeal"
+                  defaultChecked={product?.isTodayDeal ?? false}
+                />
+                오늘의 상품
+              </label>
+              <p className="w-full text-caption text-text-3">
+                브랜드몰 노출은 선택한 브랜드 상품으로 자동 구성됩니다.
+              </p>
+            </div>
           </AdminPanel>
 
           <AdminPanel
             id="price-info"
             title="가격"
-            description="판매가와 금액 표시 상태를 함께 확인합니다."
+            description="판매가와 정가, 할인 정보를 확인합니다."
             className="scroll-mt-24"
             bodyClassName="p-24"
           >
-            <div className="space-y-16">
-              <div
-                role="group"
-                aria-label="판매가 및 금액 표시"
-                className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-16 rounded-8 border border-line bg-surface p-16"
-              >
+            <div className="space-y-16 rounded-8 border border-line bg-surface p-16">
+              <div role="group" aria-label="판매가 및 정가" className="grid gap-16">
                 <TextField
                   label="판매가"
                   name="price"
@@ -553,26 +624,8 @@ function ProductEditor({
                       : undefined
                   }
                 />
-                <Switch
-                  label="금액 표시"
-                  isChecked={previewPriceVisible}
-                  onCheckedChange={(nextValue) => {
-                    markDirty();
-                    if (product) {
-                      setPreviewValue([product], nextValue);
-                    } else {
-                      setNewProductPriceVisible(nextValue);
-                    }
-                  }}
-                  onText="표시"
-                  offText="미표시"
-                />
-              </div>
-              <div className="max-w-400 border-t border-line pt-12">
-                <p className="mb-8 text-caption text-text-3">정가</p>
                 <TextField
                   label="정가"
-                  isLabelHidden
                   name="listPrice"
                   type="number"
                   min="0"
@@ -586,6 +639,27 @@ function ProductEditor({
                   }
                 />
               </div>
+              {priceDisplay.isPriceVisible && priceDisplay.listPriceText ? (
+                <div className="flex flex-wrap items-center gap-8 border-t border-line pt-12 text-caption text-text-2">
+                  <span>할인액 {formatKrw(listPriceNumber - salePriceNumber)}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>할인율 {priceDisplay.discountRateLabel}</span>
+                </div>
+              ) : null}
+              <Switch
+                label="금액 표시"
+                isChecked={previewPriceVisible}
+                onCheckedChange={(nextValue) => {
+                  markDirty();
+                  if (product) {
+                    setPreviewValue([product], nextValue);
+                  } else {
+                    setNewProductPriceVisible(nextValue);
+                  }
+                }}
+                onText="표시"
+                offText="미표시"
+              />
               <p className="text-caption text-text-3">
                 금액 표시를 끄면 구매자 화면에서 가격이 숨겨집니다.
               </p>
@@ -1101,7 +1175,7 @@ export function AdminProductFormPage() {
       />
     );
 
-  const { product, categories, brands } = editorQuery.data;
+  const { product, categories, brands, suppliers } = editorQuery.data;
   if (!isNew && !product)
     return (
       <AdminEmpty title="상품을 찾을 수 없습니다" description="상품 목록에서 다시 선택해 주세요." />
@@ -1112,6 +1186,7 @@ export function AdminProductFormPage() {
       product={product}
       categories={categories}
       brands={brands}
+      suppliers={suppliers}
       isNew={isNew}
     />
   );

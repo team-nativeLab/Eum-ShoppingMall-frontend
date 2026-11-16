@@ -94,11 +94,19 @@ describe('SiteHeader product and brand navigation', () => {
     apiMocks.listCategories.mockResolvedValue([]);
   });
 
-  it('links Product to the full listing and Brand to /brands while both stay inactive at home', () => {
+  it('links the main product paths and keeps them inactive at home', () => {
     render(<SiteHeader />, { wrapper: createWrapper() });
     const primaryNavigation = screen.getByRole('navigation', { name: '주요 메뉴' });
     const productsLink = within(primaryNavigation).getByRole('link', { name: '제품' });
-    const brandsLink = within(primaryNavigation).getByRole('link', { name: '브랜드' });
+    const brandsLink = within(primaryNavigation).getByRole('link', { name: '브랜드몰' });
+    expect(within(primaryNavigation).getByRole('link', { name: '베스트' })).toHaveAttribute(
+      'href',
+      '/best',
+    );
+    expect(within(primaryNavigation).getByRole('link', { name: '오늘의 상품' })).toHaveAttribute(
+      'href',
+      '/today',
+    );
 
     expect(productsLink).toHaveAttribute('href', '/search');
     expect(brandsLink).toHaveAttribute('href', '/brands');
@@ -112,7 +120,7 @@ describe('SiteHeader product and brand navigation', () => {
     const primaryNavigation = screen.getByRole('navigation', { name: '주요 메뉴' });
 
     // 경로만으로 정하므로 첫 렌더부터 활성입니다(Suspense 대기 없음).
-    expect(within(primaryNavigation).getByRole('link', { name: '브랜드' })).toHaveAttribute(
+    expect(within(primaryNavigation).getByRole('link', { name: '브랜드몰' })).toHaveAttribute(
       'aria-current',
       'page',
     );
@@ -134,7 +142,7 @@ describe('SiteHeader product and brand navigation', () => {
       'aria-current',
       'page',
     );
-    expect(within(primaryNavigation).getByRole('link', { name: '브랜드' })).not.toHaveAttribute(
+    expect(within(primaryNavigation).getByRole('link', { name: '브랜드몰' })).not.toHaveAttribute(
       'aria-current',
     );
   });
@@ -170,7 +178,7 @@ describe('SiteHeader product and brand navigation', () => {
     expect(apiMocks.listProducts).not.toHaveBeenCalled();
   });
 
-  it('shows one current menu link without a success tint when multiple links share its route', async () => {
+  it('does not add legacy company pages to the primary menu or mega menu', async () => {
     navigationMocks.pathname = '/about';
     const user = userEvent.setup();
     render(<SiteHeader />, { wrapper: createWrapper() });
@@ -179,23 +187,15 @@ describe('SiteHeader product and brand navigation', () => {
     if (!desktopMenuButton) throw new Error('메뉴 버튼을 찾을 수 없습니다.');
     await user.click(desktopMenuButton);
     const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
-    const currentLinks = within(menu).getAllByRole('link', { current: 'page' });
-
-    expect(within(menu).queryByRole('heading', { name: '전체 메뉴' })).not.toBeInTheDocument();
-    expect(within(menu).queryByText('고객센터')).not.toBeInTheDocument();
-    expect(within(menu).queryByRole('link', { name: '이용 안내' })).not.toBeInTheDocument();
-    expect(currentLinks).toHaveLength(1);
-    expect(currentLinks[0]).toHaveAccessibleName('개요');
-    expect(currentLinks[0]).toHaveClass('text-success', 'underline');
-    expect(currentLinks[0]).not.toHaveClass('bg-success-tint');
-    const inactiveLink = within(menu).getByRole('link', { name: '사업분야' });
-    expect(inactiveLink).not.toHaveAttribute('aria-current');
-    expect(inactiveLink).toHaveClass('text-text-2');
-    expect(inactiveLink).not.toHaveClass('bg-success-tint');
+    expect(within(menu).queryByRole('link', { name: '개요' })).not.toBeInTheDocument();
+    expect(within(menu).queryByRole('link', { name: 'FAQ' })).not.toBeInTheDocument();
+    expect(
+      within(menu).getAllByRole('button', { name: /^(제품|베스트|오늘의 상품|브랜드몰)$/ }),
+    ).toHaveLength(4);
     expect(within(menu).getByRole('button', { name: '전체 메뉴 닫기' })).toHaveClass('size-44');
   });
 
-  it('keeps the current FAQ link green and underlined without a green background', async () => {
+  it('keeps legacy support pages out of the new product mega menu', async () => {
     navigationMocks.pathname = '/support/faq';
     const user = userEvent.setup();
     render(<SiteHeader />, { wrapper: createWrapper() });
@@ -205,38 +205,8 @@ describe('SiteHeader product and brand navigation', () => {
     await user.click(desktopMenuButton);
 
     const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
-    const supportSection = within(menu).getByRole('region', { name: '고객지원' });
-    const supportToggle = within(supportSection).getByRole('button', { name: '고객지원' });
-    expect(supportToggle).toHaveAttribute('aria-expanded', 'true');
-    const supportContentId = supportToggle.getAttribute('aria-controls');
-    if (!supportContentId) throw new Error('고객지원 메뉴 콘텐츠 ID가 없습니다.');
-    const supportContent = document.getElementById(supportContentId);
-    if (!supportContent) throw new Error('고객지원 메뉴 콘텐츠를 찾을 수 없습니다.');
-    expect(supportContent).toHaveAttribute('aria-hidden', 'false');
-    expect(supportToggle).toHaveClass('border-success', 'text-success');
-
-    const faqLink = within(supportSection).getByRole('link', { name: 'FAQ' });
-    expect(faqLink).toHaveAttribute('href', '/support/faq');
-    expect(faqLink).toHaveAttribute('aria-current', 'page');
-    expect(faqLink).toHaveClass('focus-ring');
-    expect(faqLink).toHaveClass('text-success');
-    expect(faqLink).toHaveClass('underline', 'decoration-success', 'underline-offset-4');
-    expect(faqLink).not.toHaveClass('bg-success-tint');
-    expect(faqLink).not.toHaveClass('hover:bg-success-tint');
-    expect(faqLink).not.toHaveClass('active:bg-success-tint');
-    faqLink.focus();
-    expect(faqLink).toHaveFocus();
-
-    for (const label of ['공지사항', '1:1 문의']) {
-      const inactiveLink = within(supportSection).getByRole('link', { name: label });
-      expect(inactiveLink).not.toHaveAttribute('aria-current');
-      expect(inactiveLink).toHaveClass(
-        'text-text-2',
-        'hover:bg-surface',
-        'hover:text-text-1',
-        'active:bg-surface-2',
-      );
-    }
+    expect(within(menu).queryByRole('region', { name: '고객지원' })).not.toBeInTheDocument();
+    expect(within(menu).queryByRole('link', { name: 'FAQ' })).not.toBeInTheDocument();
   });
 
   it('activates the top-level category link for a nested category route', async () => {
@@ -395,7 +365,7 @@ describe('SiteHeader product and brand navigation', () => {
 
     navigationMocks.pathname = '/checkout/shipping';
     rerender(<SiteHeader />);
-    const checkoutLogo = screen.getByRole('link', { name: '이음산업건설' });
+    const checkoutLogo = screen.getByRole('link', { name: '안전맛집' });
     await user.keyboard('{Escape}');
 
     await waitFor(() => expect(checkoutLogo).toHaveFocus());
@@ -592,8 +562,8 @@ describe('SiteHeader product and brand navigation', () => {
     firstLink.focus();
     await user.tab({ shift: true });
     expect(firstLink).not.toHaveFocus();
-    expect(within(menu).getByRole('link', { name: 'FAQ' })).toBeInTheDocument();
-    expect(within(menu).queryByText('고객센터')).not.toBeInTheDocument();
+    expect(within(menu).getByRole('link', { name: '전체 브랜드' })).toBeInTheDocument();
+    expect(within(menu).queryByText('고객지원')).not.toBeInTheDocument();
 
     await user.click(within(menu).getByRole('link', { name: '전체 브랜드' }));
 
@@ -614,7 +584,7 @@ describe('SiteHeader product and brand navigation', () => {
     const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
 
     await waitFor(() => expect(apiMocks.listBrands).toHaveBeenCalled());
-    const brandColumn = within(menu).getByRole('region', { name: '브랜드' });
+    const brandColumn = within(menu).getByRole('region', { name: '브랜드몰' });
     expect(within(brandColumn).getAllByRole('link')).toHaveLength(1);
     expect(within(brandColumn).getByRole('link', { name: '전체 브랜드' })).toHaveAttribute(
       'href',
@@ -640,8 +610,8 @@ describe('SiteHeader product and brand navigation', () => {
     await waitFor(() => expect(menuMotion).toHaveAttribute('data-menu-motion-state', 'open'));
     expect(menuMotion).toHaveClass('opacity-100');
     expect(menuMotion).toHaveStyle({ translate: '-50% -50%' });
-    expect(menu.querySelector('[class~="lg:grid-cols-5"]')).toBeInTheDocument();
-    for (const sectionTitle of ['제품', '브랜드', '안전 솔루션', '고객지원', '회사소개']) {
+    expect(menu.querySelector('[class~="lg:grid-cols-4"]')).toBeInTheDocument();
+    for (const sectionTitle of ['제품', '베스트', '오늘의 상품', '브랜드몰']) {
       expect(within(menu).getByRole('button', { name: sectionTitle })).toHaveAttribute(
         'aria-expanded',
         'true',
@@ -702,7 +672,7 @@ describe('SiteHeader product and brand navigation', () => {
       'w-[calc(100%_-_32px)]',
       'max-h-[calc(100dvh-32px)]',
     );
-    const sectionTitles = ['제품', '브랜드', '안전 솔루션', '고객지원', '회사소개'];
+    const sectionTitles = ['제품', '베스트', '오늘의 상품', '브랜드몰'];
     for (const sectionTitle of sectionTitles) {
       expect(within(menu).getByRole('button', { name: sectionTitle })).toHaveAttribute(
         'aria-expanded',
@@ -743,7 +713,7 @@ describe('SiteHeader product and brand navigation', () => {
     expect(within(productColumn).queryByRole('link', { name: '전체 제품' })).toBeNull();
   });
 
-  it.each(['제품', '브랜드', '안전 솔루션', '고객지원', '회사소개'])(
+  it.each(['제품', '베스트', '오늘의 상품', '브랜드몰'])(
     'toggles the %s category with accessible animated content',
     async (sectionTitle) => {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
@@ -782,24 +752,24 @@ describe('SiteHeader product and brand navigation', () => {
     if (!mobileMenuButton) throw new Error('모바일 메뉴 버튼을 찾을 수 없습니다.');
     await user.click(mobileMenuButton);
     const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
-    const supportSection = within(menu).getByRole('region', { name: '고객지원' });
-    const supportToggle = within(supportSection).getByRole('button', { name: '고객지원' });
-    const supportContentId = supportToggle.getAttribute('aria-controls');
-    if (!supportContentId) throw new Error('고객지원 메뉴 콘텐츠 ID가 없습니다.');
-    const supportContent = document.getElementById(supportContentId);
+    const bestSection = within(menu).getByRole('region', { name: '베스트' });
+    const bestToggle = within(bestSection).getByRole('button', { name: '베스트' });
+    const bestContentId = bestToggle.getAttribute('aria-controls');
+    if (!bestContentId) throw new Error('베스트 메뉴 콘텐츠 ID가 없습니다.');
+    const bestContent = document.getElementById(bestContentId);
 
-    await user.click(supportToggle);
-    const faqLink = within(supportSection).getByRole('link', { name: 'FAQ' });
-    faqLink.focus();
-    expect(faqLink).toHaveFocus();
+    await user.click(bestToggle);
+    const bestLink = within(bestSection).getByRole('link', { name: '베스트 상품' });
+    bestLink.focus();
+    expect(bestLink).toHaveFocus();
 
-    fireEvent.click(supportToggle);
+    fireEvent.click(bestToggle);
 
-    expect(supportToggle).toHaveAttribute('aria-expanded', 'false');
-    expect(supportToggle).toHaveFocus();
-    expect(supportContent).toHaveAttribute('aria-hidden', 'true');
-    expect(supportContent).toHaveAttribute('inert');
-    expect(within(supportSection).queryByRole('link', { name: 'FAQ' })).toBeNull();
+    expect(bestToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(bestToggle).toHaveFocus();
+    expect(bestContent).toHaveAttribute('aria-hidden', 'true');
+    expect(bestContent).toHaveAttribute('inert');
+    expect(within(bestSection).queryByRole('link', { name: '베스트 상품' })).toBeNull();
   });
 
   it('closes the popup on outside click', async () => {
@@ -817,6 +787,16 @@ describe('SiteHeader product and brand navigation', () => {
 
     await waitFor(() => expect(menuPanel).toHaveAttribute('aria-hidden', 'true'));
     expect(outsideLink).toHaveFocus();
+  });
+
+  it('opens the popup without rendering a blurred backdrop', async () => {
+    const user = userEvent.setup();
+    render(<SiteHeader />, { wrapper: createWrapper() });
+    const [desktopMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
+    if (!desktopMenuButton) throw new Error('데스크톱 메뉴 버튼을 찾을 수 없습니다.');
+    await user.click(desktopMenuButton);
+    await screen.findByRole('navigation', { name: '전체 메뉴' });
+    expect(document.querySelector('[data-menu-backdrop]')).toBeNull();
   });
 
   it('closes the search suggestions when the popup opens and closes the popup when search opens', async () => {
@@ -843,7 +823,7 @@ describe('SiteHeader product and brand navigation', () => {
   });
 
   it('keeps the compact desktop header and removes scroll listeners on unmount', () => {
-    navigationMocks.pathname = '/about';
+    navigationMocks.pathname = '/best';
     const originalInnerWidth = Object.getOwnPropertyDescriptor(window, 'innerWidth');
     const originalScrollY = Object.getOwnPropertyDescriptor(window, 'scrollY');
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
@@ -858,13 +838,13 @@ describe('SiteHeader product and brand navigation', () => {
     expect(header).toHaveClass('shadow-1');
 
     const primaryNavigation = screen.getByRole('navigation', { name: '주요 메뉴' });
-    const aboutLink = within(primaryNavigation).getByRole('link', { name: '회사소개' });
+    const bestLink = within(primaryNavigation).getByRole('link', { name: '베스트' });
     expect(primaryNavigation).toHaveClass('h-full');
     for (const navigationLink of within(primaryNavigation).getAllByRole('link')) {
       expect(navigationLink).toHaveClass('h-full');
     }
-    expect(aboutLink).toHaveAttribute('aria-current', 'page');
-    expect(aboutLink).toHaveClass('after:bottom-0');
+    expect(bestLink).toHaveAttribute('aria-current', 'page');
+    expect(bestLink).toHaveClass('after:bottom-0');
 
     const scrollHandler = addEventListener.mock.calls.find(
       ([eventName]) => eventName === 'scroll',

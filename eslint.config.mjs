@@ -88,6 +88,13 @@ export default [
   ...scopeToNonWeb(tseslint.configs.recommended, ['**/*.{ts,tsx,mts,cts}']),
   ...scopeToNonWeb([reactHooks.configs.flat.recommended], ['**/*.{jsx,tsx}']),
   ...scopeToNonWeb(fixupConfigRules([jsxA11y.flatConfigs.recommended]), ['**/*.{jsx,tsx}']),
+  // AdminSelect는 내부에서 네이티브 select를 렌더링하므로 label 연결 검사에서 입력 컨트롤로 인정합니다.
+  {
+    files: ['apps/admin/**/*.{jsx,tsx}'],
+    rules: {
+      'jsx-a11y/label-has-associated-control': ['error', { controlComponents: ['AdminSelect'] }],
+    },
+  },
   {
     files: ['apps/admin/**/*.{ts,tsx}', 'packages/ui/**/*.{ts,tsx}'],
     languageOptions: { globals: { ...globals.browser } },

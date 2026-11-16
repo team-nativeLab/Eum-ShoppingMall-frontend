@@ -7,6 +7,7 @@ import {
   AdminLoading,
   AdminNotice,
   AdminPageHeader,
+  AdminSelect,
   formatAdminCurrency,
   formatAdminDateTime,
 } from '@/components/AdminUI';
@@ -88,7 +89,7 @@ export function AdminPointsPage() {
       >
         <label className="grid gap-6 text-label-m">
           회원
-          <select
+          <AdminSelect
             value={memberId}
             onChange={(event) => setMemberId(event.target.value)}
             className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
@@ -99,7 +100,7 @@ export function AdminPointsPage() {
                 {member.name} · {member.id}
               </option>
             ))}
-          </select>
+          </AdminSelect>
         </label>
         <label className="grid gap-6 text-label-m">
           조정 금액 (차감은 음수)
