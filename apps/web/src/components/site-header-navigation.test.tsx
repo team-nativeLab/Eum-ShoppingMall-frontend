@@ -94,19 +94,24 @@ describe('SiteHeader product and brand navigation', () => {
     apiMocks.listCategories.mockResolvedValue([]);
   });
 
-  it('links the main product paths and keeps them inactive at home', () => {
+  it('links the primary navigation paths and keeps them inactive at home', () => {
     render(<SiteHeader />, { wrapper: createWrapper() });
     const primaryNavigation = screen.getByRole('navigation', { name: '주요 메뉴' });
-    const productsLink = within(primaryNavigation).getByRole('link', { name: '제품' });
-    const brandsLink = within(primaryNavigation).getByRole('link', { name: '브랜드몰' });
+    const productsLink = within(primaryNavigation).getByRole('link', { name: '전체상품' });
+    const brandsLink = within(primaryNavigation).getByRole('link', { name: '브랜드' });
     expect(within(primaryNavigation).getByRole('link', { name: '베스트' })).toHaveAttribute(
       'href',
       '/best',
     );
-    expect(within(primaryNavigation).getByRole('link', { name: '오늘의 상품' })).toHaveAttribute(
+    expect(within(primaryNavigation).getByRole('link', { name: '추천상품' })).toHaveAttribute(
       'href',
-      '/today',
+      '/#recommended-products',
     );
+    expect(within(primaryNavigation).getByRole('link', { name: '문의사항' })).toHaveAttribute(
+      'href',
+      '/support/inquiry',
+    );
+    expect(within(primaryNavigation).queryByRole('link', { name: '오늘의 상품' })).toBeNull();
 
     expect(productsLink).toHaveAttribute('href', '/search');
     expect(brandsLink).toHaveAttribute('href', '/brands');
@@ -120,11 +125,11 @@ describe('SiteHeader product and brand navigation', () => {
     const primaryNavigation = screen.getByRole('navigation', { name: '주요 메뉴' });
 
     // 경로만으로 정하므로 첫 렌더부터 활성입니다(Suspense 대기 없음).
-    expect(within(primaryNavigation).getByRole('link', { name: '브랜드몰' })).toHaveAttribute(
+    expect(within(primaryNavigation).getByRole('link', { name: '브랜드' })).toHaveAttribute(
       'aria-current',
       'page',
     );
-    expect(within(primaryNavigation).getByRole('link', { name: '제품' })).not.toHaveAttribute(
+    expect(within(primaryNavigation).getByRole('link', { name: '전체상품' })).not.toHaveAttribute(
       'aria-current',
     );
   });
@@ -138,11 +143,11 @@ describe('SiteHeader product and brand navigation', () => {
     render(<SiteHeader />, { wrapper: createWrapper() });
     const primaryNavigation = screen.getByRole('navigation', { name: '주요 메뉴' });
 
-    expect(within(primaryNavigation).getByRole('link', { name: '제품' })).toHaveAttribute(
+    expect(within(primaryNavigation).getByRole('link', { name: '전체상품' })).toHaveAttribute(
       'aria-current',
       'page',
     );
-    expect(within(primaryNavigation).getByRole('link', { name: '브랜드몰' })).not.toHaveAttribute(
+    expect(within(primaryNavigation).getByRole('link', { name: '브랜드' })).not.toHaveAttribute(
       'aria-current',
     );
   });

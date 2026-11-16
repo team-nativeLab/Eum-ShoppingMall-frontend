@@ -1,6 +1,9 @@
 export type SearchParamValue = string | string[] | undefined;
 
-export type PrimaryNavigationKey = 'products' | 'best' | 'today' | 'brands';
+export type PrimaryNavigationKey = 'products' | 'best' | 'recommended' | 'brands' | 'inquiry';
+
+/** 홈의 「추천상품」 섹션(id="recommended-products")으로 이동합니다. */
+export const RECOMMENDED_PRODUCTS_HREF = '/#recommended-products';
 
 export interface PrimaryNavigationItem {
   key: PrimaryNavigationKey;
@@ -52,13 +55,14 @@ export function buildBrandSelectionHref(
   return query ? pathname + '?' + query : pathname;
 }
 
-/** 안전맛집 주요 탐색 링크 */
+/** 안전맛집 주요 탐색 링크 (전체상품 · 베스트 · 추천상품 · 브랜드 · 문의사항) */
 export function getPrimaryNavigationItems(): PrimaryNavigationItem[] {
   return [
-    { key: 'products', label: '제품', href: '/search' },
+    { key: 'products', label: '전체상품', href: '/search' },
     { key: 'best', label: '베스트', href: '/best' },
-    { key: 'today', label: '오늘의 상품', href: '/today' },
-    { key: 'brands', label: '브랜드몰', href: buildBrandHref() },
+    { key: 'recommended', label: '추천상품', href: RECOMMENDED_PRODUCTS_HREF },
+    { key: 'brands', label: '브랜드', href: buildBrandHref() },
+    { key: 'inquiry', label: '문의사항', href: '/support/inquiry' },
   ];
 }
 
@@ -75,8 +79,10 @@ export function isPrimaryNavigationItemActive(
   const activePathPrefixes: Record<PrimaryNavigationKey, string[]> = {
     products: ['/search', '/category', '/products'],
     best: ['/best'],
-    today: ['/today'],
+    // 추천상품은 홈의 섹션 링크라 경로만으로는 활성 표시를 하지 않습니다.
+    recommended: [],
     brands: ['/brands'],
+    inquiry: ['/support'],
   };
   return activePathPrefixes[item.key].some((pathPrefix) => isPathWithin(pathname, pathPrefix));
 }
