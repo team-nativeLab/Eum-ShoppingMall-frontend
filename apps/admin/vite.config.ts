@@ -6,7 +6,7 @@ import { defineConfig, loadEnv } from 'vite';
 
 /**
  * 운영 빌드 시점에 API 설정을 검증하는 함수. 런타임(src/lib/api-config.ts)과 같은 resolveApiConfig를 씁니다.
- * 모드 미지정, mock인데 VITE_ALLOW_MOCK_IN_PRODUCTION=true 없음, real인데 baseUrl 없음이면 빌드를 실패시킵니다.
+ * 모드 미지정, opt-in 없는 mock, real인데 baseUrl 없음이면 빌드를 실패시킵니다.
  * --mode staging 등 어떤 모드로 빌드하든 검사합니다. 운영 여부는 런타임 import.meta.env.PROD와 같은 기준(NODE_ENV,
  * vite build 기본값 production)으로 정합니다.
  */
@@ -31,15 +31,16 @@ function assertBuildApiConfig(viteMode: string): void {
         'Vercel 빌드는 VERCEL_ENV=preview 또는 production 식별이 필요합니다.',
       );
     }
-    if (apiConfig.mode !== 'real' && !isVercelPreview) {
+    if (
+      isVercelProductionBuild &&
+      apiConfig.mode === 'mock' &&
+      !apiConfig.isMockAllowedInProduction
+    ) {
       throw new ApiConfigError(
-        'Vercel mock 빌드는 Preview 환경에서만 허용됩니다. Production은 VITE_API_MODE=real이 필요합니다.',
+        'Vercel Production mock 빌드에는 VITE_ALLOW_MOCK_IN_PRODUCTION=true가 필요합니다.',
       );
     }
-    if (isVercelProductionBuild) {
-      if (apiConfig.mode !== 'real') {
-        throw new ApiConfigError('Vercel Production 배포는 VITE_API_MODE=real만 허용합니다.');
-      }
+    if (isVercelProductionBuild && apiConfig.mode === 'real') {
       const apiUrl = new URL(apiConfig.baseUrl);
       const apiHostname = apiUrl.hostname.toLowerCase().replace(/\.+$/, '');
       if (apiHostname === 'invalid' || apiHostname.endsWith('.invalid')) {

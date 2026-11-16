@@ -13,7 +13,7 @@ describe.each(APP_TARGETS)('$workspace build environment', (appTarget) => {
     expect(buildEnvironment.env?.[appTarget.modeEnv]).toBe('real');
   });
 
-  it('rejects Production mock mode even when its app-specific opt-in flag is set', () => {
+  it('allows Production mock mode with its app-specific opt-in flag', () => {
     const buildEnvironment = resolveBuildEnvironment(appTarget, {
       VERCEL: '1',
       VERCEL_ENV: 'production',
@@ -21,7 +21,8 @@ describe.each(APP_TARGETS)('$workspace build environment', (appTarget) => {
       [appTarget.allowEnv]: 'true',
     });
 
-    expect(buildEnvironment.error).toContain(`${appTarget.modeEnv}=real`);
+    expect(buildEnvironment.error).toBeUndefined();
+    expect(buildEnvironment.env?.[appTarget.modeEnv]).toBe('mock');
   });
 
   it('rejects Production mock mode when its app-specific opt-in flag is missing', () => {
@@ -31,7 +32,18 @@ describe.each(APP_TARGETS)('$workspace build environment', (appTarget) => {
       [appTarget.modeEnv]: 'mock',
     });
 
-    expect(buildEnvironment.error).toContain(`${appTarget.modeEnv}=real`);
+    expect(buildEnvironment.error).toContain(`${appTarget.allowEnv}=true`);
+  });
+
+  it('rejects Production mock mode when its app-specific opt-in flag is not exactly true', () => {
+    const buildEnvironment = resolveBuildEnvironment(appTarget, {
+      VERCEL: '1',
+      VERCEL_ENV: 'production',
+      [appTarget.modeEnv]: 'mock',
+      [appTarget.allowEnv]: 'false',
+    });
+
+    expect(buildEnvironment.error).toContain(`${appTarget.allowEnv}=true`);
   });
 
   it.each([undefined, ''])('rejects Production when mode is %s', (apiMode) => {
@@ -115,7 +127,7 @@ describe.each(APP_TARGETS)('$workspace build environment', (appTarget) => {
       [appTarget.allowEnv]: 'true',
     });
 
-    expect(buildEnvironment.error).toContain(`${appTarget.modeEnv}=real`);
+    expect(buildEnvironment.error).toBeUndefined();
   });
 
   it('defaults an unset local mode to a verification-only mock build', () => {

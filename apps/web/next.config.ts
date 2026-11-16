@@ -93,9 +93,6 @@ const nextConfig: NextConfig = {
  */
 function assertProductionApiConfig(): void {
   const isVercelProductionBuild = process.env.VERCEL_ENV === 'production';
-  if (isVercelProductionBuild && process.env.NEXT_PUBLIC_API_MODE !== 'real') {
-    throw new ApiConfigError('Vercel Production 배포는 NEXT_PUBLIC_API_MODE=real만 허용합니다.');
-  }
   const apiConfig = assertBuildApiEnv({
     mode: process.env.NEXT_PUBLIC_API_MODE,
     baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL,

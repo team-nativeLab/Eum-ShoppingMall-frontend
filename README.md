@@ -174,7 +174,7 @@ Eum-ShoppingMall-frontend/
 ### 모드 결정 규칙 (`packages/api/src/config.ts`)
 - 앱 진입점(`apps/*/src/lib/api-config.ts`)과 빌드 설정(`apps/web/next.config.ts`, `apps/admin/vite.config.ts`)이 같은 `resolveApiConfig()`로 검증합니다.
 - 런타임(`resolveApiConfig()`)에서는 모드가 비어 있으면 **개발에서는 `mock`, 운영에서는 `real`** 로 봅니다. 단, 운영 빌드 시점 검사(`assertBuildApiEnv()`)는 모드 생략을 허용하지 않습니다([빌드와 배포](#빌드와-배포) 참고).
-- Production 빌드는 Web과 Admin 모두 `real` 모드만 허용합니다. mock opt-in 플래그가 있어도 Production mock 빌드는 거부합니다.
+- Production은 각 앱에서 `real` 모드 또는 해당 앱의 `*_ALLOW_MOCK_IN_PRODUCTION=true`를 명시한 테스트용 `mock` 모드를 허용합니다. opt-in 없이는 실패합니다.
 - `real` 모드에는 공백이 아닌 `API_BASE_URL`이 필요합니다. `real` 모드에서는 `MOCK_SCENARIO` 값을 검사하지 않습니다.
 - `mock`/`real`, `normal`/`empty`/`error` 외의 값은 조용히 넘어가지 않고 `ApiConfigError`를 던집니다.
 - 개발 서버에서는 설정 오류가 첫 조회에서 드러나며, 화면은 에러 상태를 보여 줍니다. 운영 빌드에서는 아래처럼 빌드 단계에서 먼저 실패합니다.
@@ -185,15 +185,22 @@ Eum-ShoppingMall-frontend/
   - 로컬에서 `NEXT_PUBLIC_API_MODE`/`VITE_API_MODE`가 없으면 해당 앱에 `mock`을 넣어 **목 모드 검증 빌드(배포용 아님)** 로 진행하고 경고를 출력합니다.
   - **CI(`CI=true`)에서는 모드가 없으면 기본값을 넣지 않고 실패합니다.** 워크플로 env에 `*_API_MODE`를 명시해야 합니다.
   - 모드를 지정하면(빈 문자열 포함) 그 값을 그대로 넘기며, 검사는 각 앱 빌드 설정이 합니다. 빈 문자열은 아래 규칙에 따라 앱 빌드에서 실패합니다.
-- **배포는 앱별 빌드 명령과 배포 환경변수로 합니다.** Production은 `real` 모드와 HTTPS API 주소를 설정해야 합니다. 루트의 `build:web`/`build:admin`은 각각 `npm run build -w @eum/web`, `npm run build -w @eum/admin`과 같습니다. 예:
+- **배포는 앱별 빌드 명령과 배포 환경변수로 합니다.** Production에서 `real` 모드를 쓰면 HTTPS API 주소가 필요합니다. 테스트 전용 `mock` 모드는 각 앱의 `*_ALLOW_MOCK_IN_PRODUCTION=true`를 별도로 명시해야 합니다. 루트의 `build:web`/`build:admin`은 각각 `npm run build -w @eum/web`, `npm run build -w @eum/admin`과 같습니다. 예:
 
   ```bash
   NEXT_PUBLIC_API_MODE=real NEXT_PUBLIC_API_BASE_URL=https://YOUR_API_HOST/api npm run build -w @eum/web
   VITE_API_MODE=real VITE_API_BASE_URL=https://YOUR_API_HOST/api npm run build -w @eum/admin
   ```
 
+  테스트 전용 Production mock 빌드는 앱에 맞는 opt-in 변수를 함께 지정합니다. Web과 Admin을 묶어 빌드할 때 두 변수 모두 필요합니다.
+
+  ```bash
+  NEXT_PUBLIC_API_MODE=mock NEXT_PUBLIC_ALLOW_MOCK_IN_PRODUCTION=true \
+    VITE_API_MODE=mock VITE_ALLOW_MOCK_IN_PRODUCTION=true npm run build
+  ```
+
 - 운영 빌드는 빌드 시점에 `assertBuildApiEnv()`(`packages/api/src/config.ts`)로 API 설정을 검사해, 아래 경우 **빌드를 실패시킵니다**.
-  - Production에서 `*_API_MODE`가 `real`이 아닐 때
+  - Production에서 `*_API_MODE=mock`인데 해당 앱의 `*_ALLOW_MOCK_IN_PRODUCTION=true`가 없을 때
   - `real`인데 `*_API_BASE_URL`이 없거나 공백일 때
 - 단, Web은 커밋된 `apps/web/.env.production`이 로컬에서 모드가 비어 있으면 검증용 목 빌드가 됩니다([배포(Vercel Preview 목 데모)](#배포vercel-preview-목-데모)). 셸·CI·Vercel에서 지정한 환경변수가 이 파일보다 우선합니다.
 - 검사 시점: Web은 `next build`(`next typegen` 제외), Admin은 `vite build`면 `--mode`와 무관하게(예: `--mode staging`) 항상 검사합니다. Admin의 운영 여부는 `NODE_ENV`(없으면 `production`) 기준입니다.
@@ -259,7 +266,7 @@ Eum-ShoppingMall-frontend/
 - **문구**: 구매자에게 보이는 문구는 합니다체로 씁니다.
 
 ## 배포(Vercel Preview 목 데모)
-Vercel Preview에서 Web과 Admin을 한 도메인으로 검증합니다. Preview는 화면 검증용 mock 데이터를 사용하고 Production은 실제 API 모드만 허용합니다.
+Vercel Preview에서 Web과 Admin을 한 도메인으로 검증합니다. Preview는 화면 검증용 mock 데이터를 사용합니다. 현재 테스트 단계에 한해 Production에서도 앱별 opt-in을 명시한 mock 빌드를 허용합니다.
 
 | 항목 | 값 |
 |---|---|
@@ -268,10 +275,11 @@ Vercel Preview에서 Web과 Admin을 한 도메인으로 검증합니다. Previe
 | Node.js | 24.x |
 | Build Command | `cd ../.. && npm run build` |
 | Preview API 모드 | 기본값 `mock` (Preview SSO 보호가 적용된 테스트 환경) |
-| Production real 환경변수 | `VITE_API_MODE=real`, `VITE_API_BASE_URL`, `NEXT_PUBLIC_API_MODE=real`, `NEXT_PUBLIC_API_BASE_URL` |
+| Production API 환경변수 | 실 API: 앱별 `*_API_MODE=real`, HTTPS `*_API_BASE_URL`; 테스트용 mock: 앱별 `*_API_MODE=mock`, `*_ALLOW_MOCK_IN_PRODUCTION=true` |
 
 - Preview에서는 Web과 Admin이 mock 데이터를 사용합니다. 실제 고객 데이터를 Preview에 넣지 마세요.
-- Production에서는 두 앱 모두 `real` 모드와 실제 HTTPS API 주소가 필요합니다. 모드나 주소가 누락되거나 mock이면 빌드가 실패합니다.
+- Production에서 실 API를 쓰면 실제 HTTPS 주소가 필요합니다. 현재 테스트 단계에서만 앱별 `*_API_MODE=mock`과 `*_ALLOW_MOCK_IN_PRODUCTION=true`를 함께 설정해 mock 배포를 허용합니다. mock에는 테스트용 초기 데이터만 있으며 서버 저장·영속성·실제 인증이 없습니다. 실제 사용자 운영에는 사용하지 마세요. opt-in이 없으면 빌드가 실패합니다.
+- Production opt-in은 Vercel 환경변수에서 제거할 때까지 유지되므로, 실제 서비스 전에 mock 변수를 제거하고 실 API 설정으로 전환해야 합니다.
 - 로컬에서 API 모드를 지정하지 않으면 검증용 mock 빌드를 사용합니다. Vercel Production에는 이 기본값을 적용하지 않습니다.
 - 실제 인증·상품 저장·발주·주문 알림 API는 아직 스텁입니다. 주문 완료 이메일/팩스 전송 및 발주처 직배송 처리는 서버 구현이 필요합니다.
 - Web과 Admin의 mock 인증은 비밀번호를 검증하지 않고 실제 세션을 발급하지 않습니다. 목 관리자 분기는 화면 시연 기능일 뿐 권한 경계가 아닙니다.
