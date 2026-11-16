@@ -29,9 +29,15 @@ function assertBuildApiConfig(viteMode: string): void {
     const isVercelProductionBuild = process.env.VERCEL_ENV === 'production';
 
     if (apiConfig.mode === 'mock') {
-      if (!isVercelPreviewBuild) {
+      if (!isVercelPreviewBuild && !isVercelProductionBuild) {
         throw new ApiConfigError(
-          'Vercel에서는 Preview에서만 mock을 허용합니다. Production에는 VITE_API_MODE=real이 필요합니다.',
+          'Vercel mock 배포에는 VERCEL_ENV=preview 또는 production 식별이 필요합니다.',
+        );
+      }
+
+      if (isVercelProductionBuild && readEnv('VITE_ALLOW_MOCK_IN_PRODUCTION') !== 'true') {
+        throw new ApiConfigError(
+          'Vercel Production mock 배포에는 VITE_ALLOW_MOCK_IN_PRODUCTION=true가 필요합니다.',
         );
       }
     } else {

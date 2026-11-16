@@ -41,28 +41,41 @@ describe('Admin Vercel build API configuration', () => {
     ).resolves.toBeDefined();
   });
 
-  it('rejects mock mode in Vercel Production even when NODE_ENV is not production', async () => {
+  it('allows mock mode in Vercel Production only with the explicit opt-in flag', async () => {
+    await expect(
+      resolveAdminBuildConfig({
+        NODE_ENV: 'production',
+        VERCEL: '1',
+        VERCEL_ENV: 'production',
+        VITE_API_MODE: 'mock',
+        VITE_API_BASE_URL: '',
+        VITE_ALLOW_MOCK_IN_PRODUCTION: 'true',
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it('rejects Vercel Production mock mode when the opt-in flag is missing', async () => {
+    await expect(
+      resolveAdminBuildConfig({
+        NODE_ENV: 'production',
+        VERCEL: '1',
+        VERCEL_ENV: 'production',
+        VITE_API_MODE: 'mock',
+        VITE_API_BASE_URL: '',
+      }),
+    ).rejects.toThrow('ALLOW_MOCK_IN_PRODUCTION=true');
+  });
+
+  it('requires the Production opt-in independently of NODE_ENV', async () => {
     await expect(
       resolveAdminBuildConfig({
         NODE_ENV: 'test',
         VERCEL: '1',
         VERCEL_ENV: 'production',
         VITE_API_MODE: 'mock',
-      }),
-    ).rejects.toThrow('Vercel에서는 Preview에서만 mock을 허용합니다.');
-  });
-
-  it('allows mock mode in Vercel Preview even when the explicit flag is set', async () => {
-    await expect(
-      resolveAdminBuildConfig({
-        NODE_ENV: 'production',
-        VERCEL: '1',
-        VERCEL_ENV: 'preview',
-        VITE_API_MODE: 'mock',
         VITE_API_BASE_URL: '',
-        VITE_ALLOW_MOCK_IN_PRODUCTION: 'true',
       }),
-    ).resolves.toBeDefined();
+    ).rejects.toThrow('VITE_ALLOW_MOCK_IN_PRODUCTION=true');
   });
 
   it('rejects mock mode when Vercel does not identify the deployment environment', async () => {
@@ -74,7 +87,7 @@ describe('Admin Vercel build API configuration', () => {
         VITE_API_BASE_URL: '',
         VITE_ALLOW_MOCK_IN_PRODUCTION: 'true',
       }),
-    ).rejects.toThrow('Vercel에서는 Preview에서만 mock을 허용합니다.');
+    ).rejects.toThrow('VERCEL_ENV=preview 또는 production 식별이 필요합니다.');
   });
 
   it('rejects a Production real mode that still uses the reserved placeholder host', async () => {
