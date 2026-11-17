@@ -347,6 +347,8 @@ export function SiteHeader() {
     router.push('/products/' + encodeURIComponent(productId));
   };
 
+  // 로그인·회원가입 화면은 공용 헤더를 그리지 않습니다(demo-mode-banner.tsx와 같은 규칙). 모든 훅 호출 뒤에서 return합니다.
+  if (pathname === '/login' || pathname === '/signup') return null;
   if (checkoutStep > 0) {
     const checkoutSteps = ['배송지', '결제', '완료'];
     return (
