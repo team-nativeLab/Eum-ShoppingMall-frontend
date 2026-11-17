@@ -33,12 +33,11 @@ function getCategoryIcon(iconKey: string | null): LucideIcon {
 }
 
 // 카테고리 바 끝의 "전체보기" 바로가기(서버 카테고리가 아닌 고정 탐색 항목)
-const VIEW_ALL_ITEM = { label: '전체보기', description: '더 다양한 제품', href: '/search' };
+const VIEW_ALL_ITEM = { label: '전체보기', href: '/search' };
 
 interface CategoryShortcut {
   key: string;
   label: string;
-  description: string | null;
   href: string;
   icon: LucideIcon;
 }
@@ -50,7 +49,6 @@ function toCategoryShortcuts(categories: Category[]): CategoryShortcut[] {
     .map((category) => ({
       key: category.id,
       label: category.name,
-      description: category.description,
       href:
         category.slug === 'custom-order'
           ? '/solutions'
@@ -75,7 +73,7 @@ function renderWrappableLabel(label: string) {
 
 /**
  * Figma HF/Web/CategoryBar(데스크톱).
- * 카테고리 이름·소개는 API에서 받고, 맞춤 제작/납품은 안전 솔루션으로 연결합니다.
+ * 카테고리 이름은 API에서 받고, 맞춤 제작/납품은 안전 솔루션으로 연결합니다. 타일에는 이름만 보입니다.
  * hover·키보드 포커스 시 연회색 타일을 보여 주고, 그 타일 양옆 구분선은 숨깁니다.
  */
 export function CategoryBar({ categories }: { categories: Category[] }) {
@@ -101,12 +99,7 @@ export function CategoryBar({ categories }: { categories: Category[] }) {
             >
               {/* Figma CategoryBar 아이콘은 32px라 Icon 크기 단계(최대 28) 대신 Lucide를 직접 씁니다. */}
               <shortcut.icon size={32} strokeWidth={1.5} aria-hidden="true" className="shrink-0" />
-              <span className="mt-8 max-w-full truncate text-label-m">{shortcut.label}</span>
-              {shortcut.description ? (
-                <span className="mt-2 max-w-full truncate text-caption text-text-3">
-                  {shortcut.description}
-                </span>
-              ) : null}
+              <span className="mt-8 max-w-full truncate text-label-l">{shortcut.label}</span>
             </Link>
           </li>
         ))}

@@ -105,7 +105,7 @@ describe('SiteHeader product and brand navigation', () => {
     );
     expect(within(primaryNavigation).getByRole('link', { name: '추천상품' })).toHaveAttribute(
       'href',
-      '/#recommended-products',
+      '/recommended',
     );
     expect(within(primaryNavigation).getByRole('link', { name: '문의사항' })).toHaveAttribute(
       'href',
@@ -117,6 +117,20 @@ describe('SiteHeader product and brand navigation', () => {
     expect(brandsLink).toHaveAttribute('href', '/brands');
     expect(productsLink).not.toHaveAttribute('aria-current');
     expect(brandsLink).not.toHaveAttribute('aria-current');
+  });
+
+  it('activates only Recommended on /recommended', () => {
+    navigationMocks.pathname = '/recommended';
+    render(<SiteHeader />, { wrapper: createWrapper() });
+    const primaryNavigation = screen.getByRole('navigation', { name: '주요 메뉴' });
+
+    expect(within(primaryNavigation).getByRole('link', { name: '추천상품' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(within(primaryNavigation).getByRole('link', { name: '베스트' })).not.toHaveAttribute(
+      'aria-current',
+    );
   });
 
   it.each(['/brands', '/brands/brd-3m'])('activates only Brand on %s', (pathname) => {
@@ -198,6 +212,27 @@ describe('SiteHeader product and brand navigation', () => {
       within(menu).getAllByRole('button', { name: /^(제품|베스트|오늘의 상품|브랜드몰)$/ }),
     ).toHaveLength(4);
     expect(within(menu).getByRole('button', { name: '전체 메뉴 닫기' })).toHaveClass('size-44');
+  });
+
+  it('lists 추천 상품 in the 베스트 section of the all-menu', async () => {
+    navigationMocks.pathname = '/';
+    const user = userEvent.setup();
+    render(<SiteHeader />, { wrapper: createWrapper() });
+
+    const [desktopMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
+    if (!desktopMenuButton) throw new Error('메뉴 버튼을 찾을 수 없습니다.');
+    await user.click(desktopMenuButton);
+
+    const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
+    const bestSection = within(menu).getByRole('region', { name: '베스트' });
+    expect(within(bestSection).getByRole('link', { name: '베스트 상품' })).toHaveAttribute(
+      'href',
+      '/best',
+    );
+    expect(within(bestSection).getByRole('link', { name: '추천 상품' })).toHaveAttribute(
+      'href',
+      '/recommended',
+    );
   });
 
   it('keeps legacy support pages out of the new product mega menu', async () => {

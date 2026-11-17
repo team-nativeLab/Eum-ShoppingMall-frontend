@@ -529,7 +529,7 @@ function BestSellerSection({
             })}
           </div>
           <Link
-            href="/search"
+            href="/best"
             className="ml-auto hidden shrink-0 items-center gap-4 rounded-4 text-label-m focus-ring hover:text-text-2 lg:inline-flex"
           >
             전체 보기
@@ -571,7 +571,7 @@ function BestSellerSection({
                   onClick={carouselPaging.goToPrevious}
                   disabled={!carouselPaging.canGoPrevious}
                   aria-label="이전 베스트 상품"
-                  className="absolute top-1/2 -left-20 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
+                  className="absolute top-1/2 left-12 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
                 >
                   <Icon icon={ChevronLeft} size={20} />
                 </button>
@@ -580,7 +580,7 @@ function BestSellerSection({
                   onClick={carouselPaging.goToNext}
                   disabled={!carouselPaging.canGoNext}
                   aria-label="다음 베스트 상품"
-                  className="absolute top-1/2 -right-20 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
+                  className="absolute top-1/2 right-12 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
                 >
                   <Icon icon={ChevronRight} size={20} />
                 </button>
@@ -598,7 +598,7 @@ function BestSellerSection({
           </p>
         )}
         <Link
-          href="/search"
+          href="/best"
           className={cx(
             buttonClassName({ variant: 'secondary', size: 'm', isFullWidth: true }),
             'mt-16 lg:hidden',
@@ -613,7 +613,7 @@ function BestSellerSection({
 
 /**
  * 베스트 셀러 아래의 「오늘의 상품」·「추천상품」 캐러셀. 기존 상품 목록(collection=today)과 추천 API를 그대로 씁니다.
- * 목록이 비어 있으면 해당 섹션은 그리지 않습니다. 「추천상품」은 헤더 링크(/#recommended-products)의 도착점입니다.
+ * 목록이 비어 있으면 해당 섹션은 그리지 않습니다. 「추천상품」 전체 보기는 전용 화면(/recommended)으로 이동합니다.
  */
 function HomeShowcaseSections() {
   const todayProductsQuery = useProductsQuery({
@@ -638,15 +638,12 @@ function HomeShowcaseSections() {
       ) : null}
       {recommendedProducts.length > 0 ? (
         <PageContainer className="mt-48 lg:mt-64">
-          {/* 고정 헤더에 가리지 않도록 스크롤 위치에 여백을 둡니다. */}
-          <div id="recommended-products" className="scroll-mt-96">
-            <HomeProductShowcase
-              headingId="recommended-products-heading"
-              title="추천상품"
-              products={recommendedProducts}
-              viewAllHref="/search"
-            />
-          </div>
+          <HomeProductShowcase
+            headingId="recommended-products-heading"
+            title="추천상품"
+            products={recommendedProducts}
+            viewAllHref="/recommended"
+          />
         </PageContainer>
       ) : null}
     </>
@@ -705,7 +702,7 @@ function HomeProductShowcase({
               onClick={carouselPaging.goToPrevious}
               disabled={!carouselPaging.canGoPrevious}
               aria-label={`이전 ${title}`}
-              className="absolute top-1/2 -left-20 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
+              className="absolute top-1/2 left-12 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
             >
               <Icon icon={ChevronLeft} size={20} />
             </button>
@@ -714,7 +711,7 @@ function HomeProductShowcase({
               onClick={carouselPaging.goToNext}
               disabled={!carouselPaging.canGoNext}
               aria-label={`다음 ${title}`}
-              className="absolute top-1/2 -right-20 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
+              className="absolute top-1/2 right-12 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
             >
               <Icon icon={ChevronRight} size={20} />
             </button>

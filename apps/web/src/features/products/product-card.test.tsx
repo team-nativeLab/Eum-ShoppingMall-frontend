@@ -303,7 +303,9 @@ describe('ProductCard', () => {
     let card = screen.getByRole('article');
     let imageFrame = card.firstElementChild;
     if (!(imageFrame instanceof HTMLElement)) throw new Error('Expected a product image frame.');
-    expect(card).toHaveClass('aspect-[181/284]', 'min-h-max');
+    // 모바일은 세로 비율을 고정하지 않고(내용에 맞게 늘어남), 데스크톱(lg)에서만 181:284 비율을 씁니다.
+    expect(card).toHaveClass('min-h-max', 'lg:aspect-[181/284]');
+    expect(card).not.toHaveClass('aspect-[181/284]');
     expect(card).not.toHaveClass('@container');
     expect(imageFrame).toHaveClass('aspect-[23/20]');
     expect(imageFrame).not.toHaveClass('w-[calc(100%_-_16px)]', 'mx-auto');
@@ -325,7 +327,8 @@ describe('ProductCard', () => {
     expect(card).not.toHaveClass('@container');
     expect(card).not.toHaveClass('min-h-[384px]');
     expect(card).toHaveClass('pb-10', 'lg:pb-8');
-    expect(card).toHaveClass('aspect-[181/284]', 'min-h-max');
+    expect(card).toHaveClass('min-h-max', 'lg:aspect-[181/284]');
+    expect(card).not.toHaveClass('aspect-[181/284]');
     expect(imageFrame).toHaveClass('aspect-[23/20]');
     expect(imageFrame).not.toHaveClass('w-[calc(100%_-_16px)]', 'mx-auto');
     expect(within(imageFrame).getByText('품절').parentElement).toHaveClass('left-8');

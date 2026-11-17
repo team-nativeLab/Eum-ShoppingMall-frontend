@@ -96,7 +96,8 @@ export function ProductCard({
           ? 'flex-row gap-16'
           : isHomeCarouselCard
             ? 'aspect-[181/284] flex-col lg:aspect-auto'
-            : 'aspect-[181/284] min-h-max flex-col',
+            : // 모바일은 세로 비율을 고정하지 않고 내용에 맞게 늘어납니다(가격·장바구니가 다음 행과 겹치지 않게). 데스크톱 비율은 그대로 둡니다.
+              'min-h-max flex-col lg:aspect-[181/284]',
         isCompactOnMobile && (isHomeCarouselCard ? 'pb-24 lg:pb-8' : 'pb-10 lg:pb-8'),
         // Keep compact home cards tall on mobile and use the desktop carousel minimum height.
         isHomeCarouselCompactCard && 'min-h-[384px]',

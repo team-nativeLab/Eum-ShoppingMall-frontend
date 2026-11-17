@@ -79,13 +79,11 @@ function getSubcategoryChips(
 /** W-02 카테고리와 W-04 검색 결과에서 공통 사용하는 필터·목록 레이아웃입니다. */
 export function ProductListingView({
   categorySlug,
-  collection,
   initialKeyword = '',
   initialBrands = [],
   initialSearchParams = '',
 }: {
   categorySlug?: string;
-  collection?: 'featured' | 'today';
   initialKeyword?: string;
   initialBrands?: string[];
   initialSearchParams?: string;
@@ -150,7 +148,6 @@ export function ProductListingView({
   );
   const productParams: ProductListParams = {
     categoryId: pageCategoryId,
-    collection,
     keyword: isSearch ? keyword || undefined : undefined,
     minPrice: appliedPrice.min,
     maxPrice: appliedPrice.max,
@@ -290,15 +287,10 @@ export function ProductListingView({
       : []),
     { label: selectedCategory?.name ?? '카테고리' },
   ];
-  const title =
-    collection === 'featured'
-      ? '베스트'
-      : collection === 'today'
-        ? '오늘의 상품'
-        : isSearch
-          ? (categoryNameById.get(selectedSearchCategoryId ?? '') ??
-            (keyword ? '‘' + keyword + '’ 검색 결과' : '전체 상품'))
-          : (selectedCategory?.name ?? '카테고리');
+  const title = isSearch
+    ? (categoryNameById.get(selectedSearchCategoryId ?? '') ??
+      (keyword ? '‘' + keyword + '’ 검색 결과' : '전체 상품'))
+    : (selectedCategory?.name ?? '카테고리');
   const isLoading = categoriesQuery.isPending || productsQuery.isPending || !isCategoryResolved;
   // 이전 결과를 보여 주며 새 페이지·필터 결과를 받는 중
   const isRefreshing = productsQuery.isPlaceholderData;
