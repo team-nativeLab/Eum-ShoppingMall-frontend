@@ -271,3 +271,36 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
     expect(screen.queryByText('2페이지 중 1페이지')).not.toBeInTheDocument();
   });
 });
+
+describe('HomeView best and recommended view-all links', () => {
+  it('sends best seller links to /best and recommended links to /recommended', async () => {
+    const sampleProduct = homeContent.featuredProducts[0];
+    vi.mocked(getShopApi).mockResolvedValue({
+      ...createApi(),
+      products: {
+        list: async () => ({ items: [sampleProduct], page: 1, pageSize: 7, totalCount: 1 }),
+        listRecommended: async () => [sampleProduct],
+      },
+    } as unknown as ShopApi);
+
+    render(<HomeView />, { wrapper: createWrapper() });
+
+    const bestSellerSection = await screen.findByRole('region', { name: '베스트 셀러' });
+    const recommendedSection = await screen.findByRole('region', { name: '추천상품' });
+
+    expect(within(bestSellerSection).getByRole('link', { name: '전체 보기' })).toHaveAttribute(
+      'href',
+      '/best',
+    );
+    expect(
+      within(bestSellerSection).getByRole('link', { name: '베스트 셀러 전체 보기' }),
+    ).toHaveAttribute('href', '/best');
+    expect(within(recommendedSection).getByRole('link', { name: '전체 보기' })).toHaveAttribute(
+      'href',
+      '/recommended',
+    );
+    expect(
+      within(recommendedSection).getByRole('link', { name: '추천상품 전체 보기' }),
+    ).toHaveAttribute('href', '/recommended');
+  });
+});

@@ -89,8 +89,13 @@
     height: 64px;
     transform: translateY(-50%);
     border-radius: var(--radius-capsule);
-    background: var(--color-bg);
+    background: var(--color-text-1);
+    color: var(--color-inverse);
     box-shadow: var(--shadow-2);
+  }
+  /* 같은 명시도(클래스 + :hover)의 규칙이며 이 규칙이 뒤에 선언되어 hover 배경을 덮습니다. 흰 아이콘이 묻히지 않도록 hover 때도 어두운 배경을 유지합니다. */
+  .site-mega-menu-trigger:hover {
+    background: var(--color-pressed-dark);
   }
   .site-mega-menu-trigger svg {
     width: 30px;

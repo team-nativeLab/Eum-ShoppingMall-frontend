@@ -2,8 +2,8 @@ export type SearchParamValue = string | string[] | undefined;
 
 export type PrimaryNavigationKey = 'products' | 'best' | 'recommended' | 'brands' | 'inquiry';
 
-/** 홈의 「추천상품」 섹션(id="recommended-products")으로 이동합니다. */
-export const RECOMMENDED_PRODUCTS_HREF = '/#recommended-products';
+/** 추천상품 전용 화면 경로입니다. */
+export const RECOMMENDED_PAGE_HREF = '/recommended';
 
 export interface PrimaryNavigationItem {
   key: PrimaryNavigationKey;
@@ -60,7 +60,7 @@ export function getPrimaryNavigationItems(): PrimaryNavigationItem[] {
   return [
     { key: 'products', label: '전체상품', href: '/search' },
     { key: 'best', label: '베스트', href: '/best' },
-    { key: 'recommended', label: '추천상품', href: RECOMMENDED_PRODUCTS_HREF },
+    { key: 'recommended', label: '추천상품', href: RECOMMENDED_PAGE_HREF },
     { key: 'brands', label: '브랜드', href: buildBrandHref() },
     { key: 'inquiry', label: '문의사항', href: '/support/inquiry' },
   ];
@@ -79,8 +79,7 @@ export function isPrimaryNavigationItemActive(
   const activePathPrefixes: Record<PrimaryNavigationKey, string[]> = {
     products: ['/search', '/category', '/products'],
     best: ['/best'],
-    // 추천상품은 홈의 섹션 링크라 경로만으로는 활성 표시를 하지 않습니다.
-    recommended: [],
+    recommended: ['/recommended'],
     brands: ['/brands'],
     inquiry: ['/support'],
   };

@@ -32,7 +32,8 @@ describe('category shortcuts', () => {
     });
 
     expect(customOrderLink).toHaveAttribute('href', '/solutions');
-    expect(customOrderLink).toHaveTextContent('기업 맞춤 솔루션');
+    // 데스크톱 타일은 이름만 보여 주므로 소개 문구는 렌더링되지 않습니다.
+    expect(customOrderLink).not.toHaveTextContent('기업 맞춤 솔루션');
     expect(within(categoryNavigation).getByRole('link', { name: '개인보호장비' })).toHaveAttribute(
       'href',
       '/category/safety%2Fgear',

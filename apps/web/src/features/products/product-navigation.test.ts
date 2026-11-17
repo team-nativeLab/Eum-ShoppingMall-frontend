@@ -27,7 +27,7 @@ describe('product and brand navigation', () => {
   it('provides all-product, best, recommended, brand and inquiry routes', () => {
     expect(findNavigationItem('products').href).toBe('/search');
     expect(findNavigationItem('best').href).toBe('/best');
-    expect(findNavigationItem('recommended').href).toBe('/#recommended-products');
+    expect(findNavigationItem('recommended').href).toBe('/recommended');
     expect(findNavigationItem('brands').href).toBe('/brands');
     expect(findNavigationItem('inquiry').href).toBe('/support/inquiry');
   });
@@ -75,5 +75,15 @@ describe('product and brand navigation', () => {
     expect(getActiveKeys('/best')).toEqual(['best']);
     expect(getActiveKeys('/today')).toEqual([]);
     expect(getActiveKeys('/')).toEqual([]);
+  });
+
+  it('activates Recommended only on /recommended and its sub-paths', () => {
+    const recommendedItem = findNavigationItem('recommended');
+    expect(isPrimaryNavigationItemActive(recommendedItem, '/recommended')).toBe(true);
+    expect(isPrimaryNavigationItemActive(recommendedItem, '/recommended/x')).toBe(true);
+    expect(isPrimaryNavigationItemActive(recommendedItem, '/recommendedx')).toBe(false);
+    expect(isPrimaryNavigationItemActive(recommendedItem, '/')).toBe(false);
+    expect(getActiveKeys('/recommended')).toEqual(['recommended']);
+    expect(getActiveKeys('/recommendedx')).toEqual([]);
   });
 });

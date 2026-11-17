@@ -881,8 +881,12 @@ function AllMenuDropdown({
       ],
     },
     {
+      // 추천상품은 GNB에서 베스트 바로 뒤에 있으므로 같은 열의 두 번째 항목으로 둡니다(열 수 4 유지).
       title: '베스트',
-      items: [{ label: '베스트 상품', href: '/best' }],
+      items: [
+        { label: '베스트 상품', href: '/best' },
+        { label: '추천 상품', href: '/recommended' },
+      ],
     },
     {
       title: '오늘의 상품',
