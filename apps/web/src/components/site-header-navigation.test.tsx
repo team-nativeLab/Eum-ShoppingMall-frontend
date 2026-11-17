@@ -905,3 +905,40 @@ describe('SiteHeader product and brand navigation', () => {
     else Reflect.deleteProperty(window, 'scrollY');
   });
 });
+
+describe('SiteHeader on login and signup pages', () => {
+  beforeEach(() => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
+    navigationMocks.pathname = '/';
+    navigationMocks.search = '';
+    navigationMocks.push.mockReset();
+    navigationMocks.back.mockReset();
+    apiMocks.getShopApi.mockResolvedValue({
+      products: { list: apiMocks.listProducts, suggest: apiMocks.suggestProducts },
+      brands: { list: apiMocks.listBrands },
+      categories: { list: apiMocks.listCategories },
+    });
+    apiMocks.suggestProducts.mockResolvedValue([]);
+    apiMocks.listBrands.mockResolvedValue([]);
+    apiMocks.listCategories.mockResolvedValue([]);
+  });
+
+  it.each(['/login', '/signup'])('renders no site header on %s', (pathname) => {
+    navigationMocks.pathname = pathname;
+    const { container } = render(<SiteHeader />, { wrapper: createWrapper() });
+
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByRole('banner')).toBeNull();
+    expect(screen.queryByRole('navigation')).toBeNull();
+    expect(screen.queryAllByAltText('안전맛집')).toHaveLength(0);
+  });
+
+  it('renders the site header with its logo on the home page', () => {
+    navigationMocks.pathname = '/';
+    render(<SiteHeader />, { wrapper: createWrapper() });
+
+    expect(screen.getByRole('banner')).toBeInTheDocument();
+    expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0);
+    expect(screen.getAllByAltText('안전맛집').length).toBeGreaterThan(0);
+  });
+});

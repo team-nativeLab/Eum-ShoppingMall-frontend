@@ -165,4 +165,12 @@ describe('W-09 login form validation', () => {
       '/account/find-email?redirect=%2F',
     );
   });
+
+  it('does not render the brand logo image on the login page', () => {
+    renderLoginPage();
+
+    expect(screen.queryByAltText('안전맛집')).not.toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: '로그인' })).toBeInTheDocument();
+  });
 });

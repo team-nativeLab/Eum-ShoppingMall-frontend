@@ -22,8 +22,9 @@ const COLLECTION_PAGE_SIZE = 24;
 const RECOMMENDED_PAGE_LIMIT = 48;
 const SKELETON_COUNT = 8;
 
+/** 베스트·오늘의 상품·추천상품 전용 화면 그리드. 1280px(xl) 이상에서만 5열이며, 로딩 스켈레톤과 목록이 같은 값을 씁니다. */
 const GRID_CLASS =
-  'grid grid-cols-2 gap-x-12 gap-y-16 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-24 lg:gap-y-40';
+  'grid grid-cols-2 gap-x-12 gap-y-16 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-24 lg:gap-y-40 xl:grid-cols-5';
 
 /** 전용 화면 공통 틀. 제목과 본문만 둡니다(필터·정렬·탭·개수·브레드크럼 없음). */
 function CollectionFrame({ title, children }: { title: string; children: ReactNode }) {
