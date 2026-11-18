@@ -9,6 +9,7 @@ import {
   Check,
   ChevronDown,
   ChevronLeft,
+  ChevronRight,
   CircleX,
   Heart,
   LayoutGrid,
@@ -36,10 +37,13 @@ import {
 } from 'react';
 import { CartLink } from './cart-link';
 import { PageContainer } from './page-container';
-import { getCategoryHref, getCurrentMenuHref } from '@/features/products/category-href';
+import {
+  getCategoryHref,
+  getCurrentMenuHref,
+  isCustomOrderCategory,
+} from '@/features/products/category-href';
 import { useCategoriesQuery } from '@/features/products/use-categories-query';
 import { useProductSuggestionsQuery } from '@/features/products/use-product-suggestions-query';
-import { useBrandsQuery } from '@/features/brands/use-brands-query';
 import {
   buildBrandHref,
   getPrimaryNavigationItems,
@@ -136,11 +140,14 @@ export function SiteHeader() {
   const menuUnmountTimerRef = useRef<number | null>(null);
   const menuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const shouldRestoreMenuFocusRef = useRef(false);
+  // 메뉴를 연 직후 한 번만 패널 안의 닫기 버튼으로 포커스를 옮기기 위한 표시입니다.
+  const shouldFocusMenuOnOpenRef = useRef(false);
   const desktopMenuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const productDetailBackButtonRef = useRef<HTMLButtonElement>(null);
   const checkoutLogoRef = useRef<HTMLAnchorElement>(null);
   const menuPanelRef = useRef<HTMLDivElement>(null);
+  const menuCloseButtonRef = useRef<HTMLButtonElement>(null);
   const categoryList = categoriesQuery.data ?? [];
   const isMenuVisible = isMenuOpen;
   const closeMenu = useCallback((restoreFocus = false) => {
@@ -159,6 +166,7 @@ export function SiteHeader() {
       menuUnmountTimerRef.current = null;
     }, MENU_TRANSITION_DURATION_MS);
     shouldRestoreMenuFocusRef.current = restoreFocus;
+    shouldFocusMenuOnOpenRef.current = false;
     if (!restoreFocus) menuTriggerRef.current = null;
   }, []);
   const toggleMenu = (trigger: HTMLButtonElement) => {
@@ -176,6 +184,7 @@ export function SiteHeader() {
     }
     shouldRestoreMenuFocusRef.current = false;
     menuTriggerRef.current = trigger;
+    shouldFocusMenuOnOpenRef.current = true;
     isMenuOpenRef.current = true;
     setIsMenuOpen(true);
     setIsMenuMotionOpen(prefersReducedMotion || isReopeningDuringExit);
@@ -225,6 +234,19 @@ export function SiteHeader() {
     const focusTarget = openedTriggerIsVisible ? openedMenuTrigger : currentMenuFocusTarget;
     focusTarget?.focus();
   }, [checkoutStep, isMenuVisible, isProductDetail]);
+
+  // 패널이 상호작용 가능해지면(inert 해제) 닫기 버튼으로 포커스를 옮깁니다. 그러면 Tab 한 번에 메뉴 항목으로 갑니다.
+  useEffect(() => {
+    if (!isMenuVisible || !isMenuInteractive || !shouldFocusMenuOnOpenRef.current) return;
+
+    shouldFocusMenuOnOpenRef.current = false;
+    // 열리는 사이 사용자가 다른 곳으로 포커스를 옮겼다면 빼앗지 않습니다.
+    const activeElement = document.activeElement;
+    const isFocusOnOpener =
+      activeElement === document.body || activeElement === menuTriggerRef.current;
+    if (!isFocusOnOpener) return;
+    menuCloseButtonRef.current?.focus();
+  }, [isMenuInteractive, isMenuVisible]);
 
   // Mount first in the closed visual state, then start the entrance on the next frame.
   useLayoutEffect(() => {
@@ -535,13 +557,15 @@ export function SiteHeader() {
             transitionDuration: `${MENU_TRANSITION_DURATION_MS}ms`,
           }}
           className={cx(
-            'fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-32px)] w-[calc(100%_-_32px)] max-w-[1200px] overflow-x-hidden overflow-y-auto rounded-8 border border-line-strong bg-bg shadow-2 transition-[opacity,translate] ease-out motion-reduce:transition-none lg:max-h-[calc(100dvh-48px)] lg:w-[calc(100%_-_48px)]',
+            // 패널 높이 상한은 승인된 값(100dvh-210px)입니다. 헤더 하단(97px) 아래에 머물도록 합니다.
+            'fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-210px)] w-[calc(100%_-_32px)] max-w-[1380px] overflow-x-hidden overflow-y-auto rounded-8 border border-line-strong bg-bg shadow-2 transition-[opacity,translate] ease-out motion-reduce:transition-none lg:w-[calc(100%_-_48px)]',
             (!isMenuVisible || !isMenuInteractive) && 'pointer-events-none',
             isMenuMotionOpen ? 'opacity-100' : 'opacity-0',
           )}
         >
           {isMenuMounted ? (
             <AllMenuDropdown
+              closeButtonRef={menuCloseButtonRef}
               categories={categoryList}
               pathname={pathname}
               onClose={() => closeMenu(true)}
@@ -830,26 +854,24 @@ function HeaderSearch({
   );
 }
 
-/** W-16 전체 메뉴 dropdown. 브랜드 목록 조회는 popup이 열려 있을 때만 실행합니다. */
+/** W-16 전체 메뉴 dropdown. */
 function AllMenuDropdown({
   categories,
   pathname,
+  closeButtonRef,
   onClose,
   onNavigate,
 }: {
   categories: readonly Category[];
   pathname: string;
+  closeButtonRef: RefObject<HTMLButtonElement | null>;
   onClose: () => void;
   onNavigate: () => void;
 }) {
-  // 이 컴포넌트는 popup이 열리거나 닫힘 애니메이션 중일 때만 마운트됩니다.
-  // 로딩·실패 중에는 브랜드 항목 없이 「전체 브랜드」만 보여 줘서 브랜드 화면으로 갈 길을 남겨 둡니다.
-  const brandsQuery = useBrandsQuery();
-  const brandList = brandsQuery.data ?? [];
-
   // 대표 카테고리마다 열을 하나씩 두고, 하위 카테고리와 「전체 보기」를 넣습니다. 하위가 없으면 「전체 보기」 한 줄입니다.
+  // 맞춤 제작/납품(custom-order)은 메뉴 열에서 뺍니다. 카테고리 바와 홈에는 그대로 남습니다.
   const representativeSections: MenuSection[] = categories
-    .filter((category) => category.parentId === null)
+    .filter((category) => category.parentId === null && !isCustomOrderCategory(category))
     .map((category) => ({
       key: category.id,
       title: category.name,
@@ -868,7 +890,7 @@ function AllMenuDropdown({
         },
       ],
     }));
-  // 열 수는 전체 제품 1 + 대표 카테고리 수 + 베스트·오늘의 상품·브랜드몰 3입니다. 대표 카테고리 수에 따라 열 수가 달라지며, lg에서는 4열 격자로 줄 바꿈됩니다.
+  // 열 수는 전체 제품 1 + 대표 카테고리 수(맞춤 제작/납품 제외)입니다. 대표 카테고리 수에 따라 열 수가 달라지며, lg에서는 4열 격자로 줄 바꿈됩니다.
   const menuSections: MenuSection[] = [
     {
       key: 'all-products',
@@ -876,32 +898,13 @@ function AllMenuDropdown({
       items: [{ label: '전체 제품', href: '/search' }],
     },
     ...representativeSections,
-    {
-      // 추천상품은 GNB에서 베스트 바로 뒤에 있으므로 같은 열의 두 번째 항목으로 둡니다.
-      key: 'best',
-      title: '베스트',
-      items: [
-        { label: '베스트 상품', href: '/best' },
-        { label: '추천 상품', href: '/recommended' },
-      ],
-    },
-    {
-      key: 'today',
-      title: '오늘의 상품',
-      items: [{ label: '오늘의 상품 모두 보기', href: '/today' }],
-    },
-    {
-      key: 'brands',
-      title: '브랜드몰',
-      items: [
-        ...brandList.map((brandSummary) => ({
-          label: brandSummary.name,
-          href: buildBrandHref(brandSummary.id),
-        })),
-        { label: '전체 브랜드', href: buildBrandHref() },
-      ],
-    },
   ];
+  const brandHref = buildBrandHref();
+  // GNB 「브랜드」와 같은 규칙으로 /brands/* 경로도 활성으로 봅니다.
+  const isBrandLinkActive = isPrimaryNavigationItemActive(
+    { key: 'brands', label: '브랜드', href: brandHref },
+    pathname,
+  );
   const currentMenuHref = getCurrentMenuHref(categories, pathname);
   // 여러 메뉴 항목이 같은 주소를 가리켜도 현재 경로는 첫 번째 링크 한 곳에만 표시합니다.
   const currentMenuItem = menuSections
@@ -911,18 +914,34 @@ function AllMenuDropdown({
   return (
     <nav aria-label="전체 메뉴">
       <div className="border-b border-line">
-        <div className="flex h-56 items-center justify-end px-16 lg:h-64 lg:px-24">
+        <div className="flex h-64 items-center justify-end px-18 lg:h-74 lg:px-28">
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={onClose}
             aria-label="전체 메뉴 닫기"
-            className="inline-flex size-44 shrink-0 items-center justify-center rounded-8 focus-ring hover:bg-surface"
+            className="inline-flex size-51 shrink-0 items-center justify-center rounded-8 focus-ring hover:bg-surface"
           >
-            <Icon icon={X} size={20} />
+            <Icon icon={X} size={24} />
           </button>
         </div>
       </div>
-      <div className="grid grid-cols-1 content-start gap-x-16 gap-y-8 px-16 py-12 lg:grid-cols-4 lg:gap-x-24 lg:gap-y-0 lg:px-24 lg:py-24">
+      {/* 모바일 전용 브랜드 진입점입니다. 카테고리 열 제목과 같은 글자·선으로 맞춥니다. 데스크톱에서는 GNB의 「브랜드」를 씁니다. */}
+      <div className="px-18 lg:hidden">
+        <Link
+          href={brandHref}
+          onClick={onNavigate}
+          aria-current={isBrandLinkActive ? 'page' : undefined}
+          className={cx(
+            'flex min-h-51 w-full items-center justify-between border-b pr-5 text-left text-[18px] leading-[26px] font-medium focus-ring',
+            isBrandLinkActive ? 'border-success text-success' : 'border-line text-text-1',
+          )}
+        >
+          브랜드
+          <Icon icon={ChevronRight} size={20} />
+        </Link>
+      </div>
+      <div className="grid grid-cols-1 content-start gap-x-18 gap-y-9 px-18 py-14 lg:grid-cols-4 lg:gap-x-28 lg:gap-y-0 lg:px-28 lg:py-28">
         {menuSections.map((menuSection) => (
           <MenuColumn
             key={menuSection.key}
@@ -1018,14 +1037,15 @@ function MenuColumn({
           aria-controls={sectionContentId}
           onClick={toggleDisclosure}
           className={cx(
-            'flex min-h-44 w-full items-center justify-between border-b pr-4 text-left text-label-l focus-ring',
+            // 섹션 제목은 18px·500 굵기입니다. 18px 500 토큰이 없어 임의 값을 씁니다(label-l 16px의 약 1.15배).
+            'flex min-h-51 w-full items-center justify-between border-b pr-5 text-left text-[18px] leading-[26px] font-medium focus-ring',
             isCurrentSection ? 'border-success text-success' : 'border-line text-text-1',
           )}
         >
           <span>{title}</span>
           <Icon
             icon={ChevronDown}
-            size={16}
+            size={20}
             className={cx(
               'transition-transform duration-[180ms] ease-out motion-reduce:transition-none',
               isExpanded && 'rotate-180',
@@ -1045,10 +1065,10 @@ function MenuColumn({
           {/* 항목이 많은 섹션(예: 개인보호장비)은 목록을 2열로 나눠 섹션 행 높이를 줄입니다. 열 전체는 늘리지 않습니다. */}
           <ul
             className={cx(
-              'pt-8',
+              'pt-9',
               allowTwoColumnList && items.length >= MENU_TWO_COLUMN_MIN_ITEMS
-                ? 'grid grid-cols-2 gap-x-8 gap-y-4'
-                : 'space-y-4',
+                ? 'grid grid-cols-2 gap-x-9 gap-y-5'
+                : 'space-y-5',
             )}
           >
             {items.map((menuItem) => (
@@ -1059,9 +1079,9 @@ function MenuColumn({
                   aria-label={menuItem.ariaLabel}
                   aria-current={menuItem === currentItem ? 'page' : undefined}
                   className={cx(
-                    'inline-flex min-h-44 w-full items-center rounded-8 px-8 text-body-s focus-ring transition-colors',
+                    'inline-flex min-h-51 w-full items-center rounded-8 px-9 text-body-l focus-ring transition-colors',
                     menuItem === currentItem
-                      ? 'text-label-m text-success underline decoration-success underline-offset-4 hover:text-success active:text-success'
+                      ? 'text-label-l text-success underline decoration-success underline-offset-4 hover:text-success active:text-success'
                       : 'text-text-2 hover:bg-surface hover:text-text-1 active:bg-surface-2',
                   )}
                 >
