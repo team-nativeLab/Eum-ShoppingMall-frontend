@@ -9,12 +9,6 @@ import { useCompanyInfoQuery } from '@/features/company/use-company-info-query';
 import { PageContainer } from './page-container';
 
 const FOOTER_LINKS = [
-  { label: '제품', href: '/search', isEmphasized: false, isDesktopOnly: false },
-  { label: '베스트', href: '/best', isEmphasized: false, isDesktopOnly: false },
-  { label: '오늘의 상품', href: '/today', isEmphasized: false, isDesktopOnly: false },
-  { label: '추천상품', href: '/recommended', isEmphasized: false, isDesktopOnly: false },
-  { label: '브랜드몰', href: '/brands', isEmphasized: false, isDesktopOnly: false },
-  { label: '안전 솔루션', href: '/solutions', isEmphasized: false, isDesktopOnly: true },
   { label: '회사소개', href: '/about', isEmphasized: false, isDesktopOnly: true },
   { label: '이용약관', href: '/terms', isEmphasized: false, isDesktopOnly: false },
   { label: '개인정보처리방침', href: '/privacy', isEmphasized: true, isDesktopOnly: false },

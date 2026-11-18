@@ -6,20 +6,50 @@ vi.mock('@/features/company/use-company-info-query', () => ({
   useCompanyInfoQuery: () => ({ data: undefined, refetch: vi.fn() }),
 }));
 
-describe('SiteFooter product links', () => {
-  it('links 추천상품 to the recommended page next to the best and today links', () => {
+/** 푸터 메뉴 nav는 데스크톱(전체 목록)과 모바일(모바일에서 보이는 목록) 두 개입니다. 데스크톱이 먼저입니다. */
+function getFooterMenus() {
+  const footerMenus = screen.getAllByRole('navigation', { name: '푸터 메뉴' });
+  const [desktopFooterMenu, mobileFooterMenu] = footerMenus;
+  if (!desktopFooterMenu || !mobileFooterMenu) throw new Error('푸터 메뉴를 찾을 수 없습니다.');
+  return { desktopFooterMenu, mobileFooterMenu };
+}
+
+function getLinkLabels(menu: HTMLElement): string[] {
+  return within(menu)
+    .getAllByRole('link')
+    .map((menuLink) => menuLink.textContent ?? '');
+}
+
+describe('SiteFooter 링크 목록', () => {
+  it('데스크톱 푸터 메뉴는 남은 6개 링크를 기존 순서대로 보여 줍니다', () => {
     render(<SiteFooter />);
 
-    const footerLinks = screen.getAllByRole('link', { name: '추천상품' });
-    expect(footerLinks.length).toBeGreaterThan(0);
-    for (const footerLink of footerLinks) {
-      expect(footerLink).toHaveAttribute('href', '/recommended');
+    const { desktopFooterMenu } = getFooterMenus();
+    expect(getLinkLabels(desktopFooterMenu)).toEqual([
+      '회사소개',
+      '이용약관',
+      '개인정보처리방침',
+      '이용안내',
+      '이벤트',
+      '고객센터',
+    ]);
+  });
+
+  it('상단 메뉴와 중복되던 제품·베스트·오늘의 상품·추천상품·브랜드몰·안전 솔루션 링크는 푸터에 없습니다', () => {
+    render(<SiteFooter />);
+
+    const { desktopFooterMenu, mobileFooterMenu } = getFooterMenus();
+    const removedLabels = ['제품', '베스트', '오늘의 상품', '추천상품', '브랜드몰', '안전 솔루션'];
+    for (const removedLabel of removedLabels) {
+      expect(within(desktopFooterMenu).queryByRole('link', { name: removedLabel })).toBeNull();
+      expect(within(mobileFooterMenu).queryByRole('link', { name: removedLabel })).toBeNull();
     }
-    const footerNavigation = screen.getAllByRole('navigation')[0];
-    if (!footerNavigation) throw new Error('푸터 탐색을 찾을 수 없습니다.');
-    expect(within(footerNavigation).getByRole('link', { name: '베스트' })).toHaveAttribute(
-      'href',
-      '/best',
-    );
+  });
+
+  it('모바일 푸터 메뉴는 이용약관·개인정보처리방침·고객센터 3개만 보여 줍니다', () => {
+    render(<SiteFooter />);
+
+    const { mobileFooterMenu } = getFooterMenus();
+    expect(getLinkLabels(mobileFooterMenu)).toEqual(['이용약관', '개인정보처리방침', '고객센터']);
   });
 });

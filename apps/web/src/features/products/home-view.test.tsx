@@ -227,7 +227,7 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
     expect(screen.getByRole('link', { name: '둘러보기' })).toHaveAttribute('href', '/about');
   });
 
-  it('resets the home carousel to the first page when selecting a category', async () => {
+  it('pages the best seller carousel without category chips', async () => {
     const firstProduct = homeContent.featuredProducts[0];
     if (!firstProduct) throw new Error('Expected one home product fixture.');
     const featuredProducts = Array.from({ length: 8 }, (_, index) => ({
@@ -235,19 +235,7 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
       id: `featured-${index}`,
       categoryId: 'safety',
     }));
-    const categories: Category[] = [
-      {
-        id: 'safety',
-        slug: 'safety',
-        name: '안전용품',
-        parentId: null,
-        description: null,
-        iconKey: null,
-      },
-    ];
-    vi.mocked(getShopApi).mockResolvedValue(
-      createApi({ ...homeContent, featuredProducts }, categories),
-    );
+    vi.mocked(getShopApi).mockResolvedValue(createApi({ ...homeContent, featuredProducts }));
 
     render(<HomeView />, { wrapper: createWrapper() });
 
@@ -258,17 +246,64 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
     fireEvent.click(await screen.findByRole('button', { name: '다음 베스트 상품' }));
     await waitFor(() => expect(track).toHaveAttribute('data-page-index', '1'));
     expect(screen.getByText('2페이지 중 2페이지')).toBeInTheDocument();
+  });
 
-    const safetyCategoryButton = screen.getAllByRole('button', { name: '안전용품' })[0];
-    if (!safetyCategoryButton) throw new Error('Expected the safety category button.');
-    fireEvent.click(safetyCategoryButton);
-    await waitFor(() =>
-      expect(screen.getByRole('list', { name: '베스트 상품' })).toHaveAttribute(
-        'data-page-index',
-        '0',
-      ),
-    );
-    expect(screen.queryByText('2페이지 중 1페이지')).not.toBeInTheDocument();
+  it('does not render category chips or a 전체 tab in the best seller section', async () => {
+    const categories: Category[] = [
+      {
+        id: 'safety',
+        slug: 'safety',
+        name: '안전용품',
+        parentId: null,
+        description: null,
+        iconKey: null,
+      },
+    ];
+    vi.mocked(getShopApi).mockResolvedValue(createApi(homeContent, categories));
+
+    render(<HomeView />, { wrapper: createWrapper() });
+
+    const bestSellerSection = await screen.findByRole('region', { name: '베스트 셀러' });
+    expect(
+      within(bestSellerSection).queryByRole('group', { name: '베스트 상품 카테고리' }),
+    ).toBeNull();
+    expect(within(bestSellerSection).queryByRole('button', { name: '전체' })).toBeNull();
+    expect(within(bestSellerSection).queryByRole('button', { name: '안전용품' })).toBeNull();
+  });
+
+  it('does not add a 전체보기 tile to the home category bar', async () => {
+    const categories: Category[] = [
+      {
+        id: 'safety',
+        slug: 'safety',
+        name: '안전용품',
+        parentId: null,
+        description: null,
+        iconKey: null,
+      },
+    ];
+    vi.mocked(getShopApi).mockResolvedValue(createApi(homeContent, categories));
+
+    render(<HomeView />, { wrapper: createWrapper() });
+
+    await screen.findByRole('region', { name: '베스트 셀러' });
+    const categoryNavigations = await screen.findAllByRole('navigation', { name: '상품 카테고리' });
+    expect(categoryNavigations).toHaveLength(2);
+    for (const categoryNavigation of categoryNavigations) {
+      expect(within(categoryNavigation).queryByRole('link', { name: '전체보기' })).toBeNull();
+    }
+  });
+
+  it('shows the empty best seller message when no best products are registered', async () => {
+    vi.mocked(getShopApi).mockResolvedValue(createApi({ ...homeContent, featuredProducts: [] }));
+
+    render(<HomeView />, { wrapper: createWrapper() });
+
+    const bestSellerSection = await screen.findByRole('region', { name: '베스트 셀러' });
+    expect(
+      within(bestSellerSection).getByText('등록된 베스트 상품이 없습니다.'),
+    ).toBeInTheDocument();
+    expect(within(bestSellerSection).queryByRole('list', { name: '베스트 상품' })).toBeNull();
   });
 });
 

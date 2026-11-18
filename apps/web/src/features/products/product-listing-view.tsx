@@ -18,6 +18,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useMemo, useState, type ReactNode } from 'react';
 import { PageContainer } from '@/components/page-container';
 import { getScrollBehavior, usePrefersReducedMotion } from '@/lib/use-media-query';
+import { getCategoryHref } from './category-href';
 import { buildBrandSelectionHref, getBrandFilterValues } from './product-navigation';
 import { ProductCard } from './product-card';
 import { PriceRangeForm } from './price-range-form';
@@ -169,6 +170,10 @@ export function ProductListingView({
     (categoryFacet) => categoryFacet.count > 0 && categoryNameById.has(categoryFacet.value),
   );
   const subcategoryChips = getSubcategoryChips(categoryList, selectedCategory);
+  // 이 화면이 열린 카테고리 경로. 칩 목적지가 이 경로와 같을 때만 aria-current를 붙입니다(맞춤 제작/납품 루트는 /solutions로 가므로 제외).
+  const currentCategoryRouteHref = categorySlug
+    ? '/category/' + encodeURIComponent(categorySlug)
+    : undefined;
   // 검색어 범위 전체 결과 수(카테고리 칩 선택과 무관). 서버 계약 필드를 그대로 씁니다.
   const keywordTotalCount = facetsQuery.data?.keywordTotalCount;
   const facetsStatus: FacetsStatus = facetsQuery.isError
@@ -281,7 +286,7 @@ export function ProductListingView({
       ? [
           {
             label: subcategoryChips.rootCategory.name,
-            href: '/category/' + encodeURIComponent(subcategoryChips.rootCategory.slug),
+            href: getCategoryHref(subcategoryChips.rootCategory),
           },
         ]
       : []),
@@ -361,12 +366,15 @@ export function ProductListingView({
               label: category.name,
             })),
           ].map(({ category, label }) => {
+            const categoryHref = getCategoryHref(category);
             const isCurrent = selectedCategory?.id === category.id;
+            // 선택 스타일(isCurrent)과 별도로, 목적지가 현재 경로일 때만 현재 위치로 알립니다.
+            const isCurrentRoute = categoryHref === currentCategoryRouteHref;
             return (
               <Link
                 key={category.id}
-                href={'/category/' + encodeURIComponent(category.slug)}
-                aria-current={isCurrent ? 'page' : undefined}
+                href={categoryHref}
+                aria-current={isCurrent && isCurrentRoute ? 'page' : undefined}
                 className={cx(
                   'inline-flex h-36 shrink-0 items-center rounded-capsule px-14 text-label-m whitespace-nowrap focus-ring',
                   isCurrent

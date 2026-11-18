@@ -20,6 +20,14 @@ const categories: Category[] = [
     description: null,
     iconKey: null,
   },
+  {
+    id: 'general-child',
+    slug: 'safety/helmet',
+    name: '안전모',
+    parentId: 'general-category',
+    description: null,
+    iconKey: null,
+  },
 ];
 
 describe('category shortcuts', () => {
@@ -52,5 +60,21 @@ describe('category shortcuts', () => {
       'href',
       '/category/safety%2Fgear',
     );
+  });
+
+  it('does not add a 전체보기 tile to the desktop bar', () => {
+    render(<CategoryBar categories={categories} />);
+
+    const categoryNavigation = screen.getByRole('navigation', { name: '상품 카테고리' });
+    expect(within(categoryNavigation).queryByRole('link', { name: '전체보기' })).toBeNull();
+    expect(within(categoryNavigation).getAllByRole('link')).toHaveLength(2);
+  });
+
+  it('does not add a 전체보기 tile to the mobile grid and shows one tile per top-level category', () => {
+    render(<MobileCategoryGrid categories={categories} />);
+
+    const categoryNavigation = screen.getByRole('navigation', { name: '상품 카테고리' });
+    expect(within(categoryNavigation).queryByRole('link', { name: '전체보기' })).toBeNull();
+    expect(within(categoryNavigation).getAllByRole('link')).toHaveLength(2);
   });
 });

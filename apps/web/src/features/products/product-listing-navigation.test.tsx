@@ -844,3 +844,102 @@ describe('ProductListingView listing toolbar', () => {
     );
   });
 });
+
+describe('ProductListingView category links', () => {
+  const customOrderCategories = [
+    {
+      id: 'category-custom',
+      slug: 'custom-order',
+      name: '맞춤 제작/납품',
+      parentId: null,
+      description: null,
+      iconKey: null,
+    },
+    {
+      id: 'category-custom-sub',
+      slug: 'custom-order-sub',
+      name: '맞춤 하위',
+      parentId: 'category-custom',
+      description: null,
+      iconKey: null,
+    },
+    {
+      id: 'category-gear',
+      slug: 'safety/gear',
+      name: '안전 장비',
+      parentId: null,
+      description: null,
+      iconKey: null,
+    },
+    {
+      id: 'category-gear-sub',
+      slug: 'gear-sub',
+      name: '장비 하위',
+      parentId: 'category-gear',
+      description: null,
+      iconKey: null,
+    },
+  ];
+
+  beforeEach(() => {
+    navigationMocks.pathname = '/search';
+    navigationMocks.push.mockReset();
+    apiMocks.getShopApi.mockResolvedValue({
+      products: { list: apiMocks.listProducts, facets: apiMocks.listFacets },
+      categories: { list: apiMocks.listCategories },
+    });
+    apiMocks.listProducts.mockResolvedValue({ items: [], page: 1, pageSize: 24, totalCount: 0 });
+    apiMocks.listCategories.mockResolvedValue(customOrderCategories);
+    apiMocks.listFacets.mockResolvedValue({
+      totalCount: 0,
+      keywordTotalCount: 0,
+      categories: [],
+      brands: [],
+      certifications: [],
+    });
+  });
+
+  it('links the custom-order root chip to solutions and child chips to their category pages', async () => {
+    render(<ProductListingView categorySlug="custom-order" />, { wrapper: createWrapper() });
+    await screen.findByText('등록된 상품이 없습니다');
+
+    // 맞춤 제작/납품 자체가 선택된 상태이므로 「전체」 칩이 루트 주소를 가리킵니다.
+    const rootChip = screen.getByRole('link', { name: '전체' });
+    expect(rootChip).toHaveAttribute('href', '/solutions');
+    // 목적지(/solutions)가 현재 경로(/category/custom-order)와 다르므로 현재 위치로 표시하지 않습니다.
+    expect(rootChip).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: '맞춤 하위' })).toHaveAttribute(
+      'href',
+      '/category/custom-order-sub',
+    );
+  });
+
+  it('marks the selected custom-order child chip as the current page', async () => {
+    render(<ProductListingView categorySlug="custom-order-sub" />, { wrapper: createWrapper() });
+    await screen.findByText('등록된 상품이 없습니다');
+
+    // 칩 목적지가 현재 경로(/category/custom-order-sub)와 같으므로 현재 위치로 표시합니다.
+    expect(screen.getByRole('link', { name: '맞춤 하위' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: '전체' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('links the custom-order breadcrumb root to solutions when a subcategory is selected', async () => {
+    render(<ProductListingView categorySlug="custom-order-sub" />, { wrapper: createWrapper() });
+    await screen.findByText('등록된 상품이 없습니다');
+
+    expect(screen.getByRole('link', { name: '맞춤 제작/납품' })).toHaveAttribute(
+      'href',
+      '/solutions',
+    );
+  });
+
+  it('encodes a slash in the category slug of the breadcrumb root link', async () => {
+    render(<ProductListingView categorySlug="gear-sub" />, { wrapper: createWrapper() });
+    await screen.findByText('등록된 상품이 없습니다');
+
+    expect(screen.getByRole('link', { name: '안전 장비' })).toHaveAttribute(
+      'href',
+      '/category/safety%2Fgear',
+    );
+  });
+});

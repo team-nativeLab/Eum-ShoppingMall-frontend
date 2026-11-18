@@ -58,7 +58,11 @@ vi.mock('./local-collections-context', () => ({
     recordRecent: detailMocks.recordRecent,
   }),
 }));
-vi.mock('./product-carousel', () => ({ ProductCarouselSection: () => null }));
+vi.mock('./product-carousel', () => ({
+  ProductCarouselSection: ({ title, viewAllHref }: { title: string; viewAllHref: string }) => (
+    <a href={viewAllHref}>{title} 전체 보기</a>
+  ),
+}));
 vi.mock('./product-reviews-section', () => ({ ProductReviewsSection: () => <section /> }));
 vi.mock('./use-categories-query', () => ({ useCategoriesQuery: detailMocks.categoriesQuery }));
 vi.mock('./use-product-query', () => ({ useProductQuery: detailMocks.productQuery }));
@@ -393,5 +397,61 @@ describe('ProductDetailView required option validation', () => {
       directLines: [{ productId: 'product-test', optionId: null, quantity: 1 }],
       checkoutStarted: true,
     });
+  });
+});
+
+describe('ProductDetailView category links', () => {
+  it('links the custom-order breadcrumb and related products view-all to solutions', () => {
+    detailMocks.categoriesQuery.mockReturnValue({
+      data: [
+        {
+          id: 'category-test',
+          slug: 'custom-order',
+          name: '맞춤 제작/납품',
+          parentId: null,
+          description: null,
+          iconKey: null,
+        },
+      ],
+      isPending: false,
+    });
+    render(<ProductDetailView productId="product-test" />);
+
+    const breadcrumbCategoryLinks = screen.getAllByRole('link', { name: '맞춤 제작/납품' });
+    expect(breadcrumbCategoryLinks.length).toBeGreaterThan(0);
+    for (const breadcrumbCategoryLink of breadcrumbCategoryLinks) {
+      expect(breadcrumbCategoryLink).toHaveAttribute('href', '/solutions');
+    }
+    expect(screen.getByRole('link', { name: '함께 구매하면 좋은 제품 전체 보기' })).toHaveAttribute(
+      'href',
+      '/solutions',
+    );
+  });
+
+  it('encodes a slash in the category slug for the breadcrumb and related products view-all', () => {
+    detailMocks.categoriesQuery.mockReturnValue({
+      data: [
+        {
+          id: 'category-test',
+          slug: 'safety/gear',
+          name: '안전 장비',
+          parentId: null,
+          description: null,
+          iconKey: null,
+        },
+      ],
+      isPending: false,
+    });
+    render(<ProductDetailView productId="product-test" />);
+
+    const breadcrumbCategoryLinks = screen.getAllByRole('link', { name: '안전 장비' });
+    expect(breadcrumbCategoryLinks.length).toBeGreaterThan(0);
+    for (const breadcrumbCategoryLink of breadcrumbCategoryLinks) {
+      expect(breadcrumbCategoryLink).toHaveAttribute('href', '/category/safety%2Fgear');
+    }
+    expect(screen.getByRole('link', { name: '함께 구매하면 좋은 제품 전체 보기' })).toHaveAttribute(
+      'href',
+      '/category/safety%2Fgear',
+    );
   });
 });

@@ -3,7 +3,6 @@ import {
   Cctv,
   FireExtinguisher,
   HardHat,
-  LayoutGrid,
   Leaf,
   Package,
   Shirt,
@@ -14,6 +13,8 @@ import Link from 'next/link';
 import { Fragment } from 'react';
 import type { Category } from '@eum/api/types';
 import { Icon } from '@eum/ui/components/Icon';
+import { cx } from '@eum/ui/lib/cx';
+import { getCategoryHref } from './category-href';
 
 // 서버 카테고리의 iconKey → Lucide 아이콘. 모르는 키이거나 키가 없으면 Package를 씁니다.
 const CATEGORY_ICONS_BY_KEY: Readonly<Record<string, LucideIcon>> = {
@@ -32,8 +33,12 @@ function getCategoryIcon(iconKey: string | null): LucideIcon {
   return (iconKey !== null ? CATEGORY_ICONS_BY_KEY[iconKey] : undefined) ?? Package;
 }
 
-// 카테고리 바 끝의 "전체보기" 바로가기(서버 카테고리가 아닌 고정 탐색 항목)
-const VIEW_ALL_ITEM = { label: '전체보기', href: '/search' };
+// 모바일 타일은 3열입니다. 마지막 행이 덜 찼을 때 6칸 격자에서 그 행의 시작 칸을 골라 가운데에 맞춥니다.
+const MOBILE_TILE_COLUMNS = 3;
+const LAST_ROW_COLUMN_START_CLASSES: Readonly<Record<number, readonly string[]>> = {
+  1: ['col-start-3'],
+  2: ['col-start-2', 'col-start-4'],
+};
 
 interface CategoryShortcut {
   key: string;
@@ -42,20 +47,16 @@ interface CategoryShortcut {
   icon: LucideIcon;
 }
 
-/** 상위 카테고리를 아이콘이 붙은 바로가기 목록으로 바꾸고 끝에 전체보기를 붙입니다. */
+/** 상위 카테고리를 아이콘이 붙은 바로가기 목록으로 바꿉니다. */
 function toCategoryShortcuts(categories: Category[]): CategoryShortcut[] {
-  const topLevelShortcuts = categories
+  return categories
     .filter((category) => category.parentId === null)
     .map((category) => ({
       key: category.id,
       label: category.name,
-      href:
-        category.slug === 'custom-order'
-          ? '/solutions'
-          : '/category/' + encodeURIComponent(category.slug),
+      href: getCategoryHref(category),
       icon: getCategoryIcon(category.iconKey),
     }));
-  return [...topLevelShortcuts, { key: 'all', ...VIEW_ALL_ITEM, icon: LayoutGrid }];
 }
 
 /**
@@ -73,7 +74,7 @@ function renderWrappableLabel(label: string) {
 
 /**
  * Figma HF/Web/CategoryBar(데스크톱).
- * 카테고리 이름은 API에서 받고, 맞춤 제작/납품은 안전 솔루션으로 연결합니다. 타일에는 이름만 보입니다.
+ * 카테고리 이름은 API에서 받고, 맞춤 제작/납품은 솔루션 화면으로 연결합니다. 타일에는 이름만 보입니다.
  * hover·키보드 포커스 시 연회색 타일을 보여 주고, 그 타일 양옆 구분선은 숨깁니다.
  */
 export function CategoryBar({ categories }: { categories: Category[] }) {
@@ -111,11 +112,22 @@ export function CategoryBar({ categories }: { categories: Category[] }) {
 /** W-01m 모바일 홈의 3열 카테고리 타일. 라벨은 두 줄까지 줄바꿈됩니다. */
 export function MobileCategoryGrid({ categories }: { categories: Category[] }) {
   const categoryShortcuts = toCategoryShortcuts(categories);
+  // 타일 한 개가 6칸 격자에서 2칸을 차지해 한 행에 3개가 들어갑니다.
+  const remainderTileCount = categoryShortcuts.length % MOBILE_TILE_COLUMNS;
+  const lastRowStartIndex = categoryShortcuts.length - remainderTileCount;
+  const lastRowColumnStartClasses = LAST_ROW_COLUMN_START_CLASSES[remainderTileCount] ?? [];
   return (
     <nav aria-label="상품 카테고리" className="px-20 pt-24 lg:hidden">
-      <ul className="grid grid-cols-3 gap-8">
-        {categoryShortcuts.map((shortcut) => (
-          <li key={shortcut.key} className="flex h-96 items-center justify-center">
+      <ul className="grid grid-cols-6 gap-8">
+        {categoryShortcuts.map((shortcut, shortcutIndex) => (
+          <li
+            key={shortcut.key}
+            className={cx(
+              'col-span-2 flex h-96 items-center justify-center',
+              shortcutIndex >= lastRowStartIndex &&
+                lastRowColumnStartClasses[shortcutIndex - lastRowStartIndex],
+            )}
+          >
             <Link
               href={shortcut.href}
               className="flex h-84 w-76 flex-col items-center justify-center gap-6 rounded-12 border border-line bg-bg px-4 py-8 text-center focus-ring hover:bg-surface"
