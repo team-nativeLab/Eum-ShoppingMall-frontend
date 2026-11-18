@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('GNB 브랜드에서 브랜드 목록 → 상세 → 브랜드 제품 목록으로 이동합니다', async ({
+test('데스크톱 GNB·모바일 전체 메뉴의 브랜드 링크에서 브랜드 목록 → 상세 → 브랜드 제품 목록으로 이동합니다', async ({
   page,
 }, testInfo) => {
   await page.goto('/');
@@ -10,7 +10,7 @@ test('GNB 브랜드에서 브랜드 목록 → 상세 → 브랜드 제품 목�
       .getByRole('link', { name: '브랜드' })
       .click();
   } else {
-    // 모바일은 GNB 대신 전체 메뉴의 「전체 브랜드」로 들어갑니다.
+    // 모바일은 GNB가 없으므로 전체 메뉴의 「브랜드」 링크(lg 미만에서만 보임)로 들어갑니다.
     const menuTrigger = page.locator(
       'button[aria-controls="site-header-all-menu"]:visible, button[aria-haspopup="dialog"]:visible',
     );
@@ -19,14 +19,7 @@ test('GNB 브랜드에서 브랜드 목록 → 상세 → 브랜드 제품 목�
 
     const allMenu = page.locator('#site-header-all-menu');
     await expect(allMenu).toBeVisible();
-    const allBrandsLink = allMenu.getByRole('link', { name: '전체 브랜드' });
-    if (!(await allBrandsLink.isVisible())) {
-      const brandDisclosure = allMenu.getByRole('button', { name: '브랜드' });
-      await expect(brandDisclosure).toBeVisible();
-      await brandDisclosure.click();
-    }
-    await expect(allBrandsLink).toBeVisible();
-    await allBrandsLink.click();
+    await allMenu.getByRole('link', { name: '브랜드', exact: true }).click();
   }
 
   await expect(page).toHaveURL(/\/brands$/);

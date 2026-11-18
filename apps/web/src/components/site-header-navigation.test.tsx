@@ -67,6 +67,42 @@ function createWrapper() {
 }
 
 describe('SiteHeader product and brand navigation', () => {
+  // 링크가 여러 개인 대표 카테고리 열(개인보호장비: 하위 3개 + 전체 보기)로 펼치기·접기를 확인합니다.
+  const multiLinkCategories: Category[] = [
+    {
+      id: 'category-ppe',
+      slug: 'personal-protective-equipment',
+      name: '개인보호장비',
+      parentId: null,
+      description: null,
+      iconKey: null,
+    },
+    {
+      id: 'category-helmet',
+      slug: 'helmet',
+      name: '안전모',
+      parentId: 'category-ppe',
+      description: null,
+      iconKey: null,
+    },
+    {
+      id: 'category-shoes',
+      slug: 'shoes',
+      name: '안전화',
+      parentId: 'category-ppe',
+      description: null,
+      iconKey: null,
+    },
+    {
+      id: 'category-gloves',
+      slug: 'gloves',
+      name: '장갑',
+      parentId: 'category-ppe',
+      description: null,
+      iconKey: null,
+    },
+  ];
+
   beforeEach(() => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
     navigationMocks.pathname = '/';
@@ -167,13 +203,11 @@ describe('SiteHeader product and brand navigation', () => {
     );
   });
 
-  it('lists brand detail links from the brands API in the dropdown and keeps All brands', async () => {
+  it('keeps 전체 제품 in the all-menu without brand links or brand queries', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
     const user = userEvent.setup();
     render(<SiteHeader />, { wrapper: createWrapper() });
 
-    // 메뉴를 열기 전에는 브랜드를 조회하지 않습니다.
-    expect(apiMocks.listBrands).not.toHaveBeenCalled();
     const menuButtons = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
     expect(menuButtons).toHaveLength(2);
     const mobileMenuButton = menuButtons[1];
@@ -185,15 +219,10 @@ describe('SiteHeader product and brand navigation', () => {
       'href',
       '/search',
     );
-    expect(within(menu).getByRole('link', { name: '전체 브랜드' })).toHaveAttribute(
-      'href',
-      '/brands',
-    );
-    expect(await within(menu).findByRole('link', { name: '3M' })).toHaveAttribute(
-      'href',
-      '/brands/brd-3m',
-    );
-    expect(apiMocks.listBrands).toHaveBeenCalledTimes(1);
+    expect(within(menu).queryByRole('link', { name: '전체 브랜드' })).toBeNull();
+    expect(within(menu).queryByRole('region', { name: '브랜드몰' })).toBeNull();
+    // 메뉴가 브랜드 목록을 더 이상 조회하지 않습니다.
+    expect(apiMocks.listBrands).not.toHaveBeenCalled();
     // 브랜드 목록을 위해 상품을 대량 조회하지 않습니다.
     expect(apiMocks.listProducts).not.toHaveBeenCalled();
   });
@@ -209,31 +238,113 @@ describe('SiteHeader product and brand navigation', () => {
     const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
     expect(within(menu).queryByRole('link', { name: '개요' })).not.toBeInTheDocument();
     expect(within(menu).queryByRole('link', { name: 'FAQ' })).not.toBeInTheDocument();
-    expect(
-      within(menu).getAllByRole('button', { name: /^(전체 제품|베스트|오늘의 상품|브랜드몰)$/ }),
-    ).toHaveLength(4);
-    expect(within(menu).getByRole('button', { name: '전체 메뉴 닫기' })).toHaveClass('size-44');
+    expect(within(menu).getAllByRole('button', { name: /^전체 제품$/ })).toHaveLength(1);
+    expect(within(menu).getByRole('button', { name: '전체 메뉴 닫기' })).toHaveClass('size-51');
   });
 
-  it('lists 추천 상품 in the 베스트 section of the all-menu', async () => {
-    navigationMocks.pathname = '/';
+  it('shows a 브랜드 link to /brands in the mobile all-menu only', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
     const user = userEvent.setup();
     render(<SiteHeader />, { wrapper: createWrapper() });
-
-    const [desktopMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
-    if (!desktopMenuButton) throw new Error('메뉴 버튼을 찾을 수 없습니다.');
-    await user.click(desktopMenuButton);
-
+    const [, mobileMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
+    if (!mobileMenuButton) throw new Error('모바일 메뉴 버튼을 찾을 수 없습니다.');
+    await user.click(mobileMenuButton);
     const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
-    const bestSection = within(menu).getByRole('region', { name: '베스트' });
-    expect(within(bestSection).getByRole('link', { name: '베스트 상품' })).toHaveAttribute(
-      'href',
-      '/best',
-    );
-    expect(within(bestSection).getByRole('link', { name: '추천 상품' })).toHaveAttribute(
-      'href',
-      '/recommended',
-    );
+
+    const brandLink = within(menu).getByRole('link', { name: '브랜드' });
+    expect(brandLink).toHaveAttribute('href', '/brands');
+    // 데스크톱 메뉴에서는 숨깁니다. 데스크톱은 GNB의 브랜드를 씁니다.
+    expect(brandLink.parentElement).toHaveClass('lg:hidden');
+  });
+
+  it.each([
+    ['desktop', 1280, 0],
+    ['mobile', 390, 1],
+  ])(
+    'moves focus into the %s all-menu when it opens',
+    async (_viewportName, width, buttonIndex) => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+      const user = userEvent.setup();
+      render(<SiteHeader />, { wrapper: createWrapper() });
+      const menuButton = screen.getAllByRole('button', { name: '전체 메뉴 열기' })[buttonIndex];
+      if (!menuButton) throw new Error('전체 메뉴 버튼을 찾을 수 없습니다.');
+      await user.click(menuButton);
+      const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
+      const menuPanel = document.getElementById('site-header-all-menu');
+      if (!menuPanel) throw new Error('전체 메뉴 패널을 찾을 수 없습니다.');
+      // 패널은 열림 전환이 끝나야 상호작용 가능해지므로 transitionend로 전환을 끝냅니다.
+      await waitFor(() => expect(menuPanel).toHaveAttribute('data-menu-motion-state', 'open'));
+      fireEvent.transitionEnd(menuPanel, { propertyName: 'opacity' });
+
+      // 열린 뒤 첫 컨트롤(닫기 버튼)에 포커스가 가서, 키보드 사용자가 Tab 한 번에 메뉴 항목으로 갑니다.
+      await waitFor(() =>
+        expect(within(menu).getByRole('button', { name: '전체 메뉴 닫기' })).toHaveFocus(),
+      );
+    },
+  );
+
+  it.each([
+    ['desktop', 1280, 0],
+    ['mobile', 390, 1],
+  ])(
+    'returns focus to the %s trigger when Escape closes the all-menu',
+    async (_viewportName, width, buttonIndex) => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+      const user = userEvent.setup();
+      render(<SiteHeader />, { wrapper: createWrapper() });
+      const menuButton = screen.getAllByRole('button', { name: '전체 메뉴 열기' })[buttonIndex];
+      if (!menuButton) throw new Error('전체 메뉴 버튼을 찾을 수 없습니다.');
+      await user.click(menuButton);
+      const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
+      const menuPanel = document.getElementById('site-header-all-menu');
+      if (!menuPanel) throw new Error('전체 메뉴 패널을 찾을 수 없습니다.');
+      await waitFor(() => expect(menuPanel).toHaveAttribute('data-menu-motion-state', 'open'));
+      fireEvent.transitionEnd(menuPanel, { propertyName: 'opacity' });
+      await waitFor(() =>
+        expect(within(menu).getByRole('button', { name: '전체 메뉴 닫기' })).toHaveFocus(),
+      );
+
+      await user.keyboard('{Escape}');
+
+      await waitFor(() => expect(menuPanel).toHaveAttribute('aria-hidden', 'true'));
+      expect(menuButton).toHaveFocus();
+      expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+    },
+  );
+
+  it('does not take focus back when the user already moved it elsewhere while opening', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    const user = userEvent.setup();
+    render(<SiteHeader />, { wrapper: createWrapper() });
+    const menuButton = screen.getAllByRole('button', { name: '전체 메뉴 열기' })[1];
+    if (!menuButton) throw new Error('모바일 메뉴 버튼을 찾을 수 없습니다.');
+    await user.click(menuButton);
+    const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
+    const menuPanel = document.getElementById('site-header-all-menu');
+    if (!menuPanel) throw new Error('전체 메뉴 패널을 찾을 수 없습니다.');
+    const otherLink = screen.getByRole('link', { name: '로그인' });
+    otherLink.focus();
+
+    await waitFor(() => expect(menuPanel).toHaveAttribute('data-menu-motion-state', 'open'));
+    fireEvent.transitionEnd(menuPanel, { propertyName: 'opacity' });
+
+    expect(otherLink).toHaveFocus();
+    expect(within(menu).getByRole('button', { name: '전체 메뉴 닫기' })).not.toHaveFocus();
+  });
+
+  it('marks the mobile 브랜드 link current on a brand detail path', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    navigationMocks.pathname = '/brands/brd-3m';
+    const user = userEvent.setup();
+    render(<SiteHeader />, { wrapper: createWrapper() });
+    const [, mobileMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
+    if (!mobileMenuButton) throw new Error('모바일 메뉴 버튼을 찾을 수 없습니다.');
+    await user.click(mobileMenuButton);
+    const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
+
+    const brandLink = within(menu).getByRole('link', { name: '브랜드' });
+    expect(brandLink).toHaveAttribute('aria-current', 'page');
+    expect(brandLink).toHaveClass('text-success');
   });
 
   it('keeps legacy support pages out of the new product mega menu', async () => {
@@ -609,38 +720,16 @@ describe('SiteHeader product and brand navigation', () => {
     firstLink.focus();
     await user.tab({ shift: true });
     expect(firstLink).not.toHaveFocus();
-    expect(within(menu).getByRole('link', { name: '전체 브랜드' })).toBeInTheDocument();
     expect(within(menu).queryByText('고객지원')).not.toBeInTheDocument();
 
-    await user.click(within(menu).getByRole('link', { name: '전체 브랜드' }));
+    await user.click(firstLink);
 
     await waitFor(() => expect(menuPanel).toHaveAttribute('aria-hidden', 'true'));
   });
 
-  it.each([
-    ['loading', () => new Promise<never>(() => {})],
-    ['error', () => Promise.reject(new Error('temporary brand failure'))],
-  ])('keeps All brands in the all-menu while brands are %s', async (_stateName, loadBrands) => {
-    apiMocks.listBrands.mockImplementation(loadBrands);
-    const user = userEvent.setup();
-    render(<SiteHeader />, { wrapper: createWrapper() });
-
-    const [desktopMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
-    if (!desktopMenuButton) throw new Error('메뉴 버튼을 찾을 수 없습니다.');
-    await user.click(desktopMenuButton);
-    const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
-
-    await waitFor(() => expect(apiMocks.listBrands).toHaveBeenCalled());
-    const brandColumn = within(menu).getByRole('region', { name: '브랜드몰' });
-    expect(within(brandColumn).getAllByRole('link')).toHaveLength(1);
-    expect(within(brandColumn).getByRole('link', { name: '전체 브랜드' })).toHaveAttribute(
-      'href',
-      '/brands',
-    );
-  });
-
   it('opens the dropdown on the more button and closes it when the same button is clicked again', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
+    apiMocks.listCategories.mockResolvedValue(multiLinkCategories);
     const user = userEvent.setup();
     render(<SiteHeader />, { wrapper: createWrapper() });
     const [desktopMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
@@ -658,8 +747,8 @@ describe('SiteHeader product and brand navigation', () => {
     expect(menuMotion).toHaveClass('opacity-100');
     expect(menuMotion).toHaveStyle({ translate: '-50% -50%' });
     expect(menu.querySelector('[class~="lg:grid-cols-4"]')).toBeInTheDocument();
-    for (const sectionTitle of ['전체 제품', '베스트', '오늘의 상품', '브랜드몰']) {
-      expect(within(menu).getByRole('button', { name: sectionTitle })).toHaveAttribute(
+    for (const sectionTitle of ['전체 제품', '개인보호장비']) {
+      expect(await within(menu).findByRole('button', { name: sectionTitle })).toHaveAttribute(
         'aria-expanded',
         'true',
       );
@@ -669,11 +758,10 @@ describe('SiteHeader product and brand navigation', () => {
       'top-1/2',
       'left-1/2',
       'w-[calc(100%_-_32px)]',
-      'max-w-[1200px]',
-      'max-h-[calc(100dvh-32px)]',
+      'max-w-[1380px]',
+      'max-h-[calc(100dvh-210px)]',
     );
     expect(menuPanel.classList.contains('lg:w-[calc(100%_-_48px)]')).toBe(true);
-    expect(menuPanel).toHaveClass('lg:max-h-[calc(100dvh-48px)]');
     expect(menuPanel).toHaveStyle({ translate: '-50% -50%' });
     expect(menuPanel).toHaveClass(
       'transition-[opacity,translate]',
@@ -693,6 +781,7 @@ describe('SiteHeader product and brand navigation', () => {
 
   it('does not open from product hover and supports the mobile click disclosure', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    apiMocks.listCategories.mockResolvedValue(multiLinkCategories);
     const user = userEvent.setup();
     render(<SiteHeader />, { wrapper: createWrapper() });
     const productLink = screen.getByRole('navigation', { name: '주요 메뉴' }).querySelector('a');
@@ -717,11 +806,11 @@ describe('SiteHeader product and brand navigation', () => {
       'top-1/2',
       'left-1/2',
       'w-[calc(100%_-_32px)]',
-      'max-h-[calc(100dvh-32px)]',
+      'max-h-[calc(100dvh-210px)]',
     );
-    const sectionTitles = ['전체 제품', '베스트', '오늘의 상품', '브랜드몰'];
+    const sectionTitles = ['전체 제품', '개인보호장비'];
     for (const sectionTitle of sectionTitles) {
-      expect(within(menu).getByRole('button', { name: sectionTitle })).toHaveAttribute(
+      expect(await within(menu).findByRole('button', { name: sectionTitle })).toHaveAttribute(
         'aria-expanded',
         'false',
       );
@@ -733,7 +822,7 @@ describe('SiteHeader product and brand navigation', () => {
       productDisclosure.getAttribute('aria-controls') ?? '',
     );
     if (!productContents) throw new Error('전체 제품 메뉴 콘텐츠를 찾을 수 없습니다.');
-    expect(productDisclosure).toHaveClass('min-h-44');
+    expect(productDisclosure).toHaveClass('min-h-51');
     expect(productContents).toHaveAttribute('aria-hidden', 'true');
     expect(productContents).toHaveAttribute('inert');
     await user.click(productDisclosure);
@@ -760,17 +849,21 @@ describe('SiteHeader product and brand navigation', () => {
     expect(within(productColumn).queryByRole('link', { name: '전체 제품' })).toBeNull();
   });
 
-  it.each(['전체 제품', '베스트', '오늘의 상품', '브랜드몰'])(
+  it.each([
+    ['전체 제품', 1],
+    ['개인보호장비', 4],
+  ])(
     'toggles the %s category with accessible animated content',
-    async (sectionTitle) => {
+    async (sectionTitle, expectedLinkCount) => {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+      apiMocks.listCategories.mockResolvedValue(multiLinkCategories);
       const user = userEvent.setup();
       render(<SiteHeader />, { wrapper: createWrapper() });
       const [, mobileMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
       if (!mobileMenuButton) throw new Error('모바일 메뉴 버튼을 찾을 수 없습니다.');
       await user.click(mobileMenuButton);
       const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
-      const section = within(menu).getByRole('region', { name: sectionTitle });
+      const section = await within(menu).findByRole('region', { name: sectionTitle });
       const disclosureButton = within(section).getByRole('button', { name: sectionTitle });
       const sectionContentId = disclosureButton.getAttribute('aria-controls');
       if (!sectionContentId) throw new Error(`${sectionTitle} 메뉴 콘텐츠 ID가 없습니다.`);
@@ -783,7 +876,7 @@ describe('SiteHeader product and brand navigation', () => {
       await user.click(disclosureButton);
       expect(disclosureButton).toHaveAttribute('aria-expanded', 'true');
       expect(sectionContent).toHaveAttribute('aria-hidden', 'false');
-      expect(within(section).getAllByRole('link').length).toBeGreaterThan(0);
+      expect(within(section).getAllByRole('link')).toHaveLength(expectedLinkCount);
       await user.click(disclosureButton);
       expect(disclosureButton).toHaveAttribute('aria-expanded', 'false');
       expect(sectionContent).toHaveAttribute('aria-hidden', 'true');
@@ -799,24 +892,24 @@ describe('SiteHeader product and brand navigation', () => {
     if (!mobileMenuButton) throw new Error('모바일 메뉴 버튼을 찾을 수 없습니다.');
     await user.click(mobileMenuButton);
     const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
-    const bestSection = within(menu).getByRole('region', { name: '베스트' });
-    const bestToggle = within(bestSection).getByRole('button', { name: '베스트' });
-    const bestContentId = bestToggle.getAttribute('aria-controls');
-    if (!bestContentId) throw new Error('베스트 메뉴 콘텐츠 ID가 없습니다.');
-    const bestContent = document.getElementById(bestContentId);
+    const productSection = within(menu).getByRole('region', { name: '전체 제품' });
+    const productToggle = within(productSection).getByRole('button', { name: '전체 제품' });
+    const productContentId = productToggle.getAttribute('aria-controls');
+    if (!productContentId) throw new Error('전체 제품 메뉴 콘텐츠 ID가 없습니다.');
+    const productContent = document.getElementById(productContentId);
 
-    await user.click(bestToggle);
-    const bestLink = within(bestSection).getByRole('link', { name: '베스트 상품' });
-    bestLink.focus();
-    expect(bestLink).toHaveFocus();
+    await user.click(productToggle);
+    const productLink = within(productSection).getByRole('link', { name: '전체 제품' });
+    productLink.focus();
+    expect(productLink).toHaveFocus();
 
-    fireEvent.click(bestToggle);
+    fireEvent.click(productToggle);
 
-    expect(bestToggle).toHaveAttribute('aria-expanded', 'false');
-    expect(bestToggle).toHaveFocus();
-    expect(bestContent).toHaveAttribute('aria-hidden', 'true');
-    expect(bestContent).toHaveAttribute('inert');
-    expect(within(bestSection).queryByRole('link', { name: '베스트 상품' })).toBeNull();
+    expect(productToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(productToggle).toHaveFocus();
+    expect(productContent).toHaveAttribute('aria-hidden', 'true');
+    expect(productContent).toHaveAttribute('inert');
+    expect(within(productSection).queryByRole('link', { name: '전체 제품' })).toBeNull();
   });
 
   it('closes the popup on outside click', async () => {
@@ -961,6 +1054,8 @@ describe('SiteHeader mega menu and header trigger layout', () => {
     '환경',
     '맞춤 제작/납품',
   ];
+  // 맞춤 제작/납품은 메뉴 열에서 빠지므로 열 이름은 이 목록을 씁니다.
+  const menuCategoryNames = representativeCategoryNames.filter((name) => name !== '맞춤 제작/납품');
 
   const structureCategories: Category[] = [
     ...representativeCategoryNames.map((name, index) => ({
@@ -1015,20 +1110,14 @@ describe('SiteHeader mega menu and header trigger layout', () => {
     return { user, desktopMenuButton, menu };
   }
 
-  it('lists 전체 제품, one column per representative category, then 베스트·오늘의 상품·브랜드몰 in 12 columns', async () => {
+  it('lists 전체 제품 and one column per representative category except 맞춤 제작/납품 in 8 columns', async () => {
     const { menu } = await openDesktopMenu();
 
     const regionNames = within(menu)
       .getAllByRole('region')
       .map((region) => region.getAttribute('aria-label'));
-    expect(regionNames).toEqual([
-      '전체 제품',
-      ...representativeCategoryNames,
-      '베스트',
-      '오늘의 상품',
-      '브랜드몰',
-    ]);
-    expect(regionNames).toHaveLength(12);
+    expect(regionNames).toEqual(['전체 제품', ...menuCategoryNames]);
+    expect(regionNames).toHaveLength(8);
     expect(menu.querySelector('[class~="lg:grid-cols-4"]')).toBeInTheDocument();
   });
 
@@ -1059,31 +1148,14 @@ describe('SiteHeader mega menu and header trigger layout', () => {
     expect(toolLinks[0]).toHaveAttribute('href', '/category/category-slug-3');
   });
 
-  it('links the 맞춤 제작/납품 entry to /solutions instead of a category page', async () => {
+  it('leaves the 맞춤 제작/납품 category out of the mega menu columns', async () => {
     const { menu } = await openDesktopMenu();
 
-    const customOrderColumn = within(menu).getByRole('region', { name: '맞춤 제작/납품' });
-    expect(
-      within(customOrderColumn).getByRole('link', { name: '맞춤 제작/납품 전체 보기' }),
-    ).toHaveAttribute('href', '/solutions');
+    expect(within(menu).queryByRole('region', { name: '맞춤 제작/납품' })).toBeNull();
+    expect(within(menu).queryByRole('link', { name: '맞춤 제작/납품 전체 보기' })).toBeNull();
   });
 
-  it.each(['/category/custom-order', '/solutions'])(
-    'marks the 맞춤 제작/납품 전체 보기 link as current on %s',
-    async (currentPathname) => {
-      navigationMocks.pathname = currentPathname;
-      const { menu } = await openDesktopMenu();
-
-      const customOrderColumn = within(menu).getByRole('region', { name: '맞춤 제작/납품' });
-      const customOrderLink = within(customOrderColumn).getByRole('link', {
-        name: '맞춤 제작/납품 전체 보기',
-      });
-      expect(customOrderLink).toHaveAttribute('aria-current', 'page');
-      expect(within(menu).getAllByRole('link', { current: 'page' })).toHaveLength(1);
-    },
-  );
-
-  it('lays out a representative section with five or more links as two columns and keeps brand and short sections in one column', async () => {
+  it('lays out a representative section with five or more links as two columns and keeps short sections in one column', async () => {
     apiMocks.listCategories.mockResolvedValue([
       ...structureCategories,
       ...[1, 2, 3].map((extraIndex) => ({
@@ -1095,16 +1167,8 @@ describe('SiteHeader mega menu and header trigger layout', () => {
         iconKey: null,
       })),
     ]);
-    // 브랜드 5개 + 「전체 브랜드」 = 6개 항목이어도 브랜드몰은 2열로 나누지 않습니다.
-    apiMocks.listBrands.mockResolvedValue(
-      ['브랜드 1', '브랜드 2', '브랜드 3', '브랜드 4', '브랜드 5'].map((brandName, brandIndex) => ({
-        id: `brd-test-${brandIndex}`,
-        name: brandName,
-        englishName: null,
-      })),
-    );
     const { menu } = await openDesktopMenu();
-    await within(menu).findByRole('link', { name: '브랜드 5' });
+    await within(menu).findByRole('link', { name: '추가 3' });
 
     // 대표 카테고리 개인보호장비: 하위 5개 + 전체 보기 = 6개 항목이므로 2열입니다.
     const ppeList = within(within(menu).getByRole('region', { name: '개인보호장비' })).getByRole(
@@ -1115,14 +1179,7 @@ describe('SiteHeader mega menu and header trigger layout', () => {
     // 대표 카테고리 공구: 전체 보기 한 항목이므로 1열(세로 목록)을 유지합니다.
     const toolList = within(within(menu).getByRole('region', { name: '공구' })).getByRole('list');
     expect(toolList).not.toHaveClass('grid-cols-2');
-    expect(toolList).toHaveClass('space-y-4');
-    // 브랜드몰: 2열 허용 대상이 아니므로 항목이 많아도 1열입니다.
-    const brandList = within(within(menu).getByRole('region', { name: '브랜드몰' })).getByRole(
-      'list',
-    );
-    expect(within(brandList).getAllByRole('listitem')).toHaveLength(6);
-    expect(brandList).not.toHaveClass('grid-cols-2');
-    expect(brandList).toHaveClass('space-y-4');
+    expect(toolList).toHaveClass('space-y-5');
   });
 
   it('keeps the desktop trigger left of the logo and tied to the all-menu panel', () => {
@@ -1151,7 +1208,7 @@ describe('SiteHeader mega menu and header trigger layout', () => {
     const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
 
     const sectionRegions = within(menu).getAllByRole('region');
-    expect(sectionRegions).toHaveLength(12);
+    expect(sectionRegions).toHaveLength(8);
     for (const sectionRegion of sectionRegions) {
       const disclosure = within(sectionRegion).getByRole('button', {
         name: sectionRegion.getAttribute('aria-label') ?? '',

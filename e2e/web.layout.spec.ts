@@ -2,11 +2,12 @@ import { expect, test, type Page } from '@playwright/test';
 // 메뉴 열 수 기대값은 목 카테고리 픽스처에서 계산합니다(대표 카테고리 수가 바뀌어도 맞게 유지).
 import { mockCategories } from '../packages/api/src/mock/categories';
 
+// 맞춤 제작/납품(custom-order)은 메뉴 열에서 뺍니다.
 const MEGA_MENU_REPRESENTATIVE_COUNT = mockCategories.filter(
-  (category) => category.parentId === null,
+  (category) => category.parentId === null && category.slug !== 'custom-order',
 ).length;
-// 전체 제품 1 + 대표 카테고리 수 + 베스트·오늘의 상품·브랜드몰 3
-const MEGA_MENU_COLUMN_COUNT = 1 + MEGA_MENU_REPRESENTATIVE_COUNT + 3;
+// 전체 제품 1 + 대표 카테고리 수
+const MEGA_MENU_COLUMN_COUNT = 1 + MEGA_MENU_REPRESENTATIVE_COUNT;
 // lg 이상은 4열 격자이므로 행 수는 열 수를 4로 나눈 올림값입니다.
 const MEGA_MENU_GRID_COLUMNS = 4;
 
@@ -54,16 +55,11 @@ test('헤더·푸터·전체 메뉴의 모든 내부 링크는 404가 아닌 화
   await menuTrigger.click();
   const allMenu = page.locator('#site-header-all-menu');
   await expect(allMenu).toBeVisible();
-  const allBrandsLink = allMenu.getByRole('link', { name: '전체 브랜드' });
-  if (!(await allBrandsLink.isVisible())) {
-    await allMenu.locator('summary').filter({ hasText: '브랜드' }).click();
-  }
-  await expect(allBrandsLink).toHaveAttribute('href', '/brands');
   const menuPaths = await collectInternalPaths(page, '#site-header-all-menu');
 
   const uniquePaths = [...new Set([...headerAndFooterPaths, ...menuPaths])].sort();
   expect(uniquePaths).toEqual(
-    expect.arrayContaining(['/about', '/brands', '/cart', '/support/faq']),
+    expect.arrayContaining(['/about', '/brands', '/cart', '/support/notices']),
   );
   for (const linkPath of uniquePaths) {
     const linkResponse = await page.request.get(linkPath);
@@ -88,7 +84,7 @@ test('목 모드에서는 데모 안내 띠를 표시합니다', async ({ page }
   );
 });
 
-test('전체 메뉴는 Escape로 닫으면 연 버튼으로 포커스를 돌려줍니다', async ({ page }) => {
+test('전체 메뉴는 Escape로 닫으면 연 버튼으로 포커스를 돌려줍니다', async ({ page }, testInfo) => {
   await page.goto('/');
   const menuTrigger = page.locator(
     'button[aria-controls="site-header-all-menu"]:visible, button[aria-haspopup="dialog"]:visible',
@@ -100,7 +96,9 @@ test('전체 메뉴는 Escape로 닫으면 연 버튼으로 포커스를 돌려�
 
   const allMenu = page.locator('#site-header-all-menu');
   await expect(allMenu).toBeVisible();
-  const menuLink = allMenu.getByRole('link', { name: '이용 안내' });
+  // 모바일은 섹션이 접혀 있으므로 항상 보이는 모바일 전용 「브랜드」 링크를, 데스크톱은 펼쳐진 「전체 제품」 링크를 씁니다.
+  const menuLinkName = testInfo.project.name === 'web-mobile' ? '브랜드' : '전체 제품';
+  const menuLink = allMenu.getByRole('link', { name: menuLinkName, exact: true });
   await expect(menuLink).toBeVisible();
   await menuLink.focus();
   await expect(menuLink).toBeFocused();
@@ -200,7 +198,7 @@ for (const viewportWidth of [1024, 1280, 1440]) {
   });
 }
 
-test('데스크톱 전체 메뉴는 12개 열을 3행으로 보여 줍니다', async ({ page }, testInfo) => {
+test('데스크톱 전체 메뉴는 8개 열을 2행으로 보여 줍니다', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'web-desktop', '데스크톱 메뉴 배치 확인');
   await page.goto('/');
   await page.getByRole('button', { name: '전체 메뉴 열기' }).locator('visible=true').click();
@@ -220,6 +218,21 @@ test('데스크톱 전체 메뉴는 12개 열을 3행으로 보여 줍니다', a
   expect(columnTops.filter((columnTop) => columnTop === firstRowTop)).toHaveLength(
     Math.min(MEGA_MENU_GRID_COLUMNS, MEGA_MENU_COLUMN_COUNT),
   );
+});
+
+test('데스크톱 전체 메뉴에서는 모바일 전용 「브랜드」 링크를 숨깁니다', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'web-desktop', '데스크톱 메뉴 숨김 확인');
+  await page.goto('/');
+  await page.getByRole('button', { name: '전체 메뉴 열기' }).locator('visible=true').click();
+
+  const allMenu = page.locator('#site-header-all-menu');
+  await expect(allMenu).toBeVisible();
+  // includeHidden으로 링크가 DOM에 있으면서 숨겨졌는지 확인합니다(없어서 숨은 것으로 통과하지 않게).
+  await expect(
+    allMenu.getByRole('link', { name: '브랜드', exact: true, includeHidden: true }),
+  ).toBeHidden();
 });
 
 test('모바일 헤더는 전체 메뉴 버튼을 로고 왼쪽에 두고 로고를 37×110으로 보여 줍니다', async ({

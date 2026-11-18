@@ -1102,14 +1102,16 @@ describe('CartProvider', () => {
     renderCart();
     expect(await screen.findByText('합계 46000')).toBeInTheDocument();
     expect(screen.getByText('주문 불가 0')).toBeInTheDocument();
-    expect(JSON.parse(window.localStorage.getItem(CART_STORAGE_KEY) ?? '{}').cartItems).toEqual([
-      {
-        productId: 'p-option',
-        quantity: 2,
-        optionId: 'type:stand',
-        optionLabel: '형태: 스탠드형(신규)',
-      },
-    ]);
+    await waitFor(() => {
+      expect(JSON.parse(window.localStorage.getItem(CART_STORAGE_KEY) ?? '{}').cartItems).toEqual([
+        {
+          productId: 'p-option',
+          quantity: 2,
+          optionId: 'type:stand',
+          optionLabel: '형태: 스탠드형(신규)',
+        },
+      ]);
+    });
   });
 
   it('상품에서 사라진 옵션으로 담긴 줄은 주문할 수 없는 상품으로 분리합니다', async () => {
