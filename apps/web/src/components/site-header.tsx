@@ -11,7 +11,7 @@ import {
   ChevronLeft,
   CircleX,
   Heart,
-  Menu,
+  LayoutGrid,
   Search,
   Share2,
   UserRound,
@@ -36,6 +36,7 @@ import {
 } from 'react';
 import { CartLink } from './cart-link';
 import { PageContainer } from './page-container';
+import { getCategoryHref, getCurrentMenuHref } from '@/features/products/category-href';
 import { useCategoriesQuery } from '@/features/products/use-categories-query';
 import { useProductSuggestionsQuery } from '@/features/products/use-product-suggestions-query';
 import { useBrandsQuery } from '@/features/brands/use-brands-query';
@@ -47,14 +48,18 @@ import {
 
 const ALL_MENU_ID = 'site-header-all-menu';
 const MENU_TRANSITION_DURATION_MS = 160;
+/** 메가메뉴 섹션 링크 목록을 2열로 나누는 최소 항목 수(「전체 보기」 포함). */
+const MENU_TWO_COLUMN_MIN_ITEMS = 5;
 const SAFETY_MATJIP_LOGO_SRC = '/assets/web/safety-matjip-logo.png';
 
 /** 데스크톱 GNB 주요 메뉴. 활성 메뉴는 경로만으로 정하므로 쿼리(useSearchParams)·Suspense가 필요 없습니다. */
 function PrimaryNavigation({ pathname, onNavigate }: { pathname: string; onNavigate: () => void }) {
+  // 간격은 gap-16(xl 미만, 1024~1279 폭에서 검색 입력 폭 확보), gap-32(1280~1439), gap-40(1440 이상) 순서입니다.
+  // xl은 Tailwind 기본 80rem(1280px)이며 packages/ui 토큰에서 재정의하지 않습니다.
   return (
     <nav
       aria-label="주요 메뉴"
-      className="flex h-full shrink-0 items-center gap-24 min-[1440px]:gap-40 xl:gap-32"
+      className="flex h-full shrink-0 items-center gap-16 min-[1440px]:gap-40 xl:gap-32"
     >
       {getPrimaryNavigationItems().map((navigationItem) => {
         const isActive = isPrimaryNavigationItemActive(navigationItem, pathname);
@@ -77,33 +82,6 @@ function PrimaryNavigation({ pathname, onNavigate }: { pathname: string; onNavig
       })}
     </nav>
   );
-}
-
-/** 카테고리 상세 경로에서는 메뉴에 표시되는 가장 가까운 최상위 카테고리를 현재 링크로 돌립니다. */
-function getCurrentMenuHref(categories: readonly Category[], pathname: string): string {
-  const categorySlug = pathname.match(/^\/category\/([^/]+)\/?$/)?.[1];
-  if (!categorySlug) return pathname;
-
-  let decodedCategorySlug = categorySlug;
-  try {
-    decodedCategorySlug = decodeURIComponent(categorySlug);
-  } catch {
-    // 잘못된 인코딩이면 원래 문자열로 조회해 다른 메뉴의 활성 상태를 바꾸지 않습니다.
-  }
-
-  const categoriesById = new Map(categories.map((category) => [category.id, category]));
-  let activeCategory = categories.find((category) => category.slug === decodedCategorySlug);
-  if (!activeCategory) return pathname;
-
-  const visitedIds = new Set([activeCategory.id]);
-  while (activeCategory.parentId) {
-    const parentCategory = categoriesById.get(activeCategory.parentId);
-    if (!parentCategory || visitedIds.has(parentCategory.id)) break;
-    visitedIds.add(parentCategory.id);
-    activeCategory = parentCategory;
-  }
-
-  return '/category/' + encodeURIComponent(activeCategory.slug);
 }
 
 /** 헤더 검색창 공통 props(검색어 값은 주소에서 정합니다) */
@@ -437,15 +415,26 @@ export function SiteHeader() {
             isScrolled ? 'h-64' : 'h-72',
           )}
         >
-          {/* 로고·메뉴·아이콘은 줄지 않고, 남는 폭은 검색바가 받습니다(1024~1440 어느 폭에서도 겹치지 않음). */}
-          <div className="flex w-160 shrink-0 items-center min-[1440px]:w-220">
+          {/* 전체 메뉴 버튼은 로고 왼쪽에 둡니다. 블록 폭은 버튼 44 + 간격 8 + 로고 166 + 여백 24를 담아 모든 데스크톱 폭에서 같습니다. */}
+          <div className="flex w-242 shrink-0 items-center gap-8">
+            <button
+              ref={desktopMenuButtonRef}
+              type="button"
+              onClick={(clickEvent) => toggleMenu(clickEvent.currentTarget)}
+              aria-label={isMenuVisible ? '전체 메뉴 닫기' : '전체 메뉴 열기'}
+              aria-controls={ALL_MENU_ID}
+              aria-expanded={isMenuVisible}
+              className="inline-flex size-44 shrink-0 items-center justify-center rounded-8 focus-ring hover:bg-surface"
+            >
+              <Icon icon={LayoutGrid} size={24} />
+            </button>
             <Link href="/" className="rounded-4 focus-ring">
               <Image
                 src={SAFETY_MATJIP_LOGO_SRC}
                 alt="안전맛집"
                 width={2000}
                 height={667}
-                className="h-48 w-144 object-contain object-left"
+                className="h-55 w-166 object-contain object-left"
               />
             </Link>
           </div>
@@ -455,7 +444,7 @@ export function SiteHeader() {
               onSearchKeyword={searchKeyword}
               onSelectProduct={openProduct}
               onOpenPanel={() => closeMenu()}
-              className="w-full max-w-320"
+              className="w-full max-w-335"
             />
           </div>
           <div className="ml-24 flex shrink-0 items-center gap-4">
@@ -474,17 +463,6 @@ export function SiteHeader() {
               <Icon icon={Heart} size={24} />
             </Link>
             <CartLink />
-            <button
-              ref={desktopMenuButtonRef}
-              type="button"
-              onClick={(clickEvent) => toggleMenu(clickEvent.currentTarget)}
-              aria-label={isMenuVisible ? '전체 메뉴 닫기' : '전체 메뉴 열기'}
-              aria-controls={ALL_MENU_ID}
-              aria-expanded={isMenuVisible}
-              className="site-mega-menu-trigger inline-flex size-44 items-center justify-center rounded-8 focus-ring hover:bg-surface"
-            >
-              <Icon icon={Menu} size={24} />
-            </button>
           </div>
         </PageContainer>
 
@@ -503,7 +481,7 @@ export function SiteHeader() {
                   aria-expanded={isMenuVisible}
                   className="inline-flex size-44 items-center justify-center rounded-8 focus-ring hover:bg-surface"
                 >
-                  <Icon icon={Menu} size={24} />
+                  <Icon icon={LayoutGrid} size={24} />
                 </button>
                 <Link href="/" className="rounded-4 focus-ring">
                   <Image
@@ -511,7 +489,7 @@ export function SiteHeader() {
                     alt="안전맛집"
                     width={2000}
                     height={667}
-                    className="h-32 w-96 object-contain object-left"
+                    className="h-37 w-110 object-contain object-left"
                   />
                 </Link>
               </div>
@@ -869,21 +847,38 @@ function AllMenuDropdown({
   const brandsQuery = useBrandsQuery();
   const brandList = brandsQuery.data ?? [];
 
-  const menuSections: { title: string; items: { label: string; href: string }[] }[] = [
-    {
-      title: '제품',
+  // 대표 카테고리마다 열을 하나씩 두고, 하위 카테고리와 「전체 보기」를 넣습니다. 하위가 없으면 「전체 보기」 한 줄입니다.
+  const representativeSections: MenuSection[] = categories
+    .filter((category) => category.parentId === null)
+    .map((category) => ({
+      key: category.id,
+      title: category.name,
+      allowTwoColumnList: true,
       items: [
         ...categories
-          .filter((category) => category.parentId === null)
-          .map((category) => ({
-            label: category.name,
-            href: '/category/' + encodeURIComponent(category.slug),
+          .filter((subcategory) => subcategory.parentId === category.id)
+          .map((subcategory) => ({
+            label: subcategory.name,
+            href: getCategoryHref(subcategory),
           })),
-        { label: '전체 제품', href: '/search' },
+        {
+          label: '전체 보기',
+          href: getCategoryHref(category),
+          ariaLabel: `${category.name} 전체 보기`,
+        },
       ],
-    },
+    }));
+  // 열 수는 전체 제품 1 + 대표 카테고리 수 + 베스트·오늘의 상품·브랜드몰 3입니다. 대표 카테고리 수에 따라 열 수가 달라지며, lg에서는 4열 격자로 줄 바꿈됩니다.
+  const menuSections: MenuSection[] = [
     {
-      // 추천상품은 GNB에서 베스트 바로 뒤에 있으므로 같은 열의 두 번째 항목으로 둡니다(열 수 4 유지).
+      key: 'all-products',
+      title: '전체 제품',
+      items: [{ label: '전체 제품', href: '/search' }],
+    },
+    ...representativeSections,
+    {
+      // 추천상품은 GNB에서 베스트 바로 뒤에 있으므로 같은 열의 두 번째 항목으로 둡니다.
+      key: 'best',
       title: '베스트',
       items: [
         { label: '베스트 상품', href: '/best' },
@@ -891,10 +886,12 @@ function AllMenuDropdown({
       ],
     },
     {
+      key: 'today',
       title: '오늘의 상품',
       items: [{ label: '오늘의 상품 모두 보기', href: '/today' }],
     },
     {
+      key: 'brands',
       title: '브랜드몰',
       items: [
         ...brandList.map((brandSummary) => ({
@@ -928,9 +925,10 @@ function AllMenuDropdown({
       <div className="grid grid-cols-1 content-start gap-x-16 gap-y-8 px-16 py-12 lg:grid-cols-4 lg:gap-x-24 lg:gap-y-0 lg:px-24 lg:py-24">
         {menuSections.map((menuSection) => (
           <MenuColumn
-            key={menuSection.title}
+            key={menuSection.key}
             title={menuSection.title}
             items={menuSection.items}
+            allowTwoColumnList={menuSection.allowTwoColumnList === true}
             currentItem={currentMenuItem}
             onNavigate={onNavigate}
           />
@@ -940,15 +938,34 @@ function AllMenuDropdown({
   );
 }
 
+/** 전체 메뉴의 링크 항목. ariaLabel은 가시 텍스트가 같은 항목(예: 「전체 보기」)을 구별할 때만 씁니다. */
+interface MenuItem {
+  label: string;
+  href: string;
+  ariaLabel?: string;
+}
+
+/** 전체 메뉴의 열. key는 React 목록 키이고 title이 열 제목(접근 가능한 region 이름)입니다. */
+interface MenuSection {
+  key: string;
+  title: string;
+  items: MenuItem[];
+  /** 대표 카테고리 섹션만 링크 목록을 2열로 나눌 수 있습니다(다른 섹션은 항상 1열). */
+  allowTwoColumnList?: boolean;
+}
+
 function MenuColumn({
   title,
   items,
+  allowTwoColumnList,
   currentItem,
   onNavigate,
 }: {
   title: string;
-  items: { label: string; href: string }[];
-  currentItem: { label: string; href: string } | undefined;
+  items: MenuItem[];
+  /** true이면 항목이 많을 때 링크 목록을 2열로 나눕니다. */
+  allowTwoColumnList: boolean;
+  currentItem: MenuItem | undefined;
   onNavigate: () => void;
 }) {
   const isCurrentSection = currentItem ? items.includes(currentItem) : false;
@@ -1025,12 +1042,21 @@ function MenuColumn({
         style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
       >
         <div className="min-h-0 overflow-hidden">
-          <ul className="space-y-4 pt-8">
+          {/* 항목이 많은 섹션(예: 개인보호장비)은 목록을 2열로 나눠 섹션 행 높이를 줄입니다. 열 전체는 늘리지 않습니다. */}
+          <ul
+            className={cx(
+              'pt-8',
+              allowTwoColumnList && items.length >= MENU_TWO_COLUMN_MIN_ITEMS
+                ? 'grid grid-cols-2 gap-x-8 gap-y-4'
+                : 'space-y-4',
+            )}
+          >
             {items.map((menuItem) => (
               <li key={menuItem.href + '-' + menuItem.label}>
                 <Link
                   href={menuItem.href}
                   onClick={onNavigate}
+                  aria-label={menuItem.ariaLabel}
                   aria-current={menuItem === currentItem ? 'page' : undefined}
                   className={cx(
                     'inline-flex min-h-44 w-full items-center rounded-8 px-8 text-body-s focus-ring transition-colors',

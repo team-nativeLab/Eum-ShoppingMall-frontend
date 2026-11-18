@@ -30,6 +30,7 @@ import {
 } from '@/lib/use-media-query';
 import { useLocalCollections } from './local-collections-context';
 import { buildQuoteInquiryHref } from '@/features/company-pages/quote-inquiry-link';
+import { getCategoryHref } from './category-href';
 import { ProductCarouselSection } from './product-carousel';
 import { ProductImage } from './product-image';
 import { ProductDescription } from './product-description';
@@ -435,7 +436,7 @@ function ProductDetailContent({
             items={[
               { label: '홈', href: '/' },
               { label: '제품', href: '/search' },
-              ...(category ? [{ label: category.name, href: '/category/' + category.slug }] : []),
+              ...(category ? [{ label: category.name, href: getCategoryHref(category) }] : []),
               { label: product.name },
             ]}
             renderLink={(item, className) => (
@@ -849,7 +850,7 @@ function ProductDetailContent({
           title="함께 구매하면 좋은 제품"
           itemLabel="함께 구매하면 좋은 제품"
           products={relatedProducts}
-          viewAllHref={category ? '/category/' + encodeURIComponent(category.slug) : '/search'}
+          viewAllHref={category ? getCategoryHref(category) : '/search'}
           className="mt-80 lg:mt-120"
         />
       </PageContainer>

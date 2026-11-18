@@ -48,7 +48,7 @@ test('전체 메뉴는 X 버튼으로 닫을 수 있습니다', async ({ page })
 
   const allMenu = page.getByRole('navigation', { name: '전체 메뉴' });
   await expect(allMenu).toBeVisible();
-  await expect(allMenu.getByRole('region', { name: '제품' })).toBeVisible();
+  await expect(allMenu.getByRole('region', { name: '개인보호장비' })).toBeVisible();
 
   await allMenu.getByRole('button', { name: '전체 메뉴 닫기' }).click();
   await expect(allMenu).toBeHidden();

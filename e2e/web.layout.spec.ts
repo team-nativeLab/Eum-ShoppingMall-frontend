@@ -1,4 +1,14 @@
 import { expect, test, type Page } from '@playwright/test';
+// 메뉴 열 수 기대값은 목 카테고리 픽스처에서 계산합니다(대표 카테고리 수가 바뀌어도 맞게 유지).
+import { mockCategories } from '../packages/api/src/mock/categories';
+
+const MEGA_MENU_REPRESENTATIVE_COUNT = mockCategories.filter(
+  (category) => category.parentId === null,
+).length;
+// 전체 제품 1 + 대표 카테고리 수 + 베스트·오늘의 상품·브랜드몰 3
+const MEGA_MENU_COLUMN_COUNT = 1 + MEGA_MENU_REPRESENTATIVE_COUNT + 3;
+// lg 이상은 4열 격자이므로 행 수는 열 수를 4로 나눈 올림값입니다.
+const MEGA_MENU_GRID_COLUMNS = 4;
 
 test('데스크톱 상품 상세에서도 주요 메뉴(GNB)와 본문 바로가기를 보여 줍니다', async ({
   page,
@@ -147,3 +157,99 @@ for (const viewportWidth of [1024, 1280]) {
     ).toBe(true);
   });
 }
+
+for (const viewportWidth of [1024, 1280, 1440]) {
+  test(`${viewportWidth} 폭 데스크톱 헤더는 전체 메뉴 버튼을 로고 왼쪽에 두고 로고와 메뉴가 겹치지 않습니다`, async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'web-desktop', '데스크톱 헤더 배치 확인');
+    await page.setViewportSize({ width: viewportWidth, height: 900 });
+    await page.goto('/');
+
+    const menuButton = page.getByRole('button', { name: '전체 메뉴 열기' }).locator('visible=true');
+    const logoLink = page.getByRole('link', { name: '안전맛집' }).locator('visible=true');
+    const logoImage = logoLink.locator('img');
+    const firstMenuLink = page
+      .getByRole('navigation', { name: '주요 메뉴' })
+      .getByRole('link')
+      .first();
+    const searchInput = page.getByRole('search').locator('visible=true').getByRole('combobox');
+    await expect(menuButton).toBeVisible();
+    await expect(logoImage).toBeVisible();
+    await expect(firstMenuLink).toBeVisible();
+    await expect(searchInput).toBeVisible();
+
+    const menuButtonBox = await menuButton.boundingBox();
+    const logoBox = await logoImage.boundingBox();
+    const firstMenuBox = await firstMenuLink.boundingBox();
+    const searchInputBox = await searchInput.boundingBox();
+    if (!menuButtonBox || !logoBox || !firstMenuBox || !searchInputBox) {
+      throw new Error('데스크톱 헤더 요소의 위치를 읽지 못했습니다.');
+    }
+
+    expect(menuButtonBox.x).toBeLessThan(logoBox.x);
+    // 로고 크기는 166×55 기준에서 ±1px 허용합니다.
+    expect(Math.abs(logoBox.width - 166), `로고 폭 ${logoBox.width}`).toBeLessThanOrEqual(1);
+    expect(Math.abs(logoBox.height - 55), `로고 높이 ${logoBox.height}`).toBeLessThanOrEqual(1);
+    // 로고 오른쪽 끝과 첫 주요 메뉴 사이에 최소 16px 간격이 있어야 합니다(경계 정확 일치는 피합니다).
+    expect(firstMenuBox.x - (logoBox.x + logoBox.width)).toBeGreaterThanOrEqual(16);
+    testInfo.annotations.push({
+      type: 'measurement',
+      description: `폭 ${viewportWidth}: 검색 입력 ${Math.round(searchInputBox.width)}px, 로고 ${Math.round(logoBox.width)}x${Math.round(logoBox.height)}, 첫 메뉴 x ${Math.round(firstMenuBox.x)}`,
+    });
+  });
+}
+
+test('데스크톱 전체 메뉴는 12개 열을 3행으로 보여 줍니다', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'web-desktop', '데스크톱 메뉴 배치 확인');
+  await page.goto('/');
+  await page.getByRole('button', { name: '전체 메뉴 열기' }).locator('visible=true').click();
+
+  const allMenu = page.getByRole('navigation', { name: '전체 메뉴' });
+  await expect(allMenu).toBeVisible();
+  // 대표 카테고리 목록은 API 응답 뒤에 채워지므로 열 개수가 맞을 때까지 기다립니다.
+  await expect(allMenu.getByRole('region')).toHaveCount(MEGA_MENU_COLUMN_COUNT);
+  const columnTops = await allMenu
+    .getByRole('region')
+    .evaluateAll((columns) =>
+      columns.map((column) => Math.round(column.getBoundingClientRect().top)),
+    );
+  expect(columnTops).toHaveLength(MEGA_MENU_COLUMN_COUNT);
+  expect(new Set(columnTops).size).toBe(Math.ceil(MEGA_MENU_COLUMN_COUNT / MEGA_MENU_GRID_COLUMNS));
+  const firstRowTop = columnTops[0];
+  expect(columnTops.filter((columnTop) => columnTop === firstRowTop)).toHaveLength(
+    Math.min(MEGA_MENU_GRID_COLUMNS, MEGA_MENU_COLUMN_COUNT),
+  );
+});
+
+test('모바일 헤더는 전체 메뉴 버튼을 로고 왼쪽에 두고 로고를 37×110으로 보여 줍니다', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'web-mobile', '모바일 헤더 배치 확인');
+  await page.goto('/');
+
+  const menuButton = page.getByRole('button', { name: '전체 메뉴 열기' }).locator('visible=true');
+  const logoImage = page
+    .getByRole('link', { name: '안전맛집' })
+    .locator('visible=true')
+    .locator('img');
+  const menuButtonBox = await menuButton.boundingBox();
+  const logoBox = await logoImage.boundingBox();
+  if (!menuButtonBox || !logoBox) throw new Error('모바일 헤더 요소의 위치를 읽지 못했습니다.');
+
+  expect(menuButtonBox.x).toBeLessThan(logoBox.x);
+  // 로고 크기는 110×37 기준에서 ±1px 허용합니다.
+  expect(Math.abs(logoBox.width - 110), `로고 폭 ${logoBox.width}`).toBeLessThanOrEqual(1);
+  expect(Math.abs(logoBox.height - 37), `로고 높이 ${logoBox.height}`).toBeLessThanOrEqual(1);
+});
+
+test('모바일 375 폭에서도 화면이 가로로 넘치지 않습니다', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'web-mobile', '모바일 가로 넘침 확인');
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/');
+
+  const pageFitsViewport = await page.evaluate(
+    () => document.documentElement.scrollWidth <= window.innerWidth,
+  );
+  expect(pageFitsViewport).toBe(true);
+});

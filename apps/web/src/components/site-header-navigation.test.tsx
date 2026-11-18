@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import type { MouseEventHandler, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Category } from '@eum/api/types';
 import { SiteHeader } from './site-header';
 
 const MENU_TRANSITION_DURATION_MS = 160;
@@ -209,7 +210,7 @@ describe('SiteHeader product and brand navigation', () => {
     expect(within(menu).queryByRole('link', { name: '개요' })).not.toBeInTheDocument();
     expect(within(menu).queryByRole('link', { name: 'FAQ' })).not.toBeInTheDocument();
     expect(
-      within(menu).getAllByRole('button', { name: /^(제품|베스트|오늘의 상품|브랜드몰)$/ }),
+      within(menu).getAllByRole('button', { name: /^(전체 제품|베스트|오늘의 상품|브랜드몰)$/ }),
     ).toHaveLength(4);
     expect(within(menu).getByRole('button', { name: '전체 메뉴 닫기' })).toHaveClass('size-44');
   });
@@ -277,11 +278,17 @@ describe('SiteHeader product and brand navigation', () => {
     await user.click(desktopMenuButton);
 
     const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
-    const ancestorCategoryLink = within(menu).getByRole('link', { name: '보안·감시' });
+    const ancestorSection = within(menu).getByRole('region', { name: '보안·감시' });
+    const ancestorCategoryLink = within(ancestorSection).getByRole('link', {
+      name: '보안·감시 전체 보기',
+    });
     expect(ancestorCategoryLink).toHaveAttribute('href', '/category/security-monitoring');
     expect(ancestorCategoryLink).toHaveAttribute('aria-current', 'page');
     expect(ancestorCategoryLink).toHaveClass('text-success', 'underline');
     expect(ancestorCategoryLink).not.toHaveClass('bg-success-tint');
+    expect(within(menu).getByRole('link', { name: '안전 표지' })).not.toHaveAttribute(
+      'aria-current',
+    );
     expect(within(menu).getAllByRole('link', { current: 'page' })).toHaveLength(1);
   });
 
@@ -651,7 +658,7 @@ describe('SiteHeader product and brand navigation', () => {
     expect(menuMotion).toHaveClass('opacity-100');
     expect(menuMotion).toHaveStyle({ translate: '-50% -50%' });
     expect(menu.querySelector('[class~="lg:grid-cols-4"]')).toBeInTheDocument();
-    for (const sectionTitle of ['제품', '베스트', '오늘의 상품', '브랜드몰']) {
+    for (const sectionTitle of ['전체 제품', '베스트', '오늘의 상품', '브랜드몰']) {
       expect(within(menu).getByRole('button', { name: sectionTitle })).toHaveAttribute(
         'aria-expanded',
         'true',
@@ -712,7 +719,7 @@ describe('SiteHeader product and brand navigation', () => {
       'w-[calc(100%_-_32px)]',
       'max-h-[calc(100dvh-32px)]',
     );
-    const sectionTitles = ['제품', '베스트', '오늘의 상품', '브랜드몰'];
+    const sectionTitles = ['전체 제품', '베스트', '오늘의 상품', '브랜드몰'];
     for (const sectionTitle of sectionTitles) {
       expect(within(menu).getByRole('button', { name: sectionTitle })).toHaveAttribute(
         'aria-expanded',
@@ -720,12 +727,12 @@ describe('SiteHeader product and brand navigation', () => {
       );
     }
 
-    const productColumn = within(menu).getByRole('region', { name: '제품' });
-    const productDisclosure = within(productColumn).getByRole('button', { name: '제품' });
+    const productColumn = within(menu).getByRole('region', { name: '전체 제품' });
+    const productDisclosure = within(productColumn).getByRole('button', { name: '전체 제품' });
     const productContents = document.getElementById(
       productDisclosure.getAttribute('aria-controls') ?? '',
     );
-    if (!productContents) throw new Error('제품 메뉴 콘텐츠를 찾을 수 없습니다.');
+    if (!productContents) throw new Error('전체 제품 메뉴 콘텐츠를 찾을 수 없습니다.');
     expect(productDisclosure).toHaveClass('min-h-44');
     expect(productContents).toHaveAttribute('aria-hidden', 'true');
     expect(productContents).toHaveAttribute('inert');
@@ -753,7 +760,7 @@ describe('SiteHeader product and brand navigation', () => {
     expect(within(productColumn).queryByRole('link', { name: '전체 제품' })).toBeNull();
   });
 
-  it.each(['제품', '베스트', '오늘의 상품', '브랜드몰'])(
+  it.each(['전체 제품', '베스트', '오늘의 상품', '브랜드몰'])(
     'toggles the %s category with accessible animated content',
     async (sectionTitle) => {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
@@ -940,5 +947,228 @@ describe('SiteHeader on login and signup pages', () => {
     expect(screen.getByRole('banner')).toBeInTheDocument();
     expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0);
     expect(screen.getAllByAltText('안전맛집').length).toBeGreaterThan(0);
+  });
+});
+
+describe('SiteHeader mega menu and header trigger layout', () => {
+  const representativeCategoryNames = [
+    '개인보호장비',
+    '안전복',
+    '안전 표지',
+    '공구',
+    '소방',
+    '보안·감시',
+    '환경',
+    '맞춤 제작/납품',
+  ];
+
+  const structureCategories: Category[] = [
+    ...representativeCategoryNames.map((name, index) => ({
+      id: `category-${index}`,
+      slug: name === '맞춤 제작/납품' ? 'custom-order' : `category-slug-${index}`,
+      name,
+      parentId: null,
+      description: null,
+      iconKey: null,
+    })),
+    {
+      id: 'category-helmet',
+      slug: 'helmet',
+      name: '안전모',
+      parentId: 'category-0',
+      description: null,
+      iconKey: null,
+    },
+    {
+      id: 'category-shoes',
+      slug: 'shoes',
+      name: '안전화',
+      parentId: 'category-0',
+      description: null,
+      iconKey: null,
+    },
+  ];
+
+  beforeEach(() => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
+    navigationMocks.pathname = '/';
+    navigationMocks.search = '';
+    navigationMocks.push.mockReset();
+    navigationMocks.back.mockReset();
+    apiMocks.getShopApi.mockResolvedValue({
+      products: { list: apiMocks.listProducts, suggest: apiMocks.suggestProducts },
+      brands: { list: apiMocks.listBrands },
+      categories: { list: apiMocks.listCategories },
+    });
+    apiMocks.suggestProducts.mockResolvedValue([]);
+    apiMocks.listBrands.mockResolvedValue([]);
+    apiMocks.listCategories.mockResolvedValue(structureCategories);
+  });
+
+  async function openDesktopMenu() {
+    const user = userEvent.setup();
+    render(<SiteHeader />, { wrapper: createWrapper() });
+    const [desktopMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
+    if (!desktopMenuButton) throw new Error('데스크톱 메뉴 버튼을 찾을 수 없습니다.');
+    await user.click(desktopMenuButton);
+    const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
+    return { user, desktopMenuButton, menu };
+  }
+
+  it('lists 전체 제품, one column per representative category, then 베스트·오늘의 상품·브랜드몰 in 12 columns', async () => {
+    const { menu } = await openDesktopMenu();
+
+    const regionNames = within(menu)
+      .getAllByRole('region')
+      .map((region) => region.getAttribute('aria-label'));
+    expect(regionNames).toEqual([
+      '전체 제품',
+      ...representativeCategoryNames,
+      '베스트',
+      '오늘의 상품',
+      '브랜드몰',
+    ]);
+    expect(regionNames).toHaveLength(12);
+    expect(menu.querySelector('[class~="lg:grid-cols-4"]')).toBeInTheDocument();
+  });
+
+  it('shows subcategories and a 전체 보기 link with an explicit accessible name in a representative column', async () => {
+    const { menu } = await openDesktopMenu();
+
+    const ppeColumn = within(menu).getByRole('region', { name: '개인보호장비' });
+    expect(within(ppeColumn).getByRole('link', { name: '안전모' })).toHaveAttribute(
+      'href',
+      '/category/helmet',
+    );
+    expect(within(ppeColumn).getByRole('link', { name: '안전화' })).toHaveAttribute(
+      'href',
+      '/category/shoes',
+    );
+    const viewAllLink = within(ppeColumn).getByRole('link', { name: '개인보호장비 전체 보기' });
+    expect(viewAllLink).toHaveTextContent('전체 보기');
+    expect(viewAllLink).toHaveAttribute('href', '/category/category-slug-0');
+  });
+
+  it('shows only one 전체 보기 link for a representative category without subcategories', async () => {
+    const { menu } = await openDesktopMenu();
+
+    const toolColumn = within(menu).getByRole('region', { name: '공구' });
+    const toolLinks = within(toolColumn).getAllByRole('link');
+    expect(toolLinks).toHaveLength(1);
+    expect(toolLinks[0]).toHaveAccessibleName('공구 전체 보기');
+    expect(toolLinks[0]).toHaveAttribute('href', '/category/category-slug-3');
+  });
+
+  it('links the 맞춤 제작/납품 entry to /solutions instead of a category page', async () => {
+    const { menu } = await openDesktopMenu();
+
+    const customOrderColumn = within(menu).getByRole('region', { name: '맞춤 제작/납품' });
+    expect(
+      within(customOrderColumn).getByRole('link', { name: '맞춤 제작/납품 전체 보기' }),
+    ).toHaveAttribute('href', '/solutions');
+  });
+
+  it.each(['/category/custom-order', '/solutions'])(
+    'marks the 맞춤 제작/납품 전체 보기 link as current on %s',
+    async (currentPathname) => {
+      navigationMocks.pathname = currentPathname;
+      const { menu } = await openDesktopMenu();
+
+      const customOrderColumn = within(menu).getByRole('region', { name: '맞춤 제작/납품' });
+      const customOrderLink = within(customOrderColumn).getByRole('link', {
+        name: '맞춤 제작/납품 전체 보기',
+      });
+      expect(customOrderLink).toHaveAttribute('aria-current', 'page');
+      expect(within(menu).getAllByRole('link', { current: 'page' })).toHaveLength(1);
+    },
+  );
+
+  it('lays out a representative section with five or more links as two columns and keeps brand and short sections in one column', async () => {
+    apiMocks.listCategories.mockResolvedValue([
+      ...structureCategories,
+      ...[1, 2, 3].map((extraIndex) => ({
+        id: `category-extra-${extraIndex}`,
+        slug: `extra-${extraIndex}`,
+        name: `추가 ${extraIndex}`,
+        parentId: 'category-0',
+        description: null,
+        iconKey: null,
+      })),
+    ]);
+    // 브랜드 5개 + 「전체 브랜드」 = 6개 항목이어도 브랜드몰은 2열로 나누지 않습니다.
+    apiMocks.listBrands.mockResolvedValue(
+      ['브랜드 1', '브랜드 2', '브랜드 3', '브랜드 4', '브랜드 5'].map((brandName, brandIndex) => ({
+        id: `brd-test-${brandIndex}`,
+        name: brandName,
+        englishName: null,
+      })),
+    );
+    const { menu } = await openDesktopMenu();
+    await within(menu).findByRole('link', { name: '브랜드 5' });
+
+    // 대표 카테고리 개인보호장비: 하위 5개 + 전체 보기 = 6개 항목이므로 2열입니다.
+    const ppeList = within(within(menu).getByRole('region', { name: '개인보호장비' })).getByRole(
+      'list',
+    );
+    expect(ppeList).toHaveClass('grid', 'grid-cols-2');
+    expect(within(ppeList).getAllByRole('listitem')).toHaveLength(6);
+    // 대표 카테고리 공구: 전체 보기 한 항목이므로 1열(세로 목록)을 유지합니다.
+    const toolList = within(within(menu).getByRole('region', { name: '공구' })).getByRole('list');
+    expect(toolList).not.toHaveClass('grid-cols-2');
+    expect(toolList).toHaveClass('space-y-4');
+    // 브랜드몰: 2열 허용 대상이 아니므로 항목이 많아도 1열입니다.
+    const brandList = within(within(menu).getByRole('region', { name: '브랜드몰' })).getByRole(
+      'list',
+    );
+    expect(within(brandList).getAllByRole('listitem')).toHaveLength(6);
+    expect(brandList).not.toHaveClass('grid-cols-2');
+    expect(brandList).toHaveClass('space-y-4');
+  });
+
+  it('keeps the desktop trigger left of the logo and tied to the all-menu panel', () => {
+    render(<SiteHeader />, { wrapper: createWrapper() });
+
+    const [desktopMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
+    if (!desktopMenuButton) throw new Error('데스크톱 메뉴 버튼을 찾을 수 없습니다.');
+    const [desktopLogoLink] = screen.getAllByRole('link', { name: '안전맛집' });
+    if (!desktopLogoLink) throw new Error('데스크톱 로고 링크를 찾을 수 없습니다.');
+
+    expect(desktopMenuButton).toHaveAttribute('aria-controls', 'site-header-all-menu');
+    // 로고가 트리거 뒤에 오면(= 트리거가 DOM에서 앞에 있으면) 비트마스크는 FOLLOWING 하나만 가집니다.
+    expect(
+      desktopMenuButton.compareDocumentPosition(desktopLogoLink) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.getAllByRole('button', { name: '전체 메뉴 열기' })).toHaveLength(2);
+  });
+
+  it('keeps every mobile section collapsed at 390px', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    const user = userEvent.setup();
+    render(<SiteHeader />, { wrapper: createWrapper() });
+    const [, mobileMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
+    if (!mobileMenuButton) throw new Error('모바일 메뉴 버튼을 찾을 수 없습니다.');
+    await user.click(mobileMenuButton);
+    const menu = await screen.findByRole('navigation', { name: '전체 메뉴' });
+
+    const sectionRegions = within(menu).getAllByRole('region');
+    expect(sectionRegions).toHaveLength(12);
+    for (const sectionRegion of sectionRegions) {
+      const disclosure = within(sectionRegion).getByRole('button', {
+        name: sectionRegion.getAttribute('aria-label') ?? '',
+      });
+      expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+    }
+  });
+
+  it('closes the open desktop menu on an outside click', async () => {
+    const { user } = await openDesktopMenu();
+    const menuPanel = document.getElementById('site-header-all-menu');
+    if (!menuPanel) throw new Error('전체 메뉴 패널을 찾을 수 없습니다.');
+    // 열린 뒤에는 패널이 접근성 트리에 노출되어야 바깥 클릭 닫힘을 검증할 의미가 있습니다.
+    expect(menuPanel).toHaveAttribute('aria-hidden', 'false');
+
+    await user.click(screen.getByRole('link', { name: '로그인' }));
+
+    await waitFor(() => expect(menuPanel).toHaveAttribute('aria-hidden', 'true'));
   });
 });

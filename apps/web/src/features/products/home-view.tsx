@@ -1,19 +1,17 @@
 'use client';
 
 import { getApiFailureKind } from '@eum/api/errors';
-import type { Category, HomeContent, HomeCtaBand, Product } from '@eum/api/types';
+import type { HomeContent, HomeCtaBand, Product } from '@eum/api/types';
 import { buttonClassName } from '@eum/ui/components/Button';
 import { capsuleButtonClassName } from '@eum/ui/components/ButtonCapsule';
-import { Chip } from '@eum/ui/components/Chip';
 import { Icon } from '@eum/ui/components/Icon';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { cx } from '@eum/ui/lib/cx';
 import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState, type FocusEvent, type PointerEvent } from 'react';
+import { useState, type FocusEvent, type PointerEvent } from 'react';
 import { PageContainer } from '@/components/page-container';
 import { usePrefersReducedMotion } from '@/lib/use-media-query';
-import { filterProductsByCategoryTree } from './best-seller-filter';
 import { CategoryBar, MobileCategoryGrid } from './category-bar';
 import { ProductCarouselTrack, useCarouselPaging, useHomeCarouselLayout } from './product-carousel';
 import { useCategoriesQuery } from './use-categories-query';
@@ -108,7 +106,7 @@ function HomeContentView({ content }: { content: HomeContent }) {
 
       <PromoBannerSection banners={content.promoBanners} />
 
-      <BestSellerSection products={content.featuredProducts} categories={categories} />
+      <BestSellerSection products={content.featuredProducts} />
 
       <HomeShowcaseSections />
 
@@ -460,41 +458,16 @@ function PromoBannerSection({ banners }: { banners: HomeContent['promoBanners'] 
 }
 
 /**
- * 베스트 셀러. 데스크톱은 카테고리 탭 + 홈 전용 카드 캐러셀(1024px대 5장, 1280px부터 7장 이동),
- * 모바일은 칩 + 2×2 카드 페이지를 스와이프로 넘기고 하단 "전체 보기" 버튼을 둡니다(W-01m).
- * 카테고리를 불러오지 못하면 "전체" 탭만 보여 줍니다.
+ * 베스트 셀러. 데스크톱은 홈 전용 카드 캐러셀(1024px대 5장, 1280px부터 7장 이동),
+ * 모바일은 2×2 카드 페이지를 스와이프로 넘기고 하단 "전체 보기" 버튼을 둡니다(W-01m).
+ * 카테고리 칩은 두지 않습니다. 카테고리 이동은 상단 카테고리 바가 맡습니다.
  */
-function BestSellerSection({
-  products,
-  categories,
-}: {
-  products: Product[];
-  categories: Category[];
-}) {
-  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
+function BestSellerSection({ products }: { products: Product[] }) {
   const desktopLayout = useHomeCarouselLayout();
-  const topLevelCategories = useMemo(
-    () => categories.filter((category) => category.parentId === null),
-    [categories],
-  );
-  const filteredProducts = useMemo(
-    () => filterProductsByCategoryTree(products, categories, activeCategoryId),
-    [activeCategoryId, categories, products],
-  );
   const carouselPaging = useCarouselPaging(
-    Math.ceil(filteredProducts.length / desktopLayout.pageSize),
+    Math.ceil(products.length / desktopLayout.pageSize),
     desktopLayout.pageSize,
   );
-  const categoryOptions = [
-    { id: null, name: '전체' },
-    ...topLevelCategories.map((category) => ({ id: category.id, name: category.name })),
-  ];
-
-  // 카테고리를 바꾸면 첫 페이지부터 다시 보여 줍니다.
-  const selectCategory = (categoryId: string | null) => {
-    setActiveCategoryId(categoryId);
-    carouselPaging.resetPaging();
-  };
 
   return (
     <PageContainer className="mt-48 lg:mt-64">
@@ -503,31 +476,6 @@ function BestSellerSection({
           <h2 id="best-sellers-heading" className="shrink-0 text-h2 lg:text-h1">
             베스트 셀러
           </h2>
-          <div
-            role="group"
-            aria-label="베스트 상품 카테고리"
-            className="hidden min-w-0 [scrollbar-width:none] items-center gap-4 overflow-x-auto lg:flex"
-          >
-            {categoryOptions.map((categoryOption) => {
-              const isSelected = activeCategoryId === categoryOption.id;
-              return (
-                <button
-                  key={categoryOption.id ?? 'all'}
-                  type="button"
-                  aria-pressed={isSelected}
-                  onClick={() => selectCategory(categoryOption.id)}
-                  className={cx(
-                    'inline-flex h-28 shrink-0 items-center rounded-capsule px-12 whitespace-nowrap focus-ring',
-                    isSelected
-                      ? 'bg-text-1 text-label-s text-inverse'
-                      : 'text-body-s text-text-3 hover:text-text-1',
-                  )}
-                >
-                  {categoryOption.name}
-                </button>
-              );
-            })}
-          </div>
           <Link
             href="/best"
             className="ml-auto hidden shrink-0 items-center gap-4 rounded-4 text-label-m focus-ring hover:text-text-2 lg:inline-flex"
@@ -537,27 +485,10 @@ function BestSellerSection({
           </Link>
         </div>
 
-        <div
-          role="group"
-          aria-label="베스트 상품 카테고리"
-          className="mt-16 flex [scrollbar-width:none] gap-8 overflow-x-auto lg:hidden"
-        >
-          {categoryOptions.map((categoryOption) => (
-            <Chip
-              key={categoryOption.id ?? 'all'}
-              isSelected={activeCategoryId === categoryOption.id}
-              onClick={() => selectCategory(categoryOption.id)}
-            >
-              {categoryOption.name}
-            </Chip>
-          ))}
-        </div>
-
-        {filteredProducts.length > 0 ? (
+        {products.length > 0 ? (
           <div className="relative mt-16 lg:mt-24">
             <ProductCarouselTrack
-              key={activeCategoryId ?? 'all'}
-              products={filteredProducts}
+              products={products}
               pageIndex={carouselPaging.pageIndex}
               direction={carouselPaging.direction}
               mobileLayout="grid"
@@ -594,7 +525,7 @@ function BestSellerSection({
           </div>
         ) : (
           <p className="mt-16 rounded-12 border border-line px-20 py-32 text-center text-body-s text-text-3 lg:mt-48">
-            선택한 카테고리에 등록된 상품이 없습니다.
+            등록된 베스트 상품이 없습니다.
           </p>
         )}
         <Link

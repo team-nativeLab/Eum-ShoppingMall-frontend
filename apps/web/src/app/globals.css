@@ -79,30 +79,6 @@
   }
 }
 
-@media (min-width: 1440px) {
-  .site-mega-menu-trigger {
-    position: fixed;
-    z-index: 60;
-    top: 50%;
-    left: calc((100vw - 1296px) / 4 - 32px);
-    width: 64px;
-    height: 64px;
-    transform: translateY(-50%);
-    border-radius: var(--radius-capsule);
-    background: var(--color-text-1);
-    color: var(--color-inverse);
-    box-shadow: var(--shadow-2);
-  }
-  /* 같은 명시도(클래스 + :hover)의 규칙이며 이 규칙이 뒤에 선언되어 hover 배경을 덮습니다. 흰 아이콘이 묻히지 않도록 hover 때도 어두운 배경을 유지합니다. */
-  .site-mega-menu-trigger:hover {
-    background: var(--color-pressed-dark);
-  }
-  .site-mega-menu-trigger svg {
-    width: 30px;
-    height: 30px;
-  }
-}
-
 /* MyPage keeps the demo note available to screen readers without shifting the Figma layout. */
 body:has(#main-content [data-mypage-shell]) [data-demo-banner-visual] {
   display: none;
