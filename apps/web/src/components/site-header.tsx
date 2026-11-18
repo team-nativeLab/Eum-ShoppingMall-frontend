@@ -557,8 +557,8 @@ export function SiteHeader() {
             transitionDuration: `${MENU_TRANSITION_DURATION_MS}ms`,
           }}
           className={cx(
-            // 패널 높이 상한은 승인된 값(100dvh-210px)입니다. 헤더 하단(97px) 아래에 머물도록 합니다.
-            'fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-210px)] w-[calc(100%_-_32px)] max-w-[1380px] overflow-x-hidden overflow-y-auto rounded-8 border border-line-strong bg-bg shadow-2 transition-[opacity,translate] ease-out motion-reduce:transition-none lg:w-[calc(100%_-_48px)]',
+            // 패널 높이 상한은 승인된 값(100dvh-210px)입니다. 헤더 하단(97px) 아래에 머물도록 하며, lg 이상은 내용이 적어도 같은 높이를 유지하도록 최소 높이를 줍니다(모바일 아코디언은 기존 동작 유지).
+            'fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-210px)] w-[calc(100%_-_32px)] max-w-[1380px] overflow-x-hidden overflow-y-auto rounded-8 border border-line-strong bg-bg shadow-2 transition-[opacity,translate] ease-out motion-reduce:transition-none lg:min-h-[calc(100dvh-210px)] lg:w-[calc(100%_-_48px)]',
             (!isMenuVisible || !isMenuInteractive) && 'pointer-events-none',
             isMenuMotionOpen ? 'opacity-100' : 'opacity-0',
           )}
