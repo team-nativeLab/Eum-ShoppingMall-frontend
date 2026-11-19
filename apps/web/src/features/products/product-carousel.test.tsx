@@ -5,17 +5,27 @@ import {
   DESKTOP_CAROUSEL_PAGE_SIZE,
   HOME_CAROUSEL_LAYOUTS,
   HOME_WIDE_DESKTOP_QUERY,
+  getHomeCarouselCardWidth,
+  getHomeCarouselPageTranslate,
   ProductCarouselTrack,
   useCarouselPaging,
   useHomeCarouselLayout,
 } from './product-carousel';
 
-const mediaQueryState = vi.hoisted(() => ({ isDesktop: false, isWideDesktop: false }));
+const mediaQueryState = vi.hoisted(() => ({
+  isDesktop: false,
+  isMediumDesktop: false,
+  isWideDesktop: false,
+}));
 
 vi.mock('@/lib/use-media-query', () => ({
   DESKTOP_QUERY: '(min-width: 64rem)',
   useMediaQuery: (query: string) =>
-    query === '(min-width: 80rem)' ? mediaQueryState.isWideDesktop : mediaQueryState.isDesktop,
+    query === '(min-width: 80rem)'
+      ? mediaQueryState.isWideDesktop
+      : query.includes('max-width: 79.99rem')
+        ? mediaQueryState.isMediumDesktop
+        : mediaQueryState.isDesktop,
 }));
 
 vi.mock('./product-card', () => ({
@@ -39,10 +49,11 @@ vi.mock('./product-card', () => ({
   ),
 }));
 
-const products = Array.from({ length: 8 }, (_, index) => ({ id: `product-${index}` }) as Product);
+const products = Array.from({ length: 13 }, (_, index) => ({ id: `product-${index}` }) as Product);
 
 beforeEach(() => {
   mediaQueryState.isDesktop = false;
+  mediaQueryState.isMediumDesktop = false;
   mediaQueryState.isWideDesktop = false;
 });
 
@@ -86,19 +97,19 @@ describe('useCarouselPaging', () => {
 
     expect(result.current).toMatchObject({ pageCount: 1, pageIndex: 0, canGoNext: false });
 
-    rerender({ productCount: 8, pageSize: HOME_CAROUSEL_LAYOUTS.wideDesktop.pageSize });
+    rerender({ productCount: 20, pageSize: HOME_CAROUSEL_LAYOUTS.wideDesktop.pageSize });
     expect(result.current).toMatchObject({ pageCount: 2, pageIndex: 0, canGoNext: true });
     act(() => result.current.goToNext());
     expect(result.current).toMatchObject({ pageIndex: 1, canGoNext: false });
 
-    rerender({ productCount: 8, pageSize: HOME_CAROUSEL_LAYOUTS.desktop.pageSize });
-    expect(result.current).toMatchObject({ pageCount: 2, pageIndex: 1 });
+    rerender({ productCount: 20, pageSize: HOME_CAROUSEL_LAYOUTS.desktop.pageSize });
+    expect(result.current).toMatchObject({ pageCount: 3, pageIndex: 1 });
     act(() => result.current.goToPrevious());
     expect(result.current.pageIndex).toBe(0);
     act(() => result.current.goToNext());
     expect(result.current.pageIndex).toBe(1);
 
-    rerender({ productCount: 8, pageSize: HOME_CAROUSEL_LAYOUTS.wideDesktop.pageSize });
+    rerender({ productCount: 20, pageSize: HOME_CAROUSEL_LAYOUTS.wideDesktop.pageSize });
     expect(result.current.pageIndex).toBe(0);
     act(() => result.current.resetPaging());
     expect(result.current).toMatchObject({ pageIndex: 0, direction: 'none' });
@@ -106,23 +117,56 @@ describe('useCarouselPaging', () => {
 });
 
 describe('useHomeCarouselLayout', () => {
-  it('uses a four-card stride below 1280px and a five-card stride at 1280px and wider', () => {
+  it('uses mobile 2×2, 1024–1279 4×2 and 1280+ 5×2 page geometry', () => {
     const { result, rerender } = renderHook(
-      ({ isWideDesktop }) => {
-        mediaQueryState.isWideDesktop = isWideDesktop;
+      ({ viewport }: { viewport: 'mobile' | 'medium' | 'wide' }) => {
+        mediaQueryState.isDesktop = viewport !== 'mobile';
+        mediaQueryState.isMediumDesktop = viewport === 'medium';
+        mediaQueryState.isWideDesktop = viewport === 'wide';
         return useHomeCarouselLayout();
       },
-      { initialProps: { isWideDesktop: false } },
+      { initialProps: { viewport: 'medium' as 'mobile' | 'medium' | 'wide' } },
     );
 
     expect(HOME_WIDE_DESKTOP_QUERY).toBe('(min-width: 80rem)');
     expect(result.current).toEqual(HOME_CAROUSEL_LAYOUTS.desktop);
-    expect(result.current.pageSize).toBe(4);
+    expect(result.current).toMatchObject({ pageSize: 8, columns: 4, rows: 2 });
 
-    rerender({ isWideDesktop: true });
+    rerender({ viewport: 'wide' });
     expect(result.current).toEqual(HOME_CAROUSEL_LAYOUTS.wideDesktop);
-    expect(result.current.pageSize).toBe(5);
+    expect(result.current).toMatchObject({ pageSize: 10, columns: 5, rows: 2 });
+
+    rerender({ viewport: 'mobile' });
+    expect(result.current).toMatchObject({ pageSize: 4, columns: 2, rows: 2 });
   });
+});
+
+describe('getHomeCarouselCardWidth', () => {
+  it('reserves both arrow gutters and the column gaps in the responsive rail width', () => {
+    expect(getHomeCarouselCardWidth(HOME_CAROUSEL_LAYOUTS.desktop)).toContain('- 176px) / 4');
+    expect(getHomeCarouselCardWidth(HOME_CAROUSEL_LAYOUTS.wideDesktop)).toContain('- 192px) / 5');
+  });
+});
+
+describe('getHomeCarouselPageTranslate', () => {
+  it.each([
+    { layout: HOME_CAROUSEL_LAYOUTS.desktop, steps: 4 },
+    { layout: HOME_CAROUSEL_LAYOUTS.wideDesktop, steps: 5 },
+  ])(
+    'moves exactly one page using the responsive card width ($steps columns)',
+    ({ layout, steps }) => {
+      const stride = ['var(--home-carousel-card-width)', 'var(--home-carousel-gap)'];
+      expect(getHomeCarouselPageTranslate(0, layout)).toBe('0px');
+      expect(getHomeCarouselPageTranslate(1, layout)).toBe(
+        `calc(0px - ${Array.from({ length: steps }, () => stride)
+          .flat()
+          .join(' - ')})`,
+      );
+      expect(
+        getHomeCarouselPageTranslate(2, layout).match(/var\(--home-carousel-card-width\)/g),
+      ).toHaveLength(steps * 2);
+    },
+  );
 });
 
 describe('ProductCarouselTrack responsive layouts', () => {
@@ -139,9 +183,14 @@ describe('ProductCarouselTrack responsive layouts', () => {
     expect(
       cards.slice(0, DESKTOP_CAROUSEL_PAGE_SIZE).every((card) => card.hasAttribute('inert')),
     ).toBe(true);
-    expect(cards.slice(DESKTOP_CAROUSEL_PAGE_SIZE).some((card) => card.hasAttribute('inert'))).toBe(
-      false,
-    );
+    expect(
+      cards
+        .slice(DESKTOP_CAROUSEL_PAGE_SIZE, DESKTOP_CAROUSEL_PAGE_SIZE * 2)
+        .some((card) => card.hasAttribute('inert')),
+    ).toBe(false);
+    expect(
+      cards.slice(DESKTOP_CAROUSEL_PAGE_SIZE * 2).every((card) => card.hasAttribute('inert')),
+    ).toBe(true);
     expect(within(track).getAllByRole('article')[0]).toHaveAttribute(
       'data-card-variant',
       'default',
@@ -152,14 +201,14 @@ describe('ProductCarouselTrack responsive layouts', () => {
     {
       name: '1024px',
       layout: HOME_CAROUSEL_LAYOUTS.desktop,
-      expectedPageSize: 4,
-      expectedTranslate: '-944px',
+      expectedPageSize: 8,
+      expectedTranslate: getHomeCarouselPageTranslate(1, HOME_CAROUSEL_LAYOUTS.desktop),
     },
     {
       name: '1280px+',
       layout: HOME_CAROUSEL_LAYOUTS.wideDesktop,
-      expectedPageSize: 5,
-      expectedTranslate: '-1180px',
+      expectedPageSize: 10,
+      expectedTranslate: getHomeCarouselPageTranslate(1, HOME_CAROUSEL_LAYOUTS.wideDesktop),
     },
   ])(
     'uses the home-only $name card geometry, stride, and inert range',
@@ -181,7 +230,7 @@ describe('ProductCarouselTrack responsive layouts', () => {
         'lg:auto-cols-[var(--home-carousel-card-width)]',
         'lg:gap-x-[var(--home-carousel-gap)]',
         'lg:translate-x-[var(--carousel-page-translate)]',
-        'lg:grid-rows-[minmax(0,max-content)]',
+        'lg:grid-rows-[minmax(0,max-content)_minmax(0,max-content)]',
       );
       expect(track).not.toHaveClass(
         'lg:grid-rows-1',
@@ -190,7 +239,7 @@ describe('ProductCarouselTrack responsive layouts', () => {
         'lg:min-h-[292px]',
       );
       expect(track).toHaveStyle({
-        '--home-carousel-card-width': '220px',
+        '--home-carousel-card-width': getHomeCarouselCardWidth(layout),
         '--home-carousel-card-min-height': '284px',
         '--home-carousel-gap': '16px',
         '--carousel-page-translate': expectedTranslate,
@@ -199,10 +248,17 @@ describe('ProductCarouselTrack responsive layouts', () => {
       expect(layout.minCardHeight).toBe(284);
       expect(layout.gap).toBe(16);
       expect(layout.pageSize).toBe(expectedPageSize);
+      expect(layout.columns).toBe(expectedPageSize / 2);
       expect(cards.slice(0, layout.pageSize).every((card) => card.hasAttribute('inert'))).toBe(
         true,
       );
       expect(cards.slice(layout.pageSize).some((card) => card.hasAttribute('inert'))).toBe(false);
+      const finalCard = cards.at(-1);
+      expect(finalCard).toHaveStyle(
+        layout.columns === 4
+          ? { '--desktop-column': '5', '--desktop-row': '2' }
+          : { '--desktop-column': '8', '--desktop-row': '1' },
+      );
       expect(cards[0]).not.toHaveClass('h-[292px]', 'lg:h-[292px]');
       expect(within(track).getAllByRole('article')[0]).toHaveAttribute(
         'data-card-variant',
@@ -244,5 +300,8 @@ describe('ProductCarouselTrack responsive layouts', () => {
     expect(items[0]).toHaveStyle({ '--mobile-column': '1', '--mobile-row': '1' });
     expect(items[1]).toHaveStyle({ '--mobile-column': '2', '--mobile-row': '1' });
     expect(items[2]).toHaveStyle({ '--mobile-column': '1', '--mobile-row': '2' });
+    expect(items[0]).toHaveStyle({ '--desktop-column': '1', '--desktop-row': '1' });
+    expect(items[1]).toHaveStyle({ '--desktop-column': '2', '--desktop-row': '1' });
+    expect(items[2]).toHaveStyle({ '--desktop-column': '3', '--desktop-row': '1' });
   });
 });

@@ -19,5 +19,9 @@ export function PageContainer({
   const maxWidthClassName =
     maxWidth === 'web-detail' ? 'max-w-[1240px]' : 'max-w-[calc(var(--container-web)+40px)]';
 
-  return <div className={cx('mx-auto w-full px-20', maxWidthClassName, className)}>{children}</div>;
+  return (
+    <div className={cx('page-container mx-auto w-full px-20', maxWidthClassName, className)}>
+      {children}
+    </div>
+  );
 }

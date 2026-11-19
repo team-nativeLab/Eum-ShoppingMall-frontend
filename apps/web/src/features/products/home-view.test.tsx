@@ -12,7 +12,14 @@ import { HomeView } from './home-view';
 
 const apiMocks = vi.hoisted(() => ({
   getShopApi: vi.fn(),
-  carouselLayout: { pageSize: 7, cardWidth: 158, minCardHeight: 292, gap: 16 },
+  carouselLayout: {
+    pageSize: 8,
+    columns: 4,
+    rows: 2,
+    cardWidth: 158,
+    minCardHeight: 292,
+    gap: 16,
+  },
 }));
 
 vi.mock('@/lib/shop-api', () => ({ getShopApi: apiMocks.getShopApi }));
@@ -153,13 +160,16 @@ beforeEach(() => {
 
 describe('HomeView section layout and responsive promo copy spacing', () => {
   it.each([
-    [1024, 4],
-    [1440, 5],
+    [1024, 8],
+    [1279, 8],
+    [1280, 10],
   ])('matches the %i px carousel layout in the pending discount skeleton', async (width, count) => {
     const originalInnerWidth = Object.getOwnPropertyDescriptor(window, 'innerWidth');
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
     Object.assign(apiMocks.carouselLayout, {
       pageSize: count,
+      columns: count === 8 ? 4 : 5,
+      rows: 2,
       cardWidth: 220,
       minCardHeight: 284,
       gap: 16,
@@ -179,8 +189,10 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
         'lg:auto-cols-[var(--home-carousel-card-width)]',
         'lg:gap-x-[var(--home-carousel-gap)]',
       );
+      expect(skeleton.style.getPropertyValue('--home-carousel-card-width')).toContain(
+        'min(1336px, 100vw)',
+      );
       expect(skeleton).toHaveStyle({
-        '--home-carousel-card-width': '220px',
         '--home-carousel-card-min-height': '284px',
         '--home-carousel-gap': '16px',
       });
@@ -189,7 +201,9 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
       );
     } finally {
       Object.assign(apiMocks.carouselLayout, {
-        pageSize: 7,
+        pageSize: 8,
+        columns: 4,
+        rows: 2,
         cardWidth: 158,
         minCardHeight: 292,
         gap: 16,
@@ -204,6 +218,8 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
     Object.assign(apiMocks.carouselLayout, {
       pageSize: 4,
+      columns: 2,
+      rows: 2,
       cardWidth: 220,
       minCardHeight: 284,
       gap: 16,
@@ -227,7 +243,9 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
       expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390);
     } finally {
       Object.assign(apiMocks.carouselLayout, {
-        pageSize: 7,
+        pageSize: 8,
+        columns: 4,
+        rows: 2,
         cardWidth: 158,
         minCardHeight: 292,
         gap: 16,
@@ -237,7 +255,7 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
     }
   });
 
-  it('positions a square category launcher in the hero flow and adds a discount carousel', async () => {
+  it('does not duplicate the category launcher in the hero and adds a discount carousel', async () => {
     vi.mocked(getShopApi).mockResolvedValue({
       ...createApi(),
       products: {
@@ -252,11 +270,7 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
 
     render(<HomeView />, { wrapper: createWrapper() });
 
-    const categoryTrigger = await screen.findByRole('button', { name: '카테고리 메뉴 열기' });
-    expect(categoryTrigger).toHaveAttribute('data-menu-trigger-location', 'hero');
-    expect(categoryTrigger).toHaveClass('absolute', 'size-96', 'border');
-    expect(categoryTrigger).not.toHaveClass('fixed', 'sticky');
-    expect(categoryTrigger.querySelector('svg')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: '카테고리 메뉴 열기' })).toBeNull();
     const activeHeroSlide = await screen.findByRole('group', { name: '1개 중 1번째 배너' });
     expect(activeHeroSlide.parentElement).toHaveClass('lg:ml-64');
 
@@ -309,7 +323,7 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
     const productTrack = screen.getByRole('list', { name: '베스트 상품' });
     const productRow = productTrack.parentElement;
     expect(productRow).toHaveClass('mt-16', 'lg:mt-24');
-    expect(productTrack).toHaveAttribute('data-page-size', '7');
+    expect(productTrack).toHaveAttribute('data-page-size', '8');
     expect(productTrack).toHaveAttribute('data-card-min-height', '292');
     expect(quoteSection).toHaveClass('mt-64');
     expect(serviceBenefits).toHaveClass('mt-64');
@@ -349,7 +363,7 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
   it('pages the best seller carousel without category chips', async () => {
     const firstProduct = homeContent.featuredProducts[0];
     if (!firstProduct) throw new Error('Expected one home product fixture.');
-    const featuredProducts = Array.from({ length: 8 }, (_, index) => ({
+    const featuredProducts = Array.from({ length: 13 }, (_, index) => ({
       ...firstProduct,
       id: `featured-${index}`,
       categoryId: 'safety',
@@ -359,7 +373,7 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
     render(<HomeView />, { wrapper: createWrapper() });
 
     const track = await screen.findByRole('list', { name: '베스트 상품' });
-    expect(track).toHaveAttribute('data-page-size', '7');
+    expect(track).toHaveAttribute('data-page-size', '8');
     expect(track).toHaveAttribute('data-page-index', '0');
 
     fireEvent.click(await screen.findByRole('button', { name: '다음 베스트 상품' }));

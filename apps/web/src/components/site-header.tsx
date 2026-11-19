@@ -203,7 +203,7 @@ export function SiteHeader() {
   useEffect(() => registerMenuTriggerHandler(toggleMenu), [registerMenuTriggerHandler, toggleMenu]);
   // 상품 상세는 모바일에서만 상세 전용 헤더(뒤로·공유·장바구니)를 씁니다. 데스크톱 GNB는 항상 그립니다.
   const isProductDetail = pathname.startsWith('/products/');
-  const isHomePage = pathname === '/';
+  const isCheckoutPath = pathname === '/checkout' || pathname.startsWith('/checkout/');
   const checkoutStep = pathname.startsWith('/checkout/')
     ? pathname === '/checkout/shipping'
       ? 1
@@ -232,9 +232,7 @@ export function SiteHeader() {
       checkoutStep > 0
         ? checkoutLogoRef.current
         : isDesktopViewport
-          ? (desktopMenuButtonRef.current ??
-            document.querySelector<HTMLButtonElement>('[data-menu-trigger-location="hero"]') ??
-            desktopLogoRef.current)
+          ? (desktopMenuButtonRef.current ?? desktopLogoRef.current)
           : isProductDetail
             ? productDetailBackButtonRef.current
             : mobileMenuButtonRef.current;
@@ -242,7 +240,7 @@ export function SiteHeader() {
       checkoutStep === 0 &&
       (isDesktopViewport
         ? openedMenuTrigger === desktopMenuButtonRef.current ||
-          openedMenuTrigger?.dataset.menuTriggerLocation === 'hero'
+          openedMenuTrigger?.dataset.menuTriggerLocation === 'global'
         : !isProductDetail && openedMenuTrigger === mobileMenuButtonRef.current);
     const isAvailableFocusTarget = (target: HTMLElement | null): target is HTMLElement => {
       if (!target?.isConnected || target.closest('[hidden], [inert]')) return false;
@@ -370,7 +368,14 @@ export function SiteHeader() {
   };
 
   // 로그인·회원가입 화면은 공용 헤더를 그리지 않습니다(demo-mode-banner.tsx와 같은 규칙). 모든 훅 호출 뒤에서 return합니다.
-  if (pathname === '/login' || pathname === '/signup') return null;
+  if (
+    pathname === '/login' ||
+    pathname.startsWith('/login/') ||
+    pathname === '/signup' ||
+    pathname.startsWith('/signup/')
+  ) {
+    return null;
+  }
   if (checkoutStep > 0) {
     const checkoutSteps = ['배송지', '결제', '완료'];
     return (
@@ -439,6 +444,21 @@ export function SiteHeader() {
 
   return (
     <>
+      {!isCheckoutPath ? (
+        <button
+          ref={desktopMenuButtonRef}
+          type="button"
+          data-menu-trigger-location="global"
+          onClick={(clickEvent) => toggleMenu(clickEvent.currentTarget)}
+          aria-label={isMenuVisible ? '전체 메뉴 닫기' : '전체 메뉴 열기'}
+          aria-controls={ALL_MENU_ID}
+          aria-expanded={isMenuVisible}
+          className="fixed top-[113px] left-26 z-40 hidden size-96 flex-col items-center justify-center gap-8 border border-line-strong bg-bg text-label-m text-text-1 shadow-1 focus-ring hover:bg-surface lg:inline-flex"
+        >
+          <Icon icon={LayoutGrid} size={24} />
+          <span>카테고리</span>
+        </button>
+      ) : null}
       <header
         className={cx(
           'sticky top-0 border-line bg-bg transition-[box-shadow] duration-200 ease-[cubic-bezier(.2,0,0,1)] motion-reduce:transition-none lg:border-b',
@@ -459,21 +479,8 @@ export function SiteHeader() {
             isScrolled ? 'h-64' : 'h-72',
           )}
         >
-          {/* 홈은 Hero 카테고리 버튼을 쓰며, 모든 경로에서 최신 헤더 로고·GNB 간격을 유지합니다. */}
+          {/* 고정 카테고리 버튼은 화면 좌측에 두고, 헤더는 로고와 GNB에 공간을 씁니다. */}
           <div className="flex w-284 shrink-0 items-center gap-8">
-            {isHomePage ? null : (
-              <button
-                ref={desktopMenuButtonRef}
-                type="button"
-                onClick={(clickEvent) => toggleMenu(clickEvent.currentTarget)}
-                aria-label={isMenuVisible ? '전체 메뉴 닫기' : '전체 메뉴 열기'}
-                aria-controls={ALL_MENU_ID}
-                aria-expanded={isMenuVisible}
-                className="inline-flex size-44 shrink-0 items-center justify-center rounded-8 focus-ring hover:bg-surface"
-              >
-                <Icon icon={LayoutGrid} size={24} />
-              </button>
-            )}
             <Link ref={desktopLogoRef} href="/" className="rounded-4 focus-ring">
               <Image
                 src={SAFETY_MATJIP_LOGO_SRC}
