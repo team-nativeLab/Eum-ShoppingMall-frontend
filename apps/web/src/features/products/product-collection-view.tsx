@@ -143,14 +143,14 @@ function CollectionResults({
   );
 }
 
-/** 베스트·오늘의 상품 전용 화면. 기존 목록과 같은 페이지 단위로 조회하고 페이지 번호로 이동합니다. */
+/** 베스트·오늘의 상품·할인 상품 전용 화면. 필터 없이 페이지 단위로 조회하고 페이지 번호로 이동합니다. */
 export function PagedProductCollectionView({
   title,
   collection,
   emptyTitle,
 }: {
   title: string;
-  collection: 'featured' | 'today';
+  collection: 'featured' | 'today' | 'discounted';
   emptyTitle: string;
 }) {
   const [page, setPage] = useState(1);

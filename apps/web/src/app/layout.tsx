@@ -5,6 +5,7 @@ import './globals.css';
 import { DemoModeBanner } from '@/components/demo-mode-banner';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
+import { SiteMenuProvider } from '@/components/site-menu-context';
 import { getWebApiConfig } from '@/lib/api-config';
 import { Providers } from './providers';
 
@@ -25,10 +26,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <div className="flex min-h-dvh flex-col">
             {/* 빌드 때 문자열로 치환되므로 real 빌드에서는 이 분기와 띠가 산출물에서 빠집니다. */}
             {getWebApiConfig().mode !== 'real' ? <DemoModeBanner /> : null}
-            <SiteHeader />
-            <main id="main-content" className="flex-1">
-              {children}
-            </main>
+            <SiteMenuProvider>
+              <SiteHeader />
+              <main id="main-content" className="flex-1">
+                {children}
+              </main>
+            </SiteMenuProvider>
             <SiteFooter />
           </div>
         </Providers>

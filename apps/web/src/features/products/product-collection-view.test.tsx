@@ -120,6 +120,23 @@ describe('PagedProductCollectionView (베스트·오늘의 상품)', () => {
     expect(screen.queryByText(/총 .*개/)).toBeNull();
   });
 
+  it('shows discounted products without filter controls and requests the discounted collection', async () => {
+    apiMocks.listProducts.mockResolvedValue(createPagedResult([createProduct(12)], 1));
+
+    render(
+      <PagedProductCollectionView
+        title="할인 상품"
+        collection="discounted"
+        emptyTitle="등록된 할인 상품이 없습니다"
+      />,
+      { wrapper: createWrapper() },
+    );
+
+    expect(await screen.findByText('테스트 상품 12')).toBeInTheDocument();
+    expect(lastListParams()).toEqual({ collection: 'discounted', page: 1, pageSize: 24 });
+    expect(screen.queryByRole('group', { name: /필터|정렬/ })).toBeNull();
+  });
+
   it('keeps pagination and requests the next page when a page button is pressed', async () => {
     const user = userEvent.setup();
     apiMocks.listProducts.mockResolvedValue(createPagedResult([createProduct(1)], 30));

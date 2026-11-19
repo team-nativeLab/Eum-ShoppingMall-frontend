@@ -687,6 +687,15 @@ export function createMockApi(
           if (!isBuyerVisibleProduct(product)) return false;
           if (params.collection === 'featured' && !product.isFeatured) return false;
           if (params.collection === 'today' && !product.isTodayDeal) return false;
+          if (
+            params.collection === 'discounted' &&
+            (!product.priceVisible ||
+              product.listPrice === null ||
+              product.price === null ||
+              product.listPrice <= product.price)
+          ) {
+            return false;
+          }
           const matchesCategory = categoryIds === null || categoryIds.has(product.categoryId);
           const matchesBrand = brandFilters.size === 0 || brandFilters.has(product.brand);
           const matchesCertification =

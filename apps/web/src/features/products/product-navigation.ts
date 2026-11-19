@@ -1,6 +1,7 @@
 export type SearchParamValue = string | string[] | undefined;
 
-export type PrimaryNavigationKey = 'products' | 'best' | 'recommended' | 'brands' | 'inquiry';
+export type PrimaryNavigationKey =
+  'products' | 'best' | 'recommended' | 'discounts' | 'brands' | 'inquiry';
 
 /** 추천상품 전용 화면 경로입니다. */
 export const RECOMMENDED_PAGE_HREF = '/recommended';
@@ -61,6 +62,7 @@ export function getPrimaryNavigationItems(): PrimaryNavigationItem[] {
     { key: 'products', label: '전체상품', href: '/search' },
     { key: 'best', label: '베스트', href: '/best' },
     { key: 'recommended', label: '추천상품', href: RECOMMENDED_PAGE_HREF },
+    { key: 'discounts', label: '할인 상품', href: '/discounts' },
     { key: 'brands', label: '브랜드', href: buildBrandHref() },
     { key: 'inquiry', label: '문의사항', href: '/support/inquiry' },
   ];
@@ -80,6 +82,7 @@ export function isPrimaryNavigationItemActive(
     products: ['/search', '/category', '/products'],
     best: ['/best'],
     recommended: ['/recommended'],
+    discounts: ['/discounts'],
     brands: ['/brands'],
     inquiry: ['/support'],
   };

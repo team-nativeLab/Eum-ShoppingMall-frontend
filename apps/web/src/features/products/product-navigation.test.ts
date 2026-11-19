@@ -30,6 +30,8 @@ describe('product and brand navigation', () => {
     expect(findNavigationItem('recommended').href).toBe('/recommended');
     expect(findNavigationItem('brands').href).toBe('/brands');
     expect(findNavigationItem('inquiry').href).toBe('/support/inquiry');
+    expect(findNavigationItem('discounts').href).toBe('/discounts');
+    expect(getPrimaryNavigationItems()).toHaveLength(6);
   });
 
   it('builds brand directory, brand detail and brand product listing destinations', () => {
@@ -73,6 +75,8 @@ describe('product and brand navigation', () => {
     expect(getActiveKeys('/support/faq')).toEqual(['inquiry']);
     expect(getActiveKeys('/support/inquiry')).toEqual(['inquiry']);
     expect(getActiveKeys('/best')).toEqual(['best']);
+    expect(getActiveKeys('/discounts')).toEqual(['discounts']);
+    expect(getActiveKeys('/discounts/page/2')).toEqual(['discounts']);
     expect(getActiveKeys('/today')).toEqual([]);
     expect(getActiveKeys('/')).toEqual([]);
   });

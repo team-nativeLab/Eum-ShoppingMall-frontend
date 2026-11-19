@@ -6,10 +6,14 @@ import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getShopApi } from '@/lib/shop-api';
+import { SiteMenuProvider } from '@/components/site-menu-context';
 import type * as ProductCarouselModule from './product-carousel';
 import { HomeView } from './home-view';
 
-const apiMocks = vi.hoisted(() => ({ getShopApi: vi.fn() }));
+const apiMocks = vi.hoisted(() => ({
+  getShopApi: vi.fn(),
+  carouselLayout: { pageSize: 7, cardWidth: 158, minCardHeight: 292, gap: 16 },
+}));
 
 vi.mock('@/lib/shop-api', () => ({ getShopApi: apiMocks.getShopApi }));
 vi.mock('@/lib/use-media-query', () => ({ usePrefersReducedMotion: () => true }));
@@ -33,12 +37,7 @@ vi.mock('./product-carousel', async (importOriginal) => {
         data-card-min-height={desktopLayout?.minCardHeight}
       />
     ),
-    useHomeCarouselLayout: () => ({
-      pageSize: 7,
-      cardWidth: 158,
-      minCardHeight: 292,
-      gap: 16,
-    }),
+    useHomeCarouselLayout: () => ({ ...apiMocks.carouselLayout }),
   };
 });
 
@@ -126,7 +125,11 @@ function createWrapper() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
   return function QueryWrapper({ children }: { children: ReactNode }) {
-    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+    return (
+      <SiteMenuProvider>
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      </SiteMenuProvider>
+    );
   };
 }
 
@@ -134,6 +137,7 @@ function createApi(homeResponse = homeContent, categories: Category[] = []): Sho
   return {
     home: { getContent: async () => homeResponse },
     categories: { list: async () => categories },
+    products: { list: async () => ({ items: [], page: 1, pageSize: 10, totalCount: 0 }) },
   } as unknown as ShopApi;
 }
 
@@ -148,6 +152,121 @@ beforeEach(() => {
 });
 
 describe('HomeView section layout and responsive promo copy spacing', () => {
+  it.each([
+    [1024, 4],
+    [1440, 5],
+  ])('matches the %i px carousel layout in the pending discount skeleton', async (width, count) => {
+    const originalInnerWidth = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+    Object.assign(apiMocks.carouselLayout, {
+      pageSize: count,
+      cardWidth: 220,
+      minCardHeight: 284,
+      gap: 16,
+    });
+    vi.mocked(getShopApi).mockResolvedValue({
+      ...createApi(),
+      products: { list: () => new Promise(() => undefined) },
+    } as unknown as ShopApi);
+
+    try {
+      render(<HomeView />, { wrapper: createWrapper() });
+      const skeleton = await screen.findByTestId('home-discount-skeleton');
+
+      expect(skeleton.children).toHaveLength(count);
+      expect(skeleton).toHaveClass(
+        'grid-flow-col',
+        'lg:auto-cols-[var(--home-carousel-card-width)]',
+        'lg:gap-x-[var(--home-carousel-gap)]',
+      );
+      expect(skeleton).toHaveStyle({
+        '--home-carousel-card-width': '220px',
+        '--home-carousel-card-min-height': '284px',
+        '--home-carousel-gap': '16px',
+      });
+      expect(skeleton.firstElementChild).toHaveClass(
+        'lg:min-h-[var(--home-carousel-card-min-height)]',
+      );
+    } finally {
+      Object.assign(apiMocks.carouselLayout, {
+        pageSize: 7,
+        cardWidth: 158,
+        minCardHeight: 292,
+        gap: 16,
+      });
+      if (originalInnerWidth) Object.defineProperty(window, 'innerWidth', originalInnerWidth);
+      else Reflect.deleteProperty(window, 'innerWidth');
+    }
+  });
+
+  it('keeps the 390 px discount skeleton in a two-column, two-row mobile layout without horizontal overflow', async () => {
+    const originalInnerWidth = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    Object.assign(apiMocks.carouselLayout, {
+      pageSize: 4,
+      cardWidth: 220,
+      minCardHeight: 284,
+      gap: 16,
+    });
+    vi.mocked(getShopApi).mockResolvedValue({
+      ...createApi(),
+      products: { list: () => new Promise(() => undefined) },
+    } as unknown as ShopApi);
+
+    try {
+      render(<HomeView />, { wrapper: createWrapper() });
+      const skeleton = await screen.findByTestId('home-discount-skeleton');
+
+      expect(skeleton.children).toHaveLength(4);
+      expect(skeleton).toHaveClass(
+        'grid-flow-col',
+        'grid-rows-2',
+        'auto-cols-[calc((100%-12px)/2)]',
+      );
+      expect(skeleton).not.toHaveClass('grid-rows-1');
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390);
+    } finally {
+      Object.assign(apiMocks.carouselLayout, {
+        pageSize: 7,
+        cardWidth: 158,
+        minCardHeight: 292,
+        gap: 16,
+      });
+      if (originalInnerWidth) Object.defineProperty(window, 'innerWidth', originalInnerWidth);
+      else Reflect.deleteProperty(window, 'innerWidth');
+    }
+  });
+
+  it('positions a square category launcher in the hero flow and adds a discount carousel', async () => {
+    vi.mocked(getShopApi).mockResolvedValue({
+      ...createApi(),
+      products: {
+        list: async () => ({
+          items: homeContent.featuredProducts,
+          page: 1,
+          pageSize: 10,
+          totalCount: 1,
+        }),
+      },
+    } as unknown as ShopApi);
+
+    render(<HomeView />, { wrapper: createWrapper() });
+
+    const categoryTrigger = await screen.findByRole('button', { name: '카테고리 메뉴 열기' });
+    expect(categoryTrigger).toHaveAttribute('data-menu-trigger-location', 'hero');
+    expect(categoryTrigger).toHaveClass('absolute', 'size-96', 'border');
+    expect(categoryTrigger).not.toHaveClass('fixed', 'sticky');
+    expect(categoryTrigger.querySelector('svg')).not.toBeNull();
+    const activeHeroSlide = await screen.findByRole('group', { name: '1개 중 1번째 배너' });
+    expect(activeHeroSlide.parentElement).toHaveClass('lg:ml-64');
+
+    expect(await screen.findByRole('heading', { name: '할인 상품' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '할인 상품 전체 보기' })).toHaveAttribute(
+      'href',
+      '/discounts',
+    );
+  });
+
   it('preserves section order, desktop promo geometry, and responsive promo copy spacing', async () => {
     render(<HomeView />, { wrapper: createWrapper() });
 

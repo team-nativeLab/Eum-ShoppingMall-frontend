@@ -37,6 +37,7 @@ import {
 } from 'react';
 import { CartLink } from './cart-link';
 import { PageContainer } from './page-container';
+import { useSiteMenu } from './site-menu-context';
 import {
   getCategoryHref,
   getCurrentMenuHref,
@@ -129,9 +130,9 @@ function UrlKeywordHeaderSearchField(searchProps: UrlKeywordSearchProps) {
 export function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
+  const { isMenuOpen, setIsMenuOpen, registerMenuTriggerHandler } = useSiteMenu();
   const categoriesQuery = useCategoriesQuery();
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMenuMounted, setIsMenuMounted] = useState(false);
   const [isMenuMotionOpen, setIsMenuMotionOpen] = useState(false);
   const [isMenuInteractive, setIsMenuInteractive] = useState(false);
@@ -144,56 +145,65 @@ export function SiteHeader() {
   const shouldFocusMenuOnOpenRef = useRef(false);
   const desktopMenuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const desktopLogoRef = useRef<HTMLAnchorElement>(null);
   const productDetailBackButtonRef = useRef<HTMLButtonElement>(null);
   const checkoutLogoRef = useRef<HTMLAnchorElement>(null);
   const menuPanelRef = useRef<HTMLDivElement>(null);
   const menuCloseButtonRef = useRef<HTMLButtonElement>(null);
   const categoryList = categoriesQuery.data ?? [];
   const isMenuVisible = isMenuOpen;
-  const closeMenu = useCallback((restoreFocus = false) => {
-    if (!isMenuOpenRef.current) return;
+  const closeMenu = useCallback(
+    (restoreFocus = false) => {
+      if (!isMenuOpenRef.current) return;
 
-    isMenuOpenRef.current = false;
-    setIsMenuOpen(false);
-    setIsMenuMotionOpen(false);
-    setIsMenuInteractive(false);
-    setIsMobileSearchOpen(false);
-    if (menuUnmountTimerRef.current !== null) {
-      window.clearTimeout(menuUnmountTimerRef.current);
-    }
-    menuUnmountTimerRef.current = window.setTimeout(() => {
-      setIsMenuMounted(false);
-      menuUnmountTimerRef.current = null;
-    }, MENU_TRANSITION_DURATION_MS);
-    shouldRestoreMenuFocusRef.current = restoreFocus;
-    shouldFocusMenuOnOpenRef.current = false;
-    if (!restoreFocus) menuTriggerRef.current = null;
-  }, []);
-  const toggleMenu = (trigger: HTMLButtonElement) => {
-    if (isMenuOpenRef.current) {
-      closeMenu();
-      return;
-    }
+      isMenuOpenRef.current = false;
+      setIsMenuOpen(false);
+      setIsMenuMotionOpen(false);
+      setIsMenuInteractive(false);
+      setIsMobileSearchOpen(false);
+      if (menuUnmountTimerRef.current !== null) {
+        window.clearTimeout(menuUnmountTimerRef.current);
+      }
+      menuUnmountTimerRef.current = window.setTimeout(() => {
+        setIsMenuMounted(false);
+        menuUnmountTimerRef.current = null;
+      }, MENU_TRANSITION_DURATION_MS);
+      shouldRestoreMenuFocusRef.current = restoreFocus;
+      shouldFocusMenuOnOpenRef.current = false;
+      if (!restoreFocus) menuTriggerRef.current = null;
+    },
+    [setIsMenuOpen],
+  );
+  const toggleMenu = useCallback(
+    (trigger: HTMLButtonElement) => {
+      if (isMenuOpenRef.current) {
+        closeMenu();
+        return;
+      }
 
-    const prefersReducedMotion =
-      window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
-    const isReopeningDuringExit = menuUnmountTimerRef.current !== null;
-    if (menuUnmountTimerRef.current !== null) {
-      window.clearTimeout(menuUnmountTimerRef.current);
-      menuUnmountTimerRef.current = null;
-    }
-    shouldRestoreMenuFocusRef.current = false;
-    menuTriggerRef.current = trigger;
-    shouldFocusMenuOnOpenRef.current = true;
-    isMenuOpenRef.current = true;
-    setIsMenuOpen(true);
-    setIsMenuMotionOpen(prefersReducedMotion || isReopeningDuringExit);
-    setIsMenuInteractive(prefersReducedMotion);
-    setIsMenuMounted(true);
-    setIsMobileSearchOpen(false);
-  };
+      const prefersReducedMotion =
+        window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
+      const isReopeningDuringExit = menuUnmountTimerRef.current !== null;
+      if (menuUnmountTimerRef.current !== null) {
+        window.clearTimeout(menuUnmountTimerRef.current);
+        menuUnmountTimerRef.current = null;
+      }
+      shouldRestoreMenuFocusRef.current = false;
+      menuTriggerRef.current = trigger;
+      shouldFocusMenuOnOpenRef.current = true;
+      isMenuOpenRef.current = true;
+      setIsMenuOpen(true);
+      setIsMenuMotionOpen(prefersReducedMotion || isReopeningDuringExit);
+      setIsMenuInteractive(prefersReducedMotion);
+      setIsMenuMounted(true);
+      setIsMobileSearchOpen(false);
+    },
+    [closeMenu, setIsMenuOpen],
+  );
+  useEffect(() => registerMenuTriggerHandler(toggleMenu), [registerMenuTriggerHandler, toggleMenu]);
   // 상품 상세는 모바일에서만 상세 전용 헤더(뒤로·공유·장바구니)를 씁니다. 데스크톱 GNB는 항상 그립니다.
   const isProductDetail = pathname.startsWith('/products/');
+  const isHomePage = pathname === '/';
   const checkoutStep = pathname.startsWith('/checkout/')
     ? pathname === '/checkout/shipping'
       ? 1
@@ -222,17 +232,28 @@ export function SiteHeader() {
       checkoutStep > 0
         ? checkoutLogoRef.current
         : isDesktopViewport
-          ? desktopMenuButtonRef.current
+          ? (desktopMenuButtonRef.current ??
+            document.querySelector<HTMLButtonElement>('[data-menu-trigger-location="hero"]') ??
+            desktopLogoRef.current)
           : isProductDetail
             ? productDetailBackButtonRef.current
             : mobileMenuButtonRef.current;
     const openedTriggerIsVisible =
       checkoutStep === 0 &&
       (isDesktopViewport
-        ? openedMenuTrigger === desktopMenuButtonRef.current
+        ? openedMenuTrigger === desktopMenuButtonRef.current ||
+          openedMenuTrigger?.dataset.menuTriggerLocation === 'hero'
         : !isProductDetail && openedMenuTrigger === mobileMenuButtonRef.current);
-    const focusTarget = openedTriggerIsVisible ? openedMenuTrigger : currentMenuFocusTarget;
-    focusTarget?.focus();
+    const isAvailableFocusTarget = (target: HTMLElement | null): target is HTMLElement => {
+      if (!target?.isConnected || target.closest('[hidden], [inert]')) return false;
+      const targetStyle = window.getComputedStyle(target);
+      return targetStyle.display !== 'none' && targetStyle.visibility !== 'hidden';
+    };
+    const focusTarget =
+      openedTriggerIsVisible && isAvailableFocusTarget(openedMenuTrigger)
+        ? openedMenuTrigger
+        : currentMenuFocusTarget;
+    if (isAvailableFocusTarget(focusTarget)) focusTarget.focus();
   }, [checkoutStep, isMenuVisible, isProductDetail]);
 
   // 패널이 상호작용 가능해지면(inert 해제) 닫기 버튼으로 포커스를 옮깁니다. 그러면 Tab 한 번에 메뉴 항목으로 갑니다.
@@ -316,6 +337,7 @@ export function SiteHeader() {
       const pointerTarget = pointerEvent.target;
       if (
         menuPanelRef.current?.contains(pointerTarget) ||
+        menuTriggerRef.current?.contains(pointerTarget) ||
         desktopMenuButtonRef.current?.contains(pointerTarget) ||
         mobileMenuButtonRef.current?.contains(pointerTarget)
       ) {
@@ -437,20 +459,22 @@ export function SiteHeader() {
             isScrolled ? 'h-64' : 'h-72',
           )}
         >
-          {/* 전체 메뉴 버튼은 로고 왼쪽에 둡니다. 블록 폭은 버튼 44 + 간격 8 + 로고 208 + 여백 24를 담아 모든 데스크톱 폭에서 같습니다. */}
+          {/* 홈은 Hero 카테고리 버튼을 쓰며, 모든 경로에서 최신 헤더 로고·GNB 간격을 유지합니다. */}
           <div className="flex w-284 shrink-0 items-center gap-8">
-            <button
-              ref={desktopMenuButtonRef}
-              type="button"
-              onClick={(clickEvent) => toggleMenu(clickEvent.currentTarget)}
-              aria-label={isMenuVisible ? '전체 메뉴 닫기' : '전체 메뉴 열기'}
-              aria-controls={ALL_MENU_ID}
-              aria-expanded={isMenuVisible}
-              className="inline-flex size-44 shrink-0 items-center justify-center rounded-8 focus-ring hover:bg-surface"
-            >
-              <Icon icon={LayoutGrid} size={24} />
-            </button>
-            <Link href="/" className="rounded-4 focus-ring">
+            {isHomePage ? null : (
+              <button
+                ref={desktopMenuButtonRef}
+                type="button"
+                onClick={(clickEvent) => toggleMenu(clickEvent.currentTarget)}
+                aria-label={isMenuVisible ? '전체 메뉴 닫기' : '전체 메뉴 열기'}
+                aria-controls={ALL_MENU_ID}
+                aria-expanded={isMenuVisible}
+                className="inline-flex size-44 shrink-0 items-center justify-center rounded-8 focus-ring hover:bg-surface"
+              >
+                <Icon icon={LayoutGrid} size={24} />
+              </button>
+            )}
+            <Link ref={desktopLogoRef} href="/" className="rounded-4 focus-ring">
               <Image
                 src={SAFETY_MATJIP_LOGO_SRC}
                 alt="안전맛집"
