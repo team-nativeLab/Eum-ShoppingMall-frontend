@@ -953,6 +953,24 @@ describe('목 API 시나리오', () => {
     expect(await api.products.getById(todayPage.items[0]!.id)).not.toHaveProperty('supplierId');
   });
 
+  it('할인 상품 목록은 공개 가격이 있고 정상가가 판매가보다 높은 상품만 반환합니다', async () => {
+    const api = createMockApi(testConfig);
+    const page = await api.products.list({ collection: 'discounted', pageSize: 100 });
+
+    expect(page.items.length).toBeGreaterThan(0);
+    expect(
+      page.items.every(
+        (product) =>
+          product.priceVisible &&
+          product.price !== null &&
+          product.listPrice !== null &&
+          product.listPrice > product.price,
+      ),
+    ).toBe(true);
+    expect(page.items.map((product) => product.id)).not.toContain('prd-1002');
+    expect(page.items.map((product) => product.id)).not.toContain('prd-1006');
+  });
+
   it('error: NETWORK 오류를 냅니다', async () => {
     await expect(
       createMockApi({ ...testConfig, mockScenario: 'error' }).notices.list(),

@@ -7,10 +7,19 @@ import { capsuleButtonClassName } from '@eum/ui/components/ButtonCapsule';
 import { Icon } from '@eum/ui/components/Icon';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { cx } from '@eum/ui/lib/cx';
-import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+  LayoutGrid,
+  Pause,
+  Play,
+} from 'lucide-react';
 import Link from 'next/link';
-import { useState, type FocusEvent, type PointerEvent } from 'react';
+import { useState, type CSSProperties, type FocusEvent, type PointerEvent } from 'react';
 import { PageContainer } from '@/components/page-container';
+import { useSiteMenu } from '@/components/site-menu-context';
 import { usePrefersReducedMotion } from '@/lib/use-media-query';
 import { CategoryBar, MobileCategoryGrid } from './category-bar';
 import { ProductCarouselTrack, useCarouselPaging, useHomeCarouselLayout } from './product-carousel';
@@ -41,9 +50,22 @@ function formatSlideNumber(slideIndex: number): string {
  */
 export function HomeView() {
   const homeQuery = useHomeQuery();
+  const { isMenuOpen, requestMenuToggle } = useSiteMenu();
 
   return (
-    <>
+    <div className="relative">
+      <button
+        type="button"
+        data-menu-trigger-location="hero"
+        aria-label={isMenuOpen ? '카테고리 메뉴 닫기' : '카테고리 메뉴 열기'}
+        aria-controls="site-header-all-menu"
+        aria-expanded={isMenuOpen}
+        onClick={(clickEvent) => requestMenuToggle(clickEvent.currentTarget)}
+        className="absolute top-16 left-16 z-20 hidden size-96 flex-col items-center justify-center gap-8 border border-line-strong bg-bg text-label-m text-text-1 shadow-1 focus-ring hover:bg-surface lg:inline-flex"
+      >
+        <Icon icon={LayoutGrid} size={24} />
+        <span>카테고리</span>
+      </button>
       {/* 히어로 제목은 배너마다 바뀌므로 페이지 제목(h1)은 고정해 둡니다. */}
       <h1 className="sr-only">안전맛집 쇼핑몰 홈</h1>
       {homeQuery.isPending ? (
@@ -63,7 +85,7 @@ export function HomeView() {
       ) : (
         <HomeContentView content={homeQuery.data} />
       )}
-    </>
+    </div>
   );
 }
 
@@ -107,6 +129,8 @@ function HomeContentView({ content }: { content: HomeContent }) {
       <PromoBannerSection banners={content.promoBanners} />
 
       <BestSellerSection products={content.featuredProducts} />
+
+      <HomeDiscountProductsSection />
 
       <HomeShowcaseSections />
 
@@ -224,7 +248,7 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
           {`${slides.length}개 중 ${safeActiveIndex + 1}번째: ${activeSlide.title.join(' ')}`}
         </p>
         {/* 모든 배너 문구를 같은 칸에 겹쳐 두어, 높이가 가장 긴 문구에 맞춰 고정되고 전환 중 레이아웃이 튀지 않습니다. */}
-        <div className="grid max-w-560">
+        <div data-testid="home-hero-copy" className="grid max-w-560 lg:ml-64">
           {slides.map((slide, slideIndex) => {
             const layerState = getLayerState(slideIndex);
             const isCurrentSlide = slideIndex === safeActiveIndex;
@@ -581,6 +605,35 @@ function HomeShowcaseSections() {
   );
 }
 
+function HomeDiscountProductsSection() {
+  const discountedProductsQuery = useProductsQuery({
+    collection: 'discounted',
+    pageSize: HOME_SHOWCASE_LIMIT,
+  });
+  const discountedProducts = discountedProductsQuery.data?.items ?? [];
+  const status = discountedProductsQuery.isPending
+    ? 'pending'
+    : discountedProductsQuery.isError
+      ? 'error'
+      : discountedProducts.length > 0
+        ? 'success'
+        : 'empty';
+
+  return (
+    <PageContainer className="mt-48 lg:mt-64">
+      <HomeProductShowcase
+        headingId="discount-products-heading"
+        title="할인 상품"
+        products={discountedProducts}
+        viewAllHref="/discounts"
+        status={status}
+        error={discountedProductsQuery.error}
+        onRetry={() => void discountedProductsQuery.refetch()}
+      />
+    </PageContainer>
+  );
+}
+
 /**
  * 베스트 셀러와 같은 카드·캐러셀 방식의 홈 상품 섹션. 카테고리 탭 없이 제목·전체 보기·이전/다음만 둡니다.
  * 데스크톱은 홈 전용 캐러셀 레이아웃, 모바일은 2×2 카드 페이지를 스와이프로 넘깁니다.
@@ -590,11 +643,17 @@ function HomeProductShowcase({
   title,
   products,
   viewAllHref,
+  status = 'success',
+  error,
+  onRetry,
 }: {
   headingId: string;
   title: string;
   products: Product[];
   viewAllHref: string;
+  status?: 'pending' | 'error' | 'empty' | 'success';
+  error?: unknown;
+  onRetry?: () => void;
 }) {
   const desktopLayout = useHomeCarouselLayout();
   const carouselPaging = useCarouselPaging(
@@ -617,43 +676,91 @@ function HomeProductShowcase({
         </Link>
       </div>
 
-      <div className="relative mt-16 lg:mt-24">
-        <ProductCarouselTrack
-          products={products}
-          pageIndex={carouselPaging.pageIndex}
-          direction={carouselPaging.direction}
-          mobileLayout="grid"
-          desktopLayout={desktopLayout}
-          label={title}
-        />
-        {carouselPaging.pageCount > 1 ? (
-          <>
+      {status === 'pending' ? (
+        <div
+          aria-busy="true"
+          data-testid="home-discount-skeleton"
+          style={
+            {
+              '--home-carousel-card-width': `${desktopLayout.cardWidth}px`,
+              '--home-carousel-card-min-height': `${desktopLayout.minCardHeight}px`,
+              '--home-carousel-gap': `${desktopLayout.gap}px`,
+            } as CSSProperties
+          }
+          className="mt-16 grid auto-cols-[calc((100%-12px)/2)] grid-flow-col grid-rows-2 gap-x-12 gap-y-16 lg:mt-24 lg:auto-cols-[var(--home-carousel-card-width)] lg:grid-rows-[minmax(0,max-content)] lg:gap-x-[var(--home-carousel-gap)]"
+        >
+          {Array.from({ length: desktopLayout.pageSize }, (_, skeletonIndex) => (
+            <div
+              key={skeletonIndex}
+              className="flex aspect-[181/284] min-h-max min-w-0 flex-col rounded-8 border border-line bg-bg p-8 lg:aspect-auto lg:min-h-[var(--home-carousel-card-min-height)]"
+            >
+              <div className="aspect-[23/20] shrink-0 animate-pulse rounded-6 bg-surface" />
+              <div className="flex min-h-0 flex-1 flex-col gap-8 px-4 pt-16">
+                <div className="h-12 w-1/2 animate-pulse rounded-4 bg-surface" />
+                <div className="h-48 animate-pulse rounded-4 bg-surface" />
+                <div className="mt-auto h-16 w-2/3 animate-pulse rounded-4 bg-surface" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : status === 'error' ? (
+        <NoticeInline tone="danger" role="alert" className="mt-16">
+          {getApiFailureKind(error) === 'notImplemented'
+            ? '할인 상품 조회 기능을 준비하고 있습니다.'
+            : '할인 상품을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'}
+          {onRetry ? (
             <button
               type="button"
-              onClick={carouselPaging.goToPrevious}
-              disabled={!carouselPaging.canGoPrevious}
-              aria-label={`이전 ${title}`}
-              className="absolute top-1/2 left-12 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
+              onClick={onRetry}
+              className={buttonClassName({ variant: 'secondary', size: 's' })}
             >
-              <Icon icon={ChevronLeft} size={20} />
+              다시 시도
             </button>
-            <button
-              type="button"
-              onClick={carouselPaging.goToNext}
-              disabled={!carouselPaging.canGoNext}
-              aria-label={`다음 ${title}`}
-              className="absolute top-1/2 right-12 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
-            >
-              <Icon icon={ChevronRight} size={20} />
-            </button>
-            <p aria-live="polite" className="sr-only">
-              {carouselPaging.direction === 'none'
-                ? ''
-                : `${carouselPaging.pageCount}페이지 중 ${carouselPaging.pageIndex + 1}페이지`}
-            </p>
-          </>
-        ) : null}
-      </div>
+          ) : null}
+        </NoticeInline>
+      ) : status === 'empty' ? (
+        <p className="mt-16 rounded-12 border border-line px-20 py-32 text-center text-body-s text-text-3">
+          등록된 할인 상품이 없습니다.
+        </p>
+      ) : (
+        <div className="relative mt-16 lg:mt-24">
+          <ProductCarouselTrack
+            products={products}
+            pageIndex={carouselPaging.pageIndex}
+            direction={carouselPaging.direction}
+            mobileLayout="grid"
+            desktopLayout={desktopLayout}
+            label={title}
+          />
+          {carouselPaging.pageCount > 1 ? (
+            <>
+              <button
+                type="button"
+                onClick={carouselPaging.goToPrevious}
+                disabled={!carouselPaging.canGoPrevious}
+                aria-label={`이전 ${title}`}
+                className="absolute top-1/2 left-12 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
+              >
+                <Icon icon={ChevronLeft} size={20} />
+              </button>
+              <button
+                type="button"
+                onClick={carouselPaging.goToNext}
+                disabled={!carouselPaging.canGoNext}
+                aria-label={`다음 ${title}`}
+                className="absolute top-1/2 right-12 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
+              >
+                <Icon icon={ChevronRight} size={20} />
+              </button>
+              <p aria-live="polite" className="sr-only">
+                {carouselPaging.direction === 'none'
+                  ? ''
+                  : `${carouselPaging.pageCount}페이지 중 ${carouselPaging.pageIndex + 1}페이지`}
+              </p>
+            </>
+          ) : null}
+        </div>
+      )}
       <Link
         href={viewAllHref}
         className={cx(

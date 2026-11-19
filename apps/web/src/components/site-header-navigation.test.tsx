@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import type { MouseEventHandler, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Category } from '@eum/api/types';
+import { SiteMenuProvider, useSiteMenu } from './site-menu-context';
 import { SiteHeader } from './site-header';
 
 const MENU_TRANSITION_DURATION_MS = 160;
@@ -62,8 +63,27 @@ function createWrapper() {
   });
 
   return function QueryWrapper({ children }: { children: ReactNode }) {
-    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+    return (
+      <SiteMenuProvider>
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      </SiteMenuProvider>
+    );
   };
+}
+
+function HeroMenuTrigger() {
+  const { isMenuOpen, requestMenuToggle } = useSiteMenu();
+  return (
+    <button
+      type="button"
+      data-menu-trigger-location="hero"
+      aria-label={isMenuOpen ? '카테고리 메뉴 닫기' : '카테고리 메뉴 열기'}
+      aria-expanded={isMenuOpen}
+      onClick={(clickEvent) => requestMenuToggle(clickEvent.currentTarget)}
+    >
+      카테고리
+    </button>
+  );
 }
 
 describe('SiteHeader product and brand navigation', () => {
@@ -105,7 +125,7 @@ describe('SiteHeader product and brand navigation', () => {
 
   beforeEach(() => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
-    navigationMocks.pathname = '/';
+    navigationMocks.pathname = '/search';
     navigationMocks.search = '';
     navigationMocks.push.mockReset();
     navigationMocks.back.mockReset();
@@ -132,6 +152,7 @@ describe('SiteHeader product and brand navigation', () => {
   });
 
   it('links the primary navigation paths and keeps them inactive at home', () => {
+    navigationMocks.pathname = '/';
     render(<SiteHeader />, { wrapper: createWrapper() });
     const primaryNavigation = screen.getByRole('navigation', { name: '주요 메뉴' });
     const productsLink = within(primaryNavigation).getByRole('link', { name: '전체상품' });
@@ -144,6 +165,10 @@ describe('SiteHeader product and brand navigation', () => {
       'href',
       '/recommended',
     );
+    expect(within(primaryNavigation).getByRole('link', { name: '할인 상품' })).toHaveAttribute(
+      'href',
+      '/discounts',
+    );
     expect(within(primaryNavigation).getByRole('link', { name: '문의사항' })).toHaveAttribute(
       'href',
       '/support/inquiry',
@@ -154,6 +179,7 @@ describe('SiteHeader product and brand navigation', () => {
     expect(brandsLink).toHaveAttribute('href', '/brands');
     expect(productsLink).not.toHaveAttribute('aria-current');
     expect(brandsLink).not.toHaveAttribute('aria-current');
+    expect(within(primaryNavigation).getAllByRole('link')).toHaveLength(6);
   });
 
   it('activates only Recommended on /recommended', () => {
@@ -162,6 +188,20 @@ describe('SiteHeader product and brand navigation', () => {
     const primaryNavigation = screen.getByRole('navigation', { name: '주요 메뉴' });
 
     expect(within(primaryNavigation).getByRole('link', { name: '추천상품' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(within(primaryNavigation).getByRole('link', { name: '베스트' })).not.toHaveAttribute(
+      'aria-current',
+    );
+  });
+
+  it('activates only discounted products on /discounts', () => {
+    navigationMocks.pathname = '/discounts';
+    render(<SiteHeader />, { wrapper: createWrapper() });
+    const primaryNavigation = screen.getByRole('navigation', { name: '주요 메뉴' });
+
+    expect(within(primaryNavigation).getByRole('link', { name: '할인 상품' })).toHaveAttribute(
       'aria-current',
       'page',
     );
@@ -487,6 +527,65 @@ describe('SiteHeader product and brand navigation', () => {
     expect(desktopMenuButton).toHaveFocus();
   });
 
+  it('keeps the Hero trigger inside the menu and closes when it is clicked again', async () => {
+    navigationMocks.pathname = '/';
+    const user = userEvent.setup();
+    render(
+      <>
+        <SiteHeader />
+        <HeroMenuTrigger />
+      </>,
+      { wrapper: createWrapper() },
+    );
+
+    const heroTrigger = screen.getByRole('button', { name: '카테고리 메뉴 열기' });
+    await user.click(heroTrigger);
+    const menuPanel = document.getElementById('site-header-all-menu');
+    if (!menuPanel) throw new Error('전체 메뉴 패널을 찾을 수 없습니다.');
+    await screen.findByRole('navigation', { name: '전체 메뉴' });
+
+    await user.click(heroTrigger);
+
+    await waitFor(() => expect(menuPanel).toHaveAttribute('aria-hidden', 'true'));
+    expect(screen.getByRole('button', { name: '카테고리 메뉴 열기' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  });
+
+  it('returns focus to a current trigger after browser back/forward unmounts the Hero opener', async () => {
+    navigationMocks.pathname = '/';
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <>
+        <SiteHeader />
+        <HeroMenuTrigger />
+      </>,
+      { wrapper: createWrapper() },
+    );
+    await user.click(screen.getByRole('button', { name: '카테고리 메뉴 열기' }));
+    await screen.findByRole('navigation', { name: '전체 메뉴' });
+
+    navigationMocks.pathname = '/discounts';
+    fireEvent(window, new PopStateEvent('popstate'));
+    rerender(<SiteHeader />);
+    navigationMocks.pathname = '/';
+    fireEvent(window, new PopStateEvent('popstate'));
+    rerender(<SiteHeader />);
+    navigationMocks.pathname = '/discounts';
+    fireEvent(window, new PopStateEvent('popstate'));
+    rerender(<SiteHeader />);
+    const [currentDesktopTrigger] = screen.getAllByRole('button', {
+      name: '전체 메뉴 닫기',
+    });
+    if (!currentDesktopTrigger) throw new Error('현재 데스크톱 메뉴 버튼을 찾을 수 없습니다.');
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(currentDesktopTrigger).toHaveFocus());
+    expect(screen.queryByRole('button', { name: '카테고리 메뉴 열기' })).toBeNull();
+  });
+
   it('restores focus to the product back button when no mobile menu trigger exists', async () => {
     navigationMocks.pathname = '/products/product-1';
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
@@ -528,7 +627,7 @@ describe('SiteHeader product and brand navigation', () => {
 
     await waitFor(() => expect(checkoutLogo).toHaveFocus());
 
-    navigationMocks.pathname = '/';
+    navigationMocks.pathname = '/search';
     rerender(<SiteHeader />);
     const [returnedMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
     if (!returnedMenuButton) throw new Error('메뉴 버튼을 찾을 수 없습니다.');
@@ -1009,7 +1108,7 @@ describe('SiteHeader product and brand navigation', () => {
 describe('SiteHeader on login and signup pages', () => {
   beforeEach(() => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
-    navigationMocks.pathname = '/';
+    navigationMocks.pathname = '/search';
     navigationMocks.search = '';
     navigationMocks.push.mockReset();
     navigationMocks.back.mockReset();
@@ -1099,7 +1198,7 @@ describe('SiteHeader mega menu and header trigger layout', () => {
 
   beforeEach(() => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
-    navigationMocks.pathname = '/';
+    navigationMocks.pathname = '/search';
     navigationMocks.search = '';
     navigationMocks.push.mockReset();
     navigationMocks.back.mockReset();
@@ -1196,6 +1295,7 @@ describe('SiteHeader mega menu and header trigger layout', () => {
   });
 
   it('keeps the desktop trigger left of the logo and tied to the all-menu panel', () => {
+    navigationMocks.pathname = '/search';
     render(<SiteHeader />, { wrapper: createWrapper() });
 
     const [desktopMenuButton] = screen.getAllByRole('button', { name: '전체 메뉴 열기' });
