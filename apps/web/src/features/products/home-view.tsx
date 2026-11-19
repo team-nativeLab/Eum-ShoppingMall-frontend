@@ -7,22 +7,18 @@ import { capsuleButtonClassName } from '@eum/ui/components/ButtonCapsule';
 import { Icon } from '@eum/ui/components/Icon';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { cx } from '@eum/ui/lib/cx';
-import {
-  ArrowLeft,
-  ArrowRight,
-  ChevronLeft,
-  ChevronRight,
-  LayoutGrid,
-  Pause,
-  Play,
-} from 'lucide-react';
+import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
 import Link from 'next/link';
 import { useState, type CSSProperties, type FocusEvent, type PointerEvent } from 'react';
 import { PageContainer } from '@/components/page-container';
-import { useSiteMenu } from '@/components/site-menu-context';
 import { usePrefersReducedMotion } from '@/lib/use-media-query';
 import { CategoryBar, MobileCategoryGrid } from './category-bar';
-import { ProductCarouselTrack, useCarouselPaging, useHomeCarouselLayout } from './product-carousel';
+import {
+  getHomeCarouselCardWidth,
+  ProductCarouselTrack,
+  useCarouselPaging,
+  useHomeCarouselLayout,
+} from './product-carousel';
 import { useCategoriesQuery } from './use-categories-query';
 import { heroSlideStyle, useHeroSlides } from './use-hero-slides';
 import { useHomeQuery } from './use-home-query';
@@ -50,22 +46,9 @@ function formatSlideNumber(slideIndex: number): string {
  */
 export function HomeView() {
   const homeQuery = useHomeQuery();
-  const { isMenuOpen, requestMenuToggle } = useSiteMenu();
 
   return (
     <div className="relative">
-      <button
-        type="button"
-        data-menu-trigger-location="hero"
-        aria-label={isMenuOpen ? '카테고리 메뉴 닫기' : '카테고리 메뉴 열기'}
-        aria-controls="site-header-all-menu"
-        aria-expanded={isMenuOpen}
-        onClick={(clickEvent) => requestMenuToggle(clickEvent.currentTarget)}
-        className="absolute top-16 left-16 z-20 hidden size-96 flex-col items-center justify-center gap-8 border border-line-strong bg-bg text-label-m text-text-1 shadow-1 focus-ring hover:bg-surface lg:inline-flex"
-      >
-        <Icon icon={LayoutGrid} size={24} />
-        <span>카테고리</span>
-      </button>
       {/* 히어로 제목은 배너마다 바뀌므로 페이지 제목(h1)은 고정해 둡니다. */}
       <h1 className="sr-only">안전맛집 쇼핑몰 홈</h1>
       {homeQuery.isPending ? (
@@ -518,6 +501,7 @@ function BestSellerSection({ products }: { products: Product[] }) {
               mobileLayout="grid"
               desktopLayout={desktopLayout}
               label="베스트 상품"
+              className="lg:mx-64"
             />
             {carouselPaging.pageCount > 1 ? (
               <>
@@ -526,18 +510,18 @@ function BestSellerSection({ products }: { products: Product[] }) {
                   onClick={carouselPaging.goToPrevious}
                   disabled={!carouselPaging.canGoPrevious}
                   aria-label="이전 베스트 상품"
-                  className="absolute top-1/2 left-12 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
+                  className="absolute top-1/2 left-0 hidden size-52 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
                 >
-                  <Icon icon={ChevronLeft} size={20} />
+                  <Icon icon={ChevronLeft} size={24} />
                 </button>
                 <button
                   type="button"
                   onClick={carouselPaging.goToNext}
                   disabled={!carouselPaging.canGoNext}
                   aria-label="다음 베스트 상품"
-                  className="absolute top-1/2 right-12 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
+                  className="absolute top-1/2 right-0 hidden size-52 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
                 >
-                  <Icon icon={ChevronRight} size={20} />
+                  <Icon icon={ChevronRight} size={24} />
                 </button>
                 <p aria-live="polite" className="sr-only">
                   {carouselPaging.direction === 'none'
@@ -682,17 +666,28 @@ function HomeProductShowcase({
           data-testid="home-discount-skeleton"
           style={
             {
-              '--home-carousel-card-width': `${desktopLayout.cardWidth}px`,
+              '--home-carousel-card-width': getHomeCarouselCardWidth(desktopLayout),
               '--home-carousel-card-min-height': `${desktopLayout.minCardHeight}px`,
               '--home-carousel-gap': `${desktopLayout.gap}px`,
             } as CSSProperties
           }
-          className="mt-16 grid auto-cols-[calc((100%-12px)/2)] grid-flow-col grid-rows-2 gap-x-12 gap-y-16 lg:mt-24 lg:auto-cols-[var(--home-carousel-card-width)] lg:grid-rows-[minmax(0,max-content)] lg:gap-x-[var(--home-carousel-gap)]"
+          className="mt-16 grid auto-cols-[calc((100%-12px)/2)] grid-flow-col grid-rows-2 gap-x-12 gap-y-16 lg:mx-64 lg:mt-24 lg:auto-cols-[var(--home-carousel-card-width)] lg:grid-rows-[minmax(0,max-content)_minmax(0,max-content)] lg:gap-x-[var(--home-carousel-gap)]"
         >
           {Array.from({ length: desktopLayout.pageSize }, (_, skeletonIndex) => (
             <div
               key={skeletonIndex}
-              className="flex aspect-[181/284] min-h-max min-w-0 flex-col rounded-8 border border-line bg-bg p-8 lg:aspect-auto lg:min-h-[var(--home-carousel-card-min-height)]"
+              style={
+                {
+                  '--skeleton-column':
+                    Math.floor(skeletonIndex / desktopLayout.pageSize) * desktopLayout.columns +
+                    ((skeletonIndex % desktopLayout.pageSize) % desktopLayout.columns) +
+                    1,
+                  '--skeleton-row':
+                    Math.floor((skeletonIndex % desktopLayout.pageSize) / desktopLayout.columns) +
+                    1,
+                } as CSSProperties
+              }
+              className="flex aspect-[181/284] min-h-max min-w-0 flex-col rounded-8 border border-line bg-bg p-8 lg:col-start-(--skeleton-column) lg:row-start-(--skeleton-row) lg:aspect-auto lg:min-h-[var(--home-carousel-card-min-height)]"
             >
               <div className="aspect-[23/20] shrink-0 animate-pulse rounded-6 bg-surface" />
               <div className="flex min-h-0 flex-1 flex-col gap-8 px-4 pt-16">
@@ -731,6 +726,7 @@ function HomeProductShowcase({
             mobileLayout="grid"
             desktopLayout={desktopLayout}
             label={title}
+            className="lg:mx-64"
           />
           {carouselPaging.pageCount > 1 ? (
             <>
@@ -739,18 +735,18 @@ function HomeProductShowcase({
                 onClick={carouselPaging.goToPrevious}
                 disabled={!carouselPaging.canGoPrevious}
                 aria-label={`이전 ${title}`}
-                className="absolute top-1/2 left-12 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
+                className="absolute top-1/2 left-0 hidden size-52 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
               >
-                <Icon icon={ChevronLeft} size={20} />
+                <Icon icon={ChevronLeft} size={24} />
               </button>
               <button
                 type="button"
                 onClick={carouselPaging.goToNext}
                 disabled={!carouselPaging.canGoNext}
                 aria-label={`다음 ${title}`}
-                className="absolute top-1/2 right-12 hidden size-44 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
+                className="absolute top-1/2 right-0 hidden size-52 -translate-y-1/2 items-center justify-center rounded-capsule bg-bg shadow-2 focus-ring enabled:hover:bg-surface disabled:cursor-not-allowed disabled:text-text-disabled lg:inline-flex"
               >
-                <Icon icon={ChevronRight} size={20} />
+                <Icon icon={ChevronRight} size={24} />
               </button>
               <p aria-live="polite" className="sr-only">
                 {carouselPaging.direction === 'none'

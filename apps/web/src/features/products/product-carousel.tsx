@@ -14,25 +14,51 @@ export const DESKTOP_CAROUSEL_PAGE_SIZE = 5;
 
 /** Tailwind 기본 xl 브레이크포인트(80rem). 홈 베스트 셀러는 이 구간부터 5개씩 이동합니다. */
 export const HOME_WIDE_DESKTOP_QUERY = '(min-width: 80rem)';
+export const HOME_MEDIUM_DESKTOP_QUERY = '(min-width: 64rem) and (max-width: 79.99rem)';
 
 /** 홈 베스트 셀러 전용 데스크톱 레이아웃. 공유 추천 캐러셀은 기존 5열 규격을 유지합니다. */
 export const HOME_CAROUSEL_LAYOUTS = {
-  desktop: { pageSize: 4, cardWidth: 220, minCardHeight: 284, gap: 16 },
-  wideDesktop: { pageSize: 5, cardWidth: 220, minCardHeight: 284, gap: 16 },
+  mobile: { pageSize: 4, columns: 2, rows: 2, cardWidth: 220, minCardHeight: 284, gap: 16 },
+  desktop: { pageSize: 8, columns: 4, rows: 2, cardWidth: 220, minCardHeight: 284, gap: 16 },
+  wideDesktop: { pageSize: 10, columns: 5, rows: 2, cardWidth: 220, minCardHeight: 284, gap: 16 },
 } as const;
 
 export type CarouselDesktopLayout = {
   pageSize: number;
+  columns: number;
+  rows: number;
   cardWidth: number;
   minCardHeight: number;
   gap: number;
 };
 
-/** 홈만 Tailwind xl(1280px)에서 5장 이동으로 전환합니다. */
+/** 카드 폭은 컨테이너의 실제 사용 가능 폭에서 좌우 버튼 64px씩과 열 간격을 뺍니다. */
+export function getHomeCarouselCardWidth(layout: CarouselDesktopLayout): string {
+  const reservedWidth = 128 + (layout.columns - 1) * layout.gap;
+  return `min(${layout.cardWidth}px, calc((min(1336px, 100vw) - clamp(20px, calc(806px - 50vw), 138px) - 20px - ${reservedWidth}px) / ${layout.columns}))`;
+}
+
+/** CSS가 계산한 실제 카드 폭과 gap을 기준으로 페이지 이동 거리를 만듭니다. */
+export function getHomeCarouselPageTranslate(
+  pageIndex: number,
+  layout: CarouselDesktopLayout,
+): string {
+  const columnSteps = Math.max(0, pageIndex) * layout.columns;
+  if (columnSteps === 0) return '0px';
+
+  const strideTerms = Array.from({ length: columnSteps }, () => [
+    'var(--home-carousel-card-width)',
+    'var(--home-carousel-gap)',
+  ]).flat();
+  return `calc(0px - ${strideTerms.join(' - ')})`;
+}
+
+/** 홈 레일은 lg에서 4×2, xl부터 5×2로 배치합니다. */
 export function useHomeCarouselLayout(): CarouselDesktopLayout {
-  return useMediaQuery(HOME_WIDE_DESKTOP_QUERY)
-    ? HOME_CAROUSEL_LAYOUTS.wideDesktop
-    : HOME_CAROUSEL_LAYOUTS.desktop;
+  const isWideDesktop = useMediaQuery(HOME_WIDE_DESKTOP_QUERY);
+  const isMediumDesktop = useMediaQuery(HOME_MEDIUM_DESKTOP_QUERY);
+  if (isWideDesktop) return HOME_CAROUSEL_LAYOUTS.wideDesktop;
+  return isMediumDesktop ? HOME_CAROUSEL_LAYOUTS.desktop : HOME_CAROUSEL_LAYOUTS.mobile;
 }
 
 /** 마지막 이동 방향. 처음에는 이동한 적이 없어 'none'입니다. */
@@ -88,7 +114,7 @@ const MOBILE_GRID_PAGE_SIZE = 4;
 
 /**
  * 상품 카드 캐러셀 트랙.
- * - 데스크톱(lg 이상): 기본은 5열 한 줄, 전용 layout이 있으면 해당 화면 규격으로 이동합니다.
+ * - 데스크톱(lg 이상): 전용 layout은 행 우선 2행으로 배치하고 페이지별로 열 단위 이동합니다.
  *   현재 페이지 밖 카드는 inert로 포커스·클릭에서 뺍니다.
  * - 모바일: 가로 스크롤 + scroll-snap으로 스와이프합니다(새 의존성 없이 CSS만 사용).
  */
@@ -116,14 +142,12 @@ export function ProductCarouselTrack({
   const pageStart = pageIndex * activePageSize;
   const pageEnd = pageStart + activePageSize;
   const isMobileGrid = mobileLayout === 'grid';
-  const carouselTranslate =
-    pageIndex * activePageSize * ((desktopLayout?.cardWidth ?? 0) + (desktopLayout?.gap ?? 0));
   const trackStyle = desktopLayout
     ? ({
-        '--home-carousel-card-width': `${desktopLayout.cardWidth}px`,
+        '--home-carousel-card-width': getHomeCarouselCardWidth(desktopLayout),
         '--home-carousel-card-min-height': `${desktopLayout.minCardHeight}px`,
         '--home-carousel-gap': `${desktopLayout.gap}px`,
-        '--carousel-page-translate': `${-carouselTranslate}px`,
+        '--carousel-page-translate': getHomeCarouselPageTranslate(pageIndex, desktopLayout),
       } as CSSProperties)
     : ({ '--carousel-page': pageIndex } as CSSProperties);
 
@@ -145,7 +169,7 @@ export function ProductCarouselTrack({
           'grid auto-cols-[calc((100%-12px)/2)] grid-flow-col gap-x-12 gap-y-16',
           isMobileGrid ? 'grid-rows-2' : 'grid-rows-1',
           desktopLayout
-            ? 'lg:translate-x-[var(--carousel-page-translate)] lg:auto-cols-[var(--home-carousel-card-width)] lg:grid-rows-[minmax(0,max-content)] lg:gap-x-[var(--home-carousel-gap)]'
+            ? 'lg:translate-x-[var(--carousel-page-translate)] lg:auto-cols-[var(--home-carousel-card-width)] lg:grid-rows-[minmax(0,max-content)_minmax(0,max-content)] lg:gap-x-[var(--home-carousel-gap)]'
             : 'lg:translate-x-[calc(var(--carousel-page)*(-100%_-_24px))] lg:auto-cols-[calc((100%-96px)/5)] lg:grid-rows-1 lg:gap-x-24',
           // 감속 모드에서는 transition을 붙이지 않아 즉시 이동합니다.
           'lg:motion-safe:transition-[translate] lg:motion-safe:duration-500 lg:motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]',
@@ -156,23 +180,42 @@ export function ProductCarouselTrack({
           // 모바일 2×2: 카드 4개를 한 페이지(2열×2행)로 묶고 행 우선 순서로 놓습니다.
           const mobilePageIndex = Math.floor(productIndex / MOBILE_GRID_PAGE_SIZE);
           const positionInPage = productIndex % MOBILE_GRID_PAGE_SIZE;
-          const mobileGridStyle = isMobileGrid
-            ? ({
-                '--mobile-column': mobilePageIndex * 2 + (positionInPage % 2) + 1,
-                '--mobile-row': Math.floor(positionInPage / 2) + 1,
-              } as CSSProperties)
-            : undefined;
+          const desktopPositionInPage = productIndex % activePageSize;
+          const desktopColumn =
+            Math.floor(productIndex / activePageSize) * (desktopLayout?.columns ?? activePageSize) +
+            (desktopLayout ? desktopPositionInPage % desktopLayout.columns : 0) +
+            1;
+          const desktopRow = desktopLayout
+            ? Math.floor(desktopPositionInPage / desktopLayout.columns) + 1
+            : 1;
+          const itemStyle =
+            isMobileGrid || desktopLayout
+              ? ({
+                  ...(isMobileGrid
+                    ? {
+                        '--mobile-column': mobilePageIndex * 2 + (positionInPage % 2) + 1,
+                        '--mobile-row': Math.floor(positionInPage / 2) + 1,
+                      }
+                    : {}),
+                  ...(desktopLayout
+                    ? { '--desktop-column': desktopColumn, '--desktop-row': desktopRow }
+                    : {}),
+                } as CSSProperties)
+              : undefined;
           const isSnapPoint = isMobileGrid ? positionInPage === 0 : true;
           return (
             <li
               key={product.id}
-              style={mobileGridStyle}
+              style={itemStyle}
               inert={isDesktop && !isOnDesktopPage}
               className={cx(
                 'min-w-0',
                 isSnapPoint && 'snap-start',
                 isMobileGrid &&
-                  'col-start-(--mobile-column) row-start-(--mobile-row) lg:col-start-auto lg:row-start-auto',
+                  (desktopLayout
+                    ? 'col-start-(--mobile-column) row-start-(--mobile-row)'
+                    : 'col-start-(--mobile-column) row-start-(--mobile-row) lg:col-start-auto lg:row-start-auto'),
+                desktopLayout && 'lg:col-start-(--desktop-column) lg:row-start-(--desktop-row)',
               )}
             >
               <ProductCard
