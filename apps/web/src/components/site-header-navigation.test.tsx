@@ -1046,13 +1046,13 @@ describe('SiteHeader on login and signup pages', () => {
     const { rerender } = render(<SiteHeader />, { wrapper: createWrapper() });
     const [desktopLogo, mobileLogo] = screen.getAllByAltText('안전맛집');
 
-    expect(desktopLogo).toHaveClass('h-64', 'w-192');
-    expect(mobileLogo).toHaveClass('h-43', 'w-128');
+    expect(desktopLogo).toHaveClass('h-69', 'w-208');
+    expect(mobileLogo).toHaveClass('h-46', 'w-138');
 
     navigationMocks.pathname = '/checkout/shipping';
     rerender(<SiteHeader />);
 
-    expect(screen.getByAltText('안전맛집')).toHaveClass('h-46', 'w-138');
+    expect(screen.getByAltText('안전맛집')).toHaveClass('h-50', 'w-150');
   });
 });
 
