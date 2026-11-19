@@ -370,7 +370,7 @@ export function SiteHeader() {
               alt="안전맛집"
               width={2000}
               height={667}
-              className="h-40 w-120 object-contain object-left"
+              className="h-50 w-150 object-contain object-left"
             />
           </Link>
           <ol
@@ -437,8 +437,8 @@ export function SiteHeader() {
             isScrolled ? 'h-64' : 'h-72',
           )}
         >
-          {/* 전체 메뉴 버튼은 로고 왼쪽에 둡니다. 블록 폭은 버튼 44 + 간격 8 + 로고 166 + 여백 24를 담아 모든 데스크톱 폭에서 같습니다. */}
-          <div className="flex w-242 shrink-0 items-center gap-8">
+          {/* 전체 메뉴 버튼은 로고 왼쪽에 둡니다. 블록 폭은 버튼 44 + 간격 8 + 로고 208 + 여백 24를 담아 모든 데스크톱 폭에서 같습니다. */}
+          <div className="flex w-284 shrink-0 items-center gap-8">
             <button
               ref={desktopMenuButtonRef}
               type="button"
@@ -456,7 +456,7 @@ export function SiteHeader() {
                 alt="안전맛집"
                 width={2000}
                 height={667}
-                className="h-55 w-166 object-contain object-left"
+                className="h-69 w-208 object-contain object-left"
               />
             </Link>
           </div>
@@ -511,7 +511,7 @@ export function SiteHeader() {
                     alt="안전맛집"
                     width={2000}
                     height={667}
-                    className="h-37 w-110 object-contain object-left"
+                    className="h-46 w-138 object-contain object-left"
                   />
                 </Link>
               </div>
