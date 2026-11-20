@@ -2,13 +2,13 @@ import type { Brand } from '../types';
 
 /**
  * 목 브랜드 원본. productCount는 응답할 때 목 상품에서 계산하므로 여기에는 두지 않습니다.
- * isVisible·isFeatured는 관리자 설정을 흉내 낸 값이며 구매자 응답에는 넣지 않습니다.
+ * isVisible은 관리자 설정을 흉내 낸 값이며 구매자 응답에는 넣지 않습니다.
  */
 export interface MockBrandRecord extends Omit<Brand, 'productCount'> {
   /** false이면 구매자 목록에서 빠지고 상세는 NOT_FOUND입니다. */
   isVisible: boolean;
-  /** W-32 "이달의 브랜드" 지정 여부 */
-  isFeatured: boolean;
+  /** 구매자 브랜드 디렉터리와 Admin 목록의 순서를 정합니다. */
+  sortOrder?: number;
 }
 
 /**
@@ -59,7 +59,6 @@ export const mockBrands: MockBrandRecord[] = [
         '내관 조절, 통풍, 절연처럼 현장에서 요구하는 조건별로 제품을 나누고, 모든 안전모를 안전인증 기준에 맞춰 출고합니다.',
     },
     isVisible: true,
-    isFeatured: true,
   },
   {
     id: 'brd-workfit',
@@ -76,7 +75,6 @@ export const mockBrands: MockBrandRecord[] = [
       body: '워크핏은 장시간 서서 일하는 작업자의 발과 몸을 기준으로 안전화와 작업복을 설계합니다.',
     },
     isVisible: true,
-    isFeatured: false,
   },
   {
     id: 'brd-hisafe',
@@ -90,7 +88,6 @@ export const mockBrands: MockBrandRecord[] = [
     certification: null,
     story: null,
     isVisible: true,
-    isFeatured: false,
   },
   {
     id: 'brd-gripone',
@@ -104,7 +101,6 @@ export const mockBrands: MockBrandRecord[] = [
     certification: '자율안전확인',
     story: null,
     isVisible: true,
-    isFeatured: false,
   },
   {
     id: 'brd-firekeep',
@@ -118,7 +114,6 @@ export const mockBrands: MockBrandRecord[] = [
     certification: null,
     story: null,
     isVisible: true,
-    isFeatured: false,
   },
   {
     id: 'brd-signlab',
@@ -132,7 +127,6 @@ export const mockBrands: MockBrandRecord[] = [
     certification: null,
     story: null,
     isVisible: true,
-    isFeatured: false,
   },
   {
     id: 'brd-clearview',
@@ -146,7 +140,6 @@ export const mockBrands: MockBrandRecord[] = [
     certification: '자율안전확인',
     story: null,
     isVisible: true,
-    isFeatured: false,
   },
   {
     id: 'brd-airguard',
@@ -160,7 +153,6 @@ export const mockBrands: MockBrandRecord[] = [
     certification: 'KCs 안전인증',
     story: null,
     isVisible: true,
-    isFeatured: false,
   },
   {
     id: 'brd-silent',
@@ -174,7 +166,6 @@ export const mockBrands: MockBrandRecord[] = [
     certification: '자율안전확인',
     story: null,
     isVisible: true,
-    isFeatured: false,
   },
   {
     id: 'brd-duraguard',
@@ -188,7 +179,6 @@ export const mockBrands: MockBrandRecord[] = [
     certification: null,
     story: null,
     isVisible: true,
-    isFeatured: false,
   },
   {
     id: 'brd-hidden-preview',
@@ -202,6 +192,5 @@ export const mockBrands: MockBrandRecord[] = [
     certification: null,
     story: null,
     isVisible: false,
-    isFeatured: false,
   },
 ];

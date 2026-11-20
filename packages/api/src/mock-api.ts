@@ -66,6 +66,7 @@ import type {
   CompanyInfo,
   Brand,
   BrandSummary,
+  BrandImageSettings,
   Category,
   CheckoutOptions,
   CreateOrderInput,
@@ -85,6 +86,27 @@ import type {
   ShopEvent,
 } from './types';
 import { canBuyNow } from './price';
+
+const DEFAULT_BRAND_LOGO_SETTINGS: BrandImageSettings = { fit: 'contain', width: 240, height: 96 };
+const DEFAULT_BRAND_COVER_SETTINGS: BrandImageSettings = { fit: 'cover', width: 1200, height: 704 };
+const DEFAULT_BRAND_ACCENT_COLOR = '#2F6F62';
+const BRAND_ACCENT_COLOR_PATTERN = /^#[0-9A-F]{6}$/i;
+
+function isValidBrandImageSettings(
+  settings: BrandImageSettings,
+  maxWidth: number,
+  maxHeight: number,
+): boolean {
+  return (
+    (settings.fit === 'contain' || settings.fit === 'cover') &&
+    Number.isInteger(settings.width) &&
+    settings.width >= 24 &&
+    settings.width <= maxWidth &&
+    Number.isInteger(settings.height) &&
+    settings.height >= 24 &&
+    settings.height <= maxHeight
+  );
+}
 
 const DEFAULT_PAGE_SIZE = 20;
 /** 관련·추천 상품 기본 개수 */
@@ -274,8 +296,14 @@ function countBrandProducts(products: readonly AdminProduct[], brandName: string
 
 /** 관리자 설정 필드를 제외하고 상품 수를 붙여 구매자 상세 응답으로 바꿉니다. */
 function toBuyerBrand(brandRecord: MockBrandRecord, products: readonly AdminProduct[]): Brand {
-  const { isVisible: _isVisible, isFeatured: _isFeatured, ...brandFields } = brandRecord;
-  return { ...brandFields, productCount: countBrandProducts(products, brandRecord.name) };
+  const { isVisible: _isVisible, sortOrder: _sortOrder, ...brandFields } = brandRecord;
+  return {
+    ...brandFields,
+    logoSettings: brandRecord.logoSettings ?? DEFAULT_BRAND_LOGO_SETTINGS,
+    accentColor: brandRecord.accentColor ?? DEFAULT_BRAND_ACCENT_COLOR,
+    coverSettings: brandRecord.coverSettings ?? DEFAULT_BRAND_COVER_SETTINGS,
+    productCount: countBrandProducts(products, brandRecord.name),
+  };
 }
 
 /** 구매자 목록 항목으로 줄입니다. */
@@ -288,6 +316,8 @@ function toBrandSummary(
     name: brandRecord.name,
     englishName: brandRecord.englishName,
     logoUrl: brandRecord.logoUrl,
+    logoSettings: brandRecord.logoSettings ?? DEFAULT_BRAND_LOGO_SETTINGS,
+    accentColor: brandRecord.accentColor ?? DEFAULT_BRAND_ACCENT_COLOR,
     tagline: brandRecord.tagline,
     productCount: countBrandProducts(products, brandRecord.name),
   };
@@ -984,7 +1014,9 @@ export function createMockApi(
     brands: {
       list: (options) =>
         respondList(
-          getVisibleBrands(brands).map((brand) => toBrandSummary(brand, products)),
+          getVisibleBrands(brands)
+            .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0))
+            .map((brand) => toBrandSummary(brand, products)),
           options,
         ),
       async getById(brandId, options): Promise<Brand> {
@@ -995,21 +1027,13 @@ export function createMockApi(
         );
         return toBuyerBrand(brandRecord, products);
       },
-      async getFeatured(options): Promise<Brand | null> {
-        await wait(config.mockLatencyMs, options?.signal);
-        if (config.mockScenario === 'error') {
-          throw new ApiError('NETWORK', '목 API 오류 시나리오입니다.');
-        }
-        if (config.mockScenario === 'empty') return null;
-        const featuredBrand = getVisibleBrands(brands).find(
-          (visibleBrand) => visibleBrand.isFeatured,
-        );
-        return featuredBrand ? structuredClone(toBuyerBrand(featuredBrand, products)) : null;
-      },
       adminList: (options) =>
         respondList(
           brands.map((brand) => ({
             ...brand,
+            logoSettings: brand.logoSettings ?? DEFAULT_BRAND_LOGO_SETTINGS,
+            accentColor: brand.accentColor ?? DEFAULT_BRAND_ACCENT_COLOR,
+            coverSettings: brand.coverSettings ?? DEFAULT_BRAND_COVER_SETTINGS,
             productCount: countBrandProducts(products, brand.name),
           })),
           options,
@@ -1017,6 +1041,18 @@ export function createMockApi(
       async saveAdmin(input: AdminBrandInput, options) {
         await prepareMutation(options, '브랜드');
         if (!input.name.trim()) throw new ApiError('VALIDATION', '브랜드명을 입력해 주세요.');
+        const logoSettings = input.logoSettings ?? DEFAULT_BRAND_LOGO_SETTINGS;
+        const coverSettings = input.coverSettings ?? DEFAULT_BRAND_COVER_SETTINGS;
+        const accentColor = input.accentColor ?? DEFAULT_BRAND_ACCENT_COLOR;
+        if (!BRAND_ACCENT_COLOR_PATTERN.test(accentColor)) {
+          throw new ApiError('VALIDATION', '브랜드 대표 색상은 #RRGGBB 형식으로 입력해 주세요.');
+        }
+        if (
+          !isValidBrandImageSettings(logoSettings, 320, 160) ||
+          !isValidBrandImageSettings(coverSettings, 1600, 960)
+        ) {
+          throw new ApiError('VALIDATION', '브랜드 이미지 표시 크기가 허용 범위를 벗어났습니다.');
+        }
         if (
           brands.some(
             (brand) =>
@@ -1035,20 +1071,15 @@ export function createMockApi(
         ) {
           throw new ApiError('VALIDATION', '상품에 연결된 브랜드명은 변경할 수 없습니다.');
         }
-        if (input.isFeatured && !input.isVisible) {
-          throw new ApiError('VALIDATION', '대표 브랜드는 웹에 노출되어야 합니다.');
-        }
         const existingIndex = brands.findIndex((brand) => brand.id === input.id);
         const nextBrand: MockBrandRecord = {
           ...structuredClone(input),
           id: input.id ?? `brd-admin-${String(brandSequence++).padStart(4, '0')}`,
           isVisible: input.isVisible ?? true,
-          isFeatured: input.isFeatured ?? false,
+          logoSettings,
+          coverSettings,
+          accentColor,
         };
-        if (nextBrand.isFeatured)
-          brands.forEach((brand) => {
-            brand.isFeatured = false;
-          });
         if (existingIndex < 0) brands.unshift(nextBrand);
         else brands[existingIndex] = nextBrand;
         return structuredClone({
@@ -1060,9 +1091,6 @@ export function createMockApi(
         await prepareMutation(options, '브랜드');
         const brand = brands.find((record) => record.id === brandId);
         if (!brand) throw new ApiError('NOT_FOUND', '브랜드를 찾을 수 없습니다.');
-        if (brand.isFeatured) {
-          throw new ApiError('VALIDATION', '대표 브랜드 지정을 해제한 뒤 삭제해 주세요.');
-        }
         if (products.some((product) => product.brand === brand.name)) {
           throw new ApiError('VALIDATION', '상품에 연결된 브랜드는 삭제할 수 없습니다.');
         }

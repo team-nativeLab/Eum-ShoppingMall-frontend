@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { BrandImageSettings } from './types';
 import { ApiConfigError } from './errors';
 import { createMockApi } from './mock-api';
 import { calculateCartTotals, createCartOptionId, groupCartItems } from './cart';
@@ -1057,6 +1058,7 @@ describe('목 브랜드 API', () => {
     expect(brandList.length).toBe(mockBrands.length - hiddenBrandIds.length);
     expect(brandList.some((brandSummary) => hiddenBrandIds.includes(brandSummary.id))).toBe(false);
     expect(brandList[0]).not.toHaveProperty('isVisible');
+    expect(brandList[0]).not.toHaveProperty('sortOrder');
     for (const brandSummary of brandList) {
       const brandProductPage = await mockApi.products.list({ brand: [brandSummary.name] });
       expect(brandSummary.productCount, brandSummary.name).toBe(brandProductPage.totalCount);
@@ -1081,7 +1083,8 @@ describe('목 브랜드 API', () => {
 
     const workfitBrand = await mockApi.brands.getById('brd-workfit');
     expect(workfitBrand).toMatchObject({ id: 'brd-workfit', name: '워크핏' });
-    expect(workfitBrand).not.toHaveProperty('isFeatured');
+    expect(workfitBrand.logoSettings).toEqual({ fit: 'contain', width: 240, height: 96 });
+    expect(workfitBrand.coverSettings).toEqual({ fit: 'cover', width: 1200, height: 704 });
 
     const hiddenBrand = mockBrands.find((brandRecord) => !brandRecord.isVisible);
     if (!hiddenBrand) throw new Error('비노출 목 브랜드가 필요합니다.');
@@ -1093,32 +1096,23 @@ describe('목 브랜드 API', () => {
     });
   });
 
-  it('이달의 브랜드는 지정된 노출 브랜드를 돌려주고, empty 시나리오는 null입니다', async () => {
-    const featuredBrand = await createMockApi(testConfig).brands.getFeatured();
-    const featuredRecord = mockBrands.find(
-      (brandRecord) => brandRecord.isVisible && brandRecord.isFeatured,
-    );
-    expect(featuredBrand?.id).toBe(featuredRecord?.id);
-    expect(featuredBrand?.productCount).toBeGreaterThan(0);
-
+  it('빈 시나리오에서는 노출 브랜드가 없고 상세는 NOT_FOUND입니다', async () => {
     const emptyApi = createMockApi({ ...testConfig, mockScenario: 'empty' });
-    await expect(emptyApi.brands.getFeatured()).resolves.toBeNull();
     await expect(emptyApi.brands.list()).resolves.toEqual([]);
     await expect(emptyApi.brands.getById('brd-workfit')).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
   });
 
-  it('error 시나리오에서는 목록·상세·이달의 브랜드 모두 NETWORK 오류입니다', async () => {
+  it('error 시나리오에서는 브랜드 목록·상세가 NETWORK 오류입니다', async () => {
     const errorApi = createMockApi({ ...testConfig, mockScenario: 'error' });
     await expect(errorApi.brands.list()).rejects.toMatchObject({ code: 'NETWORK' });
     await expect(errorApi.brands.getById('brd-workfit')).rejects.toMatchObject({
       code: 'NETWORK',
     });
-    await expect(errorApi.brands.getFeatured()).rejects.toMatchObject({ code: 'NETWORK' });
   });
 
-  it('AbortSignal 취소를 목록·상세·이달의 브랜드 조회까지 전달합니다', async () => {
+  it('AbortSignal 취소를 브랜드 목록 조회까지 전달합니다', async () => {
     const abortController = new AbortController();
     const mockApi = createMockApi({ ...testConfig, mockLatencyMs: 1000 });
     const pendingBrands = mockApi.brands.list({ signal: abortController.signal });
@@ -1137,8 +1131,11 @@ describe('목 브랜드 API', () => {
     expect(secondBrand.story?.title).not.toBe('변경됨');
   });
 
-  it('관리자 브랜드를 생성·수정하고 대표 노출 및 상품 연결 삭제 제약을 지킵니다', async () => {
+  it('관리자 브랜드의 이미지 설정을 저장하고 상품 연결 삭제 제약을 지킵니다', async () => {
     const mockApi = createMockApi(testConfig);
+    expect(
+      (await mockApi.brands.list()).find((brand) => brand.id === 'brd-safeguard')?.accentColor,
+    ).toBe('#2F6F62');
     const original = await mockApi.brands.getById('brd-safeguard');
     const { productCount: _productCount, ...originalFields } = original;
     const created = await mockApi.brands.saveAdmin({
@@ -1146,22 +1143,41 @@ describe('목 브랜드 API', () => {
       id: undefined,
       name: '새 안전 브랜드',
       isVisible: true,
-      isFeatured: false,
       sortOrder: 20,
+      logoSettings: { fit: 'cover', width: 180, height: 72 },
+      coverSettings: { fit: 'contain', width: 640, height: 360 },
+      accentColor: '#466B9A',
     });
     expect(created.id).toMatch(/^brd-admin-/);
     expect((await mockApi.brands.adminList()).some((brand) => brand.id === created.id)).toBe(true);
+    expect(await mockApi.brands.getById(created.id)).toMatchObject({
+      logoSettings: created.logoSettings,
+      coverSettings: created.coverSettings,
+      accentColor: '#466B9A',
+    });
+    const createdBuyerBrand = await mockApi.brands.getById(created.id);
+    expect(createdBuyerBrand).not.toHaveProperty('isVisible');
+    expect(createdBuyerBrand).not.toHaveProperty('sortOrder');
+    const buyerBrands = await mockApi.brands.list();
+    const createdBuyerSummary = buyerBrands.find((brand) => brand.id === created.id);
+    expect(createdBuyerSummary?.logoSettings).toEqual(created.logoSettings);
+    expect(createdBuyerSummary?.accentColor).toBe('#466B9A');
+    expect(createdBuyerSummary).not.toHaveProperty('isVisible');
+    expect(createdBuyerSummary).not.toHaveProperty('sortOrder');
+    expect(buyerBrands[buyerBrands.length - 1]?.id).toBe(created.id);
+    const invalidLogoSettings: BrandImageSettings[] = [
+      { fit: 'contain', width: 24.5, height: 96 },
+      { fit: 'contain', width: 321, height: 96 },
+      { fit: 'fill' as unknown as BrandImageSettings['fit'], width: 240, height: 96 },
+    ];
+    for (const logoSettings of invalidLogoSettings) {
+      await expect(mockApi.brands.saveAdmin({ ...created, logoSettings })).rejects.toMatchObject({
+        code: 'VALIDATION',
+      });
+    }
     await expect(
-      mockApi.brands.saveAdmin({ ...created, isVisible: false, isFeatured: true }),
-    ).rejects.toMatchObject({
-      code: 'VALIDATION',
-    });
-
-    await mockApi.brands.saveAdmin({ ...created, isFeatured: true });
-    await expect(mockApi.brands.deleteAdmin(created.id)).rejects.toMatchObject({
-      code: 'VALIDATION',
-    });
-    await mockApi.brands.saveAdmin({ ...created, isFeatured: false });
+      mockApi.brands.saveAdmin({ ...created, accentColor: 'red' }),
+    ).rejects.toMatchObject({ code: 'VALIDATION' });
     await mockApi.brands.deleteAdmin(created.id);
     await expect(mockApi.brands.adminList()).resolves.not.toContainEqual(
       expect.objectContaining({ id: created.id }),

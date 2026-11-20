@@ -42,7 +42,6 @@ export function createRealApi(_config: ApiConfig): ShopApi {
     brands: {
       list: notImplemented('brands.list'),
       getById: notImplemented('brands.getById'),
-      getFeatured: notImplemented('brands.getFeatured'),
       adminList: notImplemented('brands.adminList'),
       saveAdmin: notImplemented('brands.saveAdmin'),
       deleteAdmin: notImplemented('brands.deleteAdmin'),

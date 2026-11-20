@@ -172,11 +172,9 @@ export interface ShopApi {
   };
   /** 구매자에게 노출하는 브랜드. 비노출 브랜드는 목록에서 빠지고 상세는 NOT_FOUND입니다. */
   brands: {
-    /** W-32 디렉터리용 전체 목록(정렬은 화면이 색인 규칙으로 합니다) */
+    /** W-32 디렉터리용 전체 노출 브랜드 목록 */
     list(options?: RequestOptions): Promise<BrandSummary[]>;
     getById(brandId: string, options?: RequestOptions): Promise<Brand>;
-    /** W-32 "이달의 브랜드". 지정한 브랜드가 없으면 null */
-    getFeatured(options?: RequestOptions): Promise<Brand | null>;
     adminList(options?: RequestOptions): Promise<AdminBrand[]>;
     saveAdmin(input: AdminBrandInput, options?: RequestOptions): Promise<AdminBrand>;
     deleteAdmin(brandId: string, options?: RequestOptions): Promise<void>;

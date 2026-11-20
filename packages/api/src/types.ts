@@ -26,6 +26,12 @@ export interface Category {
 }
 
 /** 브랜드 목록 항목(W-32 디렉터리·전체 메뉴). 구매자에게 노출하는 브랜드만 내려옵니다. */
+export interface BrandImageSettings {
+  fit: 'contain' | 'cover';
+  width: number;
+  height: number;
+}
+
 export interface BrandSummary {
   id: string;
   name: string;
@@ -33,6 +39,10 @@ export interface BrandSummary {
   englishName: string | null;
   /** 로고 이미지 URL. 아직 없으면 null(플레이스홀더 표시) */
   logoUrl: string | null;
+  /** 로고 표시 방식과 영역 크기. 누락된 기존 데이터는 화면 기본값을 씁니다. */
+  logoSettings?: BrandImageSettings;
+  /** 브랜드 선택 패널과 CTA에 사용할 대표 색상. 이전 레코드는 기본 색상을 사용합니다. */
+  accentColor?: string;
   /** 한 줄 소개(관리자 입력 텍스트). 없으면 null */
   tagline: string | null;
   /** 구매자에게 노출되는 이 브랜드 상품 수 */
@@ -43,6 +53,8 @@ export interface BrandSummary {
 export interface Brand extends BrandSummary {
   /** 히어로 사진 URL. 없으면 null(로고 패널로 대체) */
   coverImageUrl: string | null;
+  /** 커버 표시 방식과 영역 크기. 누락된 기존 데이터는 화면 기본값을 씁니다. */
+  coverSettings?: BrandImageSettings;
   /** 주력 분야. 없으면 null */
   mainField: string | null;
   /** 원산지. 없으면 null */
@@ -56,7 +68,6 @@ export interface Brand extends BrandSummary {
 /** 관리자에서 편집하는 브랜드 운영 상태 */
 export interface AdminBrand extends Brand {
   isVisible: boolean;
-  isFeatured: boolean;
   sortOrder?: number;
 }
 

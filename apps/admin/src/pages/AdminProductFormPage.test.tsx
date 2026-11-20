@@ -42,7 +42,6 @@ const brandFixture: AdminBrand = {
   certification: null,
   story: null,
   isVisible: true,
-  isFeatured: false,
 };
 
 const supplierFixture: AdminSupplier = {
