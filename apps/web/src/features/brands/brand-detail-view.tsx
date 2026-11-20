@@ -362,6 +362,7 @@ function OtherBrandsSection({ currentBrandId }: { currentBrandId: string }) {
                     logoUrl={otherBrand.logoUrl}
                     brandName={otherBrand.name}
                     className="size-40 lg:size-48"
+                    settings={otherBrand.logoSettings}
                   />
                 </span>
                 <span className="min-w-0 flex-1">
@@ -399,7 +400,7 @@ function BrandHero({
     <section aria-labelledby="brand-name-heading" className="bg-text-1 text-inverse">
       {brand.coverImageUrl ? (
         <div className="h-220 lg:hidden">
-          <BrandCover coverImageUrl={brand.coverImageUrl} />
+          <BrandCover coverImageUrl={brand.coverImageUrl} settings={brand.coverSettings} />
         </div>
       ) : null}
       <PageContainer className="flex flex-col gap-20 pt-24 pb-32 lg:h-480 lg:flex-row lg:items-center lg:gap-24 lg:py-64">
@@ -409,6 +410,7 @@ function BrandHero({
               logoUrl={brand.logoUrl}
               brandName={brand.name}
               className="h-32 w-88 lg:h-40 lg:w-120"
+              settings={brand.logoSettings}
             />
           </div>
           <div className="flex min-w-0 flex-col gap-4 lg:gap-8">
@@ -431,9 +433,13 @@ function BrandHero({
         </div>
         <div className="hidden h-352 min-w-0 flex-1 overflow-hidden rounded-12 lg:block">
           {brand.coverImageUrl ? (
-            <BrandCover coverImageUrl={brand.coverImageUrl} />
+            <BrandCover coverImageUrl={brand.coverImageUrl} settings={brand.coverSettings} />
           ) : (
-            <BrandLogoPanel logoUrl={brand.logoUrl} brandName={brand.name} />
+            <BrandLogoPanel
+              logoUrl={brand.logoUrl}
+              brandName={brand.name}
+              settings={brand.logoSettings}
+            />
           )}
         </div>
       </PageContainer>

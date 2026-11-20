@@ -1,6 +1,10 @@
 import { Icon } from '@eum/ui/components/Icon';
 import { cx } from '@eum/ui/lib/cx';
 import { ImageIcon } from 'lucide-react';
+import type { BrandImageSettings } from '@eum/api/types';
+
+const DEFAULT_LOGO_SETTINGS: BrandImageSettings = { fit: 'contain', width: 240, height: 96 };
+const DEFAULT_COVER_SETTINGS: BrandImageSettings = { fit: 'cover', width: 1200, height: 704 };
 
 /**
  * 브랜드 로고 슬롯(Figma HF/BrandLogo). 서버 로고는 영역 안에 contain으로 맞추고,
@@ -10,12 +14,15 @@ export function BrandLogo({
   logoUrl,
   brandName,
   className,
+  settings,
 }: {
   logoUrl: string | null;
   brandName: string;
   className?: string;
+  settings?: BrandImageSettings;
 }) {
   const logoLabel = `${brandName} 로고`;
+  const activeSettings = settings ?? DEFAULT_LOGO_SETTINGS;
   return logoUrl ? (
     // 로고 URL은 외부 호스트일 수 있어 Next Image 최적화를 거치지 않습니다(ProductImage와 같은 방식).
     // eslint-disable-next-line @next/next/no-img-element
@@ -23,7 +30,12 @@ export function BrandLogo({
       src={logoUrl}
       alt={logoLabel}
       loading="lazy"
-      className={cx('shrink-0 object-contain', className)}
+      className={cx('shrink-0', className)}
+      style={{
+        maxWidth: `${activeSettings.width}px`,
+        maxHeight: `${activeSettings.height}px`,
+        objectFit: activeSettings.fit,
+      }}
     />
   ) : (
     <span
@@ -47,10 +59,13 @@ export function BrandLogo({
 export function BrandCover({
   coverImageUrl,
   className,
+  settings,
 }: {
   coverImageUrl: string;
   className?: string;
+  settings?: BrandImageSettings;
 }) {
+  const activeSettings = settings ?? DEFAULT_COVER_SETTINGS;
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
@@ -60,6 +75,11 @@ export function BrandCover({
       fetchPriority="high"
       decoding="async"
       className={cx('size-full object-cover', className)}
+      style={{
+        maxWidth: `${activeSettings.width}px`,
+        maxHeight: `${activeSettings.height}px`,
+        objectFit: activeSettings.fit,
+      }}
     />
   );
 }
@@ -68,14 +88,21 @@ export function BrandCover({
 export function BrandLogoPanel({
   logoUrl,
   brandName,
+  settings,
 }: {
   logoUrl: string | null;
   brandName: string;
+  settings?: BrandImageSettings;
 }) {
   return (
     <div aria-hidden="true" className="flex size-full items-center justify-center bg-pressed-dark">
       <div className="flex h-96 w-240 items-center justify-center rounded-8 bg-inverse">
-        <BrandLogo logoUrl={logoUrl} brandName={brandName} className="h-64 w-180" />
+        <BrandLogo
+          logoUrl={logoUrl}
+          brandName={brandName}
+          className="h-64 w-180"
+          settings={settings}
+        />
       </div>
     </div>
   );

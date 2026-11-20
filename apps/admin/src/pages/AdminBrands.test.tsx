@@ -23,7 +23,6 @@ const fixtureBrand: AdminBrand = {
   certification: 'KC',
   story: { title: '안전을 만드는 기술', body: '브랜드 이야기입니다.' },
   isVisible: true,
-  isFeatured: false,
   sortOrder: 10,
 };
 
@@ -76,19 +75,12 @@ describe('ShopApi 기반 브랜드 관리', () => {
     expect(screen.getByText('검색 결과가 없습니다')).toBeInTheDocument();
   });
 
-  it('대표로 지정한 노출 브랜드를 이달의 브랜드 영역에 표시한다', async () => {
-    brands = [{ ...structuredClone(fixtureBrand), isFeatured: true }];
+  it('대표 브랜드 강조와 지정 컨트롤을 표시하지 않는다', async () => {
     renderBrandApp();
-
-    expect(await screen.findByRole('heading', { name: '이달의 브랜드' })).toBeInTheDocument();
-    expect(
-      await within(screen.getByRole('region', { name: '이달의 브랜드' })).findByText('한결안전'),
-    ).toBeInTheDocument();
-    expect(
-      within(screen.getByRole('region', { name: '이달의 브랜드' })).getByRole('link', {
-        name: '수정',
-      }),
-    ).toHaveAttribute('href', '/brands/brand-one');
+    expect(await screen.findByRole('row', { name: /한결안전/ })).toBeInTheDocument();
+    expect(screen.queryByText('이달의 브랜드')).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: '대표' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: /대표 브랜드/ })).not.toBeInTheDocument();
   });
 
   it('노출 상태 변경을 ShopApi에 저장한다', async () => {
@@ -106,6 +98,14 @@ describe('ShopApi 기반 브랜드 관리', () => {
     renderBrandApp('/brands/new');
     await user.type(await screen.findByRole('textbox', { name: /브랜드명/ }), '새 브랜드');
     await user.type(screen.getByRole('textbox', { name: /한 줄 소개/ }), '새 브랜드 소개');
+    await user.clear(screen.getByRole('textbox', { name: '대표 색상 HEX' }));
+    await user.type(screen.getByRole('textbox', { name: '대표 색상 HEX' }), '#466B9A');
+    await user.selectOptions(screen.getByRole('combobox', { name: '로고 맞춤 방식' }), 'cover');
+    await user.selectOptions(screen.getByRole('combobox', { name: '커버 맞춤 방식' }), 'contain');
+    await user.clear(screen.getByRole('spinbutton', { name: '로고 표시 너비' }));
+    await user.type(screen.getByRole('spinbutton', { name: '로고 표시 너비' }), '180');
+    await user.clear(screen.getByRole('spinbutton', { name: '커버 표시 너비' }));
+    await user.type(screen.getByRole('spinbutton', { name: '커버 표시 너비' }), '640');
     const file = new File(['logo'], 'logo.png', { type: 'image/png' });
     fireEvent.change(screen.getByLabelText(/로고 파일 선택/), { target: { files: [file] } });
     expect(await screen.findByRole('img', { name: '브랜드 로고 미리보기' })).toBeInTheDocument();
@@ -115,7 +115,10 @@ describe('ShopApi 기반 브랜드 관리', () => {
         expect.objectContaining({
           name: '새 브랜드',
           tagline: '새 브랜드 소개',
+          accentColor: '#466B9A',
           logoUrl: expect.stringMatching(/^data:image\/png;base64,/),
+          logoSettings: expect.objectContaining({ fit: 'cover', width: 180 }),
+          coverSettings: expect.objectContaining({ fit: 'contain', width: 640 }),
         }),
       ),
     );

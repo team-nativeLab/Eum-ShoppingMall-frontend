@@ -8,9 +8,9 @@
  *     14 — TextField·SelectField 안쪽 좌우 여백, 선택 아이콘 위치(right-14), Chip 좌우 여백, NoticeInline 좌우 여백
  *     10 — RemovableChip 오른쪽 여백, Toast 아이콘 간격, NoticeInline(전체 폭) 위아래 여백
  *   너비·높이·크기(w/h/size)는 컴포넌트 치수라 간격 규칙 대상이 아닙니다(예: 버튼 h-56, EmptyState 설명 폭 280).
- * - 반경: 4·6·8·12·capsule(999)
+ * - 반경: 4·6·8·12·24·capsule(999)
  *   capsule: 검색바·히어로 CTA·칩 / 8: 버튼·입력·스테퍼·상품카드 / 6: 카드 이미지
- *   12: 섹션 박스·패널·배너·아이콘 타일·토스트 / 4: 체크박스·상태 배지
+ *   24: 브랜드 선택 팝업 / 12: 섹션 박스·패널·배너·아이콘 타일·토스트 / 4: 체크박스·상태 배지
  * - 텍스트: HF 20개 + HF/Web 4개(확인된 것). 디자인 파일 폰트는 Noto Sans KR이지만 코드는 Pretendard입니다.
  *   letterSpacing은 % 단위라서 em으로 옮겼습니다(-0.5% → -0.005em).
  * - 그림자: sh-1~3
@@ -29,6 +29,7 @@
   --color-line-strong: #d4d4d4;
   --color-line-control: #949494;
   --color-text-1: #111111;
+  --color-text-accent-black: #000000;
   --color-text-2: #555555;
   --color-text-3: #707070;
   --color-text-disabled: #b3b3b3;
@@ -57,6 +58,7 @@
   --radius-6: 6px;
   --radius-8: 8px;
   --radius-12: 12px;
+  --radius-24: 24px;
   --radius-capsule: 999px;
 
   --shadow-*: initial;

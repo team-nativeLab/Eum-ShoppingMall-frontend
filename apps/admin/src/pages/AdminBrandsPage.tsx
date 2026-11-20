@@ -28,13 +28,7 @@ export function AdminBrandsPage() {
       )
       .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0));
   }, [brands, keyword]);
-  const featuredBrand = brands.find((brand) => brand.isFeatured && brand.isVisible);
-
   const saveBrand = async (brand: AdminBrand, changes: Partial<AdminBrand>) => {
-    if (changes.isVisible === false && brand.isFeatured) {
-      setMessage('대표 브랜드 지정을 해제한 뒤 숨길 수 있습니다.');
-      return;
-    }
     setMessage('');
     try {
       await (await getShopApi()).brands.saveAdmin({ ...brand, ...changes });
@@ -59,7 +53,6 @@ export function AdminBrandsPage() {
       <AdminPageHeader
         title="브랜드 관리"
         description={`브랜드 ${brands.length}개 · 노출 ${brands.filter((brand) => brand.isVisible).length}개`}
-        descriptionPlacement="inline"
         action={
           <Link to="/brands/new" className={buttonClassName()}>
             브랜드 등록
@@ -70,50 +63,6 @@ export function AdminBrandsPage() {
         <p role="status" className="mb-12 text-body-s text-text-2">
           {message}
         </p>
-      ) : null}
-      {featuredBrand ? (
-        <section
-          aria-label="이달의 브랜드"
-          className="mb-16 flex min-h-96 items-center gap-16 rounded-12 border border-line bg-bg p-16"
-        >
-          <div className="w-240 shrink-0 border-r border-line pr-16">
-            <h2 className="text-label-m">이달의 브랜드</h2>
-            <p className="mt-4 text-caption text-text-3">쇼핑몰 메인에 노출 중인 브랜드입니다.</p>
-          </div>
-          <div className="flex min-w-0 flex-1 items-center gap-12">
-            {featuredBrand.coverImageUrl || featuredBrand.logoUrl ? (
-              <img
-                src={featuredBrand.coverImageUrl ?? featuredBrand.logoUrl ?? undefined}
-                alt=""
-                className="size-64 shrink-0 rounded-8 border border-line object-contain"
-              />
-            ) : (
-              <div
-                aria-hidden="true"
-                className="flex size-64 shrink-0 items-center justify-center rounded-8 bg-surface text-caption text-text-3"
-              >
-                로고 없음
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-label-m">{featuredBrand.name}</p>
-              {featuredBrand.tagline ? (
-                <p className="mt-4 truncate text-body-s text-text-2">{featuredBrand.tagline}</p>
-              ) : null}
-              {featuredBrand.mainField ? (
-                <p className="mt-4 text-caption text-text-3">{featuredBrand.mainField}</p>
-              ) : (
-                <p className="mt-4 text-caption text-text-3">노출 중</p>
-              )}
-            </div>
-            <Link
-              to={`/brands/${encodeURIComponent(featuredBrand.id)}`}
-              className={buttonClassName({ variant: 'secondary', size: 's' })}
-            >
-              수정
-            </Link>
-          </div>
-        </section>
       ) : null}
       <label className="mb-16 grid max-w-480 gap-6 text-label-s">
         브랜드 검색
@@ -153,9 +102,6 @@ export function AdminBrandsPage() {
                 </th>
                 <th scope="col" className="px-12 py-12">
                   노출
-                </th>
-                <th scope="col" className="px-12 py-12">
-                  대표
                 </th>
                 <th scope="col" className="px-12 py-12 text-right">
                   관리
@@ -210,15 +156,6 @@ export function AdminBrandsPage() {
                       onCheckedChange={(isVisible) => void saveBrand(brand, { isVisible })}
                       onText="노출"
                       offText="숨김"
-                    />
-                  </td>
-                  <td className="px-12 py-12">
-                    <Switch
-                      label={`${brand.name} 대표 브랜드`}
-                      isChecked={brand.isFeatured}
-                      onCheckedChange={(isFeatured) => void saveBrand(brand, { isFeatured })}
-                      onText="대표"
-                      offText="일반"
                     />
                   </td>
                   <td className="px-12 py-12 text-right">

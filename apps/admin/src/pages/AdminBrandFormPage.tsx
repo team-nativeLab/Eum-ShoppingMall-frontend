@@ -13,8 +13,25 @@ import {
 } from '@/components/AdminUI';
 import { getShopApi } from '@/lib/shop-api';
 import type { AdminBrandInput } from '@eum/api/shop-api';
+import type { BrandImageSettings } from '@eum/api/types';
 
 const brandQueryKey = ['admin', 'brands'];
+const DEFAULT_LOGO_SETTINGS: BrandImageSettings = { fit: 'contain', width: 240, height: 96 };
+const DEFAULT_COVER_SETTINGS: BrandImageSettings = { fit: 'cover', width: 1200, height: 704 };
+const DEFAULT_ACCENT_COLOR = '#2F6F62';
+const ACCENT_COLOR_PATTERN = /^#[0-9A-F]{6}$/i;
+
+function isValidImageSettings(settings: BrandImageSettings, maxWidth: number, maxHeight: number) {
+  return (
+    (settings.fit === 'contain' || settings.fit === 'cover') &&
+    Number.isInteger(settings.width) &&
+    settings.width >= 24 &&
+    settings.width <= maxWidth &&
+    Number.isInteger(settings.height) &&
+    settings.height >= 24 &&
+    settings.height <= maxHeight
+  );
+}
 
 function readImageFile(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -39,8 +56,10 @@ export function AdminBrandFormPage() {
     brandKey: string;
     logoUrl: string;
     coverImageUrl: string;
+    logoSettings: BrandImageSettings;
+    coverSettings: BrandImageSettings;
+    accentColor: string;
     isVisible: boolean;
-    isFeatured: boolean;
   } | null>(null);
   const brandsQuery = useQuery({
     queryKey: brandQueryKey,
@@ -56,16 +75,22 @@ export function AdminBrandFormPage() {
           brandKey,
           logoUrl: brand?.logoUrl ?? '',
           coverImageUrl: brand?.coverImageUrl ?? '',
+          logoSettings: brand?.logoSettings ?? DEFAULT_LOGO_SETTINGS,
+          coverSettings: brand?.coverSettings ?? DEFAULT_COVER_SETTINGS,
+          accentColor: brand?.accentColor ?? DEFAULT_ACCENT_COLOR,
           isVisible: brand?.isVisible ?? true,
-          isFeatured: brand?.isFeatured ?? false,
         };
-  const { logoUrl, coverImageUrl, isVisible, isFeatured } = activeMediaDraft;
+  const { logoUrl, coverImageUrl, logoSettings, coverSettings, accentColor, isVisible } =
+    activeMediaDraft;
   const updateMediaDraft = (changes: Partial<typeof activeMediaDraft>) =>
     setMediaDraft({ ...activeMediaDraft, ...changes });
   const setLogoUrl = (value: string) => updateMediaDraft({ logoUrl: value });
   const setCoverImageUrl = (value: string) => updateMediaDraft({ coverImageUrl: value });
+  const setLogoSettings = (settings: Partial<BrandImageSettings>) =>
+    updateMediaDraft({ logoSettings: { ...logoSettings, ...settings } });
+  const setCoverSettings = (settings: Partial<BrandImageSettings>) =>
+    updateMediaDraft({ coverSettings: { ...coverSettings, ...settings } });
   const setIsVisible = (value: boolean) => updateMediaDraft({ isVisible: value });
-  const setIsFeatured = (value: boolean) => updateMediaDraft({ isFeatured: value });
   if (brandsQuery.isPending) return <AdminLoading label="브랜드 정보를 불러오는 중입니다." />;
   if (brandsQuery.isError)
     return (
@@ -113,6 +138,17 @@ export function AdminBrandFormPage() {
       setMessage('브랜드 로고 URL을 입력하거나 이미지 파일을 선택해 주세요.');
       return;
     }
+    if (
+      !isValidImageSettings(logoSettings, 320, 160) ||
+      !isValidImageSettings(coverSettings, 1600, 960)
+    ) {
+      setMessage('이미지 표시 크기는 허용 범위 안의 정수로 입력해 주세요.');
+      return;
+    }
+    if (!ACCENT_COLOR_PATTERN.test(accentColor)) {
+      setMessage('브랜드 대표 색상은 #RRGGBB 형식으로 입력해 주세요.');
+      return;
+    }
     const input: AdminBrandInput = {
       ...(brand ?? {
         name,
@@ -126,20 +162,21 @@ export function AdminBrandFormPage() {
         certification: null,
         story: null,
         isVisible: true,
-        isFeatured: false,
       }),
       ...(brand ? { id: brand.id } : {}),
       name,
       englishName: value('englishName') || null,
       logoUrl,
+      logoSettings,
+      accentColor,
       tagline: tagline || null,
       coverImageUrl: coverImageUrl || null,
+      coverSettings,
       mainField: value('mainField') || null,
       originCountry: value('originCountry') || null,
       certification: value('certification') || null,
       story: storyTitle ? { title: storyTitle, body: storyBody } : null,
       isVisible,
-      isFeatured,
       sortOrder: Number(value('sortOrder')) || 0,
     };
     setIsSaving(true);
@@ -241,13 +278,55 @@ export function AdminBrandFormPage() {
                 />
               </label>
               <fieldset className="grid content-start gap-8 rounded-8 border border-line p-12">
+                <legend className="px-4 text-label-s">브랜드 대표 색상</legend>
+                <div className="flex items-center gap-12">
+                  <input
+                    aria-label="대표 색상 선택"
+                    type="color"
+                    value={
+                      ACCENT_COLOR_PATTERN.test(accentColor) ? accentColor : DEFAULT_ACCENT_COLOR
+                    }
+                    onChange={(event) => updateMediaDraft({ accentColor: event.target.value })}
+                    className="size-40 cursor-pointer rounded-8 border border-line-control bg-bg p-4"
+                  />
+                  <label className="grid flex-1 gap-4 text-label-s">
+                    HEX
+                    <input
+                      aria-label="대표 색상 HEX"
+                      value={accentColor}
+                      onChange={(event) => updateMediaDraft({ accentColor: event.target.value })}
+                      placeholder="#2F6F62"
+                      maxLength={7}
+                      className="h-40 rounded-8 border border-line-control bg-bg px-12 text-body-s"
+                    />
+                  </label>
+                </div>
+                <div
+                  aria-label="대표 색상 미리보기"
+                  className="h-32 rounded-8"
+                  style={{
+                    backgroundColor: ACCENT_COLOR_PATTERN.test(accentColor)
+                      ? accentColor
+                      : DEFAULT_ACCENT_COLOR,
+                  }}
+                />
+                <p className="text-body-xs text-text-3">
+                  웹 브랜드 선택 패널에 표시됩니다. 목 데이터에 저장됩니다.
+                </p>
+              </fieldset>
+              <fieldset className="grid content-start gap-8 rounded-8 border border-line p-12">
                 <legend className="px-4 text-label-s">브랜드 로고</legend>
-                <div className="flex min-h-120 items-center justify-center rounded-8 bg-surface p-12">
+                <div className="flex h-120 items-center justify-center overflow-hidden rounded-8 bg-surface p-12">
                   {logoUrl ? (
                     <img
                       src={logoUrl}
                       alt="브랜드 로고 미리보기"
-                      className="max-h-96 max-w-full object-contain"
+                      className="max-h-full max-w-full"
+                      style={{
+                        width: `${logoSettings.width}px`,
+                        height: `${logoSettings.height}px`,
+                        objectFit: logoSettings.fit,
+                      }}
                     />
                   ) : (
                     <span className="text-caption text-text-3">로고 미리보기</span>
@@ -278,15 +357,62 @@ export function AdminBrandFormPage() {
                     className="text-body-s"
                   />
                 </label>
+                <div className="grid grid-cols-3 gap-8">
+                  <label className="grid gap-4 text-caption text-text-2">
+                    맞춤 방식
+                    <select
+                      aria-label="로고 맞춤 방식"
+                      value={logoSettings.fit}
+                      onChange={(event) =>
+                        setLogoSettings({
+                          fit: event.target.value === 'cover' ? 'cover' : 'contain',
+                        })
+                      }
+                      className="h-40 rounded-8 border border-line-control bg-bg px-8 text-body-s"
+                    >
+                      <option value="contain">전체 표시</option>
+                      <option value="cover">영역 채우기</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-4 text-caption text-text-2">
+                    너비(px)
+                    <input
+                      aria-label="로고 표시 너비"
+                      type="number"
+                      min={24}
+                      max={320}
+                      value={logoSettings.width}
+                      onChange={(event) => setLogoSettings({ width: Number(event.target.value) })}
+                      className="h-40 rounded-8 border border-line-control bg-bg px-8 text-body-s"
+                    />
+                  </label>
+                  <label className="grid gap-4 text-caption text-text-2">
+                    높이(px)
+                    <input
+                      aria-label="로고 표시 높이"
+                      type="number"
+                      min={24}
+                      max={160}
+                      value={logoSettings.height}
+                      onChange={(event) => setLogoSettings({ height: Number(event.target.value) })}
+                      className="h-40 rounded-8 border border-line-control bg-bg px-8 text-body-s"
+                    />
+                  </label>
+                </div>
               </fieldset>
               <fieldset className="grid content-start gap-8 rounded-8 border border-line p-12">
                 <legend className="px-4 text-label-s">커버 이미지</legend>
-                <div className="flex min-h-120 items-center justify-center overflow-hidden rounded-8 bg-surface p-12">
+                <div className="flex h-120 items-center justify-center overflow-hidden rounded-8 bg-surface p-12">
                   {coverImageUrl ? (
                     <img
                       src={coverImageUrl}
                       alt="브랜드 커버 미리보기"
-                      className="max-h-96 max-w-full object-contain"
+                      className="max-h-full max-w-full"
+                      style={{
+                        width: `${coverSettings.width}px`,
+                        height: `${coverSettings.height}px`,
+                        objectFit: coverSettings.fit,
+                      }}
                     />
                   ) : (
                     <span className="text-caption text-text-3">커버 미리보기</span>
@@ -318,6 +444,48 @@ export function AdminBrandFormPage() {
                     className="text-body-s"
                   />
                 </label>
+                <div className="grid grid-cols-3 gap-8">
+                  <label className="grid gap-4 text-caption text-text-2">
+                    맞춤 방식
+                    <select
+                      aria-label="커버 맞춤 방식"
+                      value={coverSettings.fit}
+                      onChange={(event) =>
+                        setCoverSettings({
+                          fit: event.target.value === 'cover' ? 'cover' : 'contain',
+                        })
+                      }
+                      className="h-40 rounded-8 border border-line-control bg-bg px-8 text-body-s"
+                    >
+                      <option value="contain">전체 표시</option>
+                      <option value="cover">영역 채우기</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-4 text-caption text-text-2">
+                    너비(px)
+                    <input
+                      aria-label="커버 표시 너비"
+                      type="number"
+                      min={24}
+                      max={1600}
+                      value={coverSettings.width}
+                      onChange={(event) => setCoverSettings({ width: Number(event.target.value) })}
+                      className="h-40 rounded-8 border border-line-control bg-bg px-8 text-body-s"
+                    />
+                  </label>
+                  <label className="grid gap-4 text-caption text-text-2">
+                    높이(px)
+                    <input
+                      aria-label="커버 표시 높이"
+                      type="number"
+                      min={24}
+                      max={960}
+                      value={coverSettings.height}
+                      onChange={(event) => setCoverSettings({ height: Number(event.target.value) })}
+                      className="h-40 rounded-8 border border-line-control bg-bg px-8 text-body-s"
+                    />
+                  </label>
+                </div>
               </fieldset>
               <label className="grid gap-6 text-label-s">
                 원산지
@@ -372,14 +540,6 @@ export function AdminBrandFormPage() {
               <div className="flex items-center justify-between gap-12 border-t border-line pt-16 text-label-m">
                 <span>웹 노출</span>
                 <Switch label="웹 노출" isChecked={isVisible} onCheckedChange={setIsVisible} />
-              </div>
-              <div className="flex items-center justify-between gap-12 border-t border-line pt-16 text-label-m">
-                <span>대표 브랜드</span>
-                <Switch
-                  label="대표 브랜드 지정"
-                  isChecked={isFeatured}
-                  onCheckedChange={setIsFeatured}
-                />
               </div>
             </AdminPanel>
             {message ? (
