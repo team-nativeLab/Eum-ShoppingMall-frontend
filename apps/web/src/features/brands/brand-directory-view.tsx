@@ -10,7 +10,7 @@ import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { cx } from '@eum/ui/lib/cx';
 import { ArrowRight, Store } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useRef, useState, type FocusEvent, type PointerEvent } from 'react';
 import { PageContainer } from '@/components/page-container';
 import { buildBrandHref } from '@/features/products/product-navigation';
 import { ProductImage } from '@/features/products/product-image';
@@ -23,6 +23,37 @@ import { useBrandsQuery } from './use-brands-query';
 const BRAND_LOAD_ERROR_COPY_MAP = BRAND_LOAD_ERROR_COPY;
 const DEFAULT_BRAND_ACCENT_COLOR = '#2F6F62';
 const BRAND_ACCENT_COLOR_PATTERN = /^#[0-9A-F]{6}$/i;
+const BRAND_PANEL_VIEWPORT_MARGIN = 16;
+const BRAND_PANEL_MAX_WIDTH = 560;
+
+function getBrandPanelLayout(cardRect: Pick<DOMRect, 'left' | 'right'>, viewportWidth: number) {
+  const preferredWidth = Math.min(
+    BRAND_PANEL_MAX_WIDTH,
+    Math.max(0, viewportWidth - BRAND_PANEL_VIEWPORT_MARGIN * 2),
+  );
+  const rightSpace = viewportWidth - BRAND_PANEL_VIEWPORT_MARGIN - cardRect.left;
+  const leftSpace = cardRect.right - BRAND_PANEL_VIEWPORT_MARGIN;
+  const alignRight = rightSpace < preferredWidth && leftSpace > rightSpace;
+
+  if (alignRight) {
+    const rightEdge = Math.min(cardRect.right, viewportWidth - BRAND_PANEL_VIEWPORT_MARGIN);
+    return {
+      alignment: 'right' as const,
+      width: Math.min(BRAND_PANEL_MAX_WIDTH, Math.max(0, rightEdge - BRAND_PANEL_VIEWPORT_MARGIN)),
+      offset: Math.max(0, cardRect.right - rightEdge),
+    };
+  }
+
+  const leftEdge = Math.max(cardRect.left, BRAND_PANEL_VIEWPORT_MARGIN);
+  return {
+    alignment: 'left' as const,
+    width: Math.min(
+      BRAND_PANEL_MAX_WIDTH,
+      Math.max(0, viewportWidth - BRAND_PANEL_VIEWPORT_MARGIN - leftEdge),
+    ),
+    offset: Math.max(0, leftEdge - cardRect.left),
+  };
+}
 
 function getBrandAccentColor(color: string | undefined): string {
   return color && BRAND_ACCENT_COLOR_PATTERN.test(color) ? color : DEFAULT_BRAND_ACCENT_COLOR;
@@ -129,44 +160,168 @@ function BrandDirectoryError({ error, onRetry }: { error: unknown; onRetry: () =
 }
 
 function BrandCardDirectory({ brands }: { brands: BrandSummary[] }) {
-  const [activeBrandId, setActiveBrandId] = useState(brands[0]?.id ?? '');
-  const activeBrand = brands.find((brand) => brand.id === activeBrandId) ?? brands[0];
+  const [activeBrandId, setActiveBrandId] = useState<string | null>(null);
+  const [panelAlignment, setPanelAlignment] = useState<'left' | 'right'>('left');
+  const [panelWidth, setPanelWidth] = useState(BRAND_PANEL_MAX_WIDTH);
+  const [panelOffset, setPanelOffset] = useState(0);
+  const lastPointerType = useRef<string | null>(null);
+  const focusModality = useRef<'keyboard' | 'pointer' | null>(null);
+  const pointerBrandId = useRef<string | null>(null);
+  const focusedBrandId = useRef<string | null>(null);
+  const activeCardElement = useRef<HTMLElement | null>(null);
+  const directoryRef = useRef<HTMLDivElement>(null);
+
+  function updatePanelPosition(cardElement: HTMLElement) {
+    const layout = getBrandPanelLayout(cardElement.getBoundingClientRect(), window.innerWidth);
+    setPanelAlignment(layout.alignment);
+    setPanelWidth(layout.width);
+    setPanelOffset(layout.offset);
+  }
+
+  function openBrandPanel(brandId: string, cardElement: HTMLElement) {
+    activeCardElement.current = cardElement;
+    updatePanelPosition(cardElement);
+    setActiveBrandId(brandId);
+  }
+
+  function findCardElement(brandId: string): HTMLElement | null {
+    const cards = directoryRef.current?.querySelectorAll<HTMLLIElement>('li[data-brand-id]');
+    return Array.from(cards ?? []).find((item) => item.dataset.brandId === brandId) ?? null;
+  }
+
+  function getBrandIdFromTarget(target: EventTarget | null): string | null {
+    return target instanceof Element
+      ? (target.closest<HTMLLIElement>('li[data-brand-id]')?.dataset.brandId ?? null)
+      : null;
+  }
+
+  function closeBrandPanel() {
+    activeCardElement.current = null;
+    setActiveBrandId(null);
+  }
+
+  function handlePointerLeave(relatedTarget: EventTarget | null) {
+    pointerBrandId.current = getBrandIdFromTarget(relatedTarget);
+    if (focusedBrandId.current) return;
+    const nextId = pointerBrandId.current;
+    const nextCard = nextId ? findCardElement(nextId) : null;
+    if (nextId && nextCard) openBrandPanel(nextId, nextCard);
+    else closeBrandPanel();
+  }
+
+  function handleFocusLeave(event: FocusEvent<HTMLLIElement>) {
+    focusedBrandId.current =
+      focusModality.current === 'keyboard' ? getBrandIdFromTarget(event.relatedTarget) : null;
+    const nextFocusId = focusedBrandId.current;
+    if (nextFocusId) {
+      const nextCard = findCardElement(nextFocusId);
+      if (nextCard) openBrandPanel(nextFocusId, nextCard);
+      return;
+    }
+    const hoveredId = pointerBrandId.current;
+    const hoveredCard = hoveredId ? findCardElement(hoveredId) : null;
+    if (hoveredId && hoveredCard) openBrandPanel(hoveredId, hoveredCard);
+    else closeBrandPanel();
+  }
+
+  function handleTouchTap(brandId: string, cardElement: HTMLElement) {
+    if (lastPointerType.current !== 'touch') return;
+    if (activeBrandId === brandId) closeBrandPanel();
+    else openBrandPanel(brandId, cardElement);
+  }
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Tab') focusModality.current = 'keyboard';
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!activeBrandId || !activeCardElement.current) return undefined;
+    const cardElement = activeCardElement.current;
+    const onResize = () => updatePanelPosition(cardElement);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [activeBrandId]);
 
   return (
     <PageContainer>
-      <div className="group/brand-directory relative">
+      <div ref={directoryRef} className="relative">
         <ul className="grid grid-cols-2 gap-12 lg:grid-cols-5 lg:gap-24">
           {brands.map((brand) => (
-            <li key={brand.id}>
-              <BrandCard
-                brand={brand}
-                isSelected={brand.id === activeBrand?.id}
-                onSelect={() => setActiveBrandId(brand.id)}
-              />
+            <li
+              key={brand.id}
+              data-brand-id={brand.id}
+              className={cx('relative', activeBrandId === brand.id && 'z-20')}
+              onPointerEnter={(event: PointerEvent<HTMLLIElement>) => {
+                if (event.pointerType === 'mouse') {
+                  pointerBrandId.current = brand.id;
+                  if (!focusedBrandId.current) openBrandPanel(brand.id, event.currentTarget);
+                }
+              }}
+              onPointerDown={(event: PointerEvent<HTMLLIElement>) => {
+                if (event.target instanceof Element && event.target.closest('[data-brand-card]')) {
+                  lastPointerType.current = event.pointerType;
+                  focusModality.current = 'pointer';
+                }
+              }}
+              onPointerUp={(event: PointerEvent<HTMLLIElement>) => {
+                if (event.target instanceof Element && event.target.closest('[data-brand-card]')) {
+                  if (event.pointerType === 'touch') handleTouchTap(brand.id, event.currentTarget);
+                  lastPointerType.current = null;
+                }
+              }}
+              onPointerCancel={() => {
+                lastPointerType.current = null;
+                pointerBrandId.current = null;
+                if (!focusedBrandId.current) closeBrandPanel();
+              }}
+              onPointerLeave={(event: PointerEvent<HTMLLIElement>) => {
+                if (event.pointerType === 'mouse') handlePointerLeave(event.relatedTarget);
+              }}
+              onFocus={(event: FocusEvent<HTMLLIElement>) => {
+                if (focusModality.current === 'keyboard') {
+                  focusedBrandId.current = brand.id;
+                  openBrandPanel(brand.id, event.currentTarget);
+                }
+              }}
+              onBlur={handleFocusLeave}
+            >
+              <BrandCard brand={brand} isSelected={brand.id === activeBrandId} />
+              {activeBrandId === brand.id ? (
+                <div
+                  data-brand-panel-bridge
+                  className={cx(
+                    'absolute top-full z-20 h-8 lg:h-16',
+                    panelAlignment === 'right' ? 'right-0' : 'left-0',
+                  )}
+                  style={{
+                    width: panelWidth,
+                    ...(panelAlignment === 'right'
+                      ? { right: panelOffset }
+                      : { left: panelOffset }),
+                  }}
+                >
+                  <BrandSelectionPanel brand={brand} />
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>
-        {activeBrand ? <BrandSelectionPanel brand={activeBrand} /> : null}
       </div>
     </PageContainer>
   );
 }
 
-function BrandCard({
-  brand,
-  isSelected,
-  onSelect,
-}: {
-  brand: BrandSummary;
-  isSelected: boolean;
-  onSelect: () => void;
-}) {
+function BrandCard({ brand, isSelected }: { brand: BrandSummary; isSelected: boolean }) {
   return (
     <button
       type="button"
       aria-expanded={isSelected}
-      aria-controls="brand-selection-panel"
-      onClick={onSelect}
+      aria-controls={isSelected ? 'brand-selection-panel' : undefined}
+      data-brand-card
       style={isSelected ? { borderColor: getBrandAccentColor(brand.accentColor) } : undefined}
       className={cx(
         'flex min-h-200 w-full flex-col overflow-hidden rounded-12 border bg-bg text-left shadow-1 focus-ring transition-colors',
@@ -209,7 +364,7 @@ function BrandSelectionPanel({ brand }: { brand: BrandSummary }) {
     <aside
       id="brand-selection-panel"
       aria-labelledby="brand-selection-title"
-      className="mt-16 overflow-hidden rounded-24 border border-line bg-bg shadow-3 lg:absolute lg:top-160 lg:left-0 lg:mt-0 lg:w-560 lg:group-focus-within/brand-directory:static"
+      className="absolute top-full left-0 w-full overflow-hidden rounded-24 border border-line bg-bg shadow-3"
     >
       <div
         className={cx('px-20 py-20 lg:px-32 lg:py-24', accentForeground)}
