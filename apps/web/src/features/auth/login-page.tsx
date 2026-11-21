@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { SignupPageView } from './signup-page';
 import { PageContainer } from '@/components/page-container';
+import { getWebApiConfig } from '@/lib/api-config';
 import { useMemberSession } from './member-session';
 import { getUnifiedAuth } from '@/lib/member-auth';
 
@@ -24,6 +25,7 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [isSignup, setIsSignup] = useState(false);
+  const isMockMode = getWebApiConfig().mode === 'mock';
   const redirectPath = sanitizeRedirectPath(rawRedirect, '/');
   const recoveryRedirectQuery = `?redirect=${encodeURIComponent(redirectPath)}`;
 
@@ -63,7 +65,7 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
       if (loginResult.role === 'admin') {
         router.replace(redirectPath.startsWith('/admin') ? redirectPath : '/admin');
       } else {
-        if (!rememberLogin) await auth.logout();
+        if (!isMockMode && !rememberLogin) await auth.logout();
         setMember(loginResult.user);
         router.replace(redirectPath.startsWith('/admin') ? '/' : redirectPath);
       }
@@ -156,6 +158,12 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
               >
                 로그인 상태 유지
               </Checkbox>
+              {isMockMode ? (
+                <p className="text-caption text-text-3">
+                  목 데모 로그인은 로그아웃할 때까지 유지됩니다. 로그인 상태 유지는 목 모드에
+                  적용되지 않습니다.
+                </p>
+              ) : null}
             </div>
           </div>
           {error ? (
@@ -230,9 +238,11 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
             목 데모에서는 외부 간편로그인을 사용할 수 없습니다.
           </p>
         </div>
-        <p className="text-caption text-text-3">
-          목 로그인은 화면 흐름 확인용이며 실제 인증은 처리되지 않습니다.
-        </p>
+        {isMockMode ? (
+          <p className="text-caption text-text-3">
+            목 로그인은 화면 흐름 확인용이며 실제 인증은 처리되지 않습니다.
+          </p>
+        ) : null}
       </section>
     </PageContainer>
   );

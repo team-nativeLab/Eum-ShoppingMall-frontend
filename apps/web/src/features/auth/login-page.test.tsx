@@ -16,8 +16,19 @@ const authMock = vi.hoisted(() => ({
 }));
 
 const routerMock = vi.hoisted(() => ({ replace: vi.fn() }));
+const apiModeMock = vi.hoisted(() => ({ mode: 'mock' as 'mock' | 'real' }));
 
 vi.mock('@/lib/member-auth', () => ({ getMemberAuth: vi.fn(), getUnifiedAuth: vi.fn() }));
+vi.mock('@/lib/api-config', () => ({
+  getWebApiConfig: () => ({
+    mode: apiModeMock.mode,
+    baseUrl: apiModeMock.mode === 'real' ? 'https://api.example.test' : '',
+    mockLatencyMs: 0,
+    mockScenario: 'normal',
+    isProduction: false,
+    isMockAllowedInProduction: false,
+  }),
+}));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: routerMock.replace }) }));
 
 const member: Member = {
@@ -43,6 +54,7 @@ function renderLoginPage(rawRedirect?: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  apiModeMock.mode = 'mock';
   authMock.getCurrentUser.mockResolvedValue(null);
   authMock.login.mockResolvedValue({ role: 'member', user: member });
   authMock.logout.mockResolvedValue(undefined);
@@ -112,6 +124,7 @@ describe('W-09 login form validation', () => {
   });
 
   it('passes the password to authentication without trimming it', async () => {
+    apiModeMock.mode = 'real';
     const user = userEvent.setup();
     renderLoginPage('/orders');
 
@@ -129,6 +142,47 @@ describe('W-09 login form validation', () => {
     );
     expect(authMock.logout).not.toHaveBeenCalled();
     expect(routerMock.replace).toHaveBeenCalledWith('/orders');
+  });
+
+  it.each([false, true])(
+    'keeps a member session after mock login with remember checked=%s',
+    async (rememberLogin) => {
+      const user = userEvent.setup();
+      renderLoginPage('/mypage');
+
+      await user.type(screen.getByRole('textbox', { name: '이메일' }), 'member@example.com');
+      await user.type(screen.getByLabelText('비밀번호'), 'password');
+      const rememberCheckbox = screen.getByRole('checkbox', { name: '로그인 상태 유지' });
+      if (rememberLogin) await user.click(rememberCheckbox);
+      await user.click(screen.getByRole('button', { name: '로그인' }));
+
+      await waitFor(() => expect(routerMock.replace).toHaveBeenCalledWith('/mypage'));
+      expect(authMock.logout).not.toHaveBeenCalled();
+      expect(
+        screen.getByText(
+          '목 데모 로그인은 로그아웃할 때까지 유지됩니다. 로그인 상태 유지는 목 모드에 적용되지 않습니다.',
+        ),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it('shows the mock session guidance only in mock mode', () => {
+    const mockView = renderLoginPage();
+
+    expect(screen.getByText(/목 데모 로그인은 로그아웃할 때까지 유지됩니다/)).toBeInTheDocument();
+    expect(
+      screen.getByText('목 로그인은 화면 흐름 확인용이며 실제 인증은 처리되지 않습니다.'),
+    ).toBeInTheDocument();
+
+    mockView.unmount();
+    apiModeMock.mode = 'real';
+    renderLoginPage();
+    expect(
+      screen.queryByText(/목 데모 로그인은 로그아웃할 때까지 유지됩니다/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('목 로그인은 화면 흐름 확인용이며 실제 인증은 처리되지 않습니다.'),
+    ).not.toBeInTheDocument();
   });
 
   it('preserves an admin mock session when remember login is unchecked', async () => {

@@ -23,12 +23,17 @@ const apiMocks = vi.hoisted(() => ({
   listBrands: vi.fn(),
   listCategories: vi.fn(),
 }));
+const sessionMocks = vi.hoisted(() => ({
+  status: 'ready' as 'loading' | 'error' | 'ready',
+  member: null as { id: string } | null,
+}));
 
 vi.mock('next/navigation', () => ({
   usePathname: () => navigationMocks.pathname,
   useRouter: () => ({ push: navigationMocks.push, back: navigationMocks.back }),
   useSearchParams: () => new URLSearchParams(navigationMocks.search),
 }));
+vi.mock('@/features/auth/member-session', () => ({ useMemberSession: () => sessionMocks }));
 
 vi.mock('next/link', () => ({
   default: ({
@@ -1107,6 +1112,8 @@ describe('SiteHeader product and brand navigation', () => {
 
 describe('SiteHeader on login and signup pages', () => {
   beforeEach(() => {
+    sessionMocks.status = 'ready';
+    sessionMocks.member = null;
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
     navigationMocks.pathname = '/search';
     navigationMocks.search = '';
@@ -1139,6 +1146,20 @@ describe('SiteHeader on login and signup pages', () => {
     expect(screen.getByRole('banner')).toBeInTheDocument();
     expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0);
     expect(screen.getAllByAltText('안전맛집').length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ['loading', null, '/mypage', '마이페이지'],
+    ['error', null, '/mypage', '마이페이지'],
+    ['ready', { id: 'member-1' }, '/mypage', '마이페이지'],
+    ['ready', null, '/login?redirect=%2Fmypage', '로그인'],
+  ] as const)('routes the account icon for session state %s', (status, member, href, label) => {
+    navigationMocks.pathname = '/';
+    sessionMocks.status = status;
+    sessionMocks.member = member;
+    render(<SiteHeader />, { wrapper: createWrapper() });
+
+    expect(screen.getByRole('link', { name: label })).toHaveAttribute('href', href);
   });
 
   it('uses the enlarged logo sizes across home and checkout headers', () => {

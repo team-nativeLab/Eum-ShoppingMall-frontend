@@ -130,6 +130,25 @@ beforeEach(() => {
   });
 });
 
+describe('MyPageScreen signed-out entry', () => {
+  it('keeps the mypage destination in the login link', () => {
+    vi.mocked(useMemberSession).mockReturnValue({
+      member: null,
+      status: 'ready',
+      refreshMember: async () => null,
+      setMember: vi.fn(),
+      clearMember: async () => undefined,
+    });
+    render(<MyPageScreen section="points" />);
+
+    expect(
+      screen
+        .getAllByRole('link', { name: '로그인' })
+        .map((loginLink) => loginLink.getAttribute('href')),
+    ).toContain('/login?redirect=%2Fmypage');
+  });
+});
+
 describe('MyPageScreen claim application', () => {
   it('keeps native claim selects keyboard accessible and spaces custom chevrons from the edge', () => {
     renderClaimApplication();

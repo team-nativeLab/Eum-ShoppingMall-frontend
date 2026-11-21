@@ -26,16 +26,34 @@ interface MemberSessionValue {
 
 const MemberSessionContext = createContext<MemberSessionValue | null>(null);
 
-async function clearMemberScopedQueries(queryClient: ReturnType<typeof useQueryClient>) {
+async function clearMemberScopedQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  memberId?: string,
+) {
+  if (memberId) {
+    const memberQueryKeys = [
+      queryKeys.inquiries.byMember(memberId),
+      queryKeys.orders.byMember(memberId),
+      queryKeys.addresses.byMember(memberId),
+      queryKeys.coupons.byMember(memberId),
+      queryKeys.myPage.byMember(memberId),
+    ];
+    await Promise.all(memberQueryKeys.map((queryKey) => queryClient.cancelQueries({ queryKey })));
+    memberQueryKeys.forEach((queryKey) => queryClient.removeQueries({ queryKey }));
+    return;
+  }
+
   await Promise.all([
     queryClient.cancelQueries({ queryKey: queryKeys.inquiries.all }),
     queryClient.cancelQueries({ queryKey: queryKeys.orders.allByMember }),
     queryClient.cancelQueries({ queryKey: queryKeys.addresses.all }),
+    queryClient.cancelQueries({ queryKey: queryKeys.coupons.all }),
     queryClient.cancelQueries({ queryKey: queryKeys.myPage.all }),
   ]);
   queryClient.removeQueries({ queryKey: queryKeys.inquiries.all });
   queryClient.removeQueries({ queryKey: queryKeys.orders.allByMember });
   queryClient.removeQueries({ queryKey: queryKeys.addresses.all });
+  queryClient.removeQueries({ queryKey: queryKeys.coupons.all });
   queryClient.removeQueries({ queryKey: queryKeys.myPage.all });
 }
 
@@ -74,8 +92,9 @@ export function MemberSessionProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   useEffect(() => {
+    const previousMemberId = member?.id;
     return () => {
-      void clearMemberScopedQueries(queryClient);
+      if (previousMemberId) void clearMemberScopedQueries(queryClient, previousMemberId);
     };
   }, [member?.id, queryClient]);
 
