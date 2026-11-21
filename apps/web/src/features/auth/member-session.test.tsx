@@ -1,6 +1,6 @@
 import { queryKeys } from '@eum/api/query-keys';
 import type { Member } from '@eum/api/types';
-import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -63,7 +63,39 @@ function SessionProbe() {
       >
         주소 캐시 설정
       </button>
+      <button
+        type="button"
+        onClick={() =>
+          queryClient.setQueryData(queryKeys.coupons.byMember(firstMember.id), ['첫 회원 쿠폰'])
+        }
+      >
+        첫 회원 쿠폰 캐시 설정
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          queryClient.setQueryData(queryKeys.coupons.byMember(secondMember.id), ['다른 회원 쿠폰'])
+        }
+      >
+        다른 회원 쿠폰 캐시 설정
+      </button>
     </div>
+  );
+}
+
+function ActiveMemberQuery() {
+  const { member, status } = useMemberSession();
+  const memberId = member?.id;
+  const query = useQuery({
+    queryKey: queryKeys.myPage.byMember(memberId ?? 'anonymous'),
+    enabled: status === 'ready' && Boolean(memberId),
+    queryFn: async () => {
+      if (!memberId) throw new Error('회원 세션이 없습니다.');
+      return { memberId };
+    },
+  });
+  return (
+    <output>{query.data?.memberId ?? (query.isPending ? '마이페이지 질의 중' : '대기')}</output>
   );
 }
 
@@ -91,6 +123,8 @@ describe('member inquiry cache privacy', () => {
     fireEvent.click(screen.getByRole('button', { name: '문의 캐시 설정' }));
     fireEvent.click(screen.getByRole('button', { name: '주문 캐시 설정' }));
     fireEvent.click(screen.getByRole('button', { name: '주소 캐시 설정' }));
+    fireEvent.click(screen.getByRole('button', { name: '첫 회원 쿠폰 캐시 설정' }));
+    fireEvent.click(screen.getByRole('button', { name: '다른 회원 쿠폰 캐시 설정' }));
     expect(queryClient.getQueryData(queryKeys.inquiries.byMember(firstMember.id))).toEqual([
       '문의 본문',
     ]);
@@ -114,18 +148,32 @@ describe('member inquiry cache privacy', () => {
       expect(
         queryClient.getQueryData([...queryKeys.myPage.byMember(firstMember.id), 'addresses', []]),
       ).toBeUndefined();
+      expect(queryClient.getQueryData(queryKeys.coupons.byMember(firstMember.id))).toBeUndefined();
+      expect(queryClient.getQueryData(queryKeys.coupons.byMember(secondMember.id))).toBeUndefined();
     });
   });
 
   it('switching member removes the previous member inquiry cache', async () => {
-    const queryClient = renderSession(<SessionProbe />);
+    const queryClient = renderSession(
+      <>
+        <SessionProbe />
+        <ActiveMemberQuery />
+      </>,
+    );
     await screen.findByText('첫 회원');
+    await screen.findByText(firstMember.id);
+    expect(queryClient.getQueryData(queryKeys.myPage.byMember(firstMember.id))).toEqual({
+      memberId: firstMember.id,
+    });
     fireEvent.click(screen.getByRole('button', { name: '문의 캐시 설정' }));
     fireEvent.click(screen.getByRole('button', { name: '주문 캐시 설정' }));
     fireEvent.click(screen.getByRole('button', { name: '주소 캐시 설정' }));
+    fireEvent.click(screen.getByRole('button', { name: '첫 회원 쿠폰 캐시 설정' }));
+    fireEvent.click(screen.getByRole('button', { name: '다른 회원 쿠폰 캐시 설정' }));
     fireEvent.click(screen.getByRole('button', { name: '회원 전환' }));
 
     await screen.findByText('다른 회원');
+    await screen.findByText(secondMember.id);
     await waitFor(() => {
       expect(
         queryClient.getQueryData(queryKeys.inquiries.byMember(firstMember.id)),
@@ -137,7 +185,41 @@ describe('member inquiry cache privacy', () => {
       expect(
         queryClient.getQueryData([...queryKeys.myPage.byMember(firstMember.id), 'addresses', []]),
       ).toBeUndefined();
+      expect(queryClient.getQueryData(queryKeys.coupons.byMember(firstMember.id))).toBeUndefined();
+      expect(queryClient.getQueryData(queryKeys.coupons.byMember(secondMember.id))).toEqual([
+        '다른 회원 쿠폰',
+      ]);
+      expect(queryClient.getQueryData(queryKeys.myPage.byMember(secondMember.id))).toEqual({
+        memberId: secondMember.id,
+      });
     });
+  });
+
+  it('keeps the active mypage query after a delayed initial session restore', async () => {
+    let resolveCurrentUser: ((currentMember: Member | null) => void) | undefined;
+    const delayedCurrentUser = new Promise<Member | null>((resolve) => {
+      resolveCurrentUser = resolve;
+    });
+    vi.mocked(getMemberAuth).mockResolvedValue({
+      getCurrentUser: vi.fn(() => delayedCurrentUser),
+      logout: vi.fn(async () => undefined),
+    } as never);
+    const queryClient = renderSession(
+      <>
+        <SessionProbe />
+        <ActiveMemberQuery />
+      </>,
+    );
+
+    expect(screen.getByText('마이페이지 질의 중')).toBeInTheDocument();
+    resolveCurrentUser?.(firstMember);
+
+    await screen.findByText(firstMember.id);
+    await waitFor(() =>
+      expect(queryClient.getQueryData(queryKeys.myPage.byMember(firstMember.id))).toEqual({
+        memberId: firstMember.id,
+      }),
+    );
   });
 
   it('mypage logout clears member caches and navigates to login', async () => {
@@ -150,6 +232,7 @@ describe('member inquiry cache privacy', () => {
     fireEvent.click(screen.getByRole('button', { name: '문의 캐시 설정' }));
     fireEvent.click(screen.getByRole('button', { name: '주문 캐시 설정' }));
     fireEvent.click(screen.getByRole('button', { name: '주소 캐시 설정' }));
+    fireEvent.click(screen.getByRole('button', { name: '첫 회원 쿠폰 캐시 설정' }));
 
     fireEvent.click(
       within(screen.getByRole('complementary', { name: '마이페이지 메뉴' })).getByRole('button', {
@@ -168,6 +251,7 @@ describe('member inquiry cache privacy', () => {
       expect(
         queryClient.getQueryData([...queryKeys.myPage.byMember(firstMember.id), 'addresses', []]),
       ).toBeUndefined();
+      expect(queryClient.getQueryData(queryKeys.coupons.byMember(firstMember.id))).toBeUndefined();
       expect(routerMock.push).toHaveBeenCalledWith('/login');
     });
     await waitFor(() =>

@@ -74,6 +74,27 @@ beforeEach(() => {
 });
 
 describe('MyPageShell logout', () => {
+  it('shows login links instead of logout buttons when signed out', async () => {
+    vi.mocked(getMemberAuth).mockResolvedValue({
+      getCurrentUser: vi.fn(async () => null),
+      logout: vi.fn(async () => undefined),
+    } as never);
+    renderPage();
+
+    await screen.findByText('로그아웃됨');
+    const menus = [
+      screen.getByRole('navigation', { name: '모바일 마이페이지 메뉴' }),
+      screen.getByRole('complementary', { name: '마이페이지 메뉴' }),
+    ];
+    for (const menu of menus) {
+      expect(within(menu).getByRole('link', { name: '로그인' })).toHaveAttribute(
+        'href',
+        '/login?redirect=%2Fmypage',
+      );
+      expect(within(menu).queryByRole('button', { name: '로그아웃' })).not.toBeInTheDocument();
+    }
+  });
+
   it('places the dashboard summary inside the main column beside the navigation', async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
@@ -180,6 +201,15 @@ describe('MyPageShell logout', () => {
       expect(routerMock.push).toHaveBeenCalledWith('/login');
     });
     expect(await screen.findByText('로그아웃됨')).toBeInTheDocument();
+    for (const menu of [
+      screen.getByRole('navigation', { name: '모바일 마이페이지 메뉴' }),
+      screen.getByRole('complementary', { name: '마이페이지 메뉴' }),
+    ]) {
+      expect(within(menu).getByRole('link', { name: '로그인' })).toHaveAttribute(
+        'href',
+        '/login?redirect=%2Fmypage',
+      );
+    }
   });
 });
 

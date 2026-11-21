@@ -22,8 +22,12 @@ export function useAddressesQuery() {
 }
 
 export function useCouponsQuery() {
+  const { member, status } = useMemberSession();
+  const memberId = member?.id;
   return useQuery({
-    queryKey: queryKeys.coupons.all,
+    queryKey: queryKeys.coupons.byMember(memberId ?? 'anonymous'),
     queryFn: async ({ signal }) => (await getShopApi()).coupons.list({ signal }),
+    enabled: status === 'ready' && Boolean(memberId),
+    placeholderData: status === 'ready' && !memberId ? [] : undefined,
   });
 }

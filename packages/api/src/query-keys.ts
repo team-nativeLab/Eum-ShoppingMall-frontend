@@ -33,7 +33,10 @@ export const queryKeys = {
     all: ['addresses'] as const,
     byMember: (memberId: string) => ['addresses', memberId] as const,
   },
-  coupons: { all: ['coupons'] as const },
+  coupons: {
+    all: ['coupons'] as const,
+    byMember: (memberId: string) => ['coupons', memberId] as const,
+  },
   categories: { all: ['categories'] as const },
   home: { content: ['home', 'content'] as const },
   company: { info: ['company', 'info'] as const },

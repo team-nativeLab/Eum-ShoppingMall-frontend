@@ -225,6 +225,15 @@ export function PaymentPageView() {
       </CheckoutPageShell>
     );
   }
+  if (memberStatus === 'error') {
+    return (
+      <CheckoutPageShell>
+        <MockOnlyNotice>
+          회원 세션을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.
+        </MockOnlyNotice>
+      </CheckoutPageShell>
+    );
+  }
   if (
     memberStatus === 'loading' ||
     !checkout.isSelectionReady ||
@@ -237,15 +246,6 @@ export function PaymentPageView() {
     return (
       <CheckoutPageShell>
         <div aria-busy="true" className="h-600 animate-pulse rounded-12 bg-surface" />
-      </CheckoutPageShell>
-    );
-  }
-  if (memberStatus === 'error') {
-    return (
-      <CheckoutPageShell>
-        <MockOnlyNotice>
-          회원 세션을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.
-        </MockOnlyNotice>
       </CheckoutPageShell>
     );
   }

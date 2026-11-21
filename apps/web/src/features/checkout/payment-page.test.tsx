@@ -295,6 +295,16 @@ afterEach(() => {
 });
 
 describe('PaymentPageView', () => {
+  it('shows a session error instead of remaining in the pending-coupon skeleton', async () => {
+    apiMocks.getCurrentUser.mockRejectedValue(new Error('Member session unavailable'));
+    renderPaymentPage();
+
+    expect(
+      await screen.findByText('회원 세션을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.'),
+    ).toBeInTheDocument();
+    expect(document.querySelector('[aria-busy="true"]')).toBeNull();
+  });
+
   it('shows the order-cleanup failure and blocks another payment until cleanup succeeds', async () => {
     const createOrder = configureApi();
     savePaymentCart();

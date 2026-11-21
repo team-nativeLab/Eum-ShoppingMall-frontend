@@ -45,6 +45,7 @@ import {
 } from '@/features/products/category-href';
 import { useCategoriesQuery } from '@/features/products/use-categories-query';
 import { useProductSuggestionsQuery } from '@/features/products/use-product-suggestions-query';
+import { useMemberSession } from '@/features/auth/member-session';
 import {
   buildBrandHref,
   getPrimaryNavigationItems,
@@ -130,6 +131,10 @@ function UrlKeywordHeaderSearchField(searchProps: UrlKeywordSearchProps) {
 export function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
+  const { member, status } = useMemberSession();
+  const isSignedOut = status === 'ready' && member === null;
+  const accountHref = isSignedOut ? '/login?redirect=%2Fmypage' : '/mypage';
+  const accountLabel = isSignedOut ? '로그인' : '마이페이지';
   const { isMenuOpen, setIsMenuOpen, registerMenuTriggerHandler } = useSiteMenu();
   const categoriesQuery = useCategoriesQuery();
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
@@ -502,8 +507,8 @@ export function SiteHeader() {
           </div>
           <div className="ml-24 flex shrink-0 items-center gap-4">
             <Link
-              href="/login"
-              aria-label="로그인"
+              href={accountHref}
+              aria-label={accountLabel}
               className="inline-flex size-44 items-center justify-center rounded-8 focus-ring hover:bg-surface"
             >
               <Icon icon={UserRound} size={24} />

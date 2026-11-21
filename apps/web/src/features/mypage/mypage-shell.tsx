@@ -112,7 +112,8 @@ export function MyPageShell({
   children: ReactNode;
 }) {
   const router = useRouter();
-  const { clearMember } = useMemberSession();
+  const { clearMember, member, status } = useMemberSession();
+  const isLoggedIn = status === 'ready' && member !== null;
   const activeKey = SECTION_NAV_KEY[activeSection];
   const mobileNavRef = useRef<HTMLElement | null>(null);
   const activeMobileLinkRef = useRef<HTMLAnchorElement | null>(null);
@@ -212,14 +213,24 @@ export function MyPageShell({
           >
             {mobileLinks.map((link) =>
               link.key === 'logout' ? (
-                <button
-                  key={link.key}
-                  type="button"
-                  onClick={() => void handleLogout()}
-                  className="shrink-0 rounded-capsule border border-line px-14 py-8 text-label-s text-text-2 focus-ring"
-                >
-                  {link.label}
-                </button>
+                isLoggedIn ? (
+                  <button
+                    key={link.key}
+                    type="button"
+                    onClick={() => void handleLogout()}
+                    className="shrink-0 rounded-capsule border border-line px-14 py-8 text-label-s text-text-2 focus-ring"
+                  >
+                    {link.label}
+                  </button>
+                ) : (
+                  <Link
+                    key={link.key}
+                    href="/login?redirect=%2Fmypage"
+                    className="shrink-0 rounded-capsule border border-line px-14 py-8 text-label-s text-text-2 focus-ring"
+                  >
+                    로그인
+                  </Link>
+                )
               ) : (
                 <Link
                   key={link.key}
@@ -266,13 +277,22 @@ export function MyPageShell({
                       {group.links.map((link) => (
                         <li key={link.key}>
                           {link.key === 'logout' ? (
-                            <button
-                              type="button"
-                              onClick={() => void handleLogout()}
-                              className="flex min-h-40 w-full items-center rounded-8 px-12 text-left text-body-s text-text-2 focus-ring hover:bg-surface"
-                            >
-                              {link.label}
-                            </button>
+                            isLoggedIn ? (
+                              <button
+                                type="button"
+                                onClick={() => void handleLogout()}
+                                className="flex min-h-40 w-full items-center rounded-8 px-12 text-left text-body-s text-text-2 focus-ring hover:bg-surface"
+                              >
+                                {link.label}
+                              </button>
+                            ) : (
+                              <Link
+                                href="/login?redirect=%2Fmypage"
+                                className="flex min-h-40 items-center rounded-8 px-12 text-body-s text-text-2 focus-ring hover:bg-surface"
+                              >
+                                로그인
+                              </Link>
+                            )
                           ) : (
                             <Link
                               href={link.href}
