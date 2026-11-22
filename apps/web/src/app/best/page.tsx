@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: '베스트' };
 export default function BestProductsPage() {
   return (
     <PagedProductCollectionView
-      title="베스트 셀러"
+      title="베스트"
       collection="featured"
       emptyTitle="등록된 베스트 상품이 없습니다"
     />

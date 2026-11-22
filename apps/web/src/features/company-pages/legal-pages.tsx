@@ -155,10 +155,7 @@ const GUIDE_DOCUMENTS: Record<GuideDocument, { title: string; sections: Document
       {
         id: 'join',
         title: '회원가입 안내',
-        paragraphs: [
-          '회원가입 후 상품 주문, 배송 확인과 견적 문의를 이용할 수 있습니다.',
-          '사업자 회원은 가입 화면에서 회원 유형을 선택해 주십시오.',
-        ],
+        paragraphs: ['회원가입 후 상품 주문, 배송 확인과 견적 문의를 이용할 수 있습니다.'],
       },
       {
         id: 'order',

@@ -49,7 +49,7 @@ export interface MemberLoginInput {
 export interface MemberSignupInput extends MemberLoginInput {
   name: string;
   phone: string;
-  accountType: 'personal' | 'business';
+  accountType: 'personal';
 }
 
 /** 목 가입 결과에만 회원 유형을 되돌려 보여 주는 좁은 결과 타입입니다. */

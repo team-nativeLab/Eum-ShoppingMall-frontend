@@ -99,6 +99,13 @@ describe('법률 문서 페이지', () => {
     ).toBeInTheDocument();
   });
 
+  it('이용안내의 회원가입 안내는 개인 회원 가입 흐름과 일치합니다', () => {
+    renderLegalPage('guide');
+
+    expect(screen.getByRole('heading', { name: '회원가입 안내' })).toBeInTheDocument();
+    expect(screen.queryByText(/사업자 회원|회원 유형을 선택/)).not.toBeInTheDocument();
+  });
+
   it('이전 약관과 개정 예정 고지를 Figma 샘플 문구로 표시합니다', () => {
     renderLegalPage('terms');
 

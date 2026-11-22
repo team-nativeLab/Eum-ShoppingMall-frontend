@@ -91,7 +91,7 @@ describe('일반 회원 목 인증', () => {
     expect(sessionStore.getItem(MEMBER_SESSION_KEY)).toBeNull();
   });
 
-  it('가입은 목 회원을 만들고 저장소에는 mock userId만 남깁니다', async () => {
+  it('개인 가입은 목 회원을 만들고 저장소에는 mock userId만 남깁니다', async () => {
     const sessionStore = createMemoryStore();
     const memberAuth = createMemberMockAuth(mockConfig, sessionStore);
     const email = `signup-${++signupTestSequence}@example.test`;
@@ -100,20 +100,37 @@ describe('일반 회원 목 인증', () => {
       password: 'password-value-123',
       name: '데모 가입자',
       phone: '010-1234-5678',
-      accountType: 'business',
+      accountType: 'personal',
     });
 
     expect(signupMember.email).toBe(email);
-    expect(signupMember.accountType).toBe('business');
+    expect(signupMember.accountType).toBe('personal');
     expect(await memberAuth.isEmailAvailable(email)).toBe(false);
     const currentMember = await memberAuth.getCurrentUser();
     expect(currentMember?.id).toBe(signupMember.id);
-    expect(currentMember).toMatchObject({ accountType: 'business' });
+    expect(currentMember).toMatchObject({ accountType: 'personal' });
     const rawSession = sessionStore.getItem(MEMBER_SESSION_KEY) ?? '';
     expect(JSON.parse(rawSession)).toEqual({ version: 1, userId: signupMember.id });
     expect(rawSession).not.toContain('password-value-123');
     expect(rawSession).not.toContain(email);
     expect(rawSession).not.toContain('010-1234-5678');
+  });
+
+  it('타입을 우회한 사업자 가입 입력은 회원을 만들거나 세션을 저장하지 않습니다', async () => {
+    const sessionStore = createMemoryStore();
+    const memberAuth = createMemberMockAuth(mockConfig, sessionStore);
+    const email = `signup-business-${++signupTestSequence}@example.test`;
+    const bypassInput = {
+      email,
+      password: 'password-value-123',
+      name: '사업자 가입 시도',
+      phone: '010-1234-5678',
+      accountType: 'business',
+    } as never;
+
+    await expect(memberAuth.signup(bypassInput)).rejects.toMatchObject({ code: 'VALIDATION' });
+    expect(await memberAuth.isEmailAvailable(email)).toBe(true);
+    expect(sessionStore.getItem(MEMBER_SESSION_KEY)).toBeNull();
   });
 
   it('가입에서 중복 이메일과 빈 비밀번호를 거부합니다', async () => {

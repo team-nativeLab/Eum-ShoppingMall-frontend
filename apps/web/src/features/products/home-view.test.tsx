@@ -286,7 +286,7 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
 
     const heroSection = await screen.findByRole('region', { name: '주요 프로모션' });
     const promoSection = await screen.findByRole('region', { name: '안전 솔루션 프로모션' });
-    const bestSellerSection = screen.getByRole('region', { name: '베스트 셀러' });
+    const bestSellerSection = screen.getByRole('region', { name: '베스트' });
     const quoteSection = screen.getByRole('region', { name: '현장 견적 상담' });
     const serviceBenefits = screen.getByRole('list', { name: '서비스 안내' });
 
@@ -396,7 +396,7 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
 
     render(<HomeView />, { wrapper: createWrapper() });
 
-    const bestSellerSection = await screen.findByRole('region', { name: '베스트 셀러' });
+    const bestSellerSection = await screen.findByRole('region', { name: '베스트' });
     expect(
       within(bestSellerSection).queryByRole('group', { name: '베스트 상품 카테고리' }),
     ).toBeNull();
@@ -419,7 +419,7 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
 
     render(<HomeView />, { wrapper: createWrapper() });
 
-    await screen.findByRole('region', { name: '베스트 셀러' });
+    await screen.findByRole('region', { name: '베스트' });
     const categoryNavigations = await screen.findAllByRole('navigation', { name: '상품 카테고리' });
     expect(categoryNavigations).toHaveLength(2);
     for (const categoryNavigation of categoryNavigations) {
@@ -432,7 +432,7 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
 
     render(<HomeView />, { wrapper: createWrapper() });
 
-    const bestSellerSection = await screen.findByRole('region', { name: '베스트 셀러' });
+    const bestSellerSection = await screen.findByRole('region', { name: '베스트' });
     expect(
       within(bestSellerSection).getByText('등록된 베스트 상품이 없습니다.'),
     ).toBeInTheDocument();
@@ -453,7 +453,7 @@ describe('HomeView best and recommended view-all links', () => {
 
     render(<HomeView />, { wrapper: createWrapper() });
 
-    const bestSellerSection = await screen.findByRole('region', { name: '베스트 셀러' });
+    const bestSellerSection = await screen.findByRole('region', { name: '베스트' });
     const recommendedSection = await screen.findByRole('region', { name: '추천상품' });
 
     expect(within(bestSellerSection).getByRole('link', { name: '전체 보기' })).toHaveAttribute(
@@ -461,7 +461,7 @@ describe('HomeView best and recommended view-all links', () => {
       '/best',
     );
     expect(
-      within(bestSellerSection).getByRole('link', { name: '베스트 셀러 전체 보기' }),
+      within(bestSellerSection).getByRole('link', { name: '베스트 전체 보기' }),
     ).toHaveAttribute('href', '/best');
     expect(within(recommendedSection).getByRole('link', { name: '전체 보기' })).toHaveAttribute(
       'href',

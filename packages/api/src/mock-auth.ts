@@ -110,6 +110,9 @@ export function createMemberMockAuth(
       return !hasFixture && !hasAdminReservation && !transientSignupMembers.has(normalizedEmail);
     },
     async signup({ email, password, name, phone, accountType }) {
+      if (accountType !== 'personal') {
+        throw new ApiError('VALIDATION', '개인 회원만 가입할 수 있습니다.');
+      }
       assertFilled([email, password, name, phone]);
       const normalizedEmail = email.trim().toLowerCase();
       const isEmailTaken = mockMembers.some(
