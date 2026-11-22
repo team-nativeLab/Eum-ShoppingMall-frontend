@@ -5,7 +5,6 @@ import { sanitizeRedirectPath } from '@eum/api/redirect';
 import { Button } from '@eum/ui/components/Button';
 import { Checkbox } from '@eum/ui/components/Checkbox';
 import { Modal } from '@eum/ui/components/Modal';
-import { Segmented } from '@eum/ui/components/Segmented';
 import { TextField } from '@eum/ui/components/TextField';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -14,7 +13,6 @@ import { PageContainer } from '@/components/page-container';
 import { getMemberAuth } from '@/lib/member-auth';
 import { useMemberSession } from './member-session';
 
-type AccountType = MemberSignupInput['accountType'];
 type ConsentDocument = 'terms' | 'privacy' | 'marketing';
 
 /** W-10: 이메일 중복 확인·메모리 휴대폰 코드 확인을 거치는 mock 가입 화면입니다. */
@@ -27,7 +25,6 @@ export function SignupPageView({
 }) {
   const router = useRouter();
   const { setMember } = useMemberSession();
-  const [accountType, setAccountType] = useState<AccountType>('personal');
   const [email, setEmail] = useState('');
   const [checkedEmail, setCheckedEmail] = useState('');
   const [emailAvailable, setEmailAvailable] = useState<boolean | null>(null);
@@ -165,7 +162,7 @@ export function SignupPageView({
         password,
         name: name.trim(),
         phone: phone.trim(),
-        accountType,
+        accountType: 'personal',
       };
       const member = await (await getMemberAuth()).signup(signupInput);
       setMember(member);
@@ -226,15 +223,6 @@ export function SignupPageView({
           className="mt-24 flex flex-col gap-16"
           onSubmit={(submitEvent) => void handleSubmit(submitEvent)}
         >
-          <Segmented
-            label="회원 유형"
-            value={accountType}
-            onValueChange={setAccountType}
-            options={[
-              { value: 'personal', label: '개인 회원' },
-              { value: 'business', label: '사업자 회원' },
-            ]}
-          />
           <div className="grid gap-8 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
             <TextField
               label="이메일"

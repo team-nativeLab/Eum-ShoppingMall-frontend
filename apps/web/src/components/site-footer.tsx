@@ -9,7 +9,6 @@ import { useCompanyInfoQuery } from '@/features/company/use-company-info-query';
 import { PageContainer } from './page-container';
 
 const FOOTER_LINKS = [
-  { label: '회사소개', href: '/about', isEmphasized: false, isDesktopOnly: true },
   { label: '이용약관', href: '/terms', isEmphasized: false, isDesktopOnly: false },
   { label: '개인정보처리방침', href: '/privacy', isEmphasized: true, isDesktopOnly: false },
   { label: '이용안내', href: '/guide', isEmphasized: false, isDesktopOnly: true },

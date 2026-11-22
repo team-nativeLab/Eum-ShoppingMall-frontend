@@ -21,18 +21,20 @@ function getLinkLabels(menu: HTMLElement): string[] {
 }
 
 describe('SiteFooter 링크 목록', () => {
-  it('데스크톱 푸터 메뉴는 남은 6개 링크를 기존 순서대로 보여 줍니다', () => {
+  it('데스크톱 푸터 메뉴는 회사소개 없이 나머지 링크를 기존 순서대로 보여 줍니다', () => {
     render(<SiteFooter />);
 
     const { desktopFooterMenu } = getFooterMenus();
     expect(getLinkLabels(desktopFooterMenu)).toEqual([
-      '회사소개',
       '이용약관',
       '개인정보처리방침',
       '이용안내',
       '이벤트',
       '고객센터',
     ]);
+    const { mobileFooterMenu } = getFooterMenus();
+    expect(within(desktopFooterMenu).queryByRole('link', { name: '회사소개' })).toBeNull();
+    expect(within(mobileFooterMenu).queryByRole('link', { name: '회사소개' })).toBeNull();
   });
 
   it('상단 메뉴와 중복되던 제품·베스트·오늘의 상품·추천상품·브랜드몰·안전 솔루션 링크는 푸터에 없습니다', () => {

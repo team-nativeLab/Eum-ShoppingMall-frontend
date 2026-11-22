@@ -1129,14 +1129,40 @@ describe('SiteHeader on login and signup pages', () => {
     apiMocks.listCategories.mockResolvedValue([]);
   });
 
-  it.each(['/login', '/signup'])('renders no site header on %s', (pathname) => {
-    navigationMocks.pathname = pathname;
-    const { container } = render(<SiteHeader />, { wrapper: createWrapper() });
+  it.each(['/login/extra', '/signup', '/signup/extra'])(
+    'renders no site header on %s',
+    (pathname) => {
+      navigationMocks.pathname = pathname;
+      const { container } = render(<SiteHeader />, { wrapper: createWrapper() });
 
-    expect(container).toBeEmptyDOMElement();
-    expect(screen.queryByRole('banner')).toBeNull();
-    expect(screen.queryByRole('navigation')).toBeNull();
-    expect(screen.queryAllByAltText('안전맛집')).toHaveLength(0);
+      expect(container).toBeEmptyDOMElement();
+      expect(screen.queryByRole('banner')).toBeNull();
+      expect(screen.queryByRole('navigation')).toBeNull();
+      expect(screen.queryAllByAltText('안전맛집')).toHaveLength(0);
+    },
+  );
+
+  it('renders the functional site header on the login page', async () => {
+    navigationMocks.pathname = '/login';
+    render(<SiteHeader />, { wrapper: createWrapper() });
+
+    expect(screen.getByRole('banner')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: '주요 메뉴' })).toBeInTheDocument();
+    expect(screen.getAllByAltText('안전맛집').length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('상품 검색')).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole('link', { name: '장바구니' })
+        .every((link) => link.getAttribute('href') === '/cart'),
+    ).toBe(true);
+    expect(
+      screen
+        .getAllByRole('link', { name: '로그인' })
+        .every((link) => link.getAttribute('href') === '/login?redirect=%2Fmypage'),
+    ).toBe(true);
+
+    await userEvent.click(screen.getAllByRole('button', { name: '전체 메뉴 열기' })[0]!);
+    expect(await screen.findByRole('navigation', { name: '전체 메뉴' })).toBeInTheDocument();
   });
 
   it('renders the site header with its logo on the home page', () => {
@@ -1145,6 +1171,19 @@ describe('SiteHeader on login and signup pages', () => {
 
     expect(screen.getByRole('banner')).toBeInTheDocument();
     expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0);
+    expect(screen.getAllByAltText('안전맛집').length).toBeGreaterThan(0);
+  });
+
+  it('keeps the site header after login route navigation to home', () => {
+    navigationMocks.pathname = '/login';
+    const { rerender } = render(<SiteHeader />, { wrapper: createWrapper() });
+    expect(screen.getByRole('banner')).toBeInTheDocument();
+
+    navigationMocks.pathname = '/';
+    rerender(<SiteHeader />);
+
+    expect(screen.getByRole('banner')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: '주요 메뉴' })).toBeInTheDocument();
     expect(screen.getAllByAltText('안전맛집').length).toBeGreaterThan(0);
   });
 

@@ -1,80 +1,19 @@
 'use client';
 
 import { getApiFailureKind } from '@eum/api/errors';
-import { getPriceDisplay } from '@eum/api/price';
-import type { BrandSummary, Product } from '@eum/api/types';
+import type { BrandSummary } from '@eum/api/types';
 import { Breadcrumb } from '@eum/ui/components/Breadcrumb';
 import { EmptyState } from '@eum/ui/components/EmptyState';
-import { Icon } from '@eum/ui/components/Icon';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
-import { cx } from '@eum/ui/lib/cx';
-import { ArrowRight, Store } from 'lucide-react';
+import { Store } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useRef, useState, type FocusEvent, type PointerEvent } from 'react';
 import { PageContainer } from '@/components/page-container';
-import { buildBrandHref } from '@/features/products/product-navigation';
-import { ProductImage } from '@/features/products/product-image';
-import { useProductsQuery } from '@/features/products/use-products-query';
+import { buildBrandProductsHref } from '@/features/products/product-navigation';
 import { BRAND_LOAD_ERROR_COPY } from './brand-load-error';
 import { BrandLogo } from './brand-media';
-import { useBrandQuery } from './use-brand-query';
 import { useBrandsQuery } from './use-brands-query';
 
 const BRAND_LOAD_ERROR_COPY_MAP = BRAND_LOAD_ERROR_COPY;
-const DEFAULT_BRAND_ACCENT_COLOR = '#2F6F62';
-const BRAND_ACCENT_COLOR_PATTERN = /^#[0-9A-F]{6}$/i;
-const BRAND_PANEL_VIEWPORT_MARGIN = 16;
-const BRAND_PANEL_MAX_WIDTH = 560;
-
-function getBrandPanelLayout(cardRect: Pick<DOMRect, 'left' | 'right'>, viewportWidth: number) {
-  const preferredWidth = Math.min(
-    BRAND_PANEL_MAX_WIDTH,
-    Math.max(0, viewportWidth - BRAND_PANEL_VIEWPORT_MARGIN * 2),
-  );
-  const rightSpace = viewportWidth - BRAND_PANEL_VIEWPORT_MARGIN - cardRect.left;
-  const leftSpace = cardRect.right - BRAND_PANEL_VIEWPORT_MARGIN;
-  const alignRight = rightSpace < preferredWidth && leftSpace > rightSpace;
-
-  if (alignRight) {
-    const rightEdge = Math.min(cardRect.right, viewportWidth - BRAND_PANEL_VIEWPORT_MARGIN);
-    return {
-      alignment: 'right' as const,
-      width: Math.min(BRAND_PANEL_MAX_WIDTH, Math.max(0, rightEdge - BRAND_PANEL_VIEWPORT_MARGIN)),
-      offset: Math.max(0, cardRect.right - rightEdge),
-    };
-  }
-
-  const leftEdge = Math.max(cardRect.left, BRAND_PANEL_VIEWPORT_MARGIN);
-  return {
-    alignment: 'left' as const,
-    width: Math.min(
-      BRAND_PANEL_MAX_WIDTH,
-      Math.max(0, viewportWidth - BRAND_PANEL_VIEWPORT_MARGIN - leftEdge),
-    ),
-    offset: Math.max(0, leftEdge - cardRect.left),
-  };
-}
-
-function getBrandAccentColor(color: string | undefined): string {
-  return color && BRAND_ACCENT_COLOR_PATTERN.test(color) ? color : DEFAULT_BRAND_ACCENT_COLOR;
-}
-
-function getAccentForeground(
-  color: string,
-): 'text-text-1' | 'text-inverse' | 'text-text-accent-black' {
-  const matches = color.slice(1).match(/.{2}/g);
-  if (!matches || matches.length !== 3) return 'text-inverse';
-  const channels = matches.map((channel) => Number.parseInt(channel, 16) / 255);
-  const luminance = channels
-    .map((channel) => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4))
-    .reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index]!, 0);
-  const contrastWithText = (foregroundLuminance: number) =>
-    (Math.max(luminance, foregroundLuminance) + 0.05) /
-    (Math.min(luminance, foregroundLuminance) + 0.05);
-  if (contrastWithText(0.005605391624202723) >= 4.5) return 'text-text-1';
-  if (contrastWithText(1) >= 4.5) return 'text-inverse';
-  return 'text-text-accent-black';
-}
 
 export function BrandDirectoryView() {
   const brandsQuery = useBrandsQuery();
@@ -160,318 +99,38 @@ function BrandDirectoryError({ error, onRetry }: { error: unknown; onRetry: () =
 }
 
 function BrandCardDirectory({ brands }: { brands: BrandSummary[] }) {
-  const [activeBrandId, setActiveBrandId] = useState<string | null>(null);
-  const [panelAlignment, setPanelAlignment] = useState<'left' | 'right'>('left');
-  const [panelWidth, setPanelWidth] = useState(BRAND_PANEL_MAX_WIDTH);
-  const [panelOffset, setPanelOffset] = useState(0);
-  const lastPointerType = useRef<string | null>(null);
-  const focusModality = useRef<'keyboard' | 'pointer' | null>(null);
-  const pointerBrandId = useRef<string | null>(null);
-  const focusedBrandId = useRef<string | null>(null);
-  const activeCardElement = useRef<HTMLElement | null>(null);
-  const directoryRef = useRef<HTMLDivElement>(null);
-
-  function updatePanelPosition(cardElement: HTMLElement) {
-    const layout = getBrandPanelLayout(cardElement.getBoundingClientRect(), window.innerWidth);
-    setPanelAlignment(layout.alignment);
-    setPanelWidth(layout.width);
-    setPanelOffset(layout.offset);
-  }
-
-  function openBrandPanel(brandId: string, cardElement: HTMLElement) {
-    activeCardElement.current = cardElement;
-    updatePanelPosition(cardElement);
-    setActiveBrandId(brandId);
-  }
-
-  function findCardElement(brandId: string): HTMLElement | null {
-    const cards = directoryRef.current?.querySelectorAll<HTMLLIElement>('li[data-brand-id]');
-    return Array.from(cards ?? []).find((item) => item.dataset.brandId === brandId) ?? null;
-  }
-
-  function getBrandIdFromTarget(target: EventTarget | null): string | null {
-    return target instanceof Element
-      ? (target.closest<HTMLLIElement>('li[data-brand-id]')?.dataset.brandId ?? null)
-      : null;
-  }
-
-  function closeBrandPanel() {
-    activeCardElement.current = null;
-    setActiveBrandId(null);
-  }
-
-  function handlePointerLeave(relatedTarget: EventTarget | null) {
-    pointerBrandId.current = getBrandIdFromTarget(relatedTarget);
-    if (focusedBrandId.current) return;
-    const nextId = pointerBrandId.current;
-    const nextCard = nextId ? findCardElement(nextId) : null;
-    if (nextId && nextCard) openBrandPanel(nextId, nextCard);
-    else closeBrandPanel();
-  }
-
-  function handleFocusLeave(event: FocusEvent<HTMLLIElement>) {
-    focusedBrandId.current =
-      focusModality.current === 'keyboard' ? getBrandIdFromTarget(event.relatedTarget) : null;
-    const nextFocusId = focusedBrandId.current;
-    if (nextFocusId) {
-      const nextCard = findCardElement(nextFocusId);
-      if (nextCard) openBrandPanel(nextFocusId, nextCard);
-      return;
-    }
-    const hoveredId = pointerBrandId.current;
-    const hoveredCard = hoveredId ? findCardElement(hoveredId) : null;
-    if (hoveredId && hoveredCard) openBrandPanel(hoveredId, hoveredCard);
-    else closeBrandPanel();
-  }
-
-  function handleTouchTap(brandId: string, cardElement: HTMLElement) {
-    if (lastPointerType.current !== 'touch') return;
-    if (activeBrandId === brandId) closeBrandPanel();
-    else openBrandPanel(brandId, cardElement);
-  }
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Tab') focusModality.current = 'keyboard';
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, []);
-
-  useEffect(() => {
-    if (!activeBrandId || !activeCardElement.current) return undefined;
-    const cardElement = activeCardElement.current;
-    const onResize = () => updatePanelPosition(cardElement);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, [activeBrandId]);
-
   return (
     <PageContainer>
-      <div ref={directoryRef} className="relative">
-        <ul className="grid grid-cols-2 gap-12 lg:grid-cols-5 lg:gap-24">
-          {brands.map((brand) => (
-            <li
-              key={brand.id}
-              data-brand-id={brand.id}
-              className={cx('relative', activeBrandId === brand.id && 'z-20')}
-              onPointerEnter={(event: PointerEvent<HTMLLIElement>) => {
-                if (event.pointerType === 'mouse') {
-                  pointerBrandId.current = brand.id;
-                  if (!focusedBrandId.current) openBrandPanel(brand.id, event.currentTarget);
-                }
-              }}
-              onPointerDown={(event: PointerEvent<HTMLLIElement>) => {
-                if (event.target instanceof Element && event.target.closest('[data-brand-card]')) {
-                  lastPointerType.current = event.pointerType;
-                  focusModality.current = 'pointer';
-                }
-              }}
-              onPointerUp={(event: PointerEvent<HTMLLIElement>) => {
-                if (event.target instanceof Element && event.target.closest('[data-brand-card]')) {
-                  if (event.pointerType === 'touch') handleTouchTap(brand.id, event.currentTarget);
-                  lastPointerType.current = null;
-                }
-              }}
-              onPointerCancel={() => {
-                lastPointerType.current = null;
-                pointerBrandId.current = null;
-                if (!focusedBrandId.current) closeBrandPanel();
-              }}
-              onPointerLeave={(event: PointerEvent<HTMLLIElement>) => {
-                if (event.pointerType === 'mouse') handlePointerLeave(event.relatedTarget);
-              }}
-              onFocus={(event: FocusEvent<HTMLLIElement>) => {
-                if (focusModality.current === 'keyboard') {
-                  focusedBrandId.current = brand.id;
-                  openBrandPanel(brand.id, event.currentTarget);
-                }
-              }}
-              onBlur={handleFocusLeave}
+      <ul className="grid grid-cols-2 gap-12 lg:grid-cols-5 lg:gap-24">
+        {brands.map((brand) => (
+          <li key={brand.id}>
+            <Link
+              href={buildBrandProductsHref(brand.name)}
+              aria-label={`${brand.name}, 제품 ${brand.productCount}개`}
+              className="flex min-h-200 w-full flex-col overflow-hidden rounded-12 border border-line bg-bg text-left shadow-1 focus-ring transition-colors hover:border-line-strong"
             >
-              <BrandCard brand={brand} isSelected={brand.id === activeBrandId} />
-              {activeBrandId === brand.id ? (
-                <div
-                  data-brand-panel-bridge
-                  className={cx(
-                    'absolute top-full z-20 h-8 lg:h-16',
-                    panelAlignment === 'right' ? 'right-0' : 'left-0',
-                  )}
-                  style={{
-                    width: panelWidth,
-                    ...(panelAlignment === 'right'
-                      ? { right: panelOffset }
-                      : { left: panelOffset }),
-                  }}
-                >
-                  <BrandSelectionPanel brand={brand} />
-                </div>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </PageContainer>
-  );
-}
-
-function BrandCard({ brand, isSelected }: { brand: BrandSummary; isSelected: boolean }) {
-  return (
-    <button
-      type="button"
-      aria-expanded={isSelected}
-      aria-controls={isSelected ? 'brand-selection-panel' : undefined}
-      data-brand-card
-      style={isSelected ? { borderColor: getBrandAccentColor(brand.accentColor) } : undefined}
-      className={cx(
-        'flex min-h-200 w-full flex-col overflow-hidden rounded-12 border bg-bg text-left shadow-1 focus-ring transition-colors',
-        isSelected ? 'border-2' : 'border-line hover:border-line-strong',
-      )}
-    >
-      <span className="flex h-148 w-full items-center justify-center overflow-hidden border-b border-line px-16 py-12">
-        {brand.logoUrl ? (
-          <BrandLogo
-            logoUrl={brand.logoUrl}
-            brandName={brand.name}
-            className="size-full"
-            settings={brand.logoSettings}
-          />
-        ) : (
-          <span className="text-label-m text-text-2">{brand.name}</span>
-        )}
-      </span>
-      <span className="flex min-h-52 w-full items-center justify-between gap-8 px-12 py-8">
-        <span className="min-w-0 truncate text-label-m">{brand.name}</span>
-        <span className="shrink-0 text-label-s text-text-3">
-          {brand.productCount.toLocaleString('ko-KR')}개
-        </span>
-      </span>
-    </button>
-  );
-}
-
-function BrandSelectionPanel({ brand }: { brand: BrandSummary }) {
-  const brandQuery = useBrandQuery(brand.id);
-  const productsQuery = useProductsQuery(
-    { brand: [brand.name], pageSize: 3, sortBy: 'recommended' },
-    { enabled: brand.productCount > 0 },
-  );
-  const detail = brandQuery.data;
-  const accentColor = getBrandAccentColor(brand.accentColor);
-  const accentForeground = getAccentForeground(accentColor);
-
-  return (
-    <aside
-      id="brand-selection-panel"
-      aria-labelledby="brand-selection-title"
-      className="absolute top-full left-0 w-full overflow-hidden rounded-24 border border-line bg-bg shadow-3"
-    >
-      <div
-        className={cx('px-20 py-20 lg:px-32 lg:py-24', accentForeground)}
-        style={{
-          backgroundColor: accentColor,
-          ...(accentForeground === 'text-text-accent-black'
-            ? { color: 'var(--color-text-accent-black)' }
-            : {}),
-        }}
-      >
-        <p className="text-label-m">{brand.englishName ?? brand.name}</p>
-        <h3 id="brand-selection-title" className="mt-4 text-h3">
-          {brand.name}
-        </h3>
-        {brand.tagline ? <p className="mt-8 text-body-s">{brand.tagline}</p> : null}
-      </div>
-      <div className="grid gap-16 p-16 lg:p-24">
-        {brandQuery.isPending ? (
-          <p className="text-body-s text-text-3" aria-live="polite">
-            브랜드 정보를 불러오는 중입니다.
-          </p>
-        ) : null}
-        {brandQuery.isError ? (
-          <div className="flex items-center justify-between gap-8 text-body-s text-text-3">
-            <span>브랜드 정보를 불러오지 못했습니다.</span>
-            <button
-              type="button"
-              onClick={() => void brandQuery.refetch()}
-              className="min-h-32 rounded-4 px-8 text-label-s underline focus-ring"
-            >
-              다시 시도
-            </button>
-          </div>
-        ) : null}
-        {detail?.mainField || detail?.certification ? (
-          <div className="flex flex-wrap gap-8">
-            {[detail.mainField, detail.certification]
-              .filter((field): field is string => Boolean(field?.trim()))
-              .map((field) => (
-                <span
-                  key={field}
-                  className="rounded-capsule border border-line bg-surface px-12 py-6 text-label-s text-text-2"
-                >
-                  {field}
+              <span className="flex h-148 w-full items-center justify-center overflow-hidden border-b border-line px-16 py-12">
+                {brand.logoUrl ? (
+                  <BrandLogo
+                    logoUrl={brand.logoUrl}
+                    brandName={brand.name}
+                    className="size-full"
+                    settings={brand.logoSettings}
+                  />
+                ) : (
+                  <span className="text-label-m text-text-2">{brand.name}</span>
+                )}
+              </span>
+              <span className="flex min-h-52 w-full items-center justify-between gap-8 px-12 py-8">
+                <span className="min-w-0 truncate text-label-m">{brand.name}</span>
+                <span className="shrink-0 text-label-s text-text-3">
+                  {brand.productCount.toLocaleString('ko-KR')}개
                 </span>
-              ))}
-          </div>
-        ) : null}
-        <section aria-labelledby="brand-recommendations-title">
-          <h4 id="brand-recommendations-title" className="text-label-m text-text-3">
-            추천 상품
-          </h4>
-          {productsQuery.isPending && brand.productCount > 0 ? (
-            <p className="mt-12 text-body-s text-text-3" aria-live="polite">
-              상품을 불러오는 중입니다.
-            </p>
-          ) : productsQuery.isError ? (
-            <div className="mt-12 flex items-center justify-between gap-8 text-body-s text-text-3">
-              <span>추천 상품을 불러오지 못했습니다.</span>
-              <button
-                type="button"
-                onClick={() => void productsQuery.refetch()}
-                className="min-h-32 rounded-4 px-8 text-label-s underline focus-ring"
-              >
-                다시 시도
-              </button>
-            </div>
-          ) : productsQuery.data?.items.length ? (
-            <ul className="mt-8 divide-y divide-line">
-              {productsQuery.data.items.map((product) => (
-                <li key={product.id}>
-                  <RecommendedProduct product={product} />
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-8 text-body-s text-text-3">등록된 추천 상품이 없습니다.</p>
-          )}
-        </section>
-        <Link
-          href={buildBrandHref(brand.id)}
-          className={cx(
-            'flex min-h-48 items-center justify-center gap-8 rounded-8 px-16 text-label-l focus-ring',
-            accentForeground,
-          )}
-          style={{ backgroundColor: accentColor }}
-        >
-          {brand.name} 브랜드관 바로가기
-          <Icon icon={ArrowRight} size={20} />
-        </Link>
-      </div>
-    </aside>
-  );
-}
-
-function RecommendedProduct({ product }: { product: Product }) {
-  const priceDisplay = getPriceDisplay(product);
-  return (
-    <Link
-      href={`/products/${encodeURIComponent(product.id)}`}
-      className="flex min-h-76 items-center gap-12 py-8 focus-ring"
-    >
-      <span className="size-56 shrink-0 overflow-hidden rounded-8 border border-line bg-surface">
-        <ProductImage src={product.thumbnailUrl} alt="" />
-      </span>
-      <span className="min-w-0 flex-1 truncate text-body-s">{product.name}</span>
-      <span className="shrink-0 text-label-s text-danger">{priceDisplay.text}</span>
-    </Link>
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </PageContainer>
   );
 }

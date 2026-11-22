@@ -5,7 +5,7 @@ import type { Member } from '@eum/api/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getMemberAuth, getUnifiedAuth } from '@/lib/member-auth';
 import { LoginPageView } from './login-page';
-import { MemberSessionProvider } from './member-session';
+import { MemberSessionProvider, useMemberSession } from './member-session';
 
 const authMock = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
@@ -40,16 +40,22 @@ const member: Member = {
   pointBalance: 0,
 };
 
-function renderLoginPage(rawRedirect?: string) {
+function renderLoginPage(rawRedirect?: string, showMemberSession = false) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
   return render(
     <QueryClientProvider client={queryClient}>
       <MemberSessionProvider>
         <LoginPageView rawRedirect={rawRedirect} />
+        {showMemberSession ? <MemberSessionProbe /> : null}
       </MemberSessionProvider>
     </QueryClientProvider>,
   );
+}
+
+function MemberSessionProbe() {
+  const { member } = useMemberSession();
+  return <output data-testid="member-session">{member?.name ?? '로그아웃'}</output>;
 }
 
 beforeEach(() => {
@@ -165,6 +171,19 @@ describe('W-09 login form validation', () => {
       ).toBeInTheDocument();
     },
   );
+
+  it('returns a direct member login to home with the shared member session ready', async () => {
+    const user = userEvent.setup();
+    renderLoginPage(undefined, true);
+
+    expect(screen.getByTestId('member-session')).toHaveTextContent('로그아웃');
+    await user.type(screen.getByRole('textbox', { name: '이메일' }), 'member@example.com');
+    await user.type(screen.getByLabelText('비밀번호'), 'password');
+    await user.click(screen.getByRole('button', { name: '로그인' }));
+
+    await waitFor(() => expect(routerMock.replace).toHaveBeenCalledWith('/'));
+    expect(screen.getByTestId('member-session')).toHaveTextContent('테스트 회원');
+  });
 
   it('shows the mock session guidance only in mock mode', () => {
     const mockView = renderLoginPage();

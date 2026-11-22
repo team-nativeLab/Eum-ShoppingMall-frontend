@@ -465,7 +465,7 @@ function PromoBannerSection({ banners }: { banners: HomeContent['promoBanners'] 
 }
 
 /**
- * 베스트 셀러. 데스크톱은 홈 전용 카드 캐러셀(1024px대 5장, 1280px부터 7장 이동),
+ * 베스트. 데스크톱은 홈 전용 카드 캐러셀(1024px대 5장, 1280px부터 7장 이동),
  * 모바일은 2×2 카드 페이지를 스와이프로 넘기고 하단 "전체 보기" 버튼을 둡니다(W-01m).
  * 카테고리 칩은 두지 않습니다. 카테고리 이동은 상단 카테고리 바가 맡습니다.
  */
@@ -481,7 +481,7 @@ function BestSellerSection({ products }: { products: Product[] }) {
       <section aria-labelledby="best-sellers-heading">
         <div className="flex items-center gap-32">
           <h2 id="best-sellers-heading" className="shrink-0 text-h2 lg:text-h1">
-            베스트 셀러
+            베스트
           </h2>
           <Link
             href="/best"
@@ -543,7 +543,7 @@ function BestSellerSection({ products }: { products: Product[] }) {
             'mt-16 lg:hidden',
           )}
         >
-          베스트 셀러 전체 보기
+          베스트 전체 보기
         </Link>
       </section>
     </PageContainer>
@@ -551,7 +551,7 @@ function BestSellerSection({ products }: { products: Product[] }) {
 }
 
 /**
- * 베스트 셀러 아래의 「오늘의 상품」·「추천상품」 캐러셀. 기존 상품 목록(collection=today)과 추천 API를 그대로 씁니다.
+ * 베스트 아래의 「오늘의 상품」·「추천상품」 캐러셀. 기존 상품 목록(collection=today)과 추천 API를 그대로 씁니다.
  * 목록이 비어 있으면 해당 섹션은 그리지 않습니다. 「추천상품」 전체 보기는 전용 화면(/recommended)으로 이동합니다.
  */
 function HomeShowcaseSections() {
@@ -619,7 +619,7 @@ function HomeDiscountProductsSection() {
 }
 
 /**
- * 베스트 셀러와 같은 카드·캐러셀 방식의 홈 상품 섹션. 카테고리 탭 없이 제목·전체 보기·이전/다음만 둡니다.
+ * 베스트와 같은 카드·캐러셀 방식의 홈 상품 섹션. 카테고리 탭 없이 제목·전체 보기·이전/다음만 둡니다.
  * 데스크톱은 홈 전용 캐러셀 레이아웃, 모바일은 2×2 카드 페이지를 스와이프로 넘깁니다.
  */
 function HomeProductShowcase({

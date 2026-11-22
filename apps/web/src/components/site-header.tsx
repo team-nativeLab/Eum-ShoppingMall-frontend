@@ -372,13 +372,8 @@ export function SiteHeader() {
     router.push('/products/' + encodeURIComponent(productId));
   };
 
-  // 로그인·회원가입 화면은 공용 헤더를 그리지 않습니다(demo-mode-banner.tsx와 같은 규칙). 모든 훅 호출 뒤에서 return합니다.
-  if (
-    pathname === '/login' ||
-    pathname.startsWith('/login/') ||
-    pathname === '/signup' ||
-    pathname.startsWith('/signup/')
-  ) {
+  // 로그인·회원가입 경로의 하위 화면에는 공용 헤더를 그리지 않습니다. 모든 훅 호출 뒤에서 return합니다.
+  if (pathname.startsWith('/login/') || pathname === '/signup' || pathname.startsWith('/signup/')) {
     return null;
   }
   if (checkoutStep > 0) {
