@@ -102,7 +102,6 @@ const apiMocks = vi.hoisted(() => ({
   listOrdersByMember: vi.fn(),
   updateOrderAdmin: vi.fn(),
   listProducts: vi.fn(),
-  listQuotes: vi.fn(),
 }));
 const adminAuthMocks = vi.hoisted(() => ({
   getAdminAuth: vi.fn(),
@@ -168,7 +167,6 @@ describe('partial order lookup retry actions', () => {
     apiMocks.listOrdersByMember.mockResolvedValue([]);
     apiMocks.updateOrderAdmin.mockResolvedValue(undefined);
     apiMocks.listProducts.mockResolvedValue({ items: [], totalCount: 0 });
-    apiMocks.listQuotes.mockResolvedValue([]);
     apiMocks.getShopApi.mockResolvedValue({
       members: { adminList: apiMocks.membersList },
       orders: {
@@ -176,7 +174,6 @@ describe('partial order lookup retry actions', () => {
         updateAdmin: apiMocks.updateOrderAdmin,
       },
       products: { list: apiMocks.listProducts },
-      quotes: { adminList: apiMocks.listQuotes },
     });
   });
 
@@ -420,7 +417,6 @@ describe('partial order lookup retry actions', () => {
     ]);
     expect(apiMocks.membersList).toHaveBeenCalledTimes(1);
     expect(apiMocks.listProducts).toHaveBeenCalledTimes(1);
-    expect(apiMocks.listQuotes).toHaveBeenCalledTimes(1);
   });
 
   it('merges retry member B orders with existing member A orders in Dashboard', async () => {
@@ -447,26 +443,16 @@ describe('partial order lookup retry actions', () => {
     ]);
     expect(apiMocks.membersList).toHaveBeenCalledTimes(1);
     expect(apiMocks.listProducts).toHaveBeenCalledTimes(1);
-    expect(apiMocks.listQuotes).toHaveBeenCalledTimes(1);
   });
 
   it('keeps only the Dashboard fields needed for its member and order summaries in cache', async () => {
     setupTwoMemberOrderResponses('failure');
-    apiMocks.listQuotes.mockResolvedValue([
-      {
-        id: 'quote-1',
-        status: 'received',
-        companyName: '민감 회사명 테스트',
-        contactName: '민감 담당자 테스트',
-      },
-    ]);
     const { queryClient } = renderWithAdminProviders(<AdminDashboardPage />);
 
     expect(await screen.findByRole('link', { name: 'ORDER-A' })).toBeInTheDocument();
 
     const cachedDashboard = queryClient.getQueryData<{
       membersById: Map<string, { id: string; name: string }>;
-      pendingQuoteCount: number;
       orders: {
         order: Pick<
           Order,
@@ -489,14 +475,6 @@ describe('partial order lookup retry actions', () => {
       memberId: memberA.id,
       paymentTotal: 1000,
     });
-    expect(cachedDashboard?.pendingQuoteCount).toBe(1);
-    expect(queryClient.getQueryData(['admin', 'dashboard'])).not.toHaveProperty('quotes');
-    expect(JSON.stringify(queryClient.getQueryData(['admin', 'dashboard']))).not.toContain(
-      '민감 회사명 테스트',
-    );
-    expect(JSON.stringify(queryClient.getQueryData(['admin', 'dashboard']))).not.toContain(
-      '민감 담당자 테스트',
-    );
     expect(
       [
         ...(cachedDashboard?.membersById.values() ?? []),
@@ -635,7 +613,6 @@ describe('partial order lookup retry actions', () => {
     expect(apiMocks.listOrdersByMember).toHaveBeenCalledTimes(2);
     expect(apiMocks.membersList).toHaveBeenCalledTimes(1);
     expect(apiMocks.listProducts).toHaveBeenCalledTimes(1);
-    expect(apiMocks.listQuotes).toHaveBeenCalledTimes(1);
   });
 
   it('does not write a late Dashboard retry response into a new session cache', async () => {

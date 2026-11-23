@@ -170,7 +170,7 @@ export function ProductListingView({
     (categoryFacet) => categoryFacet.count > 0 && categoryNameById.has(categoryFacet.value),
   );
   const subcategoryChips = getSubcategoryChips(categoryList, selectedCategory);
-  // 이 화면이 열린 카테고리 경로. 칩 목적지가 이 경로와 같을 때만 aria-current를 붙입니다(맞춤 제작/납품 루트는 /solutions로 가므로 제외).
+  // 이 화면이 열린 카테고리 경로. 칩 목적지가 이 경로와 같을 때만 aria-current를 붙입니다.
   const currentCategoryRouteHref = categorySlug
     ? '/category/' + encodeURIComponent(categorySlug)
     : undefined;

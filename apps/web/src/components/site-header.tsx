@@ -39,11 +39,7 @@ import {
 import { CartLink } from './cart-link';
 import { PageContainer } from './page-container';
 import { useSiteMenu } from './site-menu-context';
-import {
-  getCategoryHref,
-  getCurrentMenuHref,
-  isCustomOrderCategory,
-} from '@/features/products/category-href';
+import { getCategoryHref, getCurrentMenuHref } from '@/features/products/category-href';
 import { useCategoriesQuery } from '@/features/products/use-categories-query';
 import { useProductSuggestionsQuery } from '@/features/products/use-product-suggestions-query';
 import { useMemberSession } from '@/features/auth/member-session';
@@ -915,9 +911,8 @@ function AllMenuDropdown({
   onNavigate: () => void;
 }) {
   // 대표 카테고리마다 열을 하나씩 두고, 하위 카테고리와 「전체 보기」를 넣습니다. 하위가 없으면 「전체 보기」 한 줄입니다.
-  // 맞춤 제작/납품(custom-order)은 메뉴 열에서 뺍니다. 카테고리 바와 홈에는 그대로 남습니다.
   const representativeSections: MenuSection[] = categories
-    .filter((category) => category.parentId === null && !isCustomOrderCategory(category))
+    .filter((category) => category.parentId === null)
     .map((category) => ({
       key: category.id,
       title: category.name,
@@ -936,7 +931,7 @@ function AllMenuDropdown({
         },
       ],
     }));
-  // 열 수는 전체 제품 1 + 대표 카테고리 수(맞춤 제작/납품 제외)입니다. 대표 카테고리 수에 따라 열 수가 달라지며, lg에서는 4열 격자로 줄 바꿈됩니다.
+  // 열 수는 전체 제품 1 + 대표 카테고리 수입니다. 대표 카테고리 수에 따라 열 수가 달라지며, lg에서는 4열 격자로 줄 바꿈됩니다.
   const menuSections: MenuSection[] = [
     {
       key: 'all-products',

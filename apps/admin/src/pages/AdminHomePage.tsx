@@ -1,4 +1,5 @@
 import { Button } from '@eum/ui/components/Button';
+import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type SetStateAction } from 'react';
 import {
@@ -114,7 +115,9 @@ export function AdminHomePage() {
         queryClient.invalidateQueries({ queryKey: ['home', 'content'] }),
         queryClient.invalidateQueries({ queryKey: ['products'] }),
       ]);
-      setMessage('홈 편성을 프론트엔드 목 API에 저장했습니다.');
+      setMessage(
+        '배송·서비스 혜택은 Preview 브라우저 저장소에, 나머지 홈 편성은 목 API에 저장했습니다.',
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '홈 편성을 저장하지 못했습니다.');
     } finally {
@@ -177,7 +180,7 @@ export function AdminHomePage() {
           ...current,
           serviceBenefits: [
             ...current.serviceBenefits,
-            { id: `benefit-${Date.now()}`, title: '', description: '' },
+            { id: `benefit-${Date.now()}`, title: '', description: '', isVisible: true },
           ],
         },
     );
@@ -186,7 +189,7 @@ export function AdminHomePage() {
     <section aria-label="홈 편성 관리">
       <AdminPageHeader
         title="홈 편성"
-        description="홈 배너, 추천 상품, 이벤트 진입 CTA와 배송 혜택을 편집합니다."
+        description="홈 배너, 추천 상품, 이벤트와 배송 혜택을 편집합니다."
         action={
           <Button type="button" disabled={saving} onClick={() => void save()}>
             {saving ? '저장 중…' : '변경 사항 저장'}
@@ -207,7 +210,6 @@ export function AdminHomePage() {
           ['home-promotions', '프로모션 카드'],
           ['home-benefits', '배송·서비스 혜택'],
           ['home-products', '추천 상품'],
-          ['home-cta', '맞춤 주문 CTA'],
         ].map(([sectionId, label]) => (
           <a
             key={sectionId}
@@ -523,8 +525,17 @@ export function AdminHomePage() {
           }
         >
           <div className="grid gap-10 p-16">
+            <NoticeInline tone="warning">
+              혜택은 Preview에서 Web과 Admin을 같은 주소로 열 때 공유되며 이 브라우저에 저장됩니다.
+              로컬 Web과 Admin은 포트가 달라 공유되지 않고, 실제 운영 서버에도 저장되지 않습니다.
+              자동 만료되지 않으며 브라우저의 사이트 데이터를 삭제하면 초기화됩니다. 테스트 문구만
+              사용하세요.
+            </NoticeInline>
             {draft.serviceBenefits.map((benefit, index) => (
-              <div key={benefit.id} className="grid gap-8 sm:grid-cols-[1fr_1fr_auto_auto_auto]">
+              <div
+                key={benefit.id}
+                className="grid gap-8 sm:grid-cols-[1fr_1fr_auto_auto_auto_auto]"
+              >
                 <label className="grid gap-4 text-label-s">
                   혜택 제목
                   <input
@@ -547,6 +558,19 @@ export function AdminHomePage() {
                     }
                     className="h-36 rounded-6 border border-line-control px-8"
                   />
+                </label>
+                <label className="flex items-center gap-6 text-label-s">
+                  <input
+                    type="checkbox"
+                    checked={benefit.isVisible !== false}
+                    onChange={(event) =>
+                      updateBenefit(index, (value) => ({
+                        ...value,
+                        isVisible: event.target.checked,
+                      }))
+                    }
+                  />
+                  {benefit.title.trim() || `혜택 ${index + 1}`} 노출
                 </label>
                 <Button
                   type="button"
@@ -645,116 +669,6 @@ export function AdminHomePage() {
                   </span>
                 </label>
               ))}
-          </div>
-        </AdminPanel>
-        <AdminPanel
-          id="home-cta"
-          title="맞춤 주문 CTA"
-          description="홈 하단 이벤트·견적 진입 영역입니다."
-        >
-          <div className="grid gap-10 p-16">
-            <label className="flex items-center gap-8 text-label-s">
-              <input
-                type="checkbox"
-                checked={Boolean(draft.ctaBand)}
-                onChange={(event) =>
-                  setDraft(
-                    (current) =>
-                      current && {
-                        ...current,
-                        ctaBand: event.target.checked
-                          ? {
-                              eyebrow: '',
-                              title: '',
-                              cta: { label: '', destination: '/solutions' },
-                            }
-                          : null,
-                      },
-                  )
-                }
-              />
-              홈에 CTA 표시
-            </label>
-            {draft.ctaBand ? (
-              <>
-                <label className="grid gap-4 text-label-s">
-                  상단 문구
-                  <input
-                    value={draft.ctaBand.eyebrow}
-                    onChange={(event) =>
-                      setDraft((current) =>
-                        current?.ctaBand
-                          ? {
-                              ...current,
-                              ctaBand: { ...current.ctaBand, eyebrow: event.target.value },
-                            }
-                          : current,
-                      )
-                    }
-                    className="h-36 rounded-6 border border-line-control px-8"
-                  />
-                </label>
-                <label className="grid gap-4 text-label-s">
-                  제목
-                  <input
-                    value={draft.ctaBand.title}
-                    onChange={(event) =>
-                      setDraft((current) =>
-                        current?.ctaBand
-                          ? {
-                              ...current,
-                              ctaBand: { ...current.ctaBand, title: event.target.value },
-                            }
-                          : current,
-                      )
-                    }
-                    className="h-36 rounded-6 border border-line-control px-8"
-                  />
-                </label>
-                <div className="grid gap-8 sm:grid-cols-2">
-                  <label className="grid gap-4 text-label-s">
-                    버튼 문구
-                    <input
-                      value={draft.ctaBand.cta.label}
-                      onChange={(event) =>
-                        setDraft((current) =>
-                          current?.ctaBand
-                            ? {
-                                ...current,
-                                ctaBand: {
-                                  ...current.ctaBand,
-                                  cta: { ...current.ctaBand.cta, label: event.target.value },
-                                },
-                              }
-                            : current,
-                        )
-                      }
-                      className="h-36 rounded-6 border border-line-control px-8"
-                    />
-                  </label>
-                  <label className="grid gap-4 text-label-s">
-                    이동 경로
-                    <input
-                      value={draft.ctaBand.cta.destination}
-                      onChange={(event) =>
-                        setDraft((current) =>
-                          current?.ctaBand
-                            ? {
-                                ...current,
-                                ctaBand: {
-                                  ...current.ctaBand,
-                                  cta: { ...current.ctaBand.cta, destination: event.target.value },
-                                },
-                              }
-                            : current,
-                        )
-                      }
-                      className="h-36 rounded-6 border border-line-control px-8"
-                    />
-                  </label>
-                </div>
-              </>
-            ) : null}
           </div>
         </AdminPanel>
       </div>

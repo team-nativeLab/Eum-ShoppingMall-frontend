@@ -1,20 +1,11 @@
 import type { Category } from '@eum/api/types';
 
-/** 맞춤 제작/납품 카테고리의 slug. 이 카테고리는 카테고리 목록이 아니라 솔루션 화면으로 연결합니다. */
-const CUSTOM_ORDER_CATEGORY_SLUG = 'custom-order';
-
-/** 맞춤 제작/납품 카테고리인지 확인합니다. */
-export function isCustomOrderCategory(category: Pick<Category, 'slug'>): boolean {
-  return category.slug === CUSTOM_ORDER_CATEGORY_SLUG;
-}
-
 /**
  * 카테고리 링크 주소. 적용 범위는 헤더 메가메뉴, 카테고리 바, 카테고리 목록(상품 목록의 칩·브레드크럼),
  * 상품 상세의 카테고리 링크와 관련 상품 「전체 보기」입니다.
- * 맞춤 제작/납품만 /solutions로 보내고, 라우트 /category/[slug]의 직접 접근은 그대로 살아 있습니다.
+ * 각 카테고리는 해당 상품 목록으로 연결합니다.
  */
 export function getCategoryHref(category: Pick<Category, 'slug'>): string {
-  if (isCustomOrderCategory(category)) return '/solutions';
   return '/category/' + encodeURIComponent(category.slug);
 }
 

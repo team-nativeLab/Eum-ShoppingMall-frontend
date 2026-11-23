@@ -12,8 +12,11 @@ import { FaqPage, InquiryPage, NoticesPage } from './support-pages';
 
 vi.mock('@/lib/shop-api', () => ({ getShopApi: vi.fn() }));
 vi.mock('@/features/auth/member-session', () => ({ useMemberSession: vi.fn() }));
-const routerMock = vi.hoisted(() => ({ push: vi.fn() }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: routerMock.push }) }));
+const routerMock = vi.hoisted(() => ({ push: vi.fn(), search: '' }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: routerMock.push }),
+  useSearchParams: () => new URLSearchParams(routerMock.search),
+}));
 
 const companyInfo: CompanyInfo = {
   companyName: '안전맛집',
@@ -65,7 +68,7 @@ const inquiries: Inquiry[] = [
   {
     id: 'inq-3',
     memberId: 'mem-001',
-    title: '대량 구매 견적 문의',
+    title: '단체 구매 문의',
     body: '',
     status: 'answered',
     createdAt: '2026-09-12T09:00:00+09:00',
@@ -84,6 +87,14 @@ function createApi(notices: Notice[], apiFaqs: Faq[] = faqs): ShopApi {
       listByMember: vi.fn(async (memberId: string) =>
         inquiries.filter((inquiry) => inquiry.memberId === memberId),
       ),
+      submit: vi.fn(async (input: Pick<Inquiry, 'memberId' | 'title' | 'body'>) => ({
+        ...inquiries[0],
+        id: 'inq-submitted',
+        ...input,
+        status: 'waiting' as const,
+        createdAt: '2026-10-03T00:00:00Z',
+        answer: null,
+      })),
     },
   } as unknown as ShopApi;
 }
@@ -127,6 +138,7 @@ function getPageNavigations() {
 
 beforeEach(() => {
   mockMemberSession(null);
+  routerMock.search = '';
   const notices = Array.from({ length: 12 }, (_, index) => ({
     id: `ntc-${index + 1}`,
     title: `공지 ${index + 1}`,
@@ -268,140 +280,139 @@ describe('company support routes', () => {
     expect(screen.getAllByText('배송', { exact: true })).toHaveLength(1);
   });
 
-  it('문의 작성 화면은 주문 선택과 1,000자 카운터를 제공하고 입력을 초기화합니다', async () => {
+  it('문의 작성 화면은 제목·본문을 제공하고 입력값을 초기화합니다', async () => {
     mockMemberSession(createMember('mem-001'));
     renderWithQuery(<InquiryPage />);
     expect(await screen.findByRole('heading', { name: '문의 작성' })).toBeInTheDocument();
-    expect(screen.getByLabelText(/문의 유형/)).toBeRequired();
+    expect(
+      screen.getByText(
+        /Mock 문의는 현재 브라우저에 저장되며 같은 origin의 Preview Admin에서 확인할 수 있습니다/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/만료되지 않으며 브라우저 사이트 데이터를 삭제하면 정리됩니다/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/실제 개인정보 대신 테스트 내용만 입력해 주세요/)).toBeInTheDocument();
     expect(screen.getByLabelText(/제목/)).toBeRequired();
     expect(screen.getByRole('textbox', { name: /문의 내용/ })).toBeRequired();
-    expect(screen.getByRole('combobox', { name: '주문 선택 (선택)' })).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: '주문 선택 (선택)' })).not.toBeRequired();
-    expect(screen.getByText('0 / 1,000')).toBeInTheDocument();
+    expect(screen.getByText('0 / 5,000')).toBeInTheDocument();
 
-    const inquiryType = screen.getByLabelText(/문의 유형/);
     const title = screen.getByLabelText(/제목/);
     const body = screen.getByRole('textbox', { name: /문의 내용/ });
-    expect(screen.getAllByText('*', { selector: 'span[aria-hidden="true"]' })).toHaveLength(4);
-    expect(inquiryType).toHaveAccessibleName('문의 유형');
-    expect(title).toHaveAccessibleName('제목');
-    expect(body).not.toHaveAccessibleName(/\*/);
-    const bodyLabel = body.closest('label');
-    expect(bodyLabel).not.toBeNull();
-    const bodyRequiredIndicator = within(bodyLabel as HTMLElement).getByText('*');
-    expect(bodyRequiredIndicator).toHaveAttribute('aria-hidden', 'true');
-    expect(bodyRequiredIndicator).toHaveClass('text-danger');
-    expect(bodyRequiredIndicator.parentElement).toHaveClass('inline-flex', 'items-center', 'gap-4');
-    fireEvent.change(inquiryType, { target: { value: 'delivery' } });
     fireEvent.change(title, { target: { value: '작성 중인 제목' } });
     fireEvent.change(body, { target: { value: '작성 중인 내용' } });
-    expect(screen.getByText('8 / 1,000')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '취소' }));
-    expect(inquiryType).toHaveValue('');
+    expect(screen.getByText('8 / 5,000')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '초기화' }));
     expect(title).toHaveValue('');
     expect(body).toHaveValue('');
-    expect(
-      screen.getByText('작성 내용을 초기화했습니다. 입력값은 저장되지 않았습니다.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('작성 내용을 초기화했습니다.')).toBeInTheDocument();
     await screen.findByText('배송 일정 문의드립니다');
     const api = await getShopApi();
-    expect(api.members.list).not.toHaveBeenCalled();
-    expect(api.orders.listByMember).toHaveBeenCalledWith(
-      'mem-001',
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
-    );
-    expect(api.inquiries.listByMember).toHaveBeenCalledWith(
-      'mem-001',
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
-    );
+    expect(api.orders.listByMember).not.toHaveBeenCalled();
   });
 
-  it('문의 등록은 입력값을 지운 뒤 저장하지 않는 데모 완료 안내를 보여 줍니다', async () => {
+  it('회원 세션으로 문의를 저장하고 상품 문맥은 canonical 상품 정보로 포함합니다', async () => {
     mockMemberSession(createMember('mem-001'));
+    routerMock.search =
+      '?productId=&optionId=color%3Ablack&quantity=99&productId=product-a&optionId=color%3Awhite&quantity=3&productId=product-a&optionId=color%3Ablack&quantity=2';
+    const product = {
+      id: 'product-a',
+      name: '안전모',
+      options: [
+        {
+          id: 'color',
+          label: '색상',
+          required: true,
+          choices: [
+            { id: 'white', label: '백색', priceDelta: 0 },
+            { id: 'black', label: '흑색', priceDelta: 0 },
+          ],
+        },
+      ],
+      skus: [],
+    };
+    const submit = vi.fn(async (input: Pick<Inquiry, 'memberId' | 'title' | 'body'>) => ({
+      ...inquiries[0],
+      id: 'inq-saved',
+      ...input,
+      status: 'waiting' as const,
+      answer: null,
+    }));
+    vi.mocked(getShopApi).mockResolvedValue({
+      ...createApi([]),
+      products: { getById: vi.fn(async () => product) },
+      inquiries: { listByMember: vi.fn(async () => []), submit },
+    } as unknown as ShopApi);
     renderWithQuery(<InquiryPage />);
-    await screen.findByRole('heading', { name: '문의 작성' });
-    const notificationCheckbox = screen.getByRole('checkbox', { name: '답변 등록 시 알림 받기' });
-    expect(notificationCheckbox).not.toBeRequired();
-    expect(notificationCheckbox).toHaveAttribute('aria-describedby', 'inquiry-notification-note');
-    expect(
-      screen.getByText(
-        '알림 선택은 화면 미리보기용입니다. 실제로 저장되지 않으며 답변 알림도 발송되지 않습니다.',
-      ),
-    ).toHaveAttribute('id', 'inquiry-notification-note');
-    fireEvent.change(screen.getByRole('combobox', { name: /문의 유형/ }), {
-      target: { value: 'delivery' },
-    });
-    fireEvent.change(screen.getByRole('textbox', { name: /제목/ }), {
-      target: { value: '배송 확인' },
-    });
+    expect(await screen.findByText('안전모 · 색상: 백색 · 수량 3')).toBeInTheDocument();
+    expect(screen.getByText('안전모 · 색상: 흑색 · 수량 2')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/제목/), { target: { value: '납기 문의' } });
     fireEvent.change(screen.getByRole('textbox', { name: /문의 내용/ }), {
-      target: { value: '배송 일정을 확인해 주세요.' },
+      target: { value: '입고 일정을 알려주세요.' },
     });
-    const inquiryForm = screen
-      .getByRole('heading', { name: '문의 작성' })
-      .closest('form') as HTMLFormElement;
-    expect(inquiryForm.checkValidity()).toBe(true);
-    fireEvent.submit(inquiryForm);
+    fireEvent.click(screen.getByRole('button', { name: '문의 등록' }));
 
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      '문의가 접수되었습니다. 데모 화면이며 입력값은 전송·저장되지 않았습니다.',
+    expect(await screen.findByRole('heading', { name: '문의 접수 완료' })).toBeInTheDocument();
+    expect(submit).toHaveBeenCalledWith({
+      memberId: 'mem-001',
+      title: '상품 문의: 안전모 · 납기 문의',
+      body: '문의 상품\n- 안전모 (색상: 백색) · 수량 3\n- 안전모 (색상: 흑색) · 수량 2\n\n입고 일정을 알려주세요.',
+    });
+    expect(screen.getByRole('link', { name: '접수 내역 보기' })).toHaveAttribute(
+      'href',
+      '/mypage/inquiries/inq-saved',
     );
-    expect(notificationCheckbox).not.toBeChecked();
-    expect(
-      screen.getByText(
-        '알림 선택은 화면 미리보기용입니다. 실제로 저장되지 않으며 답변 알림도 발송되지 않습니다.',
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: '제목' })).toHaveValue('');
-    expect(screen.getByRole('textbox', { name: /문의 내용/ })).toHaveValue('');
-    expect(screen.getByText('접수 상태 다시 보기')).toBeInTheDocument();
-    await screen.findByText('배송 일정 문의드립니다');
-    const api = await getShopApi();
-    expect(api.inquiries.listByMember).toHaveBeenCalledWith(
-      'mem-001',
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
-    );
+    routerMock.search = '';
   });
 
-  it('알림을 선택해 제출해도 완료 미리보기만 표시하고 선택값을 문의 API로 보내지 않습니다', async () => {
+  it('상품 정보 조회 실패 상태에서 다시 시도해 상품 문맥을 불러옵니다', async () => {
     mockMemberSession(createMember('mem-001'));
+    routerMock.search = '?productId=product-retry';
+    const product = {
+      id: 'product-retry',
+      name: '안전모',
+      options: [],
+      skus: [],
+    };
+    const getById = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('temporary failure'))
+      .mockResolvedValueOnce(product);
+    vi.mocked(getShopApi).mockResolvedValue({
+      ...createApi([]),
+      products: { getById },
+    } as unknown as ShopApi);
+    renderWithQuery(<InquiryPage />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('상품 정보를 불러오지 못했습니다.');
+    fireEvent.click(screen.getByRole('button', { name: '상품 정보 다시 시도' }));
+    expect(await screen.findByText('안전모 · 수량 1')).toBeInTheDocument();
+    expect(getById).toHaveBeenCalledTimes(2);
+    routerMock.search = '';
+  });
+
+  it('문의 저장 실패 시 입력값을 보존하고 성공 완료로 표시하지 않습니다', async () => {
+    mockMemberSession(createMember('mem-001'));
+    vi.mocked(getShopApi).mockResolvedValue({
+      ...createApi([]),
+      inquiries: {
+        listByMember: vi.fn(async () => []),
+        submit: vi.fn(async () => {
+          throw new Error('저장 실패');
+        }),
+      },
+    } as unknown as ShopApi);
     renderWithQuery(<InquiryPage />);
     await screen.findByRole('heading', { name: '문의 작성' });
-    await screen.findByText('배송 일정 문의드립니다');
-
-    const notificationCheckbox = screen.getByRole('checkbox', { name: '답변 등록 시 알림 받기' });
-    fireEvent.click(notificationCheckbox);
-    expect(notificationCheckbox).toBeChecked();
-    fireEvent.change(screen.getByRole('combobox', { name: '문의 유형' }), {
-      target: { value: 'delivery' },
-    });
-    fireEvent.change(screen.getByRole('textbox', { name: '제목' }), {
-      target: { value: '배송 알림 문의' },
-    });
+    fireEvent.change(screen.getByLabelText(/제목/), { target: { value: '실패 제목' } });
     fireEvent.change(screen.getByRole('textbox', { name: /문의 내용/ }), {
-      target: { value: '답변 알림 설정을 확인합니다.' },
+      target: { value: '실패 본문' },
     });
-
-    const inquiryForm = screen
-      .getByRole('heading', { name: '문의 작성' })
-      .closest('form') as HTMLFormElement;
-    expect(inquiryForm.checkValidity()).toBe(true);
-    const api = await getShopApi();
-    const shopApiCallsBeforeSubmit = vi.mocked(getShopApi).mock.calls.length;
-    const inquiryReadCallsBeforeSubmit = vi.mocked(api.inquiries.listByMember).mock.calls.length;
-    fireEvent.submit(inquiryForm);
-
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      '문의가 접수되었습니다. 데모 화면이며 입력값은 전송·저장되지 않았습니다.',
-    );
-    expect(
-      screen.getByText(
-        '알림 선택은 화면 미리보기용입니다. 실제로 저장되지 않으며 답변 알림도 발송되지 않습니다.',
-      ),
-    ).toBeInTheDocument();
-    expect(notificationCheckbox).not.toBeChecked();
-    expect(vi.mocked(getShopApi)).toHaveBeenCalledTimes(shopApiCallsBeforeSubmit);
-    expect(api.inquiries.listByMember).toHaveBeenCalledTimes(inquiryReadCallsBeforeSubmit);
+    fireEvent.click(screen.getByRole('button', { name: '문의 등록' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('저장 실패');
+    expect(screen.getByLabelText(/제목/)).toHaveValue('실패 제목');
+    expect(screen.getByRole('textbox', { name: /문의 내용/ })).toHaveValue('실패 본문');
+    expect(screen.queryByRole('heading', { name: '문의 접수 완료' })).not.toBeInTheDocument();
   });
 
   it('회원 문의 목록은 현재 세션 회원의 문의만 표시하고 상세 경로를 연결합니다', async () => {
@@ -410,7 +421,7 @@ describe('company support routes', () => {
     const inquiryLinks = await screen.findAllByRole('link', { name: '배송 일정 문의드립니다' });
     expect(inquiryLinks[0]).toHaveAttribute('href', '/mypage/inquiries/inq-1');
     expect(await screen.findAllByText('세금계산서 발행 요청')).toHaveLength(2);
-    expect(await screen.findAllByText('대량 구매 견적 문의')).toHaveLength(2);
+    expect(await screen.findAllByText('단체 구매 문의')).toHaveLength(2);
     const answeredBadges = await screen.findAllByText('답변완료');
     expect(answeredBadges.length).toBeGreaterThan(0);
     answeredBadges.forEach((badge) => expect(badge).toHaveClass('bg-success-tint', 'text-success'));
@@ -471,7 +482,7 @@ describe('company support routes', () => {
   it('로그아웃 상태에서는 회원 문의를 조회하지 않습니다', async () => {
     renderWithQuery(<InquiryPage />);
     expect(await screen.findByRole('status')).toHaveTextContent(
-      '문의 내역은 로그인 후 마이페이지에서 확인할 수 있습니다.',
+      '문의 등록과 내역 확인은 회원 로그인 후 이용할 수 있습니다.',
     );
     expect(screen.queryByText('배송 일정 문의드립니다')).not.toBeInTheDocument();
     const api = await getShopApi();

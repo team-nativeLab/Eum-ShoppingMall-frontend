@@ -19,7 +19,7 @@ import {
 import { getShopApi } from '@/lib/shop-api';
 import type { Member } from '@eum/api/types';
 
-/** 반환된 회원 정보와 회원별 주문·견적 조회 결과를 표시합니다. */
+/** 반환된 회원 정보와 회원별 주문 이력을 표시합니다. */
 export function AdminMemberDetailPage() {
   const { memberId } = useParams();
   const memberQuery = useQuery({
@@ -39,16 +39,6 @@ export function AdminMemberDetailPage() {
       if (!currentMemberId) return [];
       const orders = await (await getShopApi()).orders.adminList({ signal });
       return orders.filter((order) => order.memberId === currentMemberId);
-    },
-  });
-  const quotesQuery = useQuery({
-    queryKey: ['admin', 'members', 'detail-quotes', memberQuery.data?.id],
-    enabled: Boolean(memberQuery.data?.id),
-    queryFn: async ({ signal }) => {
-      const currentMemberId = memberQuery.data?.id;
-      if (!currentMemberId) return [];
-      const quotes = await (await getShopApi()).quotes.adminList({ signal });
-      return quotes.filter((quote) => quote.memberId === currentMemberId);
     },
   });
 
@@ -73,7 +63,6 @@ export function AdminMemberDetailPage() {
 
   const member: Member = memberQuery.data;
   const orders = ordersQuery.data ?? [];
-  const quotes = quotesQuery.data ?? [];
 
   return (
     <section aria-label="회원 상세">
@@ -204,77 +193,6 @@ export function AdminMemberDetailPage() {
                           </tr>
                         );
                       })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </AdminPanel>
-
-          <AdminPanel
-            title={quotesQuery.data ? `견적 문의 이력 (${quotes.length})` : '견적 문의 이력'}
-            description={
-              quotesQuery.isError ? '견적 문의 조회 API를 사용할 수 없습니다.' : undefined
-            }
-            action={
-              <Link to="/quotes" className="text-label-s hover:underline">
-                전체 보기
-              </Link>
-            }
-            bodyClassName="overflow-hidden"
-          >
-            {quotesQuery.isPending ? (
-              <div className="px-20 py-16 text-body-s text-text-3" role="status">
-                견적 문의 이력을 불러오고 있습니다.
-              </div>
-            ) : quotesQuery.isError ? (
-              <AdminError
-                title="견적 문의 이력을 불러오지 못했습니다"
-                description="견적 문의 조회 API 연결을 확인해 주세요."
-                onRetry={() => void quotesQuery.refetch()}
-              />
-            ) : quotes.length === 0 ? (
-              <AdminEmpty title="견적 문의 이력이 없습니다" />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-600 border-collapse text-left text-body-s">
-                  <thead className="bg-surface text-caption text-text-2">
-                    <tr>
-                      <th scope="col" className="px-20 py-10 font-normal">
-                        문의번호 / 제목
-                      </th>
-                      <th scope="col" className="px-12 py-10 font-normal">
-                        품목 수
-                      </th>
-                      <th scope="col" className="px-12 py-10 font-normal">
-                        접수일
-                      </th>
-                      <th scope="col" className="px-20 py-10 font-normal">
-                        상태
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {quotes
-                      .toSorted((left, right) => right.requestedAt.localeCompare(left.requestedAt))
-                      .map((quote) => (
-                        <tr key={quote.id} className="border-t border-line">
-                          <td className="px-20 py-12">
-                            <span className="block font-medium">{quote.id}</span>
-                            <span className="mt-2 block text-caption text-text-3">
-                              {quote.title}
-                            </span>
-                          </td>
-                          <td className="px-12 py-12 whitespace-nowrap">
-                            {quote.requestedItems.length.toLocaleString('ko-KR')}개
-                          </td>
-                          <td className="px-12 py-12 whitespace-nowrap text-text-3">
-                            {formatAdminDate(quote.requestedAt)}
-                          </td>
-                          <td className="px-20 py-12">
-                            <AdminStatusBadge status={quote.status} kind="quote" />
-                          </td>
-                        </tr>
-                      ))}
                   </tbody>
                 </table>
               </div>

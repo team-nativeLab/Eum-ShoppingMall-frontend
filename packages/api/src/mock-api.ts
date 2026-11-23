@@ -10,25 +10,20 @@ import { mockCategories } from './mock/categories';
 import { mockCheckoutOptions } from './mock/checkout';
 import { mockAdminShopSettings } from './mock/settings';
 import { mockCompanyInfo } from './mock/company';
-import {
-  mockHeroSlides,
-  mockHomeCtaBand,
-  mockPromoBanners,
-  mockServiceBenefits,
-} from './mock/home';
+import { mockHeroSlides, mockPromoBanners, mockServiceBenefits } from './mock/home';
 import { mockMembers } from './mock/members';
 import { mockClaims, mockOrders } from './mock/orders';
 import { mockProducts } from './mock/products';
 import { mockReviews } from './mock/reviews';
 import { mockSuppliers } from './mock/suppliers';
 import { mockRecommendedKeywords } from './mock/search';
+import { HOME_SERVICE_BENEFITS_STORAGE_KEY, type KeyValueStore } from './auth';
 import {
   mockEvents,
   mockFaqs,
   mockInquiries,
   mockNotices,
   mockProductQuestions,
-  mockQuotes,
 } from './mock/support';
 import type {
   AdminBrandInput,
@@ -41,7 +36,6 @@ import type {
   AdminPopupInput,
   AdminProductInput,
   AdminSupplierInput,
-  QuoteSubmitInput,
   ProductFacetParams,
   RequestOptions,
   ShopApi,
@@ -56,7 +50,6 @@ import type {
   AdminOrder,
   AdminClaim,
   ClaimSubmitInput,
-  AdminQuote,
   AdminShopSettings,
   AdminFaq,
   AdminNotice,
@@ -79,7 +72,6 @@ import type {
   OrderReceipt,
   Order,
   Member,
-  Quote,
   PagedResult,
   Product,
   Coupon,
@@ -88,6 +80,7 @@ import type {
   ProductReview,
   ProductReviewSummary,
   ShopEvent,
+  ServiceBenefit,
 } from './types';
 
 const mockBuyerPopup: ShopPopup = {
@@ -103,6 +96,33 @@ const POPUP_DATA_URL_PREFIXES = [
   'data:image/png;base64,',
   'data:image/webp;base64,',
 ];
+
+function normalizeServiceBenefits(value: unknown): ServiceBenefit[] | null {
+  if (!Array.isArray(value)) return null;
+  const ids = new Set<string>();
+  const benefits: ServiceBenefit[] = [];
+
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+    const record = item as Record<string, unknown>;
+    const { id, title, description } = record;
+    const isVisible = record.isVisible === undefined ? true : record.isVisible;
+    if (
+      typeof id !== 'string' ||
+      !id.trim() ||
+      ids.has(id) ||
+      typeof title !== 'string' ||
+      typeof description !== 'string' ||
+      typeof isVisible !== 'boolean'
+    ) {
+      return null;
+    }
+    ids.add(id);
+    benefits.push({ id, title, description, isVisible });
+  }
+
+  return benefits;
+}
 
 function isValidPopupImageUrl(imageUrl: string | null): boolean {
   if (imageUrl === null || imageUrl === '') return true;
@@ -366,6 +386,31 @@ function getVisibleBrands(brands: readonly MockBrandRecord[]): MockBrandRecord[]
   return brands.filter((brandRecord) => brandRecord.isVisible);
 }
 
+function isAdminInquiry(value: unknown): value is AdminInquiry {
+  if (typeof value !== 'object' || value === null) return false;
+  const inquiry = value as Record<string, unknown>;
+  return (
+    typeof inquiry.id === 'string' &&
+    typeof inquiry.memberId === 'string' &&
+    typeof inquiry.title === 'string' &&
+    typeof inquiry.body === 'string' &&
+    (inquiry.status === 'waiting' || inquiry.status === 'answered') &&
+    typeof inquiry.createdAt === 'string' &&
+    (typeof inquiry.answer === 'string' || inquiry.answer === null) &&
+    typeof inquiry.adminMemo === 'string' &&
+    Array.isArray(inquiry.statusHistory) &&
+    inquiry.statusHistory.every(
+      (entry: unknown) =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        ((entry as Record<string, unknown>).status === 'waiting' ||
+          (entry as Record<string, unknown>).status === 'answered') &&
+        typeof (entry as Record<string, unknown>).occurredAt === 'string' &&
+        typeof (entry as Record<string, unknown>).note === 'string',
+    )
+  );
+}
+
 function toBuyerEvent(event: AdminShopEvent): ShopEvent {
   const { isVisible: _isVisible, sortOrder: _sortOrder, ...buyerEvent } = event;
   return buyerEvent;
@@ -382,20 +427,6 @@ function toBuyerOrder(order: AdminOrder): Order {
   const { memberId: _addressMemberId, ...shippingAddress } =
     order.shippingAddress as Order['shippingAddress'] & { memberId?: string };
   return { ...buyerOrder, shippingAddress };
-}
-
-function toBuyerQuote(quote: AdminQuote): Quote {
-  const { internalMemo: _internalMemo, attachments, ...buyerQuote } = quote;
-  return {
-    ...buyerQuote,
-    requestedItems: structuredClone(quote.requestedItems),
-    attachments: attachments.map(({ id, fileName, mimeType, sizeBytes }) => ({
-      id,
-      fileName,
-      mimeType,
-      sizeBytes,
-    })),
-  };
 }
 
 // 취소 신호를 fetch와 같은 AbortError로 바꾸는 함수
@@ -428,7 +459,10 @@ function wait(delayMs: number, signal: AbortSignal | undefined): Promise<void> {
  */
 export function createMockApi(
   config: ApiConfig,
-  options: { getCurrentMember?: () => Promise<Member | null> } = {},
+  options: {
+    getCurrentMember?: () => Promise<Member | null>;
+    store?: KeyValueStore;
+  } = {},
 ): ShopApi {
   assertMockAllowed(config);
   let orderSequence = 0;
@@ -482,11 +516,116 @@ export function createMockApi(
     isVisible: true,
     sortOrder: index,
   }));
-  const inquiries: AdminInquiry[] = structuredClone(mockInquiries).map((inquiry) => ({
+  const seededInquiries: AdminInquiry[] = structuredClone(mockInquiries).map((inquiry) => ({
     ...inquiry,
     adminMemo: '',
     statusHistory: [{ status: inquiry.status, occurredAt: inquiry.createdAt, note: '문의 접수' }],
   }));
+  const inquiryStorageKey = 'eum.mock.inquiries.v1';
+  const inquiryRecordKeyPrefix = `${inquiryStorageKey}:record:`;
+  const readPersistedInquiries = (): {
+    isReadable: boolean;
+    supportsRecordKeys: boolean;
+    inquiries: AdminInquiry[];
+  } => {
+    if (!options.store) return { isReadable: false, supportsRecordKeys: false, inquiries: [] };
+    try {
+      const rawInquiries: unknown = options.store.getItem(inquiryStorageKey);
+      let legacyInquiries: AdminInquiry[] = [];
+      if (rawInquiries !== null) {
+        if (typeof rawInquiries !== 'string')
+          return { isReadable: false, supportsRecordKeys: false, inquiries: [] };
+        const parsedInquiries: unknown = JSON.parse(rawInquiries);
+        if (!Array.isArray(parsedInquiries) || !parsedInquiries.every(isAdminInquiry))
+          return { isReadable: false, supportsRecordKeys: false, inquiries: [] };
+        legacyInquiries = parsedInquiries;
+      }
+      if (!options.store.keys)
+        return {
+          isReadable: true,
+          supportsRecordKeys: false,
+          inquiries: legacyInquiries,
+        };
+
+      let storageKeys: string[];
+      try {
+        storageKeys = options.store.keys();
+      } catch {
+        return {
+          isReadable: true,
+          supportsRecordKeys: false,
+          inquiries: legacyInquiries,
+        };
+      }
+      const recordInquiries: AdminInquiry[] = [];
+      for (const storageKey of storageKeys) {
+        if (!storageKey.startsWith(inquiryRecordKeyPrefix)) continue;
+        const rawRecord: unknown = options.store.getItem(storageKey);
+        if (typeof rawRecord !== 'string') continue;
+        try {
+          const parsedRecord: unknown = JSON.parse(rawRecord);
+          const encodedId = storageKey.slice(inquiryRecordKeyPrefix.length);
+          if (isAdminInquiry(parsedRecord) && encodeURIComponent(parsedRecord.id) === encodedId) {
+            recordInquiries.push(parsedRecord);
+          }
+        } catch {
+          continue;
+        }
+      }
+      return {
+        isReadable: true,
+        supportsRecordKeys: true,
+        inquiries: [...legacyInquiries, ...recordInquiries],
+      };
+    } catch {
+      return { isReadable: false, supportsRecordKeys: false, inquiries: [] };
+    }
+  };
+  const mergeStoredInquiries = (storedInquiries: AdminInquiry[]) => {
+    const mergedInquiries = structuredClone(seededInquiries);
+    for (const storedInquiry of storedInquiries) {
+      const existingIndex = mergedInquiries.findIndex((inquiry) => inquiry.id === storedInquiry.id);
+      if (existingIndex >= 0) mergedInquiries[existingIndex] = structuredClone(storedInquiry);
+      else mergedInquiries.push(structuredClone(storedInquiry));
+    }
+    return mergedInquiries;
+  };
+  const initialInquiryRead = readPersistedInquiries();
+  const inquiries: AdminInquiry[] = mergeStoredInquiries(
+    initialInquiryRead.isReadable ? initialInquiryRead.inquiries : [],
+  );
+  const refreshInquiries = () => {
+    const latestInquiryRead = readPersistedInquiries();
+    if (!latestInquiryRead.isReadable) return inquiries;
+    const latestInquiries = mergeStoredInquiries(latestInquiryRead.inquiries);
+    inquiries.splice(0, inquiries.length, ...latestInquiries);
+    return inquiries;
+  };
+  const persistInquiryChange = (changedInquiry: AdminInquiry) => {
+    const latestInquiryRead = readPersistedInquiries();
+    if (options.store && !latestInquiryRead.isReadable) {
+      throw new ApiError('NETWORK', '문의 저장에 실패했습니다. 다시 시도해 주세요.');
+    }
+    const nextInquiries = mergeStoredInquiries(
+      latestInquiryRead.isReadable ? latestInquiryRead.inquiries : inquiries,
+    );
+    const existingIndex = nextInquiries.findIndex((inquiry) => inquiry.id === changedInquiry.id);
+    if (existingIndex >= 0) nextInquiries[existingIndex] = structuredClone(changedInquiry);
+    else nextInquiries.unshift(structuredClone(changedInquiry));
+    try {
+      if (options.store) {
+        if (latestInquiryRead.supportsRecordKeys) {
+          const recordKey = `${inquiryRecordKeyPrefix}${encodeURIComponent(changedInquiry.id)}`;
+          options.store.setItem(recordKey, JSON.stringify(changedInquiry));
+        } else {
+          options.store.setItem(inquiryStorageKey, JSON.stringify(nextInquiries));
+        }
+      }
+    } catch {
+      throw new ApiError('NETWORK', '문의 저장에 실패했습니다. 다시 시도해 주세요.');
+    }
+    inquiries.splice(0, inquiries.length, ...nextInquiries);
+  };
   const productReviews: AdminProductReview[] = structuredClone(mockReviews).map((review) => ({
     ...review,
     isVisible: true,
@@ -509,16 +648,6 @@ export function createMockApi(
     adminMemo: '',
     statusHistory: [{ status: claim.status, occurredAt: claim.requestedAt, note: '요청 접수' }],
   }));
-  const quotes: AdminQuote[] = structuredClone(mockQuotes).map((quote) => ({
-    ...quote,
-    inquiryBody: '',
-    requestedItems: [],
-    attachments: [],
-    internalMemo: '',
-    publicMessage: null,
-    quoteAmount: null,
-    expiresAt: null,
-  }));
   const events: AdminShopEvent[] = structuredClone(mockEvents).map((event, index) => ({
     ...event,
     isVisible: true,
@@ -531,14 +660,30 @@ export function createMockApi(
     featuredProductIds: products
       .filter((product) => product.isFeatured)
       .map((product) => product.id),
-    ctaBand: structuredClone(mockHomeCtaBand),
+  };
+  const previewStore = options.store;
+  const readStoredServiceBenefits = (): ServiceBenefit[] | null => {
+    try {
+      const storedValue = previewStore?.getItem(HOME_SERVICE_BENEFITS_STORAGE_KEY);
+      if (storedValue === null || storedValue === undefined) return null;
+      const parsedValue: unknown = JSON.parse(storedValue);
+      return normalizeServiceBenefits(parsedValue);
+    } catch {
+      return null;
+    }
+  };
+  const refreshServiceBenefits = (): ServiceBenefit[] => {
+    const storedBenefits = readStoredServiceBenefits();
+    if (storedBenefits !== null) {
+      homeContent = { ...homeContent, serviceBenefits: storedBenefits };
+    }
+    return homeContent.serviceBenefits;
   };
   let productSequence = products.length + 1;
   let supplierSequence = suppliers.length + 1;
   let categorySequence = categories.length + 1;
   let brandSequence = brands.length + 1;
   let eventSequence = events.length + 1;
-  let quoteSequence = quotes.length + 1;
   let ownedCouponSequence = ownedCoupons.length + 1;
   let adminCouponSequence = adminCoupons.length + 1;
   let pointSequence = adminPoints.length + 1;
@@ -1240,32 +1385,36 @@ export function createMockApi(
             promoBanners: [],
             serviceBenefits: [],
             featuredProducts: [],
-            ctaBand: null,
           };
         }
+        const serviceBenefits = refreshServiceBenefits();
         return structuredClone({
           heroSlides: homeContent.heroSlides,
           promoBanners: homeContent.promoBanners,
-          serviceBenefits: homeContent.serviceBenefits,
+          serviceBenefits,
           featuredProducts: homeContent.featuredProductIds
             .map((productId) => products.find((product) => product.id === productId))
             .filter((product): product is AdminProduct =>
               Boolean(product && isBuyerVisibleProduct(product)),
             )
             .map(toBuyerProduct),
-          ctaBand: homeContent.ctaBand,
         });
       },
-      getAdminContent: (options) => respondOne(homeContent, '홈 편성', options),
+      async getAdminContent(options) {
+        const content = await respondOne(homeContent, '홈 편성', options);
+        return { ...content, serviceBenefits: refreshServiceBenefits() };
+      },
       async saveAdminContent(input, options) {
         await prepareMutation(options, '홈 편성');
         const heroIds = input.heroSlides.map((slide) => slide.id);
         const promoIds = input.promoBanners.map((banner) => banner.id);
+        const serviceBenefits = normalizeServiceBenefits(input.serviceBenefits);
         if (
           new Set(heroIds).size !== heroIds.length ||
-          new Set(promoIds).size !== promoIds.length
+          new Set(promoIds).size !== promoIds.length ||
+          serviceBenefits === null
         ) {
-          throw new ApiError('VALIDATION', '홈 콘텐츠 ID가 중복되었습니다.');
+          throw new ApiError('VALIDATION', '홈 콘텐츠 ID 또는 배송·서비스 혜택을 확인해 주세요.');
         }
         if (
           input.featuredProductIds.some(
@@ -1289,15 +1438,16 @@ export function createMockApi(
         ) {
           throw new ApiError('VALIDATION', '홈 배너의 이미지와 이동 경로를 확인해 주세요.');
         }
-        if (
-          input.ctaBand &&
-          (!input.ctaBand.title.trim() ||
-            !input.ctaBand.cta.label.trim() ||
-            !isSafeDestination(input.ctaBand.cta.destination))
-        ) {
-          throw new ApiError('VALIDATION', '홈 CTA 문구와 이동 경로를 확인해 주세요.');
+        const nextHomeContent = { ...structuredClone(input), serviceBenefits };
+        try {
+          previewStore?.setItem(HOME_SERVICE_BENEFITS_STORAGE_KEY, JSON.stringify(serviceBenefits));
+        } catch {
+          throw new ApiError(
+            'NETWORK',
+            '배송·서비스 혜택을 저장하지 못했습니다. 다시 시도해 주세요.',
+          );
         }
-        homeContent = structuredClone(input);
+        homeContent = nextHomeContent;
         products.forEach((product) => {
           product.isFeatured = homeContent.featuredProductIds.includes(product.id);
         });
@@ -2015,115 +2165,6 @@ export function createMockApi(
         return respondList(ownedAddresses, options);
       },
     },
-    quotes: {
-      async submit(input: QuoteSubmitInput, options) {
-        await prepareMutation(options, '견적 문의');
-        const member = await getCurrentMember();
-        if (
-          !input.title.trim() ||
-          !input.companyName.trim() ||
-          !input.contactName.trim() ||
-          !input.inquiryBody.trim()
-        ) {
-          throw new ApiError('VALIDATION', '견적 문의에 필요한 정보를 입력해 주세요.');
-        }
-        if (
-          !input.requestedItems.length ||
-          input.requestedItems.some(
-            (line) => !line.name.trim() || !Number.isInteger(line.quantity) || line.quantity < 1,
-          )
-        ) {
-          throw new ApiError('VALIDATION', '문의 상품과 수량을 확인해 주세요.');
-        }
-        if (
-          input.attachments.some(
-            (attachment) =>
-              !attachment.fileName.trim() ||
-              !Number.isInteger(attachment.sizeBytes) ||
-              attachment.sizeBytes < 0 ||
-              attachment.sizeBytes > 6_000_000,
-          )
-        ) {
-          throw new ApiError(
-            'VALIDATION',
-            '첨부 파일 정보를 확인해 주세요. 파일은 6MB 이하만 가능합니다.',
-          );
-        }
-        const quote: AdminQuote = {
-          id: `qt-web-${String(quoteSequence++).padStart(4, '0')}`,
-          title: input.title.trim(),
-          companyName: input.companyName.trim(),
-          contactName: input.contactName.trim(),
-          status: 'received',
-          requestedAt: new Date().toISOString(),
-          memberId: member.id,
-          inquiryBody: input.inquiryBody.trim(),
-          requestedItems: structuredClone(input.requestedItems),
-          attachments: input.attachments.map(({ id, fileName, mimeType, sizeBytes }) => ({
-            id,
-            fileName,
-            mimeType,
-            sizeBytes,
-          })),
-          internalMemo: '',
-          publicMessage: null,
-          quoteAmount: null,
-          expiresAt: null,
-        };
-        quotes.unshift(quote);
-        return structuredClone(toBuyerQuote(quote));
-      },
-      adminList: (options) => respondList(quotes, options),
-      async updateAdmin(quoteId, update, options) {
-        await prepareMutation(options, '견적 문의');
-        const quote = quotes.find((item) => item.id === quoteId);
-        if (!quote) throw new ApiError('NOT_FOUND', '견적 문의를 찾을 수 없습니다.');
-        if (update.status && update.status !== quote.status) quote.status = update.status;
-        if (update.internalMemo !== undefined) quote.internalMemo = update.internalMemo.trim();
-        if (update.publicMessage !== undefined)
-          quote.publicMessage = update.publicMessage?.trim() || null;
-        if (update.quoteAmount !== undefined) {
-          if (
-            update.quoteAmount !== null &&
-            (!Number.isInteger(update.quoteAmount) || update.quoteAmount < 0)
-          ) {
-            throw new ApiError('VALIDATION', '견적 금액을 확인해 주세요.');
-          }
-          quote.quoteAmount = update.quoteAmount;
-        }
-        if (update.expiresAt !== undefined) quote.expiresAt = update.expiresAt;
-        if (update.attachments !== undefined) {
-          if (
-            update.attachments.some(
-              (attachment) =>
-                !attachment.fileName.trim() ||
-                !Number.isInteger(attachment.sizeBytes) ||
-                attachment.sizeBytes < 0 ||
-                attachment.sizeBytes > 6_000_000,
-            )
-          ) {
-            throw new ApiError(
-              'VALIDATION',
-              '첨부 파일 정보를 확인해 주세요. 파일은 6MB 이하만 가능합니다.',
-            );
-          }
-          quote.attachments = update.attachments.map(({ id, fileName, mimeType, sizeBytes }) => ({
-            id,
-            fileName,
-            mimeType,
-            sizeBytes,
-          }));
-        }
-        return structuredClone(quote);
-      },
-      async listByMember(memberId, options) {
-        await assertCurrentMember(memberId);
-        return respondList(
-          quotes.filter((quote) => quote.memberId === memberId).map(toBuyerQuote),
-          options,
-        );
-      },
-    },
     notices: {
       list: (options) =>
         respondList(
@@ -2283,33 +2324,89 @@ export function createMockApi(
       },
     },
     inquiries: {
+      async submit(input, options) {
+        await prepareMutation(options, '1:1 문의');
+        const member = await assertCurrentMember(input.memberId);
+        const title = input.title.trim();
+        const body = input.body.trim();
+        if (!title || !body || title.length > 200 || body.length > 5000) {
+          throw new ApiError(
+            'VALIDATION',
+            '문의 제목은 200자, 내용은 5,000자 이내로 입력해 주세요.',
+          );
+        }
+        const createdAt = new Date().toISOString();
+        const inquiry: AdminInquiry = {
+          id: `inq-web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          memberId: member.id,
+          title,
+          body,
+          status: 'waiting',
+          createdAt,
+          answer: null,
+          adminMemo: '',
+          statusHistory: [{ status: 'waiting', occurredAt: createdAt, note: '문의 접수' }],
+        };
+        persistInquiryChange(inquiry);
+        return structuredClone({
+          id: inquiry.id,
+          memberId: inquiry.memberId,
+          title: inquiry.title,
+          body: inquiry.body,
+          status: inquiry.status,
+          createdAt: inquiry.createdAt,
+          answer: inquiry.answer,
+        });
+      },
       async listByMember(memberId, options) {
         await assertCurrentMember(memberId);
-        return respondList(
-          inquiries
+        await wait(config.mockLatencyMs, options?.signal);
+        if (config.mockScenario === 'error')
+          throw new ApiError('NETWORK', '목 API 오류 시나리오입니다.');
+        if (config.mockScenario === 'empty') return [];
+        return structuredClone(
+          refreshInquiries()
             .filter((inquiry) => inquiry.memberId === memberId)
+            .sort((first, second) => second.createdAt.localeCompare(first.createdAt))
             .map(({ adminMemo: _adminMemo, statusHistory: _statusHistory, ...inquiry }) => inquiry),
-          options,
         );
       },
-      adminList: (options) => respondList(inquiries, options),
+      async adminList(options) {
+        await wait(config.mockLatencyMs, options?.signal);
+        if (config.mockScenario === 'error')
+          throw new ApiError('NETWORK', '목 API 오류 시나리오입니다.');
+        if (config.mockScenario === 'empty') return [];
+        return structuredClone(
+          [...refreshInquiries()].sort((first, second) =>
+            second.createdAt.localeCompare(first.createdAt),
+          ),
+        );
+      },
       async updateAdmin(inquiryId, update: AdminInquiryUpdate, options) {
         await prepareMutation(options, '1:1 문의');
-        const inquiry = inquiries.find((item) => item.id === inquiryId);
-        if (!inquiry) throw new ApiError('NOT_FOUND', '1:1 문의를 찾을 수 없습니다.');
-        if (update.answer && update.answer.length > 5000)
+        const latestInquiries = refreshInquiries();
+        const inquiryIndex = latestInquiries.findIndex((item) => item.id === inquiryId);
+        const inquiry = latestInquiries.find((item) => item.id === inquiryId);
+        if (inquiryIndex < 0 || !inquiry)
+          throw new ApiError('NOT_FOUND', '1:1 문의를 찾을 수 없습니다.');
+        if (update.answer !== undefined && update.answer !== null && update.answer.length > 5000)
           throw new ApiError('VALIDATION', '공개 답변은 5,000자 이내로 입력해 주세요.');
         if (update.status === 'answered' && !(update.answer ?? inquiry.answer)?.trim())
           throw new ApiError('VALIDATION', '답변을 입력한 뒤 완료 처리해 주세요.');
         const previousStatus = inquiry.status;
-        Object.assign(inquiry, structuredClone(update));
+        const updatedInquiry: AdminInquiry = {
+          ...inquiry,
+          ...structuredClone(update),
+          statusHistory: [...inquiry.statusHistory],
+        };
         if (update.status && update.status !== previousStatus)
-          inquiry.statusHistory.push({
+          updatedInquiry.statusHistory.push({
             status: update.status,
             occurredAt: new Date().toISOString(),
             note: update.status === 'answered' ? '답변 등록' : '답변 상태 변경',
           });
-        return structuredClone(inquiry);
+        persistInquiryChange(updatedInquiry);
+        return structuredClone(updatedInquiry);
       },
     },
     members: {

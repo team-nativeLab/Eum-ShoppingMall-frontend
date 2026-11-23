@@ -10,11 +10,15 @@ import type { ApiConfig } from './config';
 import { ApiError } from './errors';
 import type { AdminUser, Member } from './types';
 
-/** localStorage와 같은 모양의 최소 저장소 인터페이스(목 세션 보관용) */
+export const HOME_SERVICE_BENEFITS_STORAGE_KEY = 'eum.mock.home.service-benefits.v1';
+
+/** localStorage와 같은 모양의 최소 저장소 인터페이스(목 데이터 저장용) */
 export interface KeyValueStore {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
   removeItem(key: string): void;
+  /** 저장소 키 열거를 지원하는 구현에서만 제공합니다. */
+  keys?(): string[];
 }
 
 /** 메모리 저장소. SSR·테스트처럼 localStorage가 없을 때 씁니다. */
@@ -28,13 +32,27 @@ export function createMemoryStore(): KeyValueStore {
     removeItem: (key) => {
       entries.delete(key);
     },
+    keys: () => [...entries.keys()],
   };
 }
 
 /** 브라우저면 localStorage, 아니면(서버 렌더링 등) 메모리 저장소를 돌려주는 함수 */
 export function getBrowserStore(): KeyValueStore {
   if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
-    return window.localStorage;
+    const localStorage = window.localStorage;
+    return {
+      getItem: (key) => localStorage.getItem(key),
+      setItem: (key, value) => localStorage.setItem(key, value),
+      removeItem: (key) => localStorage.removeItem(key),
+      keys: () => {
+        const keys: string[] = [];
+        for (let index = 0; index < localStorage.length; index += 1) {
+          const key = localStorage.key(index);
+          if (key !== null) keys.push(key);
+        }
+        return keys;
+      },
+    };
   }
   return createMemoryStore();
 }

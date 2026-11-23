@@ -2,11 +2,11 @@ import type { AdminProduct, ProductImage, ProductPurchaseNotice, ProductShipping
 
 /** 일반 배송 상품의 배송/교환/반품 안내 본문(목 운영 정책) */
 const STANDARD_SHIPPING_POLICY =
-  '결제 완료 후 영업일 기준 2~3일 이내 출고됩니다. 단순 변심에 의한 교환·반품은 수령 후 7일 이내 가능하며, 왕복 배송비가 부과됩니다. 맞춤 제작 상품은 교환·반품이 제한될 수 있습니다.';
+  '결제 완료 후 영업일 기준 2~3일 이내 출고됩니다. 단순 변심에 의한 교환·반품은 수령 후 7일 이내 가능하며, 왕복 배송비가 부과됩니다.';
 
-/** 견적 후 공급 상품의 안내 본문 */
-const QUOTE_SHIPPING_POLICY =
-  '견적 문의 후 수량과 현장 일정에 맞춰 출고 일정을 안내합니다. 교환·반품 조건은 견적서에 함께 안내됩니다.';
+/** 가격 미표시 상품은 고객센터 문의로 상품·배송 정보를 안내합니다. */
+const INQUIRY_SHIPPING_POLICY =
+  '로그인 후 고객센터 1:1 문의로 상품과 배송 정보를 확인해 주세요. 교환·반품 조건은 상품 상세에서 확인할 수 있습니다.';
 
 /** 일반 배송 상품의 구매 전 안내 */
 const STANDARD_PURCHASE_NOTICES: ProductPurchaseNotice[] = [
@@ -15,9 +15,9 @@ const STANDARD_PURCHASE_NOTICES: ProductPurchaseNotice[] = [
   { label: '교환·반품', description: '수령 후 7일 이내 접수' },
 ];
 
-/** 견적 후 공급 상품의 구매 전 안내 */
-const QUOTE_PURCHASE_NOTICES: ProductPurchaseNotice[] = [
-  { label: '출고', description: '견적 확정 후 일정 안내' },
+/** 가격 미표시 상품의 구매 전 안내 */
+const INQUIRY_PURCHASE_NOTICES: ProductPurchaseNotice[] = [
+  { label: '상품·배송 문의', description: '로그인 후 고객센터 1:1 문의 이용' },
   { label: '증빙', description: '세금계산서 발행 가능' },
 ];
 
@@ -159,7 +159,7 @@ const baseMockProducts: AdminProduct[] = [
     priceVisible: false,
     stockStatus: 'inStock',
     thumbnailUrl: null,
-    summary: '현장 규격에 따라 견적 후 공급합니다',
+    summary: '상품 규격과 배송 정보는 고객센터 1:1 문의로 확인해 주세요',
     modelName: 'HS-FB200',
     images: createMockGallery('prd-1003'),
     options: [],
@@ -171,13 +171,13 @@ const baseMockProducts: AdminProduct[] = [
     ],
     certifications: ['KCs 안전인증'],
     shipping: {
-      method: '견적 후 안내',
-      estimate: '견적 문의 후 별도 안내',
+      method: '고객센터 문의',
+      estimate: '문의 후 안내',
       fee: 0,
       countryOfOrigin: '대한민국',
-      policy: QUOTE_SHIPPING_POLICY,
+      policy: INQUIRY_SHIPPING_POLICY,
     },
-    purchaseNotices: QUOTE_PURCHASE_NOTICES,
+    purchaseNotices: INQUIRY_PURCHASE_NOTICES,
     rating: null,
     reviewCount: 0,
     createdAt: '2026-09-18T09:00:00.000Z',
@@ -281,13 +281,13 @@ const baseMockProducts: AdminProduct[] = [
     ],
     certifications: [],
     shipping: {
-      method: '견적 후 안내',
-      estimate: '견적 문의 후 별도 안내',
+      method: '고객센터 문의',
+      estimate: '문의 후 안내',
       fee: 0,
       countryOfOrigin: '대한민국',
-      policy: QUOTE_SHIPPING_POLICY,
+      policy: INQUIRY_SHIPPING_POLICY,
     },
-    purchaseNotices: QUOTE_PURCHASE_NOTICES,
+    purchaseNotices: INQUIRY_PURCHASE_NOTICES,
     rating: null,
     reviewCount: 0,
     createdAt: '2026-08-20T09:00:00.000Z',

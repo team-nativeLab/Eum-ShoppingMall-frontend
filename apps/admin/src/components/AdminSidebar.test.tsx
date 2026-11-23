@@ -7,7 +7,6 @@ import { AdminSidebar } from './AdminSidebar';
 const expectedGroups = {
   '상품 관리': ['상품 관리', '카테고리 관리', '브랜드 관리'],
   '주문 관리': ['주문 관리', '취소·반품·교환'],
-  '견적 문의': ['견적 문의'],
   '회원 관리': ['회원 관리'],
   콘텐츠: [
     '팝업 관리',
@@ -59,7 +58,7 @@ describe('관리자 사이드바 그룹 탐색', () => {
       }
     }
 
-    expect(screen.getAllByRole('link')).toHaveLength(19);
+    expect(screen.getAllByRole('link')).toHaveLength(18);
   });
 
   it('상품 하위 경로에서 상품 메뉴와 현재 하위 링크만 활성화하고 대시보드는 비활성으로 둔다', () => {
@@ -134,7 +133,7 @@ describe('관리자 사이드바 그룹 탐색', () => {
     renderSidebar('/');
 
     expect(screen.getByRole('link', { name: '대시보드' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getAllByRole('link')).toHaveLength(19);
+    expect(screen.getAllByRole('link')).toHaveLength(18);
   });
 
   it('Tab으로 링크에 초점을 이동하고 Enter로 라우트를 연다', async () => {

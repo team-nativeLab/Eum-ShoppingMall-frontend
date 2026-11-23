@@ -74,7 +74,7 @@ function renderWrappableLabel(label: string) {
 
 /**
  * Figma HF/Web/CategoryBar(데스크톱).
- * 카테고리 이름은 API에서 받고, 맞춤 제작/납품은 솔루션 화면으로 연결합니다. 타일에는 이름만 보입니다.
+ * 카테고리 이름과 이동 경로는 API 응답을 사용합니다. 타일에는 이름만 보입니다.
  * hover·키보드 포커스 시 연회색 타일을 보여 주고, 그 타일 양옆 구분선은 숨깁니다.
  */
 export function CategoryBar({ categories }: { categories: Category[] }) {

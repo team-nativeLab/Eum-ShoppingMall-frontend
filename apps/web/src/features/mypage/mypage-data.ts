@@ -10,7 +10,6 @@ import type {
   Order,
   Point,
   Product,
-  Quote,
 } from '@eum/api/types';
 import { useQuery } from '@tanstack/react-query';
 import { getShopApi } from '@/lib/shop-api';
@@ -27,9 +26,7 @@ export type MyPageDataScope =
   | 'points'
   | 'profile'
   | 'profile-edit'
-  | 'addresses'
-  | 'quotes'
-  | 'quote-detail';
+  | 'addresses';
 
 export interface MyPageData {
   member: Member | null;
@@ -39,7 +36,6 @@ export interface MyPageData {
   couponOffers: CouponOffer[];
   points: Point[];
   addresses: Address[];
-  quotes: Quote[];
   products: Product[];
   unavailableProductIds: string[];
   loadWarnings: string[];
@@ -98,7 +94,6 @@ export function useMyPageData(
           couponOffers: [],
           points: [],
           addresses: [],
-          quotes: [],
           products,
           unavailableProductIds,
           loadWarnings: unavailableProductIds.length
@@ -121,9 +116,8 @@ export function useMyPageData(
       const needsCoupons = scope === 'dashboard' || scope === 'coupons';
       const needsPoints = scope === 'points';
       const needsAddresses = scope === 'addresses' || scope === 'claim-new';
-      const needsQuotes = scope === 'quotes' || scope === 'quote-detail';
 
-      const [orders, claims, coupons, points, addresses, allQuotes] = await Promise.all([
+      const [orders, claims, coupons, points, addresses] = await Promise.all([
         needsOrders ? api.orders.listByMember(member.id, { signal }) : Promise.resolve([]),
         needsClaims ? api.claims.listByMember(member.id, { signal }) : Promise.resolve([]),
         needsCoupons
@@ -133,7 +127,6 @@ export function useMyPageData(
           : Promise.resolve([]),
         needsPoints ? api.points.list({ signal }) : Promise.resolve([]),
         needsAddresses ? api.addresses.list({ signal }) : Promise.resolve([]),
-        needsQuotes ? api.quotes.listByMember(member.id, { signal }) : Promise.resolve([]),
       ]);
       const couponOffers = scope === 'coupons' ? await api.coupons.availableList({ signal }) : [];
 
@@ -145,7 +138,6 @@ export function useMyPageData(
         couponOffers,
         points,
         addresses,
-        quotes: allQuotes,
         products: [],
         unavailableProductIds: [],
         loadWarnings: [],

@@ -1,11 +1,11 @@
-export interface QuoteInquirySelection {
+export interface ProductInquirySelection {
   productId: string;
   optionId?: string | null;
   quantity?: number;
 }
 
-/** 상품 상세·장바구니에서 선택한 품목 줄을 견적 화면의 초기 선택으로 전달합니다. */
-export function buildQuoteInquiryHref(selections: readonly QuoteInquirySelection[] = []) {
+/** 상품 상세·장바구니에서 선택한 상품 문맥을 고객센터 문의 화면에 전달합니다. */
+export function buildProductInquiryHref(selections: readonly ProductInquirySelection[] = []) {
   const query = new URLSearchParams();
   selections.forEach(({ productId, optionId, quantity }) => {
     query.append('productId', productId);
@@ -13,5 +13,5 @@ export function buildQuoteInquiryHref(selections: readonly QuoteInquirySelection
     query.append('quantity', String(quantity ?? 1));
   });
   const queryString = query.toString();
-  return queryString ? `/solutions?${queryString}` : '/solutions';
+  return queryString ? `/support/inquiry?${queryString}` : '/support/inquiry';
 }

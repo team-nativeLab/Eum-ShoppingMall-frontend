@@ -40,7 +40,6 @@ export const queryKeys = {
   categories: { all: ['categories'] as const },
   home: { content: ['home', 'content'] as const },
   company: { info: ['company', 'info'] as const },
-  quotes: { all: ['quotes'] as const },
   notices: { all: ['notices'] as const },
   popups: {
     all: ['popups'] as const,

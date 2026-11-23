@@ -59,14 +59,6 @@ export const mockCategories: Category[] = [
     iconKey: 'leaf',
   },
   {
-    id: 'cat-custom',
-    slug: 'custom-order',
-    name: '맞춤 제작/납품',
-    parentId: null,
-    description: '기업 맞춤 솔루션',
-    iconKey: 'package',
-  },
-  {
     id: 'cat-head',
     slug: 'head-protection',
     name: '안전모',

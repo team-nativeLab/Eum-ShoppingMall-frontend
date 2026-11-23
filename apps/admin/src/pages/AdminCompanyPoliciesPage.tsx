@@ -102,7 +102,6 @@ export function AdminCompanyPoliciesPage() {
     { key: 'mailOrderSalesNumber', label: '통신판매업 신고번호' },
     { key: 'address', label: '사업장 주소' },
     { key: 'email', label: '대표 이메일', type: 'email' },
-    { key: 'quoteEmail', label: '견적 문의 이메일', type: 'email' },
     { key: 'privacyOfficer', label: '개인정보 보호책임자' },
     { key: 'customerCenterPhone', label: '고객센터 표시 번호' },
     { key: 'customerCenterTel', label: '전화 링크 번호' },

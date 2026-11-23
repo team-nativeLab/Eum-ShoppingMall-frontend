@@ -64,7 +64,9 @@ export function AdminInquiriesPage() {
       />
       <AdminNotice tone="warning" className="mb-16">
         고객에게 보낼 답변과 내부 처리 메모를 별도로 저장합니다. 회원 연락처는 이 목록에 표시하지
-        않습니다.
+        않습니다. 문의와 답변·내부 메모는 현재 브라우저의 localStorage 목 저장소에 보관되므로, 실제
+        개인정보나 민감정보 대신 테스트 데이터만 사용해 주세요. 저장 데이터는 자동 만료되지 않으며,
+        브라우저 사이트 데이터를 삭제해야 정리됩니다.
       </AdminNotice>
       <div className="grid items-start gap-16 xl:grid-cols-[minmax(360px,1fr)_minmax(420px,1.2fr)]">
         <section aria-label="문의 목록" className="rounded-12 border border-line bg-bg">

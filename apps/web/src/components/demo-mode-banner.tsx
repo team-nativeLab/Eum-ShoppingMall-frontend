@@ -10,8 +10,7 @@ import { usePathname } from 'next/navigation';
 export function DemoModeBanner() {
   const pathname = usePathname();
   if (pathname === '/login' || pathname === '/signup') return null;
-  const isFigmaPresentationRoute =
-    pathname === '/about' || pathname === '/solutions' || pathname.startsWith('/support/');
+  const isFigmaPresentationRoute = pathname === '/about' || pathname.startsWith('/support/');
 
   return (
     <aside aria-label="데모 안내">

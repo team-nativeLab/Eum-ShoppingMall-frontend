@@ -99,39 +99,6 @@ export function AdminWithdrawnMemberDetailPage() {
               </div>
             )}
           </AdminPanel>
-          <AdminPanel
-            title={`견적 문의 이력 (${member.quotes.length})`}
-            bodyClassName="overflow-hidden"
-          >
-            {member.quotes.length === 0 ? (
-              <AdminEmpty title="견적 문의 이력이 없습니다" />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-520 border-collapse text-left text-body-s">
-                  <thead className="bg-surface text-caption text-text-2">
-                    <tr>
-                      {['문의번호', '접수일', '유형', '품목', '상태'].map((label) => (
-                        <th key={label} className="px-12 py-10 font-medium">
-                          {label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {member.quotes.map((quote) => (
-                      <tr key={quote.id} className="border-t border-line">
-                        <td className="px-12 py-12">{quote.id}</td>
-                        <td className="px-12 py-12">{quote.date}</td>
-                        <td className="px-12 py-12">{quote.type}</td>
-                        <td className="px-12 py-12">{quote.itemCount}건</td>
-                        <td className="px-12 py-12">{quote.status}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </AdminPanel>
         </div>
         <AdminPanel title="상세 메모">
           <p className="p-20 text-body-s text-text-2">{member.detailedMemo}</p>

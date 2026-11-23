@@ -103,12 +103,12 @@ describe('AdminSelect', () => {
 
   it('비활성 상태는 선택을 막고 화살표를 흐리게 표시한다', async () => {
     render(
-      <AdminSelect aria-label="견적 유형" disabled>
+      <AdminSelect aria-label="주문 유형" disabled>
         <option>유형 정보 없음</option>
       </AdminSelect>,
     );
 
-    const typeSelect = screen.getByRole('combobox', { name: '견적 유형' });
+    const typeSelect = screen.getByRole('combobox', { name: '주문 유형' });
     expect(typeSelect).toBeDisabled();
     expect(typeSelect.parentElement?.querySelector('svg')).toHaveClass('text-text-disabled');
   });

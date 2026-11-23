@@ -1,22 +1,29 @@
 'use client';
 
 import { queryKeys } from '@eum/api/query-keys';
-import type { Faq, Inquiry, Notice, Order } from '@eum/api/types';
+import { resolveCartOption } from '@eum/api/cart';
+import type { Faq, Inquiry, Notice, Product } from '@eum/api/types';
 import { Badge } from '@eum/ui/components/Badge';
 import { Button } from '@eum/ui/components/Button';
-import { Checkbox } from '@eum/ui/components/Checkbox';
 import { Chip } from '@eum/ui/components/Chip';
 import { Icon } from '@eum/ui/components/Icon';
 import { Pagination } from '@eum/ui/components/Pagination';
-import { SelectField, TextField } from '@eum/ui/components/TextField';
+import { TextField } from '@eum/ui/components/TextField';
 import { cx } from '@eum/ui/lib/cx';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, ChevronUp, FileText, Search } from 'lucide-react';
+import { ChevronDown, ChevronUp, Search } from 'lucide-react';
 import { useId, useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useMemberSession } from '@/features/auth/member-session';
 import { getShopApi } from '@/lib/shop-api';
 import { SupportQueryError, SupportShell } from './support-shell';
+
+interface InquiryProductContext {
+  product: Product;
+  optionLabel: string | null;
+  quantity: number;
+}
 
 const PAGE_SIZE = 10;
 
@@ -285,7 +292,7 @@ export function NoticesPage() {
   );
 }
 
-const FAQ_CATEGORIES = ['전체', '주문/결제', '배송', '교환/반품', '회원', '견적·대량구매'] as const;
+const FAQ_CATEGORIES = ['전체', '주문/결제', '배송', '교환/반품', '회원'] as const;
 
 function FaqItem({ faq, isOpen, onToggle }: { faq: Faq; isOpen: boolean; onToggle: () => void }) {
   return (
@@ -330,6 +337,7 @@ export function FaqPage() {
     const normalized = keyword.toLocaleLowerCase('ko-KR');
     return (faqsQuery.data ?? []).filter(
       (faq) =>
+        faq.category !== '견적·대량구매' &&
         (category === '전체' || faq.category === category) &&
         (!normalized ||
           `${faq.question} ${faq.answer}`.toLocaleLowerCase('ko-KR').includes(normalized)),
@@ -394,29 +402,126 @@ export function FaqPage() {
   );
 }
 
-function InquiryForm({ memberId }: { memberId: string | null }) {
+function InquiryForm({
+  memberId,
+  productIds,
+  optionIds,
+  quantities,
+}: {
+  memberId: string;
+  productIds: string[];
+  optionIds: string[];
+  quantities: string[];
+}) {
+  const [title, setTitle] = useState('');
   const [inquiryBody, setInquiryBody] = useState('');
   const [feedback, setFeedback] = useState('');
-  const [hasCompletedPreview, setHasCompletedPreview] = useState(false);
-  const ordersQuery = useQuery({
-    queryKey: memberId ? queryKeys.orders.byMember(memberId) : ['orders', 'member', null],
-    enabled: Boolean(memberId),
-    queryFn: async ({ signal }): Promise<Order[]> => {
-      if (!memberId) return [];
-      return (await getShopApi()).orders.listByMember(memberId, { signal });
+  const [submitError, setSubmitError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittedInquiry, setSubmittedInquiry] = useState<Inquiry | null>(null);
+  const productKey = JSON.stringify(
+    productIds
+      .slice(0, 20)
+      .map((productId, index) => [productId, optionIds[index], quantities[index]]),
+  );
+  const productQuery = useQuery({
+    queryKey: ['support-inquiry-products', productKey],
+    enabled: productIds.length > 0,
+    queryFn: async ({ signal }): Promise<InquiryProductContext[]> => {
+      const api = await getShopApi();
+      const products = await Promise.all(
+        productIds.slice(0, 20).map((productId) => api.products.getById(productId, { signal })),
+      );
+      return products.map((product, index) => {
+        const rawOptionId = optionIds[index] || null;
+        const option = rawOptionId ? resolveCartOption(product, rawOptionId) : null;
+        if (rawOptionId && !option?.isAvailable) {
+          throw new Error(
+            '선택한 상품 옵션을 확인할 수 없습니다. 상품 페이지에서 다시 문의해 주세요.',
+          );
+        }
+        const rawQuantity = Number(quantities[index]);
+        const quantity = Number.isFinite(rawQuantity)
+          ? Math.min(999, Math.max(1, Math.floor(rawQuantity)))
+          : 1;
+        return {
+          product,
+          optionLabel: option?.isAvailable ? option.optionLabel : null,
+          quantity,
+        };
+      });
     },
   });
+  const productContext = productQuery.data ?? [];
+  const productNames = [...new Set(productContext.map(({ product }) => product.name))];
+  const canonicalProductText = productContext
+    .map(
+      ({ product, optionLabel, quantity }) =>
+        `- ${product.name}${optionLabel ? ` (${optionLabel})` : ''} · 수량 ${quantity}`,
+    )
+    .join('\n');
 
-  function handleSubmit(submitEvent: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(submitEvent: FormEvent<HTMLFormElement>) {
     submitEvent.preventDefault();
-    if (hasCompletedPreview) {
-      setFeedback('이미 접수 미리보기를 완료했습니다. 입력값은 저장되지 않았습니다.');
+    if (isSubmitting || submittedInquiry) return;
+    if (productIds.length > 20) {
+      setSubmitError('상품 문의는 한 번에 최대 20개까지 포함할 수 있습니다.');
       return;
     }
-    submitEvent.currentTarget.reset();
-    setInquiryBody('');
-    setHasCompletedPreview(true);
-    setFeedback('문의가 접수되었습니다. 데모 화면이며 입력값은 전송·저장되지 않았습니다.');
+    if (productIds.length > 0 && (productQuery.isPending || productQuery.isError)) {
+      setSubmitError('상품 정보를 확인한 뒤 문의를 등록해 주세요.');
+      return;
+    }
+    setIsSubmitting(true);
+    setSubmitError('');
+    try {
+      const context = canonicalProductText ? `문의 상품\n${canonicalProductText}\n\n` : '';
+      const submittedTitle = productNames.length
+        ? `상품 문의: ${productNames.join(', ')}${title.trim() ? ` · ${title.trim()}` : ''}`
+        : title.trim();
+      const submittedBody = `${context}${inquiryBody.trim()}`;
+      if (submittedBody.length > 5000) {
+        setSubmitError('상품 정보와 문의 내용을 합쳐 5,000자 이내로 입력해 주세요.');
+        return;
+      }
+      const submitted = await (
+        await getShopApi()
+      ).inquiries.submit({
+        memberId,
+        title: submittedTitle.slice(0, 200),
+        body: submittedBody,
+      });
+      setSubmittedInquiry(submitted);
+      setFeedback('문의가 접수되었습니다. 마이페이지에서 접수 내역을 확인할 수 있습니다.');
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : '문의 접수에 실패했습니다. 다시 시도해 주세요.',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  if (submittedInquiry) {
+    return (
+      <section
+        aria-labelledby="inquiry-form-heading"
+        className="rounded-12 border border-line p-24"
+      >
+        <h2 id="inquiry-form-heading" className="text-h4">
+          문의 접수 완료
+        </h2>
+        <p role="status" className="mt-12 text-body-s text-text-2">
+          {feedback}
+        </p>
+        <Link
+          href={`/mypage/inquiries/${encodeURIComponent(submittedInquiry.id)}`}
+          className="mt-16 inline-flex min-h-44 items-center rounded-8 bg-text-1 px-16 text-label-s text-inverse focus-ring"
+        >
+          접수 내역 보기
+        </Link>
+      </section>
+    );
   }
 
   return (
@@ -424,10 +529,12 @@ function InquiryForm({ memberId }: { memberId: string | null }) {
       <form
         aria-labelledby="inquiry-form-heading"
         className="space-y-20 rounded-12 border border-line p-16 sm:p-24"
-        onSubmit={handleSubmit}
+        onSubmit={(event) => void handleSubmit(event)}
         onReset={() => {
+          setTitle('');
           setInquiryBody('');
-          setFeedback('작성 내용을 초기화했습니다. 입력값은 저장되지 않았습니다.');
+          setFeedback('작성 내용을 초기화했습니다.');
+          setSubmitError('');
         }}
       >
         <div className="flex items-end justify-between gap-12">
@@ -441,58 +548,58 @@ function InquiryForm({ memberId }: { memberId: string | null }) {
             필수 입력 항목
           </span>
         </div>
-        <div className="grid gap-16 sm:grid-cols-2">
-          <SelectField
-            label="문의 유형"
-            showRequiredIndicator
-            defaultValue=""
-            required
-            aria-required="true"
-            options={[
-              { value: '', label: '문의 유형을 선택해 주세요' },
-              { value: 'order', label: '주문/결제' },
-              { value: 'delivery', label: '배송' },
-              { value: 'product', label: '상품' },
-              { value: 'etc', label: '기타' },
-            ]}
-          />
-          <SelectField
-            label="주문 선택 (선택)"
-            defaultValue=""
-            options={[
-              { value: '', label: '관련 주문을 선택해 주세요 (선택)' },
-              ...(ordersQuery.data ?? []).map((order) => ({
-                value: order.id,
-                label: `${order.orderNumber} · ${formatDate(order.orderedAt)}`,
-              })),
-            ]}
-          />
-        </div>
-        {memberId && ordersQuery.isError ? (
-          <div
-            role="alert"
-            className="flex flex-wrap items-center justify-between gap-8 text-body-s text-danger"
-          >
-            <span>주문 목록을 불러오지 못했습니다.</span>
-            <Button
-              type="button"
-              variant="secondary"
-              size="s"
-              onClick={() => void ordersQuery.refetch()}
-            >
-              다시 시도
-            </Button>
+        {productIds.length > 0 ? (
+          <div className="rounded-8 bg-surface p-16" aria-live="polite">
+            <h3 className="text-label-m">문의 상품</h3>
+            {productQuery.isPending ? (
+              <p role="status" className="mt-8 text-body-s text-text-3">
+                상품 정보를 확인하는 중입니다.
+              </p>
+            ) : null}
+            {productQuery.isError ? (
+              <div className="mt-8 flex flex-wrap items-center gap-8">
+                <p role="alert" className="text-body-s text-danger">
+                  상품 정보를 불러오지 못했습니다.
+                </p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="s"
+                  onClick={() => void productQuery.refetch()}
+                >
+                  상품 정보 다시 시도
+                </Button>
+              </div>
+            ) : null}
+            {productContext.length ? (
+              <ul className="mt-8 space-y-4 text-body-s text-text-2">
+                {productContext.map(({ product, optionLabel, quantity }, index) => (
+                  <li key={`${product.id}-${optionIds[index] || 'default'}-${index}`}>
+                    {product.name}
+                    {optionLabel ? ` · ${optionLabel}` : ''} · 수량 {quantity}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {productIds.length > 20 ? (
+              <p className="mt-8 text-caption text-text-3">
+                상품 문의는 한 번에 최대 20개까지 포함됩니다.
+              </p>
+            ) : null}
           </div>
         ) : null}
         <TextField
           label="제목"
           showRequiredIndicator
           placeholder="문의 제목을 입력해 주세요"
+          value={title}
+          onChange={(event) => setTitle(event.currentTarget.value)}
+          maxLength={160}
           required
           aria-required="true"
         />
         <div className="space-y-8">
-          <label className="flex flex-col gap-8 text-label-m">
+          <label className="flex flex-col gap-8 text-label-m" htmlFor="inquiry-body">
             <span className="inline-flex items-center gap-4">
               문의 내용{' '}
               <span aria-hidden="true" className="text-danger">
@@ -500,11 +607,12 @@ function InquiryForm({ memberId }: { memberId: string | null }) {
               </span>
             </span>
             <textarea
+              id="inquiry-body"
               required
               aria-required="true"
               value={inquiryBody}
-              onChange={(changeEvent) => setInquiryBody(changeEvent.currentTarget.value)}
-              maxLength={1000}
+              onChange={(event) => setInquiryBody(event.currentTarget.value)}
+              maxLength={5000}
               aria-describedby="inquiry-body-count"
               className="min-h-160 w-full resize-y rounded-8 border border-line-strong bg-bg p-14 text-body-m outline-none placeholder:text-text-3 focus:border-text-1 focus:ring-[0.5px] focus:ring-text-1 focus:ring-inset"
               placeholder="문의 내용을 입력해 주세요"
@@ -515,55 +623,40 @@ function InquiryForm({ memberId }: { memberId: string | null }) {
             aria-live="polite"
             className="block text-right text-caption text-text-3"
           >
-            {inquiryBody.length.toLocaleString('ko-KR')} / 1,000
+            {inquiryBody.length.toLocaleString('ko-KR')} / 5,000
           </span>
         </div>
-        <div className="space-y-8">
-          <span className="block text-label-m">파일 첨부</span>
-          <label className="flex min-h-88 cursor-not-allowed flex-col items-center justify-center gap-6 rounded-8 border border-dashed border-line-strong bg-surface px-16 text-center text-body-s text-text-3">
-            <Icon icon={FileText} size={20} />
-            <span>파일 첨부 기능은 준비 중입니다.</span>
-            <input type="file" className="sr-only" disabled aria-label="문의 파일 첨부" />
-          </label>
-          <p className="text-caption text-text-3">첨부 파일 업로드는 현재 지원하지 않습니다.</p>
-        </div>
-        <div className="space-y-8">
-          <Checkbox aria-describedby="inquiry-notification-note">답변 등록 시 알림 받기</Checkbox>
-          <p id="inquiry-notification-note" className="text-caption text-text-3">
-            알림 선택은 화면 미리보기용입니다. 실제로 저장되지 않으며 답변 알림도 발송되지 않습니다.
+        <p className="text-caption text-text-3">
+          Mock 문의는 현재 브라우저에 저장되며 같은 origin의 Preview Admin에서 확인할 수 있습니다.
+          만료되지 않으며 브라우저 사이트 데이터를 삭제하면 정리됩니다. 실제 개인정보 대신 테스트
+          내용만 입력해 주세요.
+        </p>
+        {submitError ? (
+          <p role="alert" className="rounded-8 bg-surface p-12 text-body-s text-danger">
+            {submitError}
           </p>
-        </div>
-        <div className="flex flex-col gap-12 border-t border-line pt-16 sm:flex-row sm:items-center sm:justify-between">
-          <p id="inquiry-form-note" className="text-caption text-text-3">
-            입력 내용은 이 화면에서만 유지되며 실제 문의로 전달되지 않습니다.
-          </p>
-          <div className="flex shrink-0 justify-end gap-8">
-            <Button type="reset" variant="secondary" size="m">
-              취소
-            </Button>
-            <Button type="submit" size="m" aria-describedby="inquiry-form-note">
-              등록
-            </Button>
-          </div>
-        </div>
+        ) : null}
         {feedback ? (
           <p role="status" className="rounded-8 bg-surface p-12 text-body-s text-text-2">
             {feedback}
           </p>
         ) : null}
-        {hasCompletedPreview ? (
-          <button
-            type="button"
-            onClick={() =>
-              setFeedback(
-                '이미 접수 미리보기를 완료했습니다. 실제 문의 기록은 생성되지 않았습니다.',
-              )
+        <div className="flex flex-col gap-12 border-t border-line pt-16 sm:flex-row sm:items-center sm:justify-end">
+          <Button type="reset" variant="secondary" size="m" disabled={isSubmitting}>
+            초기화
+          </Button>
+          <Button
+            type="submit"
+            size="m"
+            disabled={
+              isSubmitting ||
+              productIds.length > 20 ||
+              (productIds.length > 0 && (productQuery.isPending || productQuery.isError))
             }
-            className="rounded-4 text-caption text-text-3 underline focus-ring"
           >
-            접수 상태 다시 보기
-          </button>
-        ) : null}
+            {isSubmitting ? '접수 중…' : '문의 등록'}
+          </Button>
+        </div>
       </form>
     </section>
   );
@@ -639,6 +732,28 @@ function MemberInquiryHistory({ memberId }: { memberId: string }) {
 /** 고객 문의 작성 폼과 회원 문의 내역을 렌더링합니다. */
 export function InquiryPage() {
   const { member, status: memberStatus, refreshMember } = useMemberSession();
+  const searchParams = useSearchParams();
+  const productIdParams = searchParams.getAll('productId');
+  const optionIdParams = searchParams.getAll('optionId');
+  const quantityParams = searchParams.getAll('quantity');
+  const productSelections = productIdParams.flatMap((productId, index) => {
+    const normalizedProductId = productId.trim();
+    return normalizedProductId
+      ? [
+          {
+            productId: normalizedProductId,
+            optionId: optionIdParams[index] ?? '',
+            quantity: quantityParams[index] ?? '',
+          },
+        ]
+      : [];
+  });
+  const productIds = productSelections.map((selection) => selection.productId);
+  const optionIds = productSelections.map((selection) => selection.optionId);
+  const quantities = productSelections.map((selection) => selection.quantity);
+  const inquiryPath = searchParams.toString()
+    ? `/support/inquiry?${searchParams.toString()}`
+    : '/support/inquiry';
   return (
     <SupportShell activePath="/support/inquiry">
       {memberStatus === 'loading' ? <LoadingState label="회원 정보를 확인하는 중입니다." /> : null}
@@ -650,15 +765,24 @@ export function InquiryPage() {
       ) : null}
       {memberStatus === 'ready' && !member ? (
         <p role="status" className="mb-16 text-body-s text-text-3">
-          문의 내역은{' '}
-          <Link href="/login?redirect=%2Fmypage%2Finquiries" className="underline focus-ring">
-            로그인 후
-          </Link>{' '}
-          마이페이지에서 확인할 수 있습니다.
+          문의 등록과 내역 확인은 회원 로그인 후 이용할 수 있습니다.{' '}
+          <Link
+            href={`/login?redirect=${encodeURIComponent(inquiryPath)}`}
+            className="underline focus-ring"
+          >
+            로그인
+          </Link>
         </p>
       ) : null}
       {memberStatus === 'ready' && member ? <MemberInquiryHistory memberId={member.id} /> : null}
-      <InquiryForm memberId={member?.id ?? null} />
+      {memberStatus === 'ready' && member ? (
+        <InquiryForm
+          memberId={member.id}
+          productIds={productIds}
+          optionIds={optionIds}
+          quantities={quantities}
+        />
+      ) : null}
     </SupportShell>
   );
 }

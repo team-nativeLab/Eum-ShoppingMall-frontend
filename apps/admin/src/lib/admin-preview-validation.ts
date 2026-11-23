@@ -1,10 +1,3 @@
-export interface AdminQuoteDraft {
-  amount: string;
-  expiresAt: string;
-  notice: string;
-  attachments: File[];
-}
-
 /** 브라우저 현지 달력 날짜(한국어 Admin 화면은 Asia/Seoul 환경 사용)를 ISO 날짜 키로 만듭니다. */
 export function getBrowserLocalDateKey(date = new Date()): string {
   const year = date.getFullYear();
@@ -78,33 +71,6 @@ export function validateAdminSettingsDraft(draft: AdminSettingsDraft): string[] 
     if (field.toLocaleLowerCase('ko-KR').includes('rate') && amount > 100) {
       errors.push(`${field}: 할인율은 100% 이하여야 합니다.`);
     }
-  }
-  return errors;
-}
-
-export function validateAdminQuoteDraft(draft: AdminQuoteDraft, today: string): string[] {
-  const errors: string[] = [];
-  const amount = Number(draft.amount);
-  if (!draft.amount.trim() || !Number.isFinite(amount) || amount < 1 || amount > 1_000_000_000) {
-    errors.push('견적 금액은 1원 이상 10억원 이하로 입력해 주세요.');
-  }
-  if (!draft.expiresAt || draft.expiresAt < today) {
-    errors.push('유효기간은 오늘 이후 날짜로 선택해 주세요.');
-  }
-  if (!draft.notice.trim()) errors.push('고객 안내 내용을 입력해 주세요.');
-  if (draft.notice.length > 1000) errors.push('안내 내용은 1,000자 이내로 입력해 주세요.');
-  if (draft.attachments.length === 0) errors.push('견적서 파일을 선택해 주세요.');
-  if (draft.attachments.length > 1) errors.push('견적서 PDF 파일은 1개만 첨부할 수 있습니다.');
-  if (
-    draft.attachments.some(
-      (file) =>
-        file.type !== 'application/pdf' || !file.name.toLocaleLowerCase('ko-KR').endsWith('.pdf'),
-    )
-  ) {
-    errors.push('PDF 형식 파일 1개만 첨부할 수 있습니다.');
-  }
-  if (draft.attachments.some((file) => file.size > 20 * 1024 * 1024)) {
-    errors.push('파일당 20MB 이하로 첨부해 주세요.');
   }
   return errors;
 }

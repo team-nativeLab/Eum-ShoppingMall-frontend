@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider } from 'react-router';
@@ -6,7 +6,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { AdminMemberDetailPage } from './AdminMemberDetailPage';
 import { AdminOrderDetailPage } from './AdminOrderDetailPage';
 import { AdminCouponsPage } from './AdminCouponsPage';
-import { AdminQuotesPage } from './AdminQuotesPage';
 import { AdminSettingsPage } from './AdminSettingsPage';
 import { AdminWithdrawnMemberDetailPage } from './AdminWithdrawnMemberDetailPage';
 
@@ -14,9 +13,6 @@ const shopMocks = vi.hoisted(() => ({
   getShopApi: vi.fn(),
   membersList: vi.fn(),
   ordersList: vi.fn(),
-  quotesList: vi.fn(),
-  quotesAdminList: vi.fn(),
-  quotesUpdateAdmin: vi.fn(),
   couponsAdminList: vi.fn(),
   couponsSaveAdmin: vi.fn(),
   orderGet: vi.fn(),
@@ -73,75 +69,6 @@ function renderSettings() {
 }
 
 describe('Admin demo preview flows', () => {
-  it('refreshes quote elapsed days at local midnight and keeps invalid date fallback', async () => {
-    vi.useFakeTimers();
-    const beforeMidnight = new Date(2026, 9, 26, 23, 59, 30);
-    vi.setSystemTime(beforeMidnight);
-    const requestDate = new Date(2026, 9, 26, 12, 0).toISOString();
-    const quotes = [
-      {
-        id: 'quote-midnight',
-        title: '자정 경과 견적',
-        companyName: '이음 회사',
-        contactName: '담당자',
-        status: 'received',
-        requestedAt: requestDate,
-        memberId: null,
-        inquiryBody: '자재 견적을 문의합니다.',
-        requestedItems: [{ name: '테스트 자재', quantity: 1 }],
-        attachments: [],
-        internalMemo: '',
-        publicMessage: null,
-        quoteAmount: null,
-        expiresAt: null,
-      },
-      {
-        id: 'quote-invalid-date',
-        title: '날짜 누락 견적',
-        companyName: '이음 회사',
-        contactName: '담당자',
-        status: 'received',
-        requestedAt: 'invalid-date',
-        memberId: null,
-        inquiryBody: '자재 견적을 문의합니다.',
-        requestedItems: [{ name: '테스트 자재', quantity: 1 }],
-        attachments: [],
-        internalMemo: '',
-        publicMessage: null,
-        quoteAmount: null,
-        expiresAt: null,
-      },
-    ];
-    shopMocks.quotesAdminList.mockResolvedValue(quotes);
-    shopMocks.getShopApi.mockResolvedValue({ quotes: { adminList: shopMocks.quotesAdminList } });
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false, gcTime: Infinity } },
-    });
-    const rendered = render(
-      <QueryClientProvider client={queryClient}>
-        <AdminQuotesPage />
-      </QueryClientProvider>,
-    );
-
-    try {
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1);
-      });
-      expect(screen.getByText('0일 경과')).toBeInTheDocument();
-      expect(screen.getByText('경과 정보 없음')).toBeInTheDocument();
-
-      await act(async () => {
-        vi.advanceTimersByTime(30_050);
-      });
-
-      expect(screen.getByText('1일 경과')).toBeInTheDocument();
-    } finally {
-      rendered.unmount();
-      queryClient.clear();
-      vi.useRealTimers();
-    }
-  });
-
   it('shows a navigation warning only while settings differ from the current preview', async () => {
     const user = userEvent.setup();
     const { router } = renderSettings();
@@ -224,132 +151,6 @@ describe('Admin demo preview flows', () => {
     expect(window.sessionStorage.length).toBe(0);
   });
 
-  it('clears the quote PDF input on cancel and allows choosing the same file again', async () => {
-    const user = userEvent.setup();
-    const quote = {
-      id: 'quote-a',
-      title: '견적 문의',
-      companyName: '이음 회사',
-      contactName: '담당자',
-      status: 'received',
-      requestedAt: '2026-10-15T00:00:00Z',
-      memberId: null,
-      inquiryBody: '자재 견적을 문의합니다.',
-      requestedItems: [{ name: '테스트 자재', quantity: 3 }],
-      attachments: [],
-      internalMemo: '',
-      publicMessage: null,
-      quoteAmount: null,
-      expiresAt: null,
-    };
-    shopMocks.quotesAdminList.mockResolvedValue([quote]);
-    shopMocks.quotesUpdateAdmin.mockImplementation((_id: string, update: object) =>
-      Promise.resolve({ ...quote, ...update }),
-    );
-    shopMocks.getShopApi.mockResolvedValue({
-      quotes: { adminList: shopMocks.quotesAdminList, updateAdmin: shopMocks.quotesUpdateAdmin },
-    });
-    render(
-      <QueryClientProvider
-        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-      >
-        <AdminQuotesPage />
-      </QueryClientProvider>,
-    );
-
-    await user.click(await screen.findByRole('button', { name: '견적 문의' }));
-    await user.click(screen.getByRole('button', { name: '견적 작성·저장' }));
-    const fileInput = screen.getByLabelText('견적서 파일 (PDF 1개)') as HTMLInputElement;
-    const pdf = new File(['quote'], 'quote.pdf', { type: 'application/pdf' });
-    fireEvent.change(fileInput, { target: { files: [pdf] } });
-    expect(screen.getByText(/quote\.pdf/)).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: '취소' }));
-    expect(fileInput.value).toBe('');
-    expect(screen.queryByText(/quote\.pdf/)).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: '견적 작성·저장' }));
-    fireEvent.change(fileInput, { target: { files: [pdf] } });
-    expect(screen.getByText(/quote\.pdf/)).toBeInTheDocument();
-    await user.type(screen.getByLabelText('견적 금액'), '1000');
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + 2);
-    const expiryDate = [
-      futureDate.getFullYear(),
-      String(futureDate.getMonth() + 1).padStart(2, '0'),
-      String(futureDate.getDate()).padStart(2, '0'),
-    ].join('-');
-    fireEvent.change(screen.getByLabelText('유효기간'), { target: { value: expiryDate } });
-    const quoteNoticeInput = screen.getByText('고객 안내').parentElement?.querySelector('textarea');
-    if (!quoteNoticeInput) throw new Error('견적 고객 안내 입력을 찾을 수 없습니다.');
-    fireEvent.change(quoteNoticeInput, { target: { value: '견적 내용을 확인해 주세요.' } });
-    await user.click(screen.getByRole('button', { name: '목 API에 저장' }));
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      '견적 정보와 PDF 파일 메타데이터를 목 API에 저장했습니다.',
-    );
-    expect(shopMocks.quotesUpdateAdmin).toHaveBeenCalledWith(
-      'quote-a',
-      expect.objectContaining({
-        status: 'quoteSent',
-        quoteAmount: 1000,
-        publicMessage: '견적 내용을 확인해 주세요.',
-        attachments: [
-          {
-            id: 'quote-a-quote.pdf-5',
-            fileName: 'quote.pdf',
-            mimeType: 'application/pdf',
-            sizeBytes: 5,
-          },
-        ],
-      }),
-    );
-    expect(JSON.stringify(shopMocks.quotesUpdateAdmin.mock.calls)).not.toContain('dataUrl');
-    expect(fileInput.value).toBe('');
-    expect(screen.queryByText(/quote\.pdf/)).not.toBeInTheDocument();
-  });
-
-  it('explains that only PDF metadata is saved and the file is not stored or uploaded', async () => {
-    const user = userEvent.setup();
-    shopMocks.quotesAdminList.mockResolvedValue([
-      {
-        id: 'quote-a',
-        title: '견적 문의',
-        companyName: '이음 회사',
-        contactName: '담당자',
-        status: 'received',
-        requestedAt: '2026-10-15T00:00:00Z',
-        memberId: null,
-        inquiryBody: '자재 견적을 문의합니다.',
-        requestedItems: [],
-        attachments: [],
-        internalMemo: '',
-        publicMessage: null,
-        quoteAmount: null,
-        expiresAt: null,
-      },
-    ]);
-    shopMocks.getShopApi.mockResolvedValue({
-      quotes: { adminList: shopMocks.quotesAdminList },
-    });
-    render(
-      <QueryClientProvider
-        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-      >
-        <AdminQuotesPage />
-      </QueryClientProvider>,
-    );
-
-    const quotesList = await screen.findByRole('region', { name: '견적 문의 목록' });
-    await user.click(within(quotesList).getByRole('button', { name: '견적 문의' }));
-
-    expect(
-      screen.getAllByText(
-        (_, element) =>
-          element?.textContent?.includes('PDF 파일 자체는 보관하거나 업로드하지') ?? false,
-      ),
-    ).not.toHaveLength(0);
-  });
-
   it('requires the exact 탈퇴 confirmation phrase and keeps account data unchanged', async () => {
     const user = userEvent.setup();
     shopMocks.membersList.mockResolvedValue([
@@ -363,11 +164,9 @@ describe('Admin demo preview flows', () => {
       },
     ]);
     shopMocks.ordersList.mockResolvedValue([]);
-    shopMocks.quotesList.mockResolvedValue([]);
     shopMocks.getShopApi.mockResolvedValue({
       members: { adminList: shopMocks.membersList },
       orders: { adminList: shopMocks.ordersList },
-      quotes: { adminList: shopMocks.quotesList },
     });
     const router = createMemoryRouter(
       [{ path: '/members/:memberId', element: <AdminMemberDetailPage /> }],
@@ -382,9 +181,7 @@ describe('Admin demo preview flows', () => {
     );
     await user.click(await screen.findByRole('button', { name: '탈퇴 처리 안내' }));
     expect(await screen.findByText('주문 이력 (0)')).toBeInTheDocument();
-    expect(await screen.findByText('견적 문의 이력 (0)')).toBeInTheDocument();
     expect(screen.getByText('주문 이력이 없습니다')).toBeInTheDocument();
-    expect(screen.getByText('견적 문의 이력이 없습니다')).toBeInTheDocument();
     const confirmButton = screen.getByRole('button', { name: '확인 미리보기' });
     expect(confirmButton).toBeDisabled();
     await user.type(screen.getByLabelText(/계속하려면/), '탈퇴 처리');
@@ -401,7 +198,7 @@ describe('Admin demo preview flows', () => {
     expect(shopMocks.membersList).toHaveBeenCalledTimes(1);
   });
 
-  it('shows member scoped order and quote lists from Admin APIs after loading', async () => {
+  it('shows member scoped order lists from Admin APIs after loading', async () => {
     shopMocks.membersList.mockResolvedValue([
       {
         id: 'member-a',
@@ -432,25 +229,9 @@ describe('Admin demo preview flows', () => {
         paymentTotal: 24000,
       },
     ]);
-    shopMocks.quotesList.mockResolvedValue([
-      {
-        id: 'quote-a',
-        title: '안전모 대량 견적',
-        companyName: '회원 회사',
-        contactName: '담당자',
-        status: 'received',
-        requestedAt: '2026-10-18T00:00:00Z',
-        memberId: 'member-a',
-        requestedItems: [
-          { name: '안전모', quantity: 10 },
-          { name: '안전모 턱끈', quantity: 10 },
-        ],
-      },
-    ]);
     shopMocks.getShopApi.mockResolvedValue({
       members: { adminList: shopMocks.membersList },
       orders: { adminList: shopMocks.ordersList },
-      quotes: { adminList: shopMocks.quotesList },
     });
     const router = createMemoryRouter(
       [{ path: '/members/:memberId', element: <AdminMemberDetailPage /> }],
@@ -465,15 +246,11 @@ describe('Admin demo preview flows', () => {
     );
 
     expect(await screen.findByText('주문 이력 (1)')).toBeInTheDocument();
-    expect(await screen.findByText('견적 문의 이력 (1)')).toBeInTheDocument();
     expect(screen.getByText('20261018-0001')).toBeInTheDocument();
     expect(screen.queryByText('20261018-0002')).not.toBeInTheDocument();
-    expect(screen.getByText('quote-a')).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: '품목 수' })).toBeInTheDocument();
-    expect(screen.getByText('2개')).toBeInTheDocument();
   });
 
-  it('shows a settled error state when member order or quote history requests fail', async () => {
+  it('shows a settled error state when member order history requests fail', async () => {
     shopMocks.membersList.mockResolvedValue([
       {
         id: 'member-a',
@@ -485,11 +262,9 @@ describe('Admin demo preview flows', () => {
       },
     ]);
     shopMocks.ordersList.mockRejectedValue(new Error('주문 조회 실패'));
-    shopMocks.quotesList.mockRejectedValue(new Error('견적 조회 실패'));
     shopMocks.getShopApi.mockResolvedValue({
       members: { adminList: shopMocks.membersList },
       orders: { adminList: shopMocks.ordersList },
-      quotes: { adminList: shopMocks.quotesList },
     });
     const router = createMemoryRouter(
       [{ path: '/members/:memberId', element: <AdminMemberDetailPage /> }],
@@ -504,19 +279,13 @@ describe('Admin demo preview flows', () => {
     );
 
     expect(await screen.findByText('주문 이력을 불러오지 못했습니다')).toBeInTheDocument();
-    expect(await screen.findByText('견적 문의 이력을 불러오지 못했습니다')).toBeInTheDocument();
     expect(screen.queryByText('주문 이력을 불러오고 있습니다.')).not.toBeInTheDocument();
-    expect(screen.queryByText('견적 문의 이력을 불러오고 있습니다.')).not.toBeInTheDocument();
   });
 
-  it('shows pending history states only until both Admin history requests settle', async () => {
+  it('shows the pending order history state until its Admin request settles', async () => {
     let resolveOrders: ((orders: never[]) => void) | undefined;
-    let resolveQuotes: ((quotes: never[]) => void) | undefined;
     const pendingOrders = new Promise<never[]>((resolve) => {
       resolveOrders = resolve;
-    });
-    const pendingQuotes = new Promise<never[]>((resolve) => {
-      resolveQuotes = resolve;
     });
     shopMocks.membersList.mockResolvedValue([
       {
@@ -529,11 +298,9 @@ describe('Admin demo preview flows', () => {
       },
     ]);
     shopMocks.ordersList.mockReturnValue(pendingOrders);
-    shopMocks.quotesList.mockReturnValue(pendingQuotes);
     shopMocks.getShopApi.mockResolvedValue({
       members: { adminList: shopMocks.membersList },
       orders: { adminList: shopMocks.ordersList },
-      quotes: { adminList: shopMocks.quotesList },
     });
     const router = createMemoryRouter(
       [{ path: '/members/:memberId', element: <AdminMemberDetailPage /> }],
@@ -548,16 +315,12 @@ describe('Admin demo preview flows', () => {
     );
 
     expect(await screen.findByText('주문 이력을 불러오고 있습니다.')).toBeInTheDocument();
-    expect(screen.getByText('견적 문의 이력을 불러오고 있습니다.')).toBeInTheDocument();
     resolveOrders?.([]);
-    resolveQuotes?.([]);
     expect(await screen.findByText('주문 이력 (0)')).toBeInTheDocument();
-    expect(await screen.findByText('견적 문의 이력 (0)')).toBeInTheDocument();
     expect(screen.queryByText('주문 이력을 불러오고 있습니다.')).not.toBeInTheDocument();
-    expect(screen.queryByText('견적 문의 이력을 불러오고 있습니다.')).not.toBeInTheDocument();
   });
 
-  it('renders only masked synthetic purchase, quote, and memo records on withdrawn details', () => {
+  it('renders only masked synthetic purchase and memo records on withdrawn details', () => {
     const router = createMemoryRouter(
       [{ path: '/members/withdrawn/:memberId', element: <AdminWithdrawnMemberDetailPage /> }],
       { initialEntries: ['/members/withdrawn/admin-demo-withdrawn-001'] },
@@ -566,7 +329,6 @@ describe('Admin demo preview flows', () => {
     expect(screen.getByText('010-****-0001')).toBeInTheDocument();
     expect(screen.getByText('ex*****@email.com')).toBeInTheDocument();
     expect(screen.getByText('주문 이력 (2)')).toBeInTheDocument();
-    expect(screen.getByText('견적 문의 이력 (1)')).toBeInTheDocument();
     expect(screen.getByText('재가입 가능 예정일')).toBeInTheDocument();
     expect(screen.getByText('2026-11-14')).toBeInTheDocument();
     expect(screen.getByText(/합성 데모 기록입니다/)).toBeInTheDocument();

@@ -1,6 +1,5 @@
 import Image from 'next/image';
-import Link from 'next/link';
-import { ArrowRight, Image as ImageIcon } from 'lucide-react';
+import { Image as ImageIcon } from 'lucide-react';
 import { Icon } from '@eum/ui/components/Icon';
 import type { ReactNode } from 'react';
 import { PageContainer } from '@/components/page-container';
@@ -24,22 +23,10 @@ const BUSINESS_AREAS = [
     imageAlt: '안전용품을 보관한 창고',
   },
   {
-    title: '현장 납품',
-    description: '건설·산업 현장 정기 납품',
-    image: '/assets/web/about-delivery.png',
-    imageAlt: '현장에 전달할 안전용품',
-  },
-  {
-    title: '맞춤 제작',
-    description: '로고 인쇄·사양 맞춤 제작',
-    image: '/assets/web/promo-blueprint-v2.png',
-    imageAlt: '맞춤 제작을 위한 설계 도면',
-  },
-  {
-    title: '안전 솔루션',
-    description: '현장 진단과 맞춤 안전 제안',
+    title: '안전용품 안내',
+    description: '개인보호장비와 현장 안전용품 정보',
     image: '/assets/web/hero-v3.webp',
-    imageAlt: '현장 도시를 배경으로 놓인 안전모',
+    imageAlt: '현장 안전용품',
   },
 ] as const;
 
@@ -106,8 +93,8 @@ export function AboutPageContent() {
             <div className="max-w-[636px] space-y-16 leading-[26px]">
               <h3 className="text-h3">작은 변화가 큰 안전을 만듭니다.</h3>
               <p className="text-body-l text-text-2">
-                안전맛집은 개인보호장비부터 현장 안전용품, 맞춤 제작까지 현장에 필요한 안전 솔루션을
-                제공합니다. 고객의 현장 환경을 이해하고, 가장 알맞은 제품과 서비스를 제안합니다.
+                안전맛집은 개인보호장비와 현장 안전용품을 소개하는 쇼핑몰입니다. 상품별 정보와
+                고객센터 안내를 확인하고 필요한 제품을 살펴볼 수 있습니다.
               </p>
             </div>
           </div>
@@ -123,7 +110,7 @@ export function AboutPageContent() {
             <SectionHeading eyebrow="Business">
               <span id="business-title">사업분야</span>
             </SectionHeading>
-            <div className="grid grid-cols-1 gap-16 sm:grid-cols-2 lg:grid-cols-4 lg:gap-24">
+            <div className="grid grid-cols-1 gap-16 sm:grid-cols-2 lg:grid-cols-2 lg:gap-24">
               {BUSINESS_AREAS.map((businessArea) => (
                 <article key={businessArea.title} className="rounded-12 border border-line p-16">
                   <div className="relative h-[180px] overflow-hidden rounded-6">
@@ -238,23 +225,8 @@ export function AboutPageContent() {
                 >
                   <Icon icon={ImageIcon} size={28} className="text-ph-glyph" />
                 </div>
-                <CompanyContactSummary variant="about" />
+                <CompanyContactSummary />
               </div>
-            </div>
-            <div className="flex flex-col items-start justify-between gap-24 rounded-12 bg-text-1 px-24 py-24 lg:flex-row lg:items-center lg:px-48 lg:py-40">
-              <div className="flex flex-col gap-8">
-                <p className="text-overline tracking-[0.16em] text-inverse-2">Custom Order</p>
-                <p className="text-h3 text-inverse lg:text-h2">
-                  현장에 꼭 맞는 안전 솔루션, 지금 상담받아 보세요.
-                </p>
-              </div>
-              <Link
-                href="/solutions"
-                className="inline-flex h-56 shrink-0 items-center gap-8 rounded-8 border border-inverse px-24 text-label-l text-inverse focus-ring hover:bg-inverse/10"
-              >
-                견적 문의하기
-                <Icon icon={ArrowRight} size={20} />
-              </Link>
             </div>
           </div>
         </section>

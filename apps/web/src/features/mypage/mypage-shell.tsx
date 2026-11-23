@@ -43,7 +43,6 @@ export const MYPAGE_NAV_GROUPS: MyPageNavGroup[] = [
     links: [
       { key: 'profile', label: '내 정보 관리', href: '/mypage/profile' },
       { key: 'addresses', label: '배송지 관리', href: '/mypage/addresses' },
-      { key: 'quotes', label: '견적 문의 내역', href: '/mypage/quotes' },
       { key: 'inquiries', label: '1:1 문의 내역', href: '/mypage/inquiries' },
       { key: 'logout', label: '로그아웃', href: '/login' },
     ],
@@ -62,9 +61,7 @@ export type MyPageSection =
   | 'points'
   | 'profile'
   | 'profile-edit'
-  | 'addresses'
-  | 'quotes'
-  | 'quote-detail';
+  | 'addresses';
 
 type MyPageShellSection = MyPageSection | 'inquiries' | 'inquiry-detail';
 
@@ -86,8 +83,6 @@ const SECTION_NAV_KEY: Record<MyPageShellSection, string> = {
   profile: 'profile',
   'profile-edit': 'profile',
   addresses: 'addresses',
-  quotes: 'quotes',
-  'quote-detail': 'quotes',
   inquiries: 'inquiries',
   'inquiry-detail': 'inquiries',
 };

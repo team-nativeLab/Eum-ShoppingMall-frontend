@@ -43,7 +43,11 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 const FREE_SHIPPING_THRESHOLD = 50_000;
 
-function buildProduct(id: string, price: number): Product {
+function buildProduct(
+  id: string,
+  price: number,
+  overrides: Partial<Pick<Product, 'priceVisible' | 'stockStatus'>> = {},
+): Product {
   return {
     id,
     name: `상품 ${id}`,
@@ -51,8 +55,8 @@ function buildProduct(id: string, price: number): Product {
     categoryId: 'category-test',
     price,
     listPrice: null,
-    priceVisible: true,
-    stockStatus: 'inStock',
+    priceVisible: overrides.priceVisible ?? true,
+    stockStatus: overrides.stockStatus ?? 'inStock',
     thumbnailUrl: null,
     summary: '',
     modelName: null,
@@ -105,8 +109,18 @@ function configureApi(
 
 const productCatalog = new Map<string, Product>();
 
-function saveCart(products: Array<{ id: string; price: number; quantity?: number }>) {
-  for (const { id, price } of products) productCatalog.set(id, buildProduct(id, price));
+function saveCart(
+  products: Array<{
+    id: string;
+    price: number;
+    quantity?: number;
+    priceVisible?: boolean;
+    stockStatus?: Product['stockStatus'];
+  }>,
+) {
+  for (const { id, price, priceVisible, stockStatus } of products) {
+    productCatalog.set(id, buildProduct(id, price, { priceVisible, stockStatus }));
+  }
   window.localStorage.setItem(
     CART_STORAGE_KEY,
     serializeCart(
@@ -193,6 +207,26 @@ afterEach(() => {
 });
 
 describe('CartPageView free shipping progress', () => {
+  it('routes only price-hidden cart products to the customer inquiry form', async () => {
+    saveCart([{ id: 'private-price', price: 18_000, priceVisible: false }]);
+    renderCartPage();
+
+    expect(await screen.findByRole('link', { name: '상품 문의하기' })).toHaveAttribute(
+      'href',
+      '/support/inquiry?productId=private-price&optionId=&quantity=1',
+    );
+  });
+
+  it('does not create an inquiry CTA for sold-out cart products', async () => {
+    saveCart([{ id: 'sold-out', price: 18_000, stockStatus: 'soldOut' }]);
+    renderCartPage();
+
+    expect(
+      await screen.findByRole('button', { name: '주문 가능한 상품이 없습니다' }),
+    ).toBeDisabled();
+    expect(screen.queryByRole('link', { name: '상품 문의하기' })).not.toBeInTheDocument();
+  });
+
   it('does not show a shipping banner while checkout options are loading', async () => {
     saveCart([{ id: 'loading-options', price: 18_000 }]);
     configureApi(() => new Promise<CheckoutOptions>(() => undefined));
