@@ -74,8 +74,7 @@ const homeContent: HomeContent = {
     {
       id: 'promo-two',
       title: ['두 번째 안내'],
-      description:
-        '현장의 상황과 작업 환경에 맞는 안전 솔루션을 제안하며, 필요한 제품과 맞춤 서비스를 함께 안내합니다.\n안전맛집이 현장별 선택을 돕습니다.',
+      description: '필요한 현장 안전용품 정보를 안내합니다.\n안전맛집이 제품 선택을 돕습니다.',
       imageUrl: '',
       tone: 'light',
       destination: '/about',
@@ -121,11 +120,6 @@ const homeContent: HomeContent = {
       isFeatured: true,
     } satisfies Product,
   ],
-  ctaBand: {
-    eyebrow: 'CUSTOM ORDER',
-    title: '현장 견적 상담',
-    cta: { label: '문의하기', destination: '/solutions' },
-  },
 };
 
 function createWrapper() {
@@ -288,13 +282,11 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
     const heroSection = await screen.findByRole('region', { name: '주요 프로모션' });
     const promoSection = await screen.findByRole('region', { name: '안전 솔루션 프로모션' });
     const bestSellerSection = screen.getByRole('region', { name: '베스트' });
-    const quoteSection = screen.getByRole('region', { name: '현장 견적 상담' });
     const serviceBenefits = screen.getByRole('list', { name: '서비스 안내' });
 
     expect(followsInDocument(heroSection, promoSection)).toBe(true);
     expect(followsInDocument(promoSection, bestSellerSection)).toBe(true);
-    expect(followsInDocument(bestSellerSection, quoteSection)).toBe(true);
-    expect(followsInDocument(quoteSection, serviceBenefits)).toBe(true);
+    expect(followsInDocument(bestSellerSection, serviceBenefits)).toBe(true);
 
     expect(promoSection).toHaveClass('lg:mt-24');
     expect(promoSection.firstElementChild).toHaveClass('lg:grid-cols-3', 'lg:gap-16');
@@ -326,8 +318,60 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
     expect(productRow).toHaveClass('mt-16', 'lg:mt-24');
     expect(productTrack).toHaveAttribute('data-page-size', '8');
     expect(productTrack).toHaveAttribute('data-card-min-height', '292');
-    expect(quoteSection).toHaveClass('mt-64');
     expect(serviceBenefits).toHaveClass('mt-64');
+  });
+
+  it('keeps benefit order, shows legacy entries, and omits hidden entries', async () => {
+    vi.mocked(getShopApi).mockResolvedValue(
+      createApi({
+        ...homeContent,
+        serviceBenefits: [
+          { id: 'benefit-first', title: '첫 번째 혜택', description: '먼저 표시합니다.' },
+          {
+            id: 'benefit-hidden',
+            title: '숨긴 혜택',
+            description: '표시하지 않습니다.',
+            isVisible: false,
+          },
+          {
+            id: 'benefit-last',
+            title: '마지막 혜택',
+            description: '마지막에 표시합니다.',
+            isVisible: true,
+          },
+        ],
+      }),
+    );
+
+    render(<HomeView />, { wrapper: createWrapper() });
+
+    const serviceBenefits = await screen.findByRole('list', { name: '서비스 안내' });
+    const benefitRows = within(serviceBenefits).getAllByRole('listitem');
+    expect(benefitRows).toHaveLength(2);
+    expect(benefitRows[0]).toHaveTextContent('첫 번째 혜택');
+    expect(benefitRows[1]).toHaveTextContent('마지막 혜택');
+    expect(within(serviceBenefits).queryByText('숨긴 혜택')).not.toBeInTheDocument();
+  });
+
+  it('does not render the benefits strip when every benefit is hidden', async () => {
+    vi.mocked(getShopApi).mockResolvedValue(
+      createApi({
+        ...homeContent,
+        serviceBenefits: [
+          {
+            id: 'benefit-hidden',
+            title: '숨긴 혜택',
+            description: '표시하지 않습니다.',
+            isVisible: false,
+          },
+        ],
+      }),
+    );
+
+    render(<HomeView />, { wrapper: createWrapper() });
+
+    expect(await screen.findByRole('heading', { name: '베스트' })).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: '서비스 안내' })).not.toBeInTheDocument();
   });
 
   it('keeps the promo card keyboard-focusable as one link with a decorative CTA', async () => {

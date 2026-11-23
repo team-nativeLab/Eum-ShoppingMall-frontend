@@ -66,42 +66,40 @@ const TERMS_CHAPTERS: TermsChapter[] = [
     title: '제2장 회원',
     articles: [
       { id: 'term-6', title: '제6조(회원가입)' },
-      { id: 'term-7', title: '제7조(사업자 회원)' },
-      { id: 'term-8', title: '제8조(회원 탈퇴 및 자격 상실 등)' },
-      { id: 'term-9', title: '제9조(회원에 대한 통지)' },
+      { id: 'term-7', title: '제7조(회원 탈퇴 및 자격 상실 등)' },
+      { id: 'term-8', title: '제8조(회원에 대한 통지)' },
     ],
   },
   {
     id: 'chapter-purchase',
     title: '제3장 구매·결제',
     articles: [
-      { id: 'term-10', title: '제10조(구매신청)' },
-      { id: 'term-11', title: '제11조(계약의 성립)' },
-      { id: 'term-12', title: '제12조(지급방법)' },
-      { id: 'term-13', title: '제13조(가격 문의 상품과 견적 문의)' },
-      { id: 'term-14', title: '제14조(세금계산서 및 현금영수증)' },
+      { id: 'term-9', title: '제9조(구매신청)' },
+      { id: 'term-10', title: '제10조(계약의 성립)' },
+      { id: 'term-11', title: '제11조(지급방법)' },
+      { id: 'term-12', title: '제12조(세금계산서 및 현금영수증)' },
     ],
   },
   {
     id: 'chapter-delivery',
     title: '제4장 배송·청약철회',
     articles: [
-      { id: 'term-15', title: '제15조(재화 등의 공급)' },
-      { id: 'term-16', title: '제16조(환급)' },
-      { id: 'term-17', title: '제17조(청약철회 등)', hasList: true },
-      { id: 'term-18', title: '제18조(청약철회 등의 효과)' },
+      { id: 'term-13', title: '제13조(재화 등의 공급)' },
+      { id: 'term-14', title: '제14조(환급)' },
+      { id: 'term-15', title: '제15조(청약철회 등)', hasList: true },
+      { id: 'term-16', title: '제16조(청약철회 등의 효과)' },
     ],
   },
   {
     id: 'chapter-provisions',
     title: '제5장 보칙',
     articles: [
-      { id: 'term-19', title: '제19조(개인정보보호)' },
-      { id: 'term-20', title: '제20조(회사의 의무)' },
-      { id: 'term-21', title: '제21조(회원의 아이디 및 비밀번호에 대한 의무)' },
-      { id: 'term-22', title: '제22조(이용자의 의무)' },
-      { id: 'term-23', title: '제23조(분쟁해결)' },
-      { id: 'term-24', title: '제24조(재판권 및 준거법)' },
+      { id: 'term-17', title: '제17조(개인정보보호)' },
+      { id: 'term-18', title: '제18조(회사의 의무)' },
+      { id: 'term-19', title: '제19조(회원의 아이디 및 비밀번호에 대한 의무)' },
+      { id: 'term-20', title: '제20조(이용자의 의무)' },
+      { id: 'term-21', title: '제21조(분쟁해결)' },
+      { id: 'term-22', title: '제22조(재판권 및 준거법)' },
     ],
   },
 ];
@@ -155,14 +153,14 @@ const GUIDE_DOCUMENTS: Record<GuideDocument, { title: string; sections: Document
       {
         id: 'join',
         title: '회원가입 안내',
-        paragraphs: ['회원가입 후 상품 주문, 배송 확인과 견적 문의를 이용할 수 있습니다.'],
+        paragraphs: ['회원가입 후 상품 주문, 배송 확인과 고객센터 문의를 이용할 수 있습니다.'],
       },
       {
         id: 'order',
         title: '주문 안내',
         paragraphs: [
           '상품과 수량을 선택해 장바구니에 담은 다음 주문서에서 배송지와 결제 방법을 확인합니다.',
-          '가격이 표시되지 않는 상품은 견적 또는 고객센터를 통해 문의해 주십시오.',
+          '가격이 표시되지 않는 상품은 고객센터로 문의해 주십시오.',
         ],
       },
       {
@@ -419,7 +417,7 @@ function isLegalVersion(value: string): value is LegalVersion {
 }
 
 function PolicyTableOfContents({ document }: { document: PolicyDocument }) {
-  const itemCount = document === 'terms' ? '24개 조항' : '12개 항목';
+  const itemCount = document === 'terms' ? '22개 조항' : '12개 항목';
 
   return (
     <>

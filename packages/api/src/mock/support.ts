@@ -1,4 +1,4 @@
-import type { AdminProductQuestion, Faq, Inquiry, Notice, Quote, ShopEvent } from '../types';
+import type { AdminProductQuestion, Faq, Inquiry, Notice, ShopEvent } from '../types';
 
 /** 목 이벤트·기획전. 기간과 상태는 목 API가 제공하는 시연 데이터입니다. */
 export const mockEvents: ShopEvent[] = [
@@ -179,8 +179,8 @@ export const mockNotices: Notice[] = [
   },
   {
     id: 'ntc-004',
-    title: '맞춤 제작 상품 상담 안내',
-    body: '맞춤 제작 상품 상담 안내입니다.',
+    title: '상품 정보 확인 안내',
+    body: '상품별 규격과 선택 옵션은 각 상품 상세 페이지에서 확인해 주세요.',
     isPinned: false,
     publishedAt: '2026-07-12T09:00:00+09:00',
     viewCount: 71,
@@ -195,16 +195,16 @@ export const mockNotices: Notice[] = [
   },
   {
     id: 'ntc-006',
-    title: '사업자 회원 견적 문의 안내',
-    body: '사업자 회원 견적 문의 안내입니다.',
+    title: '상품 문의 접수 안내',
+    body: '상품 정보와 옵션 문의는 로그인 후 고객센터 1:1 문의에 남겨 주세요.',
     isPinned: false,
     publishedAt: '2026-06-10T09:00:00+09:00',
     viewCount: 53,
   },
   {
     id: 'ntc-007',
-    title: '안전용품 정기 납품 상담 안내',
-    body: '안전용품 정기 납품 상담 안내입니다.',
+    title: '안전용품 배송 안내',
+    body: '상품별 배송 일정은 결제 후 주문 내역에서 확인해 주세요.',
     isPinned: false,
     publishedAt: '2026-05-22T09:00:00+09:00',
     viewCount: 47,
@@ -251,8 +251,8 @@ export const mockNotices: Notice[] = [
   },
   {
     id: 'ntc-013',
-    title: '현장 납품 일정 확인 안내',
-    body: '현장 납품 일정 확인 안내입니다.',
+    title: '배송 일정 확인 안내',
+    body: '주문 배송 일정은 마이페이지 주문 내역에서 확인해 주세요.',
     isPinned: false,
     publishedAt: '2026-02-14T09:00:00+09:00',
     viewCount: 14,
@@ -330,20 +330,19 @@ export const mockFaqs: Faq[] = [
     category: '배송',
     question: '주문 후 배송까지 얼마나 걸리나요?',
     answer:
-      '결제 완료 후 평균 2~3일(영업일 기준) 이내 출고됩니다. 맞춤 제작 상품은 별도 안내드립니다.',
+      '결제 완료 후 평균 2~3일(영업일 기준) 이내 출고됩니다. 상품별 출고 일정은 상세 페이지에서 확인해 주세요.',
   },
   {
     id: 'faq-002',
     category: '주문/결제',
     question: '금액이 표시되지 않는 상품은 어떻게 구매하나요?',
-    answer: '상품별 요구사항과 수량을 알려 주시면 담당자가 확인 후 안내드립니다.',
+    answer: '로그인 후 고객센터 1:1 문의에 상품명, 선택 옵션과 수량을 남겨 주세요.',
   },
   {
     id: 'faq-003',
-    category: '견적·대량구매',
-    question: '대량 구매 시 할인이 가능한가요?',
-    answer:
-      '수량과 납품 일정에 따라 상담이 필요합니다. 안전 솔루션 문의에서 필요한 내용을 남겨 주세요.',
+    category: '상품 문의',
+    question: '상품에 대해 더 알고 싶어요.',
+    answer: '상품 상세 정보를 확인하거나 고객센터 1:1 문의로 문의해 주세요.',
   },
   {
     id: 'faq-004',
@@ -359,9 +358,9 @@ export const mockFaqs: Faq[] = [
   },
   {
     id: 'faq-006',
-    category: '견적·대량구매',
-    question: '회사 로고 인쇄(맞춤 제작)가 가능한가요?',
-    answer: '상품과 인쇄 사양에 따라 가능 여부가 달라집니다. 안전 솔루션 문의를 이용해 주세요.',
+    category: '상품 문의',
+    question: '상품 옵션은 어디에서 확인하나요?',
+    answer: '상품 상세 페이지에서 선택 가능한 옵션을 확인할 수 있습니다.',
   },
   {
     id: 'faq-007',
@@ -394,11 +393,11 @@ export const mockInquiries: Inquiry[] = [
   {
     id: 'inq-003',
     memberId: 'mem-001',
-    title: '대량 구매 견적 문의',
-    body: '대량 구매 상담 가능 여부를 문의합니다.',
+    title: '상품 정보 문의',
+    body: '상품 정보와 선택 옵션을 확인하고 싶습니다.',
     status: 'answered',
     createdAt: '2026-09-12T16:20:00+09:00',
-    answer: '요청 사항을 확인해 안내드렸습니다.',
+    answer: '문의하신 상품 정보를 확인해 안내드렸습니다.',
   },
 ];
 
@@ -433,54 +432,5 @@ export const mockProductQuestions: AdminProductQuestion[] = [
     statusHistory: [
       { status: 'waiting', occurredAt: '2026-10-15T13:40:00+09:00', note: '문의 접수' },
     ],
-  },
-];
-
-/** 목 견적 문의. 상태 다섯 가지를 모두 담습니다. */
-export const mockQuotes: Quote[] = [
-  {
-    id: 'qt-001',
-    title: '현장 안전모 200개 견적',
-    companyName: '예시건설',
-    contactName: '박담당',
-    status: 'received',
-    requestedAt: '2026-10-12T09:10:00+09:00',
-    memberId: 'mem-001',
-  },
-  {
-    id: 'qt-002',
-    title: '추락 방지망 설치 문의',
-    companyName: '샘플토건',
-    contactName: '최현장',
-    status: 'consulting',
-    requestedAt: '2026-10-09T13:20:00+09:00',
-    memberId: 'mem-002',
-  },
-  {
-    id: 'qt-003',
-    title: '소화기 일괄 교체',
-    companyName: '예시건설',
-    contactName: '박담당',
-    status: 'quoteSent',
-    requestedAt: '2026-10-02T15:00:00+09:00',
-    memberId: 'mem-001',
-  },
-  {
-    id: 'qt-004',
-    title: 'CCTV 경고 표지 30개',
-    companyName: '테스트산업',
-    contactName: '정안전',
-    status: 'completed',
-    requestedAt: '2026-09-15T10:00:00+09:00',
-    memberId: null,
-  },
-  {
-    id: 'qt-005',
-    title: '안전화 사이즈별 견적',
-    companyName: '샘플토건',
-    contactName: '최현장',
-    status: 'canceled',
-    requestedAt: '2026-09-01T11:30:00+09:00',
-    memberId: 'mem-002',
   },
 ];

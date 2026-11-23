@@ -846,23 +846,7 @@ describe('ProductListingView listing toolbar', () => {
 });
 
 describe('ProductListingView category links', () => {
-  const customOrderCategories = [
-    {
-      id: 'category-custom',
-      slug: 'custom-order',
-      name: '맞춤 제작/납품',
-      parentId: null,
-      description: null,
-      iconKey: null,
-    },
-    {
-      id: 'category-custom-sub',
-      slug: 'custom-order-sub',
-      name: '맞춤 하위',
-      parentId: 'category-custom',
-      description: null,
-      iconKey: null,
-    },
+  const categories = [
     {
       id: 'category-gear',
       slug: 'safety/gear',
@@ -889,7 +873,7 @@ describe('ProductListingView category links', () => {
       categories: { list: apiMocks.listCategories },
     });
     apiMocks.listProducts.mockResolvedValue({ items: [], page: 1, pageSize: 24, totalCount: 0 });
-    apiMocks.listCategories.mockResolvedValue(customOrderCategories);
+    apiMocks.listCategories.mockResolvedValue(categories);
     apiMocks.listFacets.mockResolvedValue({
       totalCount: 0,
       keywordTotalCount: 0,
@@ -899,41 +883,16 @@ describe('ProductListingView category links', () => {
     });
   });
 
-  it('links the custom-order root chip to solutions and child chips to their category pages', async () => {
+  it('blocks the removed custom-order URL when its category is no longer available', async () => {
     render(<ProductListingView categorySlug="custom-order" />, { wrapper: createWrapper() });
-    await screen.findByText('등록된 상품이 없습니다');
 
-    // 맞춤 제작/납품 자체가 선택된 상태이므로 「전체」 칩이 루트 주소를 가리킵니다.
-    const rootChip = screen.getByRole('link', { name: '전체' });
-    expect(rootChip).toHaveAttribute('href', '/solutions');
-    // 목적지(/solutions)가 현재 경로(/category/custom-order)와 다르므로 현재 위치로 표시하지 않습니다.
-    expect(rootChip).not.toHaveAttribute('aria-current');
-    expect(screen.getByRole('link', { name: '맞춤 하위' })).toHaveAttribute(
-      'href',
-      '/category/custom-order-sub',
-    );
+    expect(await screen.findByText('카테고리를 찾을 수 없습니다')).toBeInTheDocument();
+    expect(apiMocks.listProducts).not.toHaveBeenCalled();
+    expect(apiMocks.listFacets).not.toHaveBeenCalled();
+    expect(screen.getByRole('link', { name: '전체 상품 보기' })).toHaveAttribute('href', '/search');
   });
 
-  it('marks the selected custom-order child chip as the current page', async () => {
-    render(<ProductListingView categorySlug="custom-order-sub" />, { wrapper: createWrapper() });
-    await screen.findByText('등록된 상품이 없습니다');
-
-    // 칩 목적지가 현재 경로(/category/custom-order-sub)와 같으므로 현재 위치로 표시합니다.
-    expect(screen.getByRole('link', { name: '맞춤 하위' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: '전체' })).not.toHaveAttribute('aria-current');
-  });
-
-  it('links the custom-order breadcrumb root to solutions when a subcategory is selected', async () => {
-    render(<ProductListingView categorySlug="custom-order-sub" />, { wrapper: createWrapper() });
-    await screen.findByText('등록된 상품이 없습니다');
-
-    expect(screen.getByRole('link', { name: '맞춤 제작/납품' })).toHaveAttribute(
-      'href',
-      '/solutions',
-    );
-  });
-
-  it('encodes a slash in the category slug of the breadcrumb root link', async () => {
+  it('keeps other category breadcrumbs and links available', async () => {
     render(<ProductListingView categorySlug="gear-sub" />, { wrapper: createWrapper() });
     await screen.findByText('등록된 상품이 없습니다');
 
@@ -941,5 +900,6 @@ describe('ProductListingView category links', () => {
       'href',
       '/category/safety%2Fgear',
     );
+    expect(screen.getByRole('link', { name: '장비 하위' })).toHaveAttribute('aria-current', 'page');
   });
 });

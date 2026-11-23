@@ -14,7 +14,6 @@ const apiMocks = vi.hoisted(() => ({
   couponsList: vi.fn(),
   pointsList: vi.fn(),
   addressesList: vi.fn(),
-  quotesList: vi.fn(),
   productById: vi.fn(),
 }));
 
@@ -49,7 +48,6 @@ describe('useMyPageData', () => {
     apiMocks.couponsList.mockResolvedValue([]);
     apiMocks.pointsList.mockResolvedValue([]);
     apiMocks.addressesList.mockResolvedValue([]);
-    apiMocks.quotesList.mockResolvedValue([]);
     apiMocks.productById.mockResolvedValue({ id: 'product-a', name: '목 상품' });
     apiMocks.getShopApi.mockResolvedValue({
       members: { getCurrent: apiMocks.currentMember, list: apiMocks.membersList },
@@ -62,7 +60,6 @@ describe('useMyPageData', () => {
       },
       points: { list: apiMocks.pointsList },
       addresses: { list: apiMocks.addressesList },
-      quotes: { listByMember: apiMocks.quotesList },
       products: { getById: apiMocks.productById },
     });
   });
@@ -127,7 +124,6 @@ describe('useMyPageData', () => {
     expect(apiMocks.couponsList).not.toHaveBeenCalled();
     expect(apiMocks.pointsList).not.toHaveBeenCalled();
     expect(apiMocks.addressesList).not.toHaveBeenCalled();
-    expect(apiMocks.quotesList).not.toHaveBeenCalled();
     expect(apiMocks.productById).not.toHaveBeenCalled();
   });
 

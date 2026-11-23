@@ -313,13 +313,6 @@ export interface HomeLink {
   destination: string;
 }
 
-/** 홈 하단 견적 문의 띠(HF/Web/CTABand) */
-export interface HomeCtaBand {
-  eyebrow: string;
-  title: string;
-  cta: HomeLink;
-}
-
 /** 홈 프로모션 배너 */
 export interface PromoBanner {
   id: string;
@@ -335,6 +328,8 @@ export interface ServiceBenefit {
   id: string;
   title: string;
   description: string;
+  /** 표시 여부. 저장된 기존 데이터에서 누락된 경우 표시 상태로 취급합니다. */
+  isVisible?: boolean;
 }
 
 /** 홈 화면 조회 결과 */
@@ -343,8 +338,6 @@ export interface HomeContent {
   promoBanners: PromoBanner[];
   serviceBenefits: ServiceBenefit[];
   featuredProducts: Product[];
-  /** 하단 견적 문의 띠. 운영에서 끄면 null */
-  ctaBand: HomeCtaBand | null;
 }
 
 /** 관리자 홈 편성 저장 모델. 상품 상세는 ID로 연결해 Web 응답에서 최신 데이터를 구성합니다. */
@@ -353,7 +346,6 @@ export interface AdminHomeContentInput {
   promoBanners: PromoBanner[];
   serviceBenefits: ServiceBenefit[];
   featuredProductIds: string[];
-  ctaBand: HomeCtaBand | null;
 }
 
 /** 푸터에 표시하는 사업자·고객센터 정보 */
@@ -367,8 +359,6 @@ export interface CompanyInfo {
   mailOrderSalesNumber: string;
   address: string;
   email: string;
-  /** 견적 문의 담당 이메일. 제공하지 않으면 견적 화면에서 연락처를 생략합니다. */
-  quoteEmail?: string;
   /** 개인정보보호책임자 */
   privacyOfficer: string;
   /** 화면에 그대로 보여 주는 고객센터 번호(내선 안내 등 포함 가능) */
@@ -651,41 +641,6 @@ export interface Point {
 export interface AdminPoint extends Point {
   memberId: string;
   reason: string;
-}
-
-/** 견적 문의 상태: 접수 / 상담중 / 견적 발송 / 완료 / 취소 */
-export type QuoteStatus = 'received' | 'consulting' | 'quoteSent' | 'completed' | 'canceled';
-
-/** 견적 문의 */
-export interface Quote {
-  id: string;
-  title: string;
-  companyName: string;
-  contactName: string;
-  status: QuoteStatus;
-  requestedAt: string;
-  memberId: string | null;
-  /** 본인 문의 상세에서만 공개하는 요청 내용 */
-  inquiryBody?: string;
-  requestedItems?: { name: string; quantity: number; option?: string }[];
-  /** 첨부 파일 다운로드 데이터는 제외한 메타데이터 */
-  attachments?: { id: string; fileName: string; mimeType: string; sizeBytes: number }[];
-  /** 회원에게 공개할 견적 답변 정보 */
-  publicMessage?: string | null;
-  quoteAmount?: number | null;
-  expiresAt?: string | null;
-}
-
-/** 관리자 견적 데이터. 내부 메모와 고객 공개 답변을 분리합니다. */
-export interface AdminQuote extends Quote {
-  inquiryBody: string;
-  requestedItems: { name: string; quantity: number; option?: string }[];
-  /** 목 API가 보관하는 첨부 메타데이터. 파일 바이트는 저장하지 않습니다. */
-  attachments: { id: string; fileName: string; mimeType: string; sizeBytes: number }[];
-  internalMemo: string;
-  publicMessage: string | null;
-  quoteAmount: number | null;
-  expiresAt: string | null;
 }
 
 /** 일반 회원 */

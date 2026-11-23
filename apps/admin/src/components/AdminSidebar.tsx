@@ -12,7 +12,6 @@ import {
   Megaphone,
   MessageCircleQuestion,
   MessagesSquare,
-  MessageSquareText,
   Package,
   PanelsTopLeft,
   Receipt,
@@ -62,11 +61,6 @@ const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
       { label: '주문 관리', to: '/orders', icon: Receipt },
       { label: '취소·반품·교환', to: '/claims', icon: RotateCcw },
     ],
-  },
-  {
-    id: 'quotes',
-    label: '견적 문의',
-    items: [{ label: '견적 문의', to: '/quotes', icon: MessageSquareText }],
   },
   {
     id: 'members',

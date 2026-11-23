@@ -6,7 +6,6 @@ import {
   generateAdminCouponCode,
   saveWithGeneratedCouponCode,
   validateAdminCouponDraft,
-  validateAdminQuoteDraft,
   validateAdminSettingsDraft,
   validateAdminTrackingRows,
 } from './admin-preview-validation';
@@ -51,51 +50,6 @@ describe('admin coupon code generation', () => {
 });
 
 describe('admin preview form validation', () => {
-  it('rejects invalid quote amounts, expired dates, empty notices, and unsupported attachments', () => {
-    const errors = validateAdminQuoteDraft(
-      {
-        amount: '0',
-        expiresAt: '2020-01-01',
-        notice: '',
-        attachments: [new File(['bad'], 'quote.pdf', { type: 'application/x-msdownload' })],
-      },
-      '2026-10-15',
-    );
-    expect(errors).toContain('견적 금액은 1원 이상 10억원 이하로 입력해 주세요.');
-    expect(errors).toContain('유효기간은 오늘 이후 날짜로 선택해 주세요.');
-    expect(errors).toContain('고객 안내 내용을 입력해 주세요.');
-    expect(errors).toContain('PDF 형식 파일 1개만 첨부할 수 있습니다.');
-  });
-
-  it('accepts a quote at the allowed amount and supported file boundaries', () => {
-    const errors = validateAdminQuoteDraft(
-      {
-        amount: '1000000000',
-        expiresAt: '2026-10-15',
-        notice: '견적 안내',
-        attachments: [new File(['pdf'], 'quote.pdf', { type: 'application/pdf' })],
-      },
-      '2026-10-15',
-    );
-    expect(errors).toEqual([]);
-  });
-
-  it('requires exactly one PDF with matching extension and MIME type', () => {
-    const errors = validateAdminQuoteDraft(
-      {
-        amount: '100',
-        expiresAt: '2026-10-15',
-        notice: '안내',
-        attachments: [
-          new File(['pdf'], 'quote.pdf', { type: 'application/pdf' }),
-          new File(['pdf'], 'second.pdf', { type: 'application/pdf' }),
-        ],
-      },
-      '2026-10-15',
-    );
-    expect(errors).toContain('견적서 PDF 파일은 1개만 첨부할 수 있습니다.');
-  });
-
   it('formats the current browser-local calendar date', () => {
     expect(getBrowserLocalDateKey(new Date(2026, 0, 2, 0, 15))).toBe('2026-01-02');
   });

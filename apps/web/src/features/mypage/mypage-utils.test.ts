@@ -6,7 +6,6 @@ import {
   getInitialClaimOrderId,
   getTrackingProgressIndex,
   isCouponExpired,
-  shouldShowQuoteProgress,
   shouldShowPresentationRows,
   subtractMonthsClamped,
 } from './mypage-utils';
@@ -47,11 +46,6 @@ describe('mypage presentation and date helpers', () => {
     expect(getInitialClaimOrderId(eligibleOrderIds, 'ord-002')).toBe('ord-002');
     expect(getInitialClaimOrderId(eligibleOrderIds, 'ord-missing')).toBe('');
     expect(getInitialClaimOrderId(eligibleOrderIds)).toBe('ord-001');
-  });
-
-  it('hides the active quote progress timeline for cancelled quotes', () => {
-    expect(shouldShowQuoteProgress('canceled')).toBe(false);
-    expect(shouldShowQuoteProgress('completed')).toBe(true);
   });
 
   it('clamps month subtraction to the last valid target day', () => {

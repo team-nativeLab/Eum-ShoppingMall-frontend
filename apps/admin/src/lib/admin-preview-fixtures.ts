@@ -14,7 +14,6 @@ export interface AdminWithdrawnMemberFixture {
   businessName: string;
   detailedMemo: string;
   orders: { id: string; date: string; productSummary: string; amount: number; status: string }[];
-  quotes: { id: string; date: string; type: string; itemCount: number; status: string }[];
 }
 
 /** Admin 화면에서만 쓰는 마스킹 완료 탈퇴 예시입니다. 실제 회원 API를 사용하지 않습니다. */
@@ -50,15 +49,6 @@ export const ADMIN_WITHDRAWN_MEMBER_FIXTURES: AdminWithdrawnMemberFixture[] = [
         status: '배송완료',
       },
     ],
-    quotes: [
-      {
-        id: 'Q-DEMO-0001',
-        date: '2026-08-04',
-        type: '맞춤 제작',
-        itemCount: 2,
-        status: '견적 발송',
-      },
-    ],
   },
   {
     id: 'admin-demo-withdrawn-002',
@@ -83,10 +73,6 @@ export const ADMIN_WITHDRAWN_MEMBER_FIXTURES: AdminWithdrawnMemberFixture[] = [
         amount: 156000,
         status: '배송중',
       },
-    ],
-    quotes: [
-      { id: 'Q-DEMO-0002', date: '2026-09-11', type: '대량 구매', itemCount: 4, status: '완료' },
-      { id: 'Q-DEMO-0003', date: '2026-08-12', type: '맞춤 제작', itemCount: 1, status: '상담중' },
     ],
   },
 ];

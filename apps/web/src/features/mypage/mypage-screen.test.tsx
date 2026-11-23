@@ -1,4 +1,4 @@
-import type { Address, Claim, Member, Order, Quote } from '@eum/api/types';
+import type { Address, Claim, Member, Order } from '@eum/api/types';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useMemberSession } from '@/features/auth/member-session';
@@ -80,15 +80,13 @@ const myPageData: MyPageData = {
   couponOffers: [],
   points: [],
   addresses: [address],
-  quotes: [],
   products: [],
   unavailableProductIds: [],
   loadWarnings: [],
 };
 
 function renderMyPageSection(
-  section:
-    'claim-new' | 'claims' | 'points' | 'addresses' | 'quote-detail' | 'profile' | 'profile-edit',
+  section: 'claim-new' | 'claims' | 'points' | 'addresses' | 'profile' | 'profile-edit',
 ) {
   vi.mocked(useMyPageData).mockReturnValue({
     data: myPageData,
@@ -399,6 +397,27 @@ describe('MyPageScreen claim application', () => {
 });
 
 describe('MyPageScreen profile reauthentication demo', () => {
+  it('개인회원 정보 수정에서 사업자 정보는 없고 기본 정보와 수신 동의는 유지합니다', () => {
+    const { rerender } = renderMyPageSection('profile');
+
+    fireEvent.change(screen.getByLabelText('비밀번호'), {
+      target: { value: 'temporary-demo-value' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    rerender(<MyPageScreen section="profile-edit" />);
+
+    expect(screen.getByRole('heading', { name: '기본 정보' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '수신 동의' })).toBeInTheDocument();
+    expect(screen.getByLabelText('이름')).toBeInTheDocument();
+    expect(screen.getByLabelText('휴대폰 번호')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'SMS 수신 동의' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: '이메일 수신 동의' })).toBeInTheDocument();
+    expect(screen.queryByText('사업자 정보')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('회사명')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('사업자등록번호')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('담당 부서')).not.toBeInTheDocument();
+  });
+
   it('requires a password, grants the edit route after the demo step, and clears that grant on exit', async () => {
     const { rerender } = renderMyPageSection('profile');
     const passwordField = screen.getByLabelText('비밀번호');
@@ -448,54 +467,5 @@ describe('MyPageScreen profile reauthentication demo', () => {
         .getAllByRole('link', { name: '로그인' })
         .some((loginLink) => loginLink.getAttribute('href') === '/login?redirect=%2Fmypage'),
     ).toBe(true);
-  });
-});
-
-describe('MyPageScreen quote detail', () => {
-  it('shows the member quote request body, items, and safe attachment metadata', () => {
-    const quote: Quote = {
-      id: 'quote-1',
-      title: '대량 납품 문의',
-      companyName: '테스트 회사',
-      contactName: '담당자',
-      status: 'received',
-      requestedAt: '2026-10-12T00:00:00+09:00',
-      memberId: member.id,
-      inquiryBody: '현장 납품 일정을 문의합니다.',
-      requestedItems: [{ name: '안전모', quantity: 12, option: '색상: 흰색' }],
-      attachments: [
-        { id: 'attachment-1', fileName: 'spec.pdf', mimeType: 'application/pdf', sizeBytes: 2048 },
-      ],
-    };
-    vi.mocked(useMyPageData).mockReturnValue({
-      data: { ...myPageData, quotes: [quote] },
-      isPending: false,
-      isError: false,
-      refetch: vi.fn(),
-    } as never);
-
-    render(<MyPageScreen section="quote-detail" itemId={quote.id} />);
-
-    expect(screen.getByText('현장 납품 일정을 문의합니다.')).toBeInTheDocument();
-    expect(screen.getByText('안전모')).toBeInTheDocument();
-    expect(screen.getByText('12')).toBeInTheDocument();
-    expect(screen.getByText('spec.pdf (2KB)')).toBeInTheDocument();
-  });
-});
-
-describe('MyPageScreen claim list', () => {
-  it('keeps the claim detail link target at least 44px high', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-10-12T12:00:00+09:00'));
-
-    try {
-      renderMyPageSection('claims');
-
-      const claimLink = screen.getByRole('link', { name: '신청 상세' });
-      expect(claimLink).toHaveAttribute('href', '/mypage/claims/claim-1');
-      expect(claimLink).toHaveClass('min-h-44');
-    } finally {
-      vi.useRealTimers();
-    }
   });
 });

@@ -4,7 +4,6 @@ import { Badge, type BadgeTone } from '@eum/ui/components/Badge';
 import { Button } from '@eum/ui/components/Button';
 import { Icon } from '@eum/ui/components/Icon';
 import { Link } from 'react-router';
-import { QUOTE_STATUS_META } from '@eum/api/quote-status';
 import { cx } from '@eum/ui/lib/cx';
 
 export const adminPanelClassName = 'rounded-12 border border-line bg-bg';
@@ -408,8 +407,6 @@ export function AdminDateInput({
   );
 }
 
-const QUOTE_STATUS: Record<string, { label: string; tone: BadgeTone }> = QUOTE_STATUS_META;
-
 const ORDER_STATUS: Record<string, { label: string; tone: BadgeTone }> = {
   paymentPending: { label: '결제대기', tone: 'warning' },
   paid: { label: '결제완료', tone: 'warning' },
@@ -426,13 +423,12 @@ const PRODUCT_STOCK_STATUS: Record<string, { label: string; tone: BadgeTone }> =
 
 interface AdminStatusBadgeProps {
   status: string;
-  kind: 'quote' | 'order' | 'product';
+  kind: 'order' | 'product';
 }
 
 /** 도메인 상태를 기존 공통 Badge 톤으로 표시합니다. */
 export function AdminStatusBadge({ status, kind }: AdminStatusBadgeProps) {
-  const labels =
-    kind === 'quote' ? QUOTE_STATUS : kind === 'order' ? ORDER_STATUS : PRODUCT_STOCK_STATUS;
+  const labels = kind === 'order' ? ORDER_STATUS : PRODUCT_STOCK_STATUS;
   const statusPresentation = labels[status] ?? { label: status, tone: 'neutral' as const };
   return <Badge tone={statusPresentation.tone}>{statusPresentation.label}</Badge>;
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { getApiFailureKind } from '@eum/api/errors';
-import type { HomeContent, HomeCtaBand, Product } from '@eum/api/types';
+import type { HomeContent, Product } from '@eum/api/types';
 import { buttonClassName } from '@eum/ui/components/Button';
 import { capsuleButtonClassName } from '@eum/ui/components/ButtonCapsule';
 import { Icon } from '@eum/ui/components/Icon';
@@ -118,12 +118,6 @@ function HomeContentView({ content }: { content: HomeContent }) {
       <HomeDiscountProductsSection />
 
       <HomeShowcaseSections />
-
-      {content.ctaBand ? (
-        <PageContainer className="hidden lg:block">
-          <QuoteBanner ctaBand={content.ctaBand} />
-        </PageContainer>
-      ) : null}
 
       <PageContainer className="hidden lg:block">
         <ServiceBenefits benefits={content.serviceBenefits} />
@@ -379,13 +373,14 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
 
 /** 무료배송 등 서비스 안내 띠(trust strip). 항목 사이에 세로 구분선을 둡니다. */
 function ServiceBenefits({ benefits }: { benefits: HomeContent['serviceBenefits'] }) {
-  if (benefits.length === 0) return null;
+  const visibleBenefits = benefits.filter((benefit) => benefit.isVisible !== false);
+  if (visibleBenefits.length === 0) return null;
   return (
     <ul
       aria-label="서비스 안내"
       className="mt-64 flex items-center rounded-12 border border-line px-8 py-20"
     >
-      {benefits.map((benefit, benefitIndex) => (
+      {visibleBenefits.map((benefit, benefitIndex) => (
         <li key={benefit.id} className="flex min-w-0 flex-1 items-center">
           {benefitIndex > 0 ? <span aria-hidden="true" className="h-32 w-1 bg-line" /> : null}
           <div className="flex min-w-0 flex-1 flex-col gap-4 px-24">
@@ -767,30 +762,6 @@ function HomeProductShowcase({
         )}
       >
         {title} 전체 보기
-      </Link>
-    </section>
-  );
-}
-
-/** HF/Web/CTABand. 문구·이동 경로는 홈 응답(ctaBand)으로 받습니다(데스크톱 전용, W-01m에는 없음). */
-function QuoteBanner({ ctaBand }: { ctaBand: HomeCtaBand }) {
-  return (
-    <section
-      aria-labelledby="quote-banner-heading"
-      className="mt-64 flex items-center justify-between gap-24 rounded-12 bg-text-1 px-48 py-40"
-    >
-      <div className="min-w-0">
-        <p className="text-overline text-inverse-2">{ctaBand.eyebrow}</p>
-        <h2 id="quote-banner-heading" className="mt-4 text-h2 text-inverse">
-          {ctaBand.title}
-        </h2>
-      </div>
-      <Link
-        href={ctaBand.cta.destination}
-        className="inline-flex h-56 shrink-0 items-center gap-8 rounded-8 border border-inverse px-24 text-label-l text-inverse transition-colors hover:bg-pressed-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-inverse"
-      >
-        {ctaBand.cta.label}
-        <Icon icon={ArrowRight} size={20} />
       </Link>
     </section>
   );

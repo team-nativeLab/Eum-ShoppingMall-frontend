@@ -220,7 +220,7 @@ describe('ProductDetailView content layout', () => {
     );
   });
 
-  it('keeps top purchase controls, mobile purchase bar, discount display, and quote link affordances', () => {
+  it('keeps the purchase controls for visible-price products without adding an inquiry CTA', () => {
     render(<ProductDetailView productId="product-test" />);
 
     expect(screen.getAllByRole('button', { name: '장바구니 담기' })).toHaveLength(2);
@@ -229,22 +229,13 @@ describe('ProductDetailView content layout', () => {
     expect(screen.getByText('49%')).toHaveClass('text-danger');
     expect(screen.getByText('₩20,900').closest('p')).toHaveClass('line-through');
 
-    const quoteLink = screen.getByRole('link', { name: '대량 구매는 견적 문의 →' });
-    expect(quoteLink).toHaveAttribute('href', '/solutions?productId=product-test');
-    expect(quoteLink).not.toHaveClass('underline');
-    expect(quoteLink).toHaveClass(
-      'focus-ring',
-      'hover:underline',
-      'hover:underline-offset-2',
-      'focus-visible:underline',
-      'focus-visible:underline-offset-2',
-    );
+    expect(screen.queryByRole('link', { name: '상품 문의 →' })).not.toBeInTheDocument();
   });
 
-  it('passes each selected option and quantity to the quote inquiry link', async () => {
+  it('passes each selected option and quantity to the customer service inquiry link', async () => {
     const user = userEvent.setup();
     detailMocks.productQuery.mockReturnValue({
-      data: { ...testProduct, options: [sizeOption] },
+      data: { ...testProduct, priceVisible: false, options: [sizeOption] },
       isPending: false,
       isError: false,
     });
@@ -260,8 +251,8 @@ describe('ProductDetailView content layout', () => {
     await user.click(within(mediumQuantity).getByRole('button', { name: '수량 늘리기' }));
     await user.click(within(largeQuantity).getByRole('button', { name: '수량 늘리기' }));
 
-    const quoteLink = screen.getByRole('link', { name: '대량 구매는 견적 문의 →' });
-    const query = new URLSearchParams(quoteLink.getAttribute('href')?.split('?')[1] ?? '');
+    const inquiryLink = screen.getByRole('link', { name: '상품 문의 →' });
+    const query = new URLSearchParams(inquiryLink.getAttribute('href')?.split('?')[1] ?? '');
     expect(query.getAll('productId')).toEqual(['product-test', 'product-test']);
     expect(query.getAll('optionId')).toEqual(['size:medium', 'size:large']);
     expect(query.getAll('quantity')).toEqual(['3', '2']);
@@ -401,33 +392,6 @@ describe('ProductDetailView required option validation', () => {
 });
 
 describe('ProductDetailView category links', () => {
-  it('links the custom-order breadcrumb and related products view-all to solutions', () => {
-    detailMocks.categoriesQuery.mockReturnValue({
-      data: [
-        {
-          id: 'category-test',
-          slug: 'custom-order',
-          name: '맞춤 제작/납품',
-          parentId: null,
-          description: null,
-          iconKey: null,
-        },
-      ],
-      isPending: false,
-    });
-    render(<ProductDetailView productId="product-test" />);
-
-    const breadcrumbCategoryLinks = screen.getAllByRole('link', { name: '맞춤 제작/납품' });
-    expect(breadcrumbCategoryLinks.length).toBeGreaterThan(0);
-    for (const breadcrumbCategoryLink of breadcrumbCategoryLinks) {
-      expect(breadcrumbCategoryLink).toHaveAttribute('href', '/solutions');
-    }
-    expect(screen.getByRole('link', { name: '함께 구매하면 좋은 제품 전체 보기' })).toHaveAttribute(
-      'href',
-      '/solutions',
-    );
-  });
-
   it('encodes a slash in the category slug for the breadcrumb and related products view-all', () => {
     detailMocks.categoriesQuery.mockReturnValue({
       data: [

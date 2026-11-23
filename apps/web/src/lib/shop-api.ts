@@ -2,6 +2,7 @@ import { createRealApi } from '@eum/api/real-api';
 import type { ShopApi } from '@eum/api/shop-api';
 import { getWebApiConfig } from './api-config';
 import { getMemberAuth } from './member-auth';
+import { getBrowserStore } from '@eum/api/auth';
 
 let shopApiPromise: Promise<ShopApi> | null = null;
 
@@ -14,6 +15,7 @@ async function loadShopApi(): Promise<ShopApi> {
     const { createMockApi } = await import('@eum/api/mock-api');
     return createMockApi(apiConfig, {
       getCurrentMember: async () => (await getMemberAuth()).getCurrentUser(),
+      store: getBrowserStore(),
     });
   }
   return createRealApi(apiConfig);

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createMemoryStore, HOME_SERVICE_BENEFITS_STORAGE_KEY } from './auth';
 import type { BrandImageSettings } from './types';
 import { ApiConfigError } from './errors';
 import { createMockApi } from './mock-api';
@@ -25,6 +26,35 @@ const returnDetails = {
 };
 
 describe('목 API 시나리오', () => {
+  it('기본 문의 seed와 가격 미표시 상품은 견적 대신 고객센터 문의를 안내합니다', async () => {
+    const api = createMockApi(testConfig);
+    const [faqs, notices, inquiries] = await Promise.all([
+      api.faqs.list(),
+      api.notices.list(),
+      api.inquiries.listByMember('mem-001'),
+    ]);
+    const supportCopy = [
+      ...faqs.flatMap(({ category, question, answer }) => [category, question, answer]),
+      ...notices.flatMap(({ title, body }) => [title, body]),
+      ...inquiries.flatMap(({ title, body, answer }) => [title, body, answer ?? '']),
+    ].join(' ');
+    expect(supportCopy).not.toMatch(/견적|대량구매|사업자 회원|맞춤 제작|정기 납품|납품 상담/);
+
+    for (const productId of ['prd-1003', 'prd-1006']) {
+      const product = await api.products.getById(productId);
+      expect(product.priceVisible).toBe(false);
+      expect(product.summary).not.toMatch(/견적|견적서|견적 확정/);
+      expect(product.shipping.method).toBe('고객센터 문의');
+      expect(product.shipping.policy).toContain('고객센터 1:1 문의');
+    }
+    const categories = await api.categories.list();
+    expect(categories).not.toContainEqual(expect.objectContaining({ slug: 'custom-order' }));
+    expect((await api.products.getById('prd-1001')).shipping.policy).not.toMatch(/맞춤 제작/);
+    expect(
+      (await api.home.getContent()).promoBanners.map((banner) => banner.destination),
+    ).not.toContain('/solutions');
+  });
+
   it('공지 목은 Figma pagination 10페이지에 맞춰 100건을 제공합니다', () => {
     expect(mockNotices).toHaveLength(100);
   });
@@ -60,7 +90,7 @@ describe('목 API 시나리오', () => {
     expect(addresses.every((address) => !('memberId' in address))).toBe(true);
   });
 
-  it('buyer mock scopes private order, quote, point and coupon data to the active mock session', async () => {
+  it('buyer mock scopes private order, point and coupon data to the active mock session', async () => {
     const secondMember = mockMembers.find((member) => member.id === 'mem-003');
     if (!secondMember) throw new Error('두 번째 회원 fixture가 필요합니다.');
     const api = createMockApi(testConfig, { getCurrentMember: async () => secondMember });
@@ -70,14 +100,12 @@ describe('목 API 시나리오', () => {
     expect(await api.members.list()).not.toContainEqual(expect.objectContaining({ id: 'mem-001' }));
     expect(await api.addresses.list()).toEqual([]);
     expect(await api.orders.listByMember('mem-003')).toEqual([]);
-    expect(await api.quotes.listByMember('mem-003')).toEqual([]);
     expect(await api.points.list()).toEqual([]);
     const memberCoupons = await api.coupons.historyList();
     expect(memberCoupons).not.toContainEqual(expect.objectContaining({ id: 'cpn-001' }));
     expect(memberCoupons.every((coupon) => !('adminCouponId' in coupon))).toBe(true);
     await expect(api.orders.getById('ord-001')).rejects.toMatchObject({ code: 'NOT_FOUND' });
     await expect(api.orders.listByMember('mem-001')).rejects.toMatchObject({ code: 'NOT_FOUND' });
-    await expect(api.quotes.listByMember('mem-001')).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
   it('does not fall back to demo-member private data without an active mock session', async () => {
@@ -793,7 +821,13 @@ describe('목 API 시나리오', () => {
     const topLevelCategories = categories.filter((category) => category.parentId === null);
     expect(topLevelCategories.every((category) => category.description !== null)).toBe(true);
     expect(homeContent.heroSlides.every((slide) => slide.ctaLabel.trim().length > 0)).toBe(true);
-    expect(homeContent.ctaBand).not.toBeNull();
+    expect(homeContent).not.toHaveProperty('ctaBand');
+    expect(homeContent.heroSlides.map((slide) => slide.ctaLabel)).not.toContain('견적 문의하기');
+    expect(homeContent.serviceBenefits.map((benefit) => benefit.id)).toEqual([
+      'free-shipping',
+      'same-day',
+      'tax-invoice',
+    ]);
   });
 
   it('사업자 정보는 푸터에 필요한 항목을 모두 반환하고, error 시나리오에서는 실패합니다', async () => {
@@ -805,7 +839,7 @@ describe('목 API 시나리오', () => {
     ).toBe(true);
     expect(companyInfo.customerCenterTel).toMatch(/^[0-9+]+$/);
     expect(companyInfo.email).toBe('info@example.com');
-    expect(companyInfo.quoteEmail).toBe('quote@example.com');
+    expect(companyInfo).not.toHaveProperty('quoteEmail');
     await expect(
       createMockApi({ ...testConfig, mockScenario: 'error' }).company.getInfo(),
     ).rejects.toMatchObject({ code: 'NETWORK' });
@@ -1189,6 +1223,82 @@ describe('목 브랜드 API', () => {
 });
 
 describe('관리자 홈 편성·이벤트 목 API', () => {
+  it('배송 혜택을 같은 Preview 저장소에서 공유하고 새 API 인스턴스에서도 읽습니다', async () => {
+    const store = createMemoryStore();
+    const adminApi = createMockApi(testConfig, { store });
+    const draft = await adminApi.home.getAdminContent();
+    const [firstBenefit, secondBenefit] = draft.serviceBenefits;
+    if (!firstBenefit || !secondBenefit) throw new Error('배송 혜택 목 데이터가 필요합니다.');
+    const updatedBenefits = [
+      { ...secondBenefit, title: '당일 출고 변경', isVisible: false },
+      {
+        id: 'benefit-added',
+        title: '신규 안내',
+        description: '추가한 테스트 문구',
+        isVisible: true,
+      },
+      { ...firstBenefit, description: '문구 수정', isVisible: true },
+    ];
+
+    await adminApi.home.saveAdminContent({ ...draft, serviceBenefits: updatedBenefits });
+    const webApi = createMockApi(testConfig, { store });
+    const adminAfterReloadApi = createMockApi(testConfig, { store });
+
+    expect((await webApi.home.getContent()).serviceBenefits).toEqual(updatedBenefits);
+    expect((await adminAfterReloadApi.home.getAdminContent()).serviceBenefits).toEqual(
+      updatedBenefits,
+    );
+  });
+
+  it('배송 혜택의 구형 데이터에서 노출 여부가 없으면 노출 상태로 복원합니다', async () => {
+    const store = createMemoryStore();
+    store.setItem(
+      HOME_SERVICE_BENEFITS_STORAGE_KEY,
+      JSON.stringify([{ id: 'legacy-benefit', title: '기존 제목', description: '기존 설명' }]),
+    );
+
+    const adminApi = createMockApi(testConfig, { store });
+    const webApi = createMockApi(testConfig, { store });
+
+    expect((await adminApi.home.getAdminContent()).serviceBenefits).toEqual([
+      { id: 'legacy-benefit', title: '기존 제목', description: '기존 설명', isVisible: true },
+    ]);
+    expect((await webApi.home.getContent()).serviceBenefits[0]?.isVisible).toBe(true);
+  });
+
+  it('잘못된 저장 데이터는 기본 혜택으로 대체하고 저장 실패는 오류로 알립니다', async () => {
+    const malformedPayloads = [
+      '{broken-json',
+      JSON.stringify([{ id: 'invalid-benefit', title: '제목', description: '설명', isVisible: 1 }]),
+    ];
+    for (const malformedPayload of malformedPayloads) {
+      const store = createMemoryStore();
+      store.setItem(HOME_SERVICE_BENEFITS_STORAGE_KEY, malformedPayload);
+      const api = createMockApi(testConfig, { store });
+      const draft = await api.home.getAdminContent();
+      expect(draft.serviceBenefits.map((benefit) => benefit.id)).toEqual([
+        'free-shipping',
+        'same-day',
+        'tax-invoice',
+      ]);
+    }
+
+    const failingStore = {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error('storage is unavailable');
+      },
+      removeItem: () => {},
+    };
+    const failingApi = createMockApi(testConfig, { store: failingStore });
+    const failingDraft = await failingApi.home.getAdminContent();
+
+    await expect(failingApi.home.saveAdminContent(failingDraft)).rejects.toMatchObject({
+      code: 'NETWORK',
+    });
+    expect((await failingApi.home.getAdminContent()).serviceBenefits[0]?.id).toBe('free-shipping');
+  });
+
   it('저장한 홈 배너와 추천 상품을 공개 홈 응답에서 다시 조회합니다', async () => {
     const api = createMockApi(testConfig);
     const draft = await api.home.getAdminContent();
@@ -1240,68 +1350,7 @@ describe('관리자 홈 편성·이벤트 목 API', () => {
   });
 });
 
-describe('관리자 주문·클레임·견적 목 API', () => {
-  it('buyer quote submission appears in Admin and the owning member projection only', async () => {
-    const api = createMockApi(testConfig);
-    const attachmentWithPayload = {
-      id: 'att-web',
-      fileName: 'spec.pdf',
-      mimeType: 'application/pdf',
-      sizeBytes: 10,
-      dataUrl: 'data:application/pdf;base64,AA==',
-    };
-    const submitted = await api.quotes.submit({
-      title: '대량 구매 견적 문의',
-      companyName: '이음 테스트',
-      contactName: '김담당',
-      inquiryBody: '연락처: 010-0000-1111\n상세: 납품 문의',
-      requestedItems: [{ name: '안전모', quantity: 12, option: '색상: 흰색' }],
-      attachments: [attachmentWithPayload],
-    });
-    expect(submitted).toMatchObject({
-      status: 'received',
-      memberId: 'mem-001',
-      title: '대량 구매 견적 문의',
-    });
-    expect(submitted).toMatchObject({
-      inquiryBody: expect.stringContaining('납품 문의'),
-      requestedItems: [{ name: '안전모', quantity: 12, option: '색상: 흰색' }],
-      attachments: [
-        { id: 'att-web', fileName: 'spec.pdf', mimeType: 'application/pdf', sizeBytes: 10 },
-      ],
-    });
-    expect(submitted).not.toHaveProperty('internalMemo');
-    expect(submitted.attachments?.[0]).not.toHaveProperty('dataUrl');
-    const adminQuote = (await api.quotes.adminList()).find((quote) => quote.id === submitted.id);
-    expect(adminQuote).toMatchObject({
-      inquiryBody: expect.stringContaining('010-0000-1111'),
-      requestedItems: [{ name: '안전모', quantity: 12, option: '색상: 흰색' }],
-      attachments: [expect.objectContaining({ fileName: 'spec.pdf' })],
-    });
-    expect(adminQuote?.attachments[0]).not.toHaveProperty('dataUrl');
-    await api.quotes.updateAdmin(submitted.id, {
-      status: 'quoteSent',
-      publicMessage: '해당 조건으로 진행 가능합니다.',
-      quoteAmount: 145000,
-      expiresAt: '2026-11-30',
-      internalMemo: '발주 전 수량 재확인',
-    });
-    const buyerSubmittedQuote = (await api.quotes.listByMember('mem-001')).find(
-      (quote) => quote.id === submitted.id,
-    );
-    expect(buyerSubmittedQuote).toMatchObject({
-      status: 'quoteSent',
-      publicMessage: '해당 조건으로 진행 가능합니다.',
-      quoteAmount: 145000,
-      expiresAt: '2026-11-30',
-    });
-    expect(buyerSubmittedQuote).not.toHaveProperty('internalMemo');
-    expect(await api.quotes.listByMember('mem-001')).toContainEqual(
-      expect.objectContaining({ id: submitted.id }),
-    );
-    await expect(api.quotes.listByMember('mem-002')).rejects.toMatchObject({ code: 'NOT_FOUND' });
-  });
-
+describe('관리자 주문·클레임 목 API', () => {
   it('buyer claim submission checks session ownership, validates order quantities, and appears in both inboxes', async () => {
     const api = createMockApi(testConfig);
     await api.claims.updateAdmin('clm-002', { status: 'rejected' });
@@ -1605,68 +1654,6 @@ describe('관리자 주문·클레임·견적 목 API', () => {
     expect(buyerOrder.status).toBe('shipping');
     expect(buyerOrder).toMatchObject({ trackingCarrier: '택배사', trackingNumber: '1234567890' });
     expect(buyerOrder).not.toHaveProperty('adminMemo');
-  });
-
-  it('클레임 처리 상태와 견적서 공개 답변·내부 메모·첨부를 구분해 저장합니다', async () => {
-    const api = createMockApi(testConfig);
-    const claim = (await api.claims.adminList())[0];
-    const quote = (await api.quotes.adminList())[0];
-    if (!claim || !quote) throw new Error('클레임·견적 문의 목 데이터가 필요합니다.');
-    await api.claims.updateAdmin(claim.id, { status: 'completed', adminMemo: '환불 확인' });
-    const updatedClaim = (await api.claims.adminList()).find((item) => item.id === claim.id);
-    expect(updatedClaim?.statusHistory.at(-1)?.status).toBe('completed');
-    const attachment = {
-      id: 'att-1',
-      fileName: '견적.pdf',
-      mimeType: 'application/pdf',
-      sizeBytes: 20,
-      dataUrl: 'data:application/pdf;base64,AA==',
-    };
-    await api.quotes.updateAdmin(quote.id, {
-      status: 'quoteSent',
-      quoteAmount: 125000,
-      expiresAt: '2026-11-30',
-      publicMessage: '고객에게 안내할 내용',
-      internalMemo: '담당자 확인 필요',
-      attachments: [attachment],
-    });
-    const updatedQuote = (await api.quotes.adminList()).find((item) => item.id === quote.id);
-    expect(updatedQuote).toMatchObject({
-      status: 'quoteSent',
-      quoteAmount: 125000,
-      publicMessage: '고객에게 안내할 내용',
-      internalMemo: '담당자 확인 필요',
-      attachments: [
-        { id: 'att-1', fileName: '견적.pdf', mimeType: 'application/pdf', sizeBytes: 20 },
-      ],
-    });
-    expect(updatedQuote?.attachments[0]).not.toHaveProperty('dataUrl');
-    expect(updatedQuote?.attachments[0]).not.toHaveProperty('dataUrl');
-    const buyerQuote = (await api.quotes.listByMember(quote.memberId ?? '')).find(
-      (item) => item.id === quote.id,
-    );
-    expect(buyerQuote).toMatchObject({
-      status: 'quoteSent',
-      publicMessage: '고객에게 안내할 내용',
-      quoteAmount: 125000,
-      expiresAt: '2026-11-30',
-    });
-    expect(buyerQuote).not.toHaveProperty('internalMemo');
-    expect(buyerQuote).toHaveProperty('attachments');
-    expect(buyerQuote).toHaveProperty('inquiryBody');
-    expect(buyerQuote?.attachments?.[0]).not.toHaveProperty('dataUrl');
-    expect(buyerQuote).not.toHaveProperty('internalMemo');
-    expect(await api.quotes.listByMember('mem-001')).toEqual(
-      expect.arrayContaining([expect.objectContaining({ memberId: 'mem-001' })]),
-    );
-    expect(
-      (await api.quotes.listByMember('mem-001')).every((item) => item.memberId === 'mem-001'),
-    ).toBe(true);
-    expect(
-      (await api.quotes.listByMember('mem-001')).some(
-        (item) => item.memberId === 'mem-002' || item.memberId === null,
-      ),
-    ).toBe(false);
   });
 });
 
@@ -2034,6 +2021,143 @@ describe('팝업 운영 목 API', () => {
 });
 
 describe('1:1 문의·리뷰 공개 답변 분리', () => {
+  it('same-origin mock store shares submitted inquiries and Admin replies across API instances', async () => {
+    const entries = new Map<string, string>();
+    const store = {
+      getItem: (key: string) => entries.get(key) ?? null,
+      setItem: (key: string, value: string) => entries.set(key, value),
+      removeItem: (key: string) => entries.delete(key),
+    };
+    const buyerApi = createMockApi(testConfig, { store });
+    const submitted = await buyerApi.inquiries.submit({
+      memberId: 'mem-001',
+      title: '가격 미표시 상품 문의',
+      body: '상품 정보와 선택 옵션을 확인해 주세요.',
+    });
+    const adminApi = createMockApi(testConfig, { store });
+
+    expect(await adminApi.inquiries.adminList()).toContainEqual(
+      expect.objectContaining({ id: submitted.id, memberId: 'mem-001' }),
+    );
+    await adminApi.inquiries.updateAdmin(submitted.id, {
+      status: 'answered',
+      answer: '상담 답변입니다.',
+    });
+
+    const recreatedWebApi = createMockApi(testConfig, { store });
+    await expect(recreatedWebApi.inquiries.listByMember('mem-001')).resolves.toContainEqual(
+      expect.objectContaining({ id: submitted.id, answer: '상담 답변입니다.', status: 'answered' }),
+    );
+    expect(await createMockApi(testConfig, { store }).inquiries.adminList()).toContainEqual(
+      expect.objectContaining({ id: submitted.id, answer: '상담 답변입니다.' }),
+    );
+  });
+
+  it('concurrent submissions survive an update from an Admin API instance opened beforehand', async () => {
+    const entries = new Map<string, string>();
+    const legacyStorageKey = 'eum.mock.inquiries.v1';
+    const legacyInquiry = {
+      id: 'inq-legacy-001',
+      memberId: 'mem-001',
+      title: '기존 저장 문의',
+      body: '기존 문의 본문',
+      status: 'waiting',
+      createdAt: '2026-09-01T00:00:00.000Z',
+      answer: null,
+      adminMemo: '',
+      statusHistory: [
+        { status: 'waiting', occurredAt: '2026-09-01T00:00:00.000Z', note: '문의 접수' },
+      ],
+    };
+    const legacyStorageValue = JSON.stringify([legacyInquiry]);
+    entries.set(legacyStorageKey, legacyStorageValue);
+    const store = {
+      getItem: (key: string) => entries.get(key) ?? null,
+      setItem: (key: string, value: string) => entries.set(key, value),
+      removeItem: (key: string) => entries.delete(key),
+      keys: () => [...entries.keys()],
+    };
+    const staleAdminApi = createMockApi(testConfig, { store });
+    const firstWebApi = createMockApi(testConfig, { store });
+    const secondWebApi = createMockApi(testConfig, { store });
+    const [firstInquiry, secondInquiry] = await Promise.all([
+      firstWebApi.inquiries.submit({
+        memberId: 'mem-001',
+        title: '첫 문의',
+        body: '첫 문의 내용',
+      }),
+      secondWebApi.inquiries.submit({
+        memberId: 'mem-001',
+        title: '두 번째 문의',
+        body: '두 번째 문의 내용',
+      }),
+    ]);
+
+    expect(await staleAdminApi.inquiries.adminList()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: firstInquiry.id }),
+        expect.objectContaining({ id: secondInquiry.id }),
+      ]),
+    );
+    await staleAdminApi.inquiries.updateAdmin(firstInquiry.id, {
+      status: 'answered',
+      answer: '확인했습니다.',
+    });
+
+    const adminInquiries = await staleAdminApi.inquiries.adminList();
+    expect(adminInquiries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: firstInquiry.id, status: 'answered' }),
+        expect.objectContaining({ id: secondInquiry.id, status: 'waiting' }),
+        expect.objectContaining({ id: legacyInquiry.id }),
+      ]),
+    );
+    expect(entries.get(legacyStorageKey)).toBe(legacyStorageValue);
+    expect(entries.has(`eum.mock.inquiries.v1:record:${encodeURIComponent(firstInquiry.id)}`)).toBe(
+      true,
+    );
+    expect(
+      entries.has(`eum.mock.inquiries.v1:record:${encodeURIComponent(secondInquiry.id)}`),
+    ).toBe(true);
+  });
+
+  it('rejects blank, oversized, or anonymous inquiry submissions', async () => {
+    const api = createMockApi(testConfig);
+    await expect(
+      api.inquiries.submit({ memberId: 'mem-001', title: ' ', body: '문의' }),
+    ).rejects.toMatchObject({
+      code: 'VALIDATION',
+    });
+    await expect(
+      api.inquiries.submit({ memberId: 'mem-001', title: '제목', body: 'x'.repeat(5001) }),
+    ).rejects.toMatchObject({ code: 'VALIDATION' });
+    const anonymousApi = createMockApi(testConfig, { getCurrentMember: async () => null });
+    await expect(
+      anonymousApi.inquiries.submit({ memberId: 'mem-001', title: '제목', body: '문의' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('does not report success when inquiry storage fails', async () => {
+    const api = createMockApi(testConfig, {
+      store: {
+        getItem: () => null,
+        setItem: () => {
+          throw new Error('quota exceeded');
+        },
+        removeItem: () => undefined,
+      },
+    });
+    await expect(
+      api.inquiries.submit({ memberId: 'mem-001', title: '문의', body: '저장 실패 확인' }),
+    ).rejects.toMatchObject({
+      code: 'NETWORK',
+      message: '문의 저장에 실패했습니다. 다시 시도해 주세요.',
+    });
+    expect(await api.inquiries.adminList()).not.toContainEqual(
+      expect.objectContaining({ title: '문의', body: '저장 실패 확인' }),
+    );
+  });
+
   it('1:1 문의 답변은 회원 목록에 반영하고 내부 메모·이력은 제외합니다', async () => {
     const api = createMockApi(testConfig);
     const inquiry = (await api.inquiries.adminList()).find((item) => item.id === 'inq-002');

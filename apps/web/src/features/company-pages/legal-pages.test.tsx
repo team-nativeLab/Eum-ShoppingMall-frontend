@@ -68,17 +68,21 @@ describe('법률 문서 페이지', () => {
     ).toBeInTheDocument();
   });
 
-  it('약관의 다섯 장, 스물네 조항과 샘플 조항을 표시합니다', () => {
+  it('약관의 다섯 장, 스물두 조항과 샘플 조항을 표시합니다', () => {
     renderLegalPage('terms');
 
-    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(24);
+    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(22);
     expect(screen.getByRole('heading', { name: '제1장 총칙' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '제2장 회원' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '제3장 구매·결제' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '제4장 배송·청약철회' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '제5장 보칙' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '제24조(재판권 및 준거법)' })).toBeInTheDocument();
-    expect(screen.getAllByText('조항 내용이 들어갑니다.')).toHaveLength(24);
+    expect(screen.getByRole('heading', { name: '제22조(재판권 및 준거법)' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '제12조(세금계산서 및 현금영수증)' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /사업자 회원/ })).not.toBeInTheDocument();
+    expect(screen.getAllByText('조항 내용이 들어갑니다.')).toHaveLength(22);
     expect(screen.getAllByText('① 항 내용이 들어갑니다.')).toHaveLength(2);
     expect(screen.getAllByText('② 항 내용이 들어갑니다.')).toHaveLength(2);
   });

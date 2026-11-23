@@ -37,7 +37,6 @@ interface DashboardData {
   orders: DashboardOrder[];
   membersById: Map<string, DashboardMember>;
   failedOrderMemberIds: string[];
-  pendingQuoteCount: number;
   unavailableOrderMemberCount: number;
   orderListUnavailable: boolean;
 }
@@ -47,10 +46,9 @@ const DASHBOARD_QUERY_KEY = ['admin', 'dashboard'] as const;
 /** 회원별 주문 API와 공용 목록 API의 목 조회값으로 대시보드 데이터를 만듭니다. */
 async function loadDashboardData(signal: AbortSignal): Promise<DashboardData> {
   const api = await getShopApi();
-  const [productPage, members, quotes] = await Promise.all([
+  const [productPage, members] = await Promise.all([
     api.products.list({ page: 1, pageSize: 100 }, { signal }),
     api.members.adminList({ signal }),
-    api.quotes.adminList({ signal }),
   ]);
   const orderListUnavailable = getAdminApiConfig().mode === 'real';
   const ordersByMember = orderListUnavailable
@@ -82,9 +80,6 @@ async function loadDashboardData(signal: AbortSignal): Promise<DashboardData> {
         }))
       : [],
   );
-  const pendingQuoteCount = quotes.filter(
-    (quote) => quote.status === 'received' || quote.status === 'consulting',
-  ).length;
   const failedOrderMemberIds = orderListUnavailable
     ? []
     : ordersByMember.flatMap((result, index) => {
@@ -97,7 +92,6 @@ async function loadDashboardData(signal: AbortSignal): Promise<DashboardData> {
     orders,
     membersById: memberById,
     failedOrderMemberIds,
-    pendingQuoteCount,
     unavailableOrderMemberCount: orderListUnavailable
       ? members.length
       : failedOrderMemberIds.length,
@@ -373,14 +367,8 @@ export function AdminDashboardPage() {
   if (dashboardQuery.isPending) return <AdminLoading label="대시보드 현황을 불러오고 있습니다." />;
   if (!dashboardQuery.data) return <AdminError onRetry={() => void dashboardQuery.refetch()} />;
 
-  const {
-    products,
-    productTotalCount,
-    orders,
-    pendingQuoteCount,
-    unavailableOrderMemberCount,
-    orderListUnavailable,
-  } = dashboardQuery.data;
+  const { products, productTotalCount, orders, unavailableOrderMemberCount, orderListUnavailable } =
+    dashboardQuery.data;
   const isProductAggregationPartial = productTotalCount > products.length;
   const productAggregationHint = isProductAggregationPartial
     ? `${products.length.toLocaleString('ko-KR')}개 조회분 · 전체 ${productTotalCount.toLocaleString('ko-KR')}개`
@@ -436,12 +424,6 @@ export function AdminDashboardPage() {
           value={orderListUnavailable ? '—' : orders.length}
           href="/orders"
           hint={orderListUnavailable ? '주문 조회 API 미제공' : undefined}
-        />
-        <AdminCountTile
-          label="미처리 견적 문의"
-          value={pendingQuoteCount}
-          href="/quotes"
-          emphasis
         />
       </div>
 

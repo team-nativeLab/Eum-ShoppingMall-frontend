@@ -41,7 +41,7 @@ const BRAND_PRODUCT_SORT_OPTIONS: {
   { value: 'priceDesc', label: '높은 가격순' },
 ];
 
-// 다크 밴드 위 포커스 표시(home-view QuoteBanner와 같은 방식)
+// 다크 밴드 위 포커스 표시
 const INVERSE_FOCUS_CLASS =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-inverse';
 

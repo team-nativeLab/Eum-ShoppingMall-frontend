@@ -1,6 +1,5 @@
 'use client';
 
-import { QUOTE_STATUS_META } from '@eum/api/quote-status';
 import { queryKeys } from '@eum/api/query-keys';
 import type {
   Address,
@@ -14,8 +13,6 @@ import type {
   OrderStatus,
   Point,
   Product,
-  Quote,
-  QuoteStatus,
 } from '@eum/api/types';
 import { Badge } from '@eum/ui/components/Badge';
 import { Button } from '@eum/ui/components/Button';
@@ -39,7 +36,6 @@ import {
   MapPin,
   Package,
   Plus,
-  Search,
   ShoppingBag,
   TicketPercent,
   UserRound,
@@ -69,7 +65,6 @@ import {
   getInitialClaimOrderId,
   getTrackingProgressIndex,
   isCouponExpired,
-  shouldShowQuoteProgress,
   shouldShowPresentationRows,
   subtractMonthsClamped,
 } from './mypage-utils';
@@ -87,7 +82,6 @@ import { PasswordChangeDemoModal } from './password-change-demo-modal';
 
 type OrderTab = OrderStatus | 'all';
 type ClaimTab = ClaimType | 'all';
-type QuoteTab = QuoteStatus | 'all';
 type PointTab = 'all' | 'earned' | 'spent' | 'expired';
 const SECTION_TITLE: Record<MyPageSection, string> = {
   dashboard: '마이페이지',
@@ -102,8 +96,6 @@ const SECTION_TITLE: Record<MyPageSection, string> = {
   profile: '내 정보 관리',
   'profile-edit': '내 정보 수정',
   addresses: '배송지 관리',
-  quotes: '견적 문의 내역',
-  'quote-detail': '견적 문의 상세',
 };
 const ORDER_STATUS_META: Record<
   OrderStatus,
@@ -140,14 +132,6 @@ const CLAIM_TABS: { value: ClaimTab; label: string }[] = [
   { value: 'return', label: '반품' },
   { value: 'exchange', label: '교환' },
 ];
-const QUOTE_TABS: { value: QuoteTab; label: string }[] = [
-  { value: 'all', label: '전체' },
-  { value: 'received', label: '접수' },
-  { value: 'consulting', label: '상담중' },
-  { value: 'quoteSent', label: '견적 발송' },
-  { value: 'completed', label: '완료' },
-  { value: 'canceled', label: '취소' },
-];
 const POINT_TABS: { value: PointTab; label: string }[] = [
   { value: 'all', label: '전체' },
   { value: 'earned', label: '적립' },
@@ -161,7 +145,6 @@ const ORDER_STAGE_ORDER: OrderStatus[] = [
   'shipping',
   'delivered',
 ];
-const QUOTE_STAGE_ORDER: QuoteStatus[] = ['received', 'consulting', 'quoteSent', 'completed'];
 let pendingProfileEditGrant = false;
 
 export function MyPageScreen({
@@ -233,10 +216,6 @@ export function MyPageScreen({
           >
             배송지 추가
           </Button>
-        ) : section === 'quotes' ? (
-          <MyPageActionLink href="/solutions" variant="primary" size="m" className="shrink-0">
-            견적 문의하기
-          </MyPageActionLink>
         ) : undefined
       }
     >
@@ -360,15 +339,6 @@ function MyPageContent({
       return <ProfileView member={member} editable />;
     case 'addresses':
       return <AddressesView addresses={data.addresses} addAddressActionRef={addAddressActionRef} />;
-    case 'quotes':
-      return <QuotesView quotes={data.quotes} />;
-    case 'quote-detail':
-      return (
-        <QuoteDetailView
-          quote={data.quotes.find((quote) => quote.id === itemId)}
-          memberEmail={member.email}
-        />
-      );
   }
 }
 
@@ -2363,9 +2333,6 @@ function ProfileView({
   const [reauthError, setReauthError] = useState('');
   const [name, setName] = useState(member.name);
   const [phone, setPhone] = useState(member.phone);
-  const [companyName, setCompanyName] = useState('');
-  const [businessNumber, setBusinessNumber] = useState('');
-  const [department, setDepartment] = useState('');
   const [smsOptIn, setSmsOptIn] = useState(true);
   const [emailOptIn, setEmailOptIn] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -2454,44 +2421,6 @@ function ProfileView({
           <Button variant="secondary" onClick={() => setIsPasswordModalOpen(true)}>
             비밀번호 변경
           </Button>
-        </ProfileRow>
-      </section>
-      <section>
-        <DividerTitle>
-          사업자 정보{' '}
-          <span className="ml-8 text-caption font-normal text-text-3">
-            사업자 회원에게만 표시됩니다.
-          </span>
-        </DividerTitle>
-        <ProfileRow label="회사명">
-          <TextField
-            label="회사명"
-            isLabelHidden
-            value={companyName}
-            placeholder="회사명을 입력해 주세요"
-            onChange={(event) => setCompanyName(event.target.value)}
-          />
-        </ProfileRow>
-        <ProfileRow label="사업자등록번호">
-          <div>
-            <TextField
-              label="사업자등록번호"
-              isLabelHidden
-              value={businessNumber}
-              placeholder="사업자등록번호를 입력해 주세요"
-              onChange={(event) => setBusinessNumber(event.target.value)}
-            />
-            <p className="mt-4 text-caption text-text-3">변경은 고객센터로 문의해 주세요.</p>
-          </div>
-        </ProfileRow>
-        <ProfileRow label="담당 부서">
-          <TextField
-            label="담당 부서"
-            isLabelHidden
-            value={department}
-            placeholder="부서명을 입력해 주세요"
-            onChange={(event) => setDepartment(event.target.value)}
-          />
         </ProfileRow>
       </section>
       <section>
@@ -2947,356 +2876,6 @@ function AddressesView({
           </p>
         ) : null}
       </Modal>
-    </div>
-  );
-}
-
-function QuotesView({ quotes }: { quotes: Quote[] }) {
-  const today = new Date();
-  const [startDate, setStartDate] = useState(() => dateInputValue(subtractMonthsClamped(today, 1)));
-  const [endDate, setEndDate] = useState(() => dateInputValue(today));
-  const [selectedPreset, setSelectedPreset] = useState<number | null>(1);
-  const [appliedRange, setAppliedRange] = useState(() => ({
-    start: dateInputValue(subtractMonthsClamped(today, 1)),
-    end: dateInputValue(today),
-  }));
-  const [tab, setTab] = useState<QuoteTab>('all');
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 6;
-  const isPresentationMode = shouldShowPresentationRows(getWebApiConfig().mode);
-  const dateFiltered = quotes.filter((quote) => {
-    const day = dateInputValue(new Date(quote.requestedAt));
-    return day >= appliedRange.start && day <= appliedRange.end;
-  });
-  const visible = dateFiltered.filter((quote) => tab === 'all' || quote.status === tab);
-  const rows = visible.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const showLayoutSamples =
-    isPresentationMode &&
-    appliedRange.start === dateInputValue(subtractMonthsClamped(today, 1)) &&
-    appliedRange.end === dateInputValue(today);
-  const sampleQuoteStatuses: QuoteStatus[] = ['consulting', 'received', 'completed', 'canceled'];
-  const displayRows = [
-    ...rows.map((quote) => ({ kind: 'quote' as const, quote })),
-    ...(showLayoutSamples
-      ? sampleQuoteStatuses
-          .filter((status) => tab === 'all' || status === tab)
-          .map((status, index) => ({ kind: 'sample' as const, status, index }))
-      : []),
-  ].slice(0, pageSize);
-  const counts = Object.fromEntries(
-    QUOTE_TABS.map((item) => [
-      item.value,
-      item.value === 'all'
-        ? dateFiltered.length
-        : dateFiltered.filter((quote) => quote.status === item.value).length,
-    ]),
-  );
-  return (
-    <div className="space-y-16 lg:space-y-20">
-      {getWebApiConfig().mode === 'mock' ? (
-        <NoticeInline tone="info">
-          데모에서는 요청한 회원 ID로 견적을 필터링합니다. 실제 회원 소유권은 서버 인증과 인가가
-          연결되어야 검증됩니다.
-        </NoticeInline>
-      ) : null}
-      <DateRangeFilter
-        startDate={startDate}
-        endDate={endDate}
-        onStartDateChange={(value) => {
-          setStartDate(value);
-          setSelectedPreset(null);
-          setCurrentPage(1);
-        }}
-        onEndDateChange={(value) => {
-          setEndDate(value);
-          setSelectedPreset(null);
-          setCurrentPage(1);
-        }}
-        onPreset={(months) => {
-          const now = new Date();
-          setSelectedPreset(months);
-          setStartDate(dateInputValue(subtractMonthsClamped(now, months)));
-          setEndDate(dateInputValue(now));
-          setCurrentPage(1);
-        }}
-        selectedPreset={selectedPreset}
-        onApply={() => {
-          setAppliedRange({ start: startDate, end: endDate });
-          setCurrentPage(1);
-        }}
-      />
-      <TabBar
-        options={QUOTE_TABS}
-        value={tab}
-        onChange={(next) => {
-          setTab(next);
-          setCurrentPage(1);
-        }}
-        label="견적 상태"
-        counts={counts}
-      />
-      {!displayRows.length ? (
-        <EmptyState
-          icon={Search}
-          title="견적 문의 내역이 없습니다."
-          description="필요한 상품의 견적을 문의하면 처리 현황을 확인할 수 있습니다."
-          action={
-            <MyPageActionLink href="/solutions" variant="primary">
-              견적 문의하기
-            </MyPageActionLink>
-          }
-        />
-      ) : (
-        <>
-          <div className="hidden grid-cols-[120px_140px_minmax(200px,1fr)_80px_112px_132px] gap-12 border-y border-line bg-surface px-12 py-12 text-label-s text-text-2 lg:grid">
-            <span>문의일</span>
-            <span>문의번호</span>
-            <span>제목</span>
-            <span className="text-center">수량</span>
-            <span className="text-center">상태</span>
-            <span className="text-center">견적서</span>
-          </div>
-          <ul className="divide-y divide-line">
-            {displayRows.map((row) =>
-              row.kind === 'quote' ? (
-                <li
-                  key={row.quote.id}
-                  className="grid gap-8 py-14 lg:grid-cols-[120px_140px_minmax(200px,1fr)_80px_112px_132px] lg:items-center lg:px-12"
-                >
-                  <time className="text-body-s text-text-2">
-                    {formatMyPageDate(row.quote.requestedAt)}
-                  </time>
-                  <span className="text-caption text-text-3">{row.quote.id}</span>
-                  <Link
-                    href={`/mypage/quotes/${encodeURIComponent(row.quote.id)}`}
-                    className="min-w-0 rounded-4 focus-ring hover:underline"
-                  >
-                    <span className="block truncate text-label-m">{row.quote.title}</span>
-                    <span className="mt-4 block text-caption text-text-3">
-                      {row.quote.companyName}
-                    </span>
-                  </Link>
-                  <span className="text-caption text-text-3 lg:text-center">미제공</span>
-                  <span className="lg:justify-self-center">
-                    <StatusBadge {...QUOTE_STATUS_META[row.quote.status]} />
-                  </span>
-                  <span className="lg:justify-self-center">
-                    {row.quote.status === 'quoteSent' ? (
-                      <Button size="s" variant="secondary" disabled aria-label="견적서 파일 미제공">
-                        파일 미제공
-                      </Button>
-                    ) : (
-                      <span className="text-body-s text-text-3">—</span>
-                    )}
-                  </span>
-                </li>
-              ) : (
-                <li
-                  key={`layout-quote-${row.index}`}
-                  className="grid gap-8 py-14 lg:grid-cols-[120px_140px_minmax(200px,1fr)_80px_112px_132px] lg:items-center lg:px-12"
-                >
-                  <time className="text-body-s text-text-2">0000.00.00</time>
-                  <span className="text-caption text-text-3">0000000000</span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-label-m">견적 문의 제목</span>
-                    <span className="mt-4 block text-caption text-text-3">제품명 외 0건</span>
-                  </span>
-                  <span className="text-center text-body-s">0개</span>
-                  <span className="lg:justify-self-center">
-                    <StatusBadge {...QUOTE_STATUS_META[row.status]} />
-                  </span>
-                  <span className="lg:justify-self-center">
-                    {row.status === 'quoteSent' || row.status === 'completed' ? (
-                      <Button size="s" variant="secondary" disabled aria-label="견적서 파일 미제공">
-                        다운로드
-                      </Button>
-                    ) : (
-                      <span className="text-body-s text-text-3">—</span>
-                    )}
-                  </span>
-                </li>
-              ),
-            )}
-          </ul>
-          <Pagination
-            currentPage={currentPage}
-            totalPages={Math.ceil(visible.length / pageSize)}
-            onPageChange={setCurrentPage}
-          />
-        </>
-      )}
-      {isPresentationMode ? (
-        <NoticeInline>
-          목 견적 문의는 현재 상태와 요청 제목만 제공합니다. 견적 파일은 연결되어 있지 않습니다.
-        </NoticeInline>
-      ) : null}
-    </div>
-  );
-}
-
-function QuoteDetailView({ quote, memberEmail }: { quote?: Quote; memberEmail: string }) {
-  const router = useRouter();
-  if (!quote)
-    return (
-      <EmptyState
-        icon={Search}
-        title="견적 문의를 찾을 수 없습니다."
-        action={
-          <Button variant="secondary" onClick={() => router.push('/mypage/quotes')}>
-            목록으로
-          </Button>
-        }
-      />
-    );
-  const currentIndex = QUOTE_STAGE_ORDER.indexOf(quote.status);
-  return (
-    <div className="space-y-16 lg:space-y-20">
-      <section className="rounded-12 border border-line p-16 lg:p-24">
-        <StatusBadge {...QUOTE_STATUS_META[quote.status]} />
-        <h2 className="mt-8 text-h3">{quote.title}</h2>
-        <p className="mt-4 text-caption text-text-3">
-          {formatMyPageDate(quote.requestedAt)} 접수 · 문의번호 {quote.id}
-        </p>
-        {shouldShowQuoteProgress(quote.status) ? (
-          <ol
-            aria-label="견적 진행 상태"
-            className="mt-20 grid grid-cols-4 gap-4 border-t border-line pt-16"
-          >
-            {QUOTE_STAGE_ORDER.map((status, index) => (
-              <li
-                key={status}
-                className={cx(
-                  'text-center text-caption',
-                  index <= currentIndex ? 'text-text-1' : 'text-text-3',
-                )}
-              >
-                <span
-                  className={cx(
-                    'mx-auto mb-6 flex size-20 items-center justify-center rounded-capsule',
-                    index <= currentIndex ? 'bg-text-1 text-inverse' : 'bg-surface text-text-3',
-                  )}
-                >
-                  {index < currentIndex ? <Check size={12} aria-hidden="true" /> : index + 1}
-                </span>
-                {QUOTE_STATUS_META[status].label}
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p role="status" className="mt-20 border-t border-line pt-16 text-body-s text-text-2">
-            취소된 문의입니다. 취소 처리 내역은 제공되지 않습니다.
-          </p>
-        )}
-      </section>
-      <div className="grid items-start gap-16 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
-        <div className="space-y-12">
-          <section className="rounded-12 border border-line p-16 lg:p-24">
-            <h2 className="text-h3">요청 정보</h2>
-            <dl className="mt-16 grid grid-cols-[92px_minmax(0,1fr)] gap-x-12 gap-y-12 text-body-s">
-              <dt className="text-text-3">회사명</dt>
-              <dd>{quote.companyName}</dd>
-              <dt className="text-text-3">담당자</dt>
-              <dd>{quote.contactName}</dd>
-              <dt className="text-text-3">이메일</dt>
-              <dd className="break-all">{memberEmail}</dd>
-              <dt className="text-text-3">접수일</dt>
-              <dd>{formatMyPageDate(quote.requestedAt)}</dd>
-              <dt className="text-text-3">문의 제목</dt>
-              <dd>{quote.title}</dd>
-            </dl>
-          </section>
-          <section className="rounded-12 border border-line p-16 lg:p-24">
-            <h2 className="text-label-m">요청 상품</h2>
-            <div className="mt-12 grid grid-cols-[minmax(0,1fr)_64px_108px] gap-8 bg-surface px-10 py-10 text-caption text-text-2">
-              <span>상품명</span>
-              <span className="text-center">수량</span>
-              <span className="text-right">비고</span>
-            </div>
-            {(quote.requestedItems ?? []).length > 0 ? (
-              (quote.requestedItems ?? []).map((item, index) => (
-                <div
-                  key={`${item.name}-${index}`}
-                  className="grid grid-cols-[minmax(0,1fr)_64px_108px] gap-8 border-b border-line px-10 py-14 text-body-s"
-                >
-                  <span>
-                    {item.name}
-                    {item.option ? (
-                      <span className="ml-6 text-caption text-text-3">{item.option}</span>
-                    ) : null}
-                  </span>
-                  <span className="text-center">{item.quantity.toLocaleString('ko-KR')}</span>
-                  <span className="text-right text-text-3">—</span>
-                </div>
-              ))
-            ) : (
-              <div className="grid grid-cols-[minmax(0,1fr)_64px_108px] gap-8 border-b border-line px-10 py-14 text-body-s">
-                <span>요청 상품 정보 미제공</span>
-                <span className="text-center">—</span>
-                <span className="text-right text-text-3">미제공</span>
-              </div>
-            )}
-          </section>
-          <section className="rounded-12 border border-line p-16 lg:p-24">
-            <h2 className="text-label-m">요청 사항</h2>
-            <dl className="mt-12 grid gap-10 text-body-s sm:grid-cols-[112px_minmax(0,1fr)]">
-              <dt className="text-text-3">요청 내용</dt>
-              <dd>{quote.inquiryBody?.trim() || quote.title}</dd>
-              <dt className="text-text-3">상세 요청</dt>
-              <dd className="text-text-3">미제공</dd>
-              <dt className="text-text-3">첨부 파일</dt>
-              <dd>
-                {quote.attachments?.length
-                  ? quote.attachments
-                      .map(
-                        (attachment) =>
-                          `${attachment.fileName} (${Math.ceil(attachment.sizeBytes / 1024)}KB)`,
-                      )
-                      .join(', ')
-                  : '첨부 내역 미제공'}
-              </dd>
-            </dl>
-          </section>
-        </div>
-        <section className="rounded-12 border border-line p-16 lg:p-24">
-          <h2 className="text-h3">견적 답변</h2>
-          <dl className="mt-16 divide-y divide-line text-body-s">
-            {[
-              [
-                '공급 금액',
-                quote.quoteAmount === null || quote.quoteAmount === undefined
-                  ? '미제공'
-                  : formatMyPagePrice(quote.quoteAmount),
-              ],
-              ['부가세', '미제공'],
-              ['견적 유효기간', quote.expiresAt ? formatMyPageDate(quote.expiresAt) : '미제공'],
-              ['담당자', '미제공'],
-              ['연락처', '미제공'],
-              ['이메일', '미제공'],
-              ['답변 내용', quote.publicMessage?.trim() || '답변 내용 미제공'],
-              ['첨부 파일', '첨부 내역 미제공'],
-            ].map(([label, value]) => (
-              <div key={label} className="grid grid-cols-[88px_minmax(0,1fr)] gap-12 py-12">
-                <dt className="text-text-3">{label}</dt>
-                <dd>{value}</dd>
-              </div>
-            ))}
-          </dl>
-          <Button
-            className="mt-16"
-            isFullWidth
-            disabled
-            leadingIcon={<ArrowDownToLine size={18} aria-hidden="true" />}
-          >
-            견적서 다운로드 불가
-          </Button>
-          <p className="mt-8 text-caption text-text-3">견적 파일이 현재 제공되지 않습니다.</p>
-        </section>
-      </div>
-      <div className="flex justify-center">
-        <Button size="l" variant="secondary" onClick={() => router.push('/mypage/quotes')}>
-          목록으로
-        </Button>
-      </div>
     </div>
   );
 }

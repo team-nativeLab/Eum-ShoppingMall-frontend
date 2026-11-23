@@ -54,6 +54,7 @@ function renderAdmin(path: string) {
 describe('홈 편성 및 이벤트 운영', () => {
   let home: AdminHomeContentInput;
   let events: AdminShopEvent[];
+  const getAdminContent = vi.fn(async () => structuredClone(home));
   const saveAdminContent = vi.fn(async (input: AdminHomeContentInput) => {
     home = structuredClone(input);
     return home;
@@ -81,11 +82,10 @@ describe('홈 편성 및 이벤트 운영', () => {
       promoBanners: [],
       serviceBenefits: [],
       featuredProductIds: [],
-      ctaBand: null,
     };
     events = [];
     mocks.getShopApi.mockResolvedValue({
-      home: { getAdminContent: vi.fn(async () => structuredClone(home)), saveAdminContent },
+      home: { getAdminContent, saveAdminContent },
       products: { adminList: vi.fn(async () => [product]) },
       events: {
         adminList: vi.fn(async () => structuredClone(events)),
@@ -93,6 +93,7 @@ describe('홈 편성 및 이벤트 운영', () => {
         deleteAdmin: vi.fn(),
       },
     });
+    getAdminContent.mockClear();
     saveAdminContent.mockClear();
     saveEvent.mockClear();
   });
@@ -132,6 +133,44 @@ describe('홈 편성 및 이벤트 운영', () => {
     expect(within(promoCard).getAllByRole('button', { name: '아래로' })).toHaveLength(1);
   });
 
+  it('혜택 노출을 저장하고 다시 불러오며 순서를 유지한다', async () => {
+    const user = userEvent.setup();
+    home.serviceBenefits = [
+      { id: 'benefit-1', title: '무료배송', description: '5만원 이상 주문 시' },
+      { id: 'benefit-2', title: '당일 출고', description: '평일 오후 2시 이전 결제' },
+    ];
+    renderAdmin('/home-content');
+
+    const firstToggle = await screen.findByRole('checkbox', { name: '무료배송 노출' });
+    expect(firstToggle).toBeChecked();
+    await user.click(firstToggle);
+    await user.click(screen.getAllByRole('button', { name: '변경 사항 저장' })[0]!);
+
+    await waitFor(() =>
+      expect(saveAdminContent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          serviceBenefits: [
+            expect.objectContaining({ id: 'benefit-1', isVisible: false }),
+            expect.objectContaining({ id: 'benefit-2' }),
+          ],
+        }),
+      ),
+    );
+    await waitFor(() => expect(firstToggle).not.toBeChecked());
+    expect(screen.getByRole('checkbox', { name: '당일 출고 노출' })).toBeChecked();
+    await waitFor(() => expect(getAdminContent.mock.calls.length).toBeGreaterThanOrEqual(2));
+  });
+
+  it('새 혜택은 기본 노출로 추가한다', async () => {
+    const user = userEvent.setup();
+    renderAdmin('/home-content');
+    await screen.findByRole('navigation', { name: '홈 편성 섹션 바로가기' });
+
+    await user.click(screen.getByRole('button', { name: '혜택 추가' }));
+
+    expect(screen.getByRole('checkbox', { name: '혜택 1 노출' })).toBeChecked();
+  });
+
   it('홈 편성 구간 바로가기를 각 편집 섹션에 연결한다', async () => {
     renderAdmin('/home-content');
     const navigation = await screen.findByRole('navigation', { name: '홈 편성 섹션 바로가기' });
@@ -140,7 +179,6 @@ describe('홈 편성 및 이벤트 운영', () => {
       ['home-promotions', '프로모션 카드'],
       ['home-benefits', '배송·서비스 혜택'],
       ['home-products', '추천 상품'],
-      ['home-cta', '맞춤 주문 CTA'],
     ] as const) {
       expect(within(navigation).getByRole('link', { name: label })).toHaveAttribute(
         'href',
@@ -148,6 +186,9 @@ describe('홈 편성 및 이벤트 운영', () => {
       );
       expect(document.getElementById(sectionId)).toBeInTheDocument();
     }
+    expect(
+      within(navigation).queryByRole('link', { name: '맞춤 주문 CTA' }),
+    ).not.toBeInTheDocument();
   });
 
   it('기간과 상세 콘텐츠가 있는 이벤트를 등록한다', async () => {

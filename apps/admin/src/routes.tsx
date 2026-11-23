@@ -26,9 +26,6 @@ const AdminOrderDetailPage = lazy(() =>
     default: module.AdminOrderDetailPage,
   })),
 );
-const AdminQuotesPage = lazy(() =>
-  import('./pages/AdminQuotesPage').then((module) => ({ default: module.AdminQuotesPage })),
-);
 const AdminMembersPage = lazy(() =>
   import('./pages/AdminMembersPage').then((module) => ({ default: module.AdminMembersPage })),
 );
@@ -242,15 +239,6 @@ export const adminRoutes: RouteObject[] = [
           element: (
             <Suspense fallback={<p role="status">화면을 불러오고 있습니다.</p>}>
               <AdminEventsPage />
-            </Suspense>
-          ),
-        },
-        {
-          path: 'quotes',
-          handle: { title: '견적 문의 관리', section: '견적 문의' },
-          element: (
-            <Suspense fallback={<p role="status">화면을 불러오고 있습니다.</p>}>
-              <AdminQuotesPage />
             </Suspense>
           ),
         },

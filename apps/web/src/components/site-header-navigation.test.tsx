@@ -1244,15 +1244,12 @@ describe('SiteHeader mega menu and header trigger layout', () => {
     '소방',
     '보안·감시',
     '환경',
-    '맞춤 제작/납품',
   ];
-  // 맞춤 제작/납품은 메뉴 열에서 빠지므로 열 이름은 이 목록을 씁니다.
-  const menuCategoryNames = representativeCategoryNames.filter((name) => name !== '맞춤 제작/납품');
 
   const structureCategories: Category[] = [
     ...representativeCategoryNames.map((name, index) => ({
       id: `category-${index}`,
-      slug: name === '맞춤 제작/납품' ? 'custom-order' : `category-slug-${index}`,
+      slug: `category-slug-${index}`,
       name,
       parentId: null,
       description: null,
@@ -1302,13 +1299,13 @@ describe('SiteHeader mega menu and header trigger layout', () => {
     return { user, desktopMenuButton, menu };
   }
 
-  it('lists 전체 제품 and one column per representative category except 맞춤 제작/납품 in 8 columns', async () => {
+  it('lists 전체 제품 and one column per representative category in 8 columns', async () => {
     const { menu } = await openDesktopMenu();
 
     const regionNames = within(menu)
       .getAllByRole('region')
       .map((region) => region.getAttribute('aria-label'));
-    expect(regionNames).toEqual(['전체 제품', ...menuCategoryNames]);
+    expect(regionNames).toEqual(['전체 제품', ...representativeCategoryNames]);
     expect(regionNames).toHaveLength(8);
     expect(menu.querySelector('[class~="lg:grid-cols-4"]')).toBeInTheDocument();
   });
@@ -1338,13 +1335,6 @@ describe('SiteHeader mega menu and header trigger layout', () => {
     expect(toolLinks).toHaveLength(1);
     expect(toolLinks[0]).toHaveAccessibleName('공구 전체 보기');
     expect(toolLinks[0]).toHaveAttribute('href', '/category/category-slug-3');
-  });
-
-  it('leaves the 맞춤 제작/납품 category out of the mega menu columns', async () => {
-    const { menu } = await openDesktopMenu();
-
-    expect(within(menu).queryByRole('region', { name: '맞춤 제작/납품' })).toBeNull();
-    expect(within(menu).queryByRole('link', { name: '맞춤 제작/납품 전체 보기' })).toBeNull();
   });
 
   it('lays out a representative section with five or more links as two columns and keeps short sections in one column', async () => {

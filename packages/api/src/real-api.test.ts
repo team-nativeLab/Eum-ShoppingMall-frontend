@@ -14,4 +14,11 @@ describe('real ShopApi stubs', () => {
     await expect(api.events.list()).rejects.toMatchObject({ code: 'NOT_IMPLEMENTED' });
     await expect(api.events.getById('event-a')).rejects.toMatchObject({ code: 'NOT_IMPLEMENTED' });
   });
+
+  it('keeps inquiry submission as a real API stub', async () => {
+    const api = createRealApi(buildMockConfig());
+    await expect(
+      api.inquiries.submit({ memberId: 'mem-001', title: '문의', body: '문의 내용' }),
+    ).rejects.toMatchObject({ code: 'NOT_IMPLEMENTED' });
+  });
 });

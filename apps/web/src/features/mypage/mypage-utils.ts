@@ -1,4 +1,4 @@
-import type { Coupon, OrderLine, OrderStatus, QuoteStatus } from '@eum/api/types';
+import type { Coupon, OrderLine, OrderStatus } from '@eum/api/types';
 
 export type MyPageApiMode = 'mock' | 'real';
 
@@ -50,11 +50,6 @@ export function getInitialClaimOrderId(
     return eligibleOrderIds.includes(preferredOrderId) ? preferredOrderId : '';
   }
   return eligibleOrderIds[0] ?? '';
-}
-
-/** Cancelled quotes have no admin progress events to map onto the active quote steps. */
-export function shouldShowQuoteProgress(status: QuoteStatus) {
-  return status !== 'canceled';
 }
 
 /** Subtracts calendar months while keeping end-of-month dates within the target month. */

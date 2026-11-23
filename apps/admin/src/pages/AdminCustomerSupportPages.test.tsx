@@ -32,8 +32,8 @@ describe('고객지원 운영 화면', () => {
           {
             id: 'inq-test',
             memberId: 'mem-test',
-            title: '배송 문의',
-            body: '일정 확인 부탁드립니다.',
+            title: '상품 문의 · 안전모',
+            body: '상품: 안전모 · 옵션: 대형 · 수량: 2\n가격 안내를 부탁드립니다.',
             status: 'waiting',
             createdAt: '2026-10-18T09:00:00Z',
             answer: null,
@@ -90,7 +90,6 @@ describe('고객지원 운영 화면', () => {
           mailOrderSalesNumber: '',
           address: '서울',
           email: 'info@example.com',
-          quoteEmail: '',
           privacyOfficer: '담당자',
           customerCenterPhone: '02-000-0000',
           customerCenterTel: '0200000000',
@@ -107,10 +106,17 @@ describe('고객지원 운영 화면', () => {
     });
   });
 
-  it('1:1 문의 공개답변과 내부 메모를 별도 필드로 저장한다', async () => {
+  it('가격 미표시 상품 문의를 확인하고 공개답변과 내부 메모를 저장한다', async () => {
     const user = userEvent.setup();
     renderPage(<AdminInquiriesPage />);
-    await screen.findByRole('heading', { name: '배송 문의' });
+    await screen.findByRole('heading', { name: '상품 문의 · 안전모' });
+    expect(
+      screen.getByText(/현재 브라우저의 localStorage 목 저장소에 보관되므로/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/실제 개인정보나 민감정보 대신 테스트 데이터만/)).toBeInTheDocument();
+    expect(screen.getByText(/저장 데이터는 자동 만료되지 않으며/)).toBeInTheDocument();
+    expect(screen.getByText(/브라우저 사이트 데이터를 삭제해야 정리됩니다/)).toBeInTheDocument();
+    expect(screen.getByText(/상품: 안전모 · 옵션: 대형 · 수량: 2/)).toBeInTheDocument();
     await user.type(screen.getByLabelText('고객 공개 답변'), '내일 출고 예정입니다.');
     await user.type(screen.getByLabelText('내부 메모'), '창고 확인 완료');
     await user.selectOptions(screen.getByLabelText('처리 상태'), 'answered');

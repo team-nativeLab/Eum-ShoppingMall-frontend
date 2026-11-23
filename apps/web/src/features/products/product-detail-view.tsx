@@ -22,6 +22,7 @@ import { PageContainer } from '@/components/page-container';
 import { useCart } from '@/features/cart/cart-context';
 import { useCheckout } from '@/features/checkout/checkout-context';
 import { getMemberAuth } from '@/lib/member-auth';
+import { buildProductInquiryHref } from '@/features/company-pages/product-inquiry-link';
 import {
   DESKTOP_QUERY,
   getScrollBehavior,
@@ -29,7 +30,6 @@ import {
   usePrefersReducedMotion,
 } from '@/lib/use-media-query';
 import { useLocalCollections } from './local-collections-context';
-import { buildQuoteInquiryHref } from '@/features/company-pages/quote-inquiry-link';
 import { getCategoryHref } from './category-href';
 import { ProductCarouselSection } from './product-carousel';
 import { ProductImage } from './product-image';
@@ -54,8 +54,7 @@ import { useProductQuestionsQuery } from './use-product-questions-query';
 /** 함께 구매하면 좋은 제품 최대 수(5열 × 2페이지) */
 const RELATED_PRODUCT_LIMIT = 10;
 /** 금액 미표시 상품 안내(데스크톱 구매 영역·모바일 하단 바 공통) */
-const PRICE_HIDDEN_NOTICE =
-  '금액 미공개 상품이라 바로 구매할 수 없습니다. 장바구니 담기·견적 문의만 가능합니다.';
+const PRICE_HIDDEN_NOTICE = '금액이 표시되지 않는 상품입니다. 고객센터에 문의해 주세요.';
 /** 상세 탭 순서(스크롤 위치에 따라 현재 탭을 고를 때도 이 순서를 씁니다) */
 const DETAIL_TAB_IDS = ['description', 'shipping', 'reviews', 'questions'] as const;
 
@@ -639,22 +638,24 @@ function ProductDetailContent({
               <p role="status" className={cx(noticeClassName, 'hidden lg:block', notice && 'mt-8')}>
                 {notice?.message}
               </p>
-              <Link
-                href={
-                  selectedPurchaseLines.length > 0
-                    ? buildQuoteInquiryHref(
-                        selectedPurchaseLines.map((line) => ({
-                          productId: product.id,
-                          optionId: line.optionId,
-                          quantity: line.quantity,
-                        })),
-                      )
-                    : `/solutions?productId=${encodeURIComponent(product.id)}`
-                }
-                className="mt-16 inline-flex rounded-4 text-label-m focus-ring hover:text-text-2 hover:underline hover:underline-offset-2 focus-visible:underline focus-visible:underline-offset-2"
-              >
-                대량 구매는 견적 문의 →
-              </Link>
+              {!priceDisplay.isPriceVisible ? (
+                <Link
+                  href={
+                    selectedPurchaseLines.length > 0
+                      ? buildProductInquiryHref(
+                          selectedPurchaseLines.map((line) => ({
+                            productId: product.id,
+                            optionId: line.optionId,
+                            quantity: line.quantity,
+                          })),
+                        )
+                      : buildProductInquiryHref([{ productId: product.id }])
+                  }
+                  className="mt-16 inline-flex rounded-4 text-label-m focus-ring hover:text-text-2 hover:underline hover:underline-offset-2 focus-visible:underline focus-visible:underline-offset-2"
+                >
+                  상품 문의 →
+                </Link>
+              ) : null}
             </section>
 
             {product.purchaseNotices.length > 0 ? (

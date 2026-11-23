@@ -7,7 +7,6 @@ import type {
   AdminSupplier,
   AdminOrder,
   AdminClaim,
-  AdminQuote,
   Brand,
   BrandSummary,
   Category,
@@ -44,7 +43,6 @@ import type {
   ProductQuestion,
   ProductReviewSummary,
   ProductSuggestion,
-  Quote,
   ShopEvent,
   ShopPopup,
 } from './types';
@@ -98,16 +96,6 @@ export type AdminOrderUpdate = Partial<
   Pick<AdminOrder, 'status' | 'trackingCarrier' | 'trackingNumber' | 'adminMemo'>
 >;
 export type AdminClaimUpdate = Partial<Pick<AdminClaim, 'status' | 'adminMemo'>>;
-export type AdminQuoteUpdate = Partial<
-  Pick<
-    AdminQuote,
-    'status' | 'internalMemo' | 'publicMessage' | 'quoteAmount' | 'expiresAt' | 'attachments'
-  >
->;
-export type QuoteSubmitInput = Pick<
-  AdminQuote,
-  'title' | 'companyName' | 'contactName' | 'inquiryBody' | 'requestedItems' | 'attachments'
->;
 export type AdminCouponInput = Omit<AdminCoupon, 'id' | 'issuedCount' | 'usedCount'> & {
   id?: string;
 };
@@ -270,16 +258,6 @@ export interface ShopApi {
     ): Promise<AdminPoint>;
   };
   addresses: { list(options?: RequestOptions): Promise<Address[]> };
-  quotes: {
-    submit(input: QuoteSubmitInput, options?: RequestOptions): Promise<Quote>;
-    adminList(options?: RequestOptions): Promise<AdminQuote[]>;
-    updateAdmin(
-      quoteId: string,
-      update: AdminQuoteUpdate,
-      options?: RequestOptions,
-    ): Promise<AdminQuote>;
-    listByMember(memberId: string, options?: RequestOptions): Promise<Quote[]>;
-  };
   notices: {
     list(options?: RequestOptions): Promise<Notice[]>;
     adminList(options?: RequestOptions): Promise<AdminNotice[]>;
@@ -306,6 +284,10 @@ export interface ShopApi {
     deleteAdmin(faqId: string, options?: RequestOptions): Promise<void>;
   };
   inquiries: {
+    submit(
+      input: Pick<Inquiry, 'memberId' | 'title' | 'body'>,
+      options?: RequestOptions,
+    ): Promise<Inquiry>;
     listByMember(memberId: string, options?: RequestOptions): Promise<Inquiry[]>;
     adminList(options?: RequestOptions): Promise<AdminInquiry[]>;
     updateAdmin(

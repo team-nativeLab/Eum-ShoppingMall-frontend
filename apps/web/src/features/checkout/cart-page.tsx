@@ -16,7 +16,7 @@ import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 import { PageContainer } from '@/components/page-container';
 import { useMemberSession } from '@/features/auth/member-session';
-import { buildQuoteInquiryHref } from '@/features/company-pages/quote-inquiry-link';
+import { buildProductInquiryHref } from '@/features/company-pages/product-inquiry-link';
 import { useCart } from '@/features/cart/cart-context';
 import { ProductImage } from '@/features/products/product-image';
 import { useCheckout } from './checkout-context';
@@ -55,6 +55,7 @@ export function CartPageView() {
     () => groups.orderableItems.map((item) => item.id),
     [groups.orderableItems],
   );
+  const priceHiddenItems = groups.unorderableItems.filter(({ reason }) => reason === 'priceHidden');
   const selectedIds = useMemo(
     () =>
       selectionMode === 'defaultAll'
@@ -383,10 +384,10 @@ export function CartPageView() {
               주문할 수 없는 상품 {groups.unorderableItems.length}개는 결제에서 제외됩니다.
             </NoticeInline>
           ) : null}
-          {orderableIds.length === 0 ? (
+          {orderableIds.length === 0 && priceHiddenItems.length > 0 ? (
             <Link
-              href={buildQuoteInquiryHref(
-                groups.unorderableItems.map(({ cartItem }) => ({
+              href={buildProductInquiryHref(
+                priceHiddenItems.map(({ cartItem }) => ({
                   productId: cartItem.productId,
                   optionId: cartItem.optionId,
                   quantity: cartItem.quantity,
@@ -397,8 +398,12 @@ export function CartPageView() {
                 'mt-24',
               )}
             >
-              견적 문의하기
+              상품 문의하기
             </Link>
+          ) : orderableIds.length === 0 ? (
+            <Button isFullWidth size="l" className="mt-24" disabled>
+              주문 가능한 상품이 없습니다
+            </Button>
           ) : (
             <Button
               isFullWidth
@@ -542,12 +547,12 @@ function CartLine({
         {linePrice}
         {unavailableReason === 'priceHidden' ? (
           <Link
-            href={buildQuoteInquiryHref([
+            href={buildProductInquiryHref([
               { productId: item.productId, optionId: item.optionId, quantity: item.quantity },
             ])}
             className="mt-4 block text-caption text-text-1 underline focus-ring"
           >
-            견적 문의 →
+            상품 문의 →
           </Link>
         ) : null}
       </p>

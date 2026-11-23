@@ -104,12 +104,6 @@ export function createRealApi(_config: ApiConfig): ShopApi {
       adjustAdmin: notImplemented('points.adjustAdmin'),
     },
     addresses: { list: notImplemented('addresses.list') },
-    quotes: {
-      submit: notImplemented('quotes.submit'),
-      adminList: notImplemented('quotes.adminList'),
-      updateAdmin: notImplemented('quotes.updateAdmin'),
-      listByMember: notImplemented('quotes.listByMember'),
-    },
     notices: {
       list: notImplemented('notices.list'),
       adminList: notImplemented('notices.adminList'),
@@ -136,6 +130,7 @@ export function createRealApi(_config: ApiConfig): ShopApi {
       deleteAdmin: notImplemented('faqs.deleteAdmin'),
     },
     inquiries: {
+      submit: notImplemented('inquiries.submit'),
       listByMember: notImplemented('inquiries.listByMember'),
       adminList: notImplemented('inquiries.adminList'),
       updateAdmin: notImplemented('inquiries.updateAdmin'),
