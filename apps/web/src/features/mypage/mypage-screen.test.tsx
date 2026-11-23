@@ -6,10 +6,12 @@ import { useLocalCollections } from '@/features/products/local-collections-conte
 import { MyPageScreen } from './mypage-screen';
 import { useMyPageData, type MyPageData } from './mypage-data';
 
-const routerMock = vi.hoisted(() => ({ push: vi.fn() }));
+const routerMock = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 const apiMocks = vi.hoisted(() => ({ submitClaim: vi.fn(), listClaims: vi.fn() }));
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: routerMock.push }) }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: routerMock.push, replace: routerMock.replace }),
+}));
 vi.mock('@/features/auth/member-session', () => ({ useMemberSession: vi.fn() }));
 vi.mock('@/features/products/local-collections-context', () => ({
   useLocalCollections: vi.fn(),
@@ -85,7 +87,8 @@ const myPageData: MyPageData = {
 };
 
 function renderMyPageSection(
-  section: 'claim-new' | 'claims' | 'points' | 'addresses' | 'quote-detail',
+  section:
+    'claim-new' | 'claims' | 'points' | 'addresses' | 'quote-detail' | 'profile' | 'profile-edit',
 ) {
   vi.mocked(useMyPageData).mockReturnValue({
     data: myPageData,
@@ -110,6 +113,7 @@ function getReasonCard(reason: string) {
 
 beforeEach(() => {
   routerMock.push.mockReset();
+  routerMock.replace.mockReset();
   apiMocks.submitClaim.mockReset().mockResolvedValue({ id: 'claim-web-001' });
   apiMocks.listClaims.mockReset().mockResolvedValue([{ ...claim, id: 'claim-web-001' }]);
   vi.mocked(useMemberSession).mockReturnValue({
@@ -391,6 +395,59 @@ describe('MyPageScreen claim application', () => {
     expect(screen.getAllByRole('status')).toHaveLength(1);
     expect(screen.getByRole('status')).toHaveTextContent('현재 신청 가능한 주문이 없습니다.');
     expect(screen.getByRole('combobox', { name: '주문 선택' })).toHaveValue('');
+  });
+});
+
+describe('MyPageScreen profile reauthentication demo', () => {
+  it('requires a password, grants the edit route after the demo step, and clears that grant on exit', async () => {
+    const { rerender } = renderMyPageSection('profile');
+    const passwordField = screen.getByLabelText('비밀번호');
+
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    expect(screen.getByRole('status')).toHaveTextContent('비밀번호를 입력해 주세요.');
+
+    fireEvent.change(passwordField, { target: { value: 'temporary-demo-value' } });
+    fireEvent.click(screen.getByRole('button', { name: '확인' }));
+    expect(routerMock.push).toHaveBeenCalledWith('/mypage/profile/edit');
+    expect(passwordField).toHaveValue('');
+    expect(screen.getByText(/실제 본인 확인은 진행되지 않습니다/)).toBeInTheDocument();
+
+    rerender(<MyPageScreen section="profile-edit" />);
+    expect(screen.getByLabelText('이름')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('이름'), { target: { value: '임시 이름' } });
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+    expect(screen.getByRole('status')).toHaveTextContent('서버에는 저장되지 않습니다.');
+
+    rerender(<MyPageScreen section="profile" />);
+    rerender(<MyPageScreen section="profile-edit" />);
+    await waitFor(() => expect(routerMock.replace).toHaveBeenCalledWith('/mypage/profile'));
+    expect(screen.queryByLabelText('이름')).not.toBeInTheDocument();
+  });
+
+  it('redirects direct edit-route entry to the profile screen without showing editable fields', async () => {
+    renderMyPageSection('profile-edit');
+
+    await waitFor(() => expect(routerMock.replace).toHaveBeenCalledWith('/mypage/profile'));
+    expect(screen.queryByLabelText('이름')).not.toBeInTheDocument();
+  });
+
+  it('redirects a signed-out direct edit route to login', async () => {
+    vi.mocked(useMemberSession).mockReturnValue({
+      member: null,
+      status: 'ready',
+      refreshMember: async () => null,
+      setMember: vi.fn(),
+      clearMember: async () => undefined,
+    });
+    const { rerender } = renderMyPageSection('profile-edit');
+
+    await waitFor(() => expect(routerMock.replace).toHaveBeenCalledWith('/mypage/profile'));
+    rerender(<MyPageScreen section="profile" />);
+    expect(
+      screen
+        .getAllByRole('link', { name: '로그인' })
+        .some((loginLink) => loginLink.getAttribute('href') === '/login?redirect=%2Fmypage'),
+    ).toBe(true);
   });
 });
 

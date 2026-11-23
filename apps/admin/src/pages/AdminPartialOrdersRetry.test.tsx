@@ -12,7 +12,6 @@ import {
 } from '@/lib/admin-request-lifecycle';
 import { AdminTopBar } from '@/components/AdminTopBar';
 import { AdminDashboardPage } from './AdminDashboardPage';
-import { LoginPage } from './LoginPage';
 import { AdminOrdersPage } from './AdminOrdersPage';
 
 const memberA = {
@@ -586,13 +585,13 @@ describe('partial order lookup retry actions', () => {
     });
   });
 
-  it('restores retry eligibility when logout fails but current-user validation succeeds', async () => {
+  it('uses the shared Web login route when logout fails', async () => {
     const user = userEvent.setup();
     adminAuthMocks.logout.mockRejectedValueOnce(new Error('로그아웃 API 오류'));
     const router = createMemoryRouter(
       [
         { path: '/', element: <AdminTopBar /> },
-        { path: '/login', element: <LoginPage /> },
+        { path: '/login', element: <p>쇼핑몰 로그인으로 이동하고 있습니다.</p> },
       ],
       { initialEntries: ['/'] },
     );
@@ -605,12 +604,14 @@ describe('partial order lookup retry actions', () => {
 
     expect(await screen.findByText('관리자 A')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '로그아웃' }));
-    await waitFor(() => expect(adminAuthMocks.getCurrentUser).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText('관리자 A')).toBeInTheDocument();
+    expect(await screen.findByText('쇼핑몰 로그인으로 이동하고 있습니다.')).toBeInTheDocument();
+    expect(adminAuthMocks.getCurrentUser).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.queryByLabelText(/비밀번호/)).toBeNull();
 
     const retryScope = createAdminRequestScope();
-    expect(retryScope.signal.aborted).toBe(false);
-    expect(retryScope.isCurrent()).toBe(true);
+    expect(retryScope.signal.aborted).toBe(true);
+    expect(retryScope.isCurrent()).toBe(false);
     retryScope.dispose();
   });
 

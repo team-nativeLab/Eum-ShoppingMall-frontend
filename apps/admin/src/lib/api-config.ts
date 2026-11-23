@@ -16,3 +16,7 @@ export function getAdminApiConfig(): ApiConfig {
   });
   return cachedApiConfig;
 }
+
+export function getAdminWebBaseUrl(): string | undefined {
+  return import.meta.env.VITE_WEB_BASE_URL?.trim() || undefined;
+}

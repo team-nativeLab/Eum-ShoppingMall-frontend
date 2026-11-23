@@ -148,6 +148,8 @@ describe('Admin notice and FAQ filters', () => {
     const user = userEvent.setup();
     const selectAll = screen.getByRole('checkbox', { name: '현재 목록 공지 전체 선택' });
     const firstNoticeCheckbox = screen.getByRole('checkbox', { name: '첫 번째 공지 선택' });
+    expect(selectAll.nextElementSibling).toHaveClass('peer-[:checked:enabled]:bg-info');
+    expect(firstNoticeCheckbox.nextElementSibling).toHaveClass('peer-[:checked:enabled]:bg-info');
     await user.click(firstNoticeCheckbox);
     expect(screen.getByText('1개 선택')).toBeInTheDocument();
     expect(selectAll).toBePartiallyChecked();

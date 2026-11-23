@@ -727,6 +727,7 @@ function AdminSupportContentPage({ mode }: { mode: ContentMode }) {
                   <tr>
                     <th scope="col" className="w-48 px-12 py-12">
                       <Checkbox
+                        checkedVariant="info"
                         aria-label="현재 목록 공지 전체 선택"
                         checked={areAllVisibleNoticesSelected}
                         isIndeterminate={areSomeVisibleNoticesSelected}
@@ -764,6 +765,7 @@ function AdminSupportContentPage({ mode }: { mode: ContentMode }) {
                       <tr key={item.id} className="border-t border-line">
                         <td className="w-48 px-12 py-12">
                           <Checkbox
+                            checkedVariant="info"
                             aria-label={`${item.title} 선택`}
                             checked={selectedNoticeIds.has(item.id)}
                             disabled={isBulkUpdating || isBulkDeleting}

@@ -11,6 +11,7 @@ import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Pause, Play } from 'l
 import Link from 'next/link';
 import { useState, type CSSProperties, type FocusEvent, type PointerEvent } from 'react';
 import { PageContainer } from '@/components/page-container';
+import { HomePopup } from './home-popup';
 import { usePrefersReducedMotion } from '@/lib/use-media-query';
 import { CategoryBar, MobileCategoryGrid } from './category-bar';
 import {
@@ -49,6 +50,7 @@ export function HomeView() {
 
   return (
     <div className="relative">
+      <HomePopup />
       {/* 히어로 제목은 배너마다 바뀌므로 페이지 제목(h1)은 고정해 둡니다. */}
       <h1 className="sr-only">안전맛집 쇼핑몰 홈</h1>
       {homeQuery.isPending ? (

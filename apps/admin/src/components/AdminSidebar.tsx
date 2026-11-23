@@ -1,7 +1,7 @@
 import { Badge } from '@eum/ui/components/Badge';
 import { Icon } from '@eum/ui/components/Icon';
 import { cx } from '@eum/ui/lib/cx';
-import safetyMatjipLogoUrl from '@/assets/safety-matjip-logo.png';
+import safetyMatjipLogoUrl from '@eum/ui/assets/safety-matjip-logo.png';
 import {
   Building2,
   CalendarDays,
@@ -9,10 +9,10 @@ import {
   CircleHelp,
   FolderTree,
   LayoutDashboard,
+  Megaphone,
   MessageCircleQuestion,
   MessagesSquare,
   MessageSquareText,
-  Newspaper,
   Package,
   PanelsTopLeft,
   Receipt,
@@ -77,7 +77,7 @@ const ADMIN_MENU_GROUPS: AdminMenuGroup[] = [
     id: 'content',
     label: '콘텐츠',
     items: [
-      { label: '공지 관리', to: '/content/notices', icon: Newspaper },
+      { label: '팝업 관리', to: '/content/popups', icon: Megaphone },
       { label: 'FAQ 관리', to: '/content/faqs', icon: CircleHelp },
       { label: '회사·정책 정보', to: '/settings/company-policies', icon: Building2 },
       { label: '1:1 문의', to: '/content/inquiries', icon: MessagesSquare },

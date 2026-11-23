@@ -1,6 +1,6 @@
 'use client';
 
-import { CircleAlert } from 'lucide-react';
+import { CircleAlert, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { cx } from '../lib/cx';
 import { Icon } from './Icon';
@@ -16,6 +16,8 @@ export interface ModalProps {
   description?: ReactNode;
   /** 위험 동작 확인(Figma Type=Danger: 제목 앞 경고 아이콘) */
   tone?: 'confirm' | 'danger';
+  /** 제목 영역에 접근 가능한 닫기 버튼을 표시합니다. */
+  showCloseButton?: boolean;
   /** 하단 버튼 영역(오른쪽 정렬) */
   actions: ReactNode;
   children?: ReactNode;
@@ -32,6 +34,7 @@ export function Modal({
   title,
   description,
   tone = 'confirm',
+  showCloseButton = false,
   actions,
   children,
   className,
@@ -84,13 +87,25 @@ export function Modal({
         className,
       )}
     >
-      <div className="flex items-center gap-8">
-        {tone === 'danger' ? (
-          <Icon icon={CircleAlert} size={20} className="shrink-0 text-danger" />
+      <div className="flex items-start justify-between gap-16">
+        <div className="flex min-w-0 items-center gap-8">
+          {tone === 'danger' ? (
+            <Icon icon={CircleAlert} size={20} className="shrink-0 text-danger" />
+          ) : null}
+          <h2 id={titleId} className="text-h3">
+            {title}
+          </h2>
+        </div>
+        {showCloseButton ? (
+          <button
+            type="button"
+            aria-label="팝업 닫기"
+            onClick={onClose}
+            className="-mt-8 -mr-8 inline-flex size-40 shrink-0 items-center justify-center rounded-6 text-text-2 focus-ring hover:bg-surface"
+          >
+            <Icon icon={X} size={20} />
+          </button>
         ) : null}
-        <h2 id={titleId} className="text-h3">
-          {title}
-        </h2>
       </div>
       {description ? (
         <div id={descriptionId} className="mt-8 text-body-m text-text-2">

@@ -279,20 +279,19 @@ export function AdminSelect({
 }: AdminSelectProps) {
   return (
     <span className={cx('relative inline-block', wrapperClassName)}>
-      {/* cx는 클래스 충돌을 해결하지 않으므로, 호출부의 px-* 뒤에 pr-32가 적용되는 CSS 순서에 의존합니다. */}
       <select
         {...selectProps}
+        data-custom-chevron="true"
         disabled={disabled}
-        className={cx('w-full appearance-none pr-32', className)}
+        className={cx('w-full appearance-none pr-56', className)}
       >
         {children}
       </select>
-      {/* 웹 드롭다운보다 화살표를 4px 안쪽에 둡니다. pr-32는 아이콘과 텍스트가 겹치지 않게 합니다. */}
       <Icon
         icon={ChevronDown}
         size={16}
         className={cx(
-          'pointer-events-none absolute top-1/2 right-16 -translate-y-1/2',
+          'pointer-events-none absolute top-1/2 right-32 -translate-y-1/2',
           disabled ? 'text-text-disabled' : 'text-text-1',
         )}
       />

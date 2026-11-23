@@ -162,6 +162,8 @@ const ORDER_STAGE_ORDER: OrderStatus[] = [
   'delivered',
 ];
 const QUOTE_STAGE_ORDER: QuoteStatus[] = ['received', 'consulting', 'quoteSent', 'completed'];
+let pendingProfileEditGrant = false;
+
 export function MyPageScreen({
   section,
   itemId,
@@ -171,6 +173,29 @@ export function MyPageScreen({
   itemId?: string;
   preferredClaimType?: ClaimType;
 }) {
+  const router = useRouter();
+  const [profileEditAuthorization, setProfileEditAuthorization] = useState(() => ({
+    section,
+    isAuthorized: section === 'profile-edit' && pendingProfileEditGrant,
+  }));
+  const isProfileEditAuthorized =
+    profileEditAuthorization.section === section
+      ? profileEditAuthorization.isAuthorized
+      : section === 'profile-edit' && pendingProfileEditGrant;
+
+  if (profileEditAuthorization.section !== section) {
+    setProfileEditAuthorization({ section, isAuthorized: isProfileEditAuthorized });
+  }
+
+  useEffect(() => {
+    if (section !== 'profile-edit') return;
+    if (!isProfileEditAuthorized) {
+      router.replace('/mypage/profile');
+      return;
+    }
+    pendingProfileEditGrant = false;
+  }, [isProfileEditAuthorized, router, section]);
+
   const addAddressActionRef = useRef<(() => void) | null>(null);
   const { member, status: memberStatus, refreshMember } = useMemberSession();
   const { wishlistIds, recentIds, recentViewedAt } = useLocalCollections();
@@ -179,6 +204,11 @@ export function MyPageScreen({
     section,
     member?.id ?? null,
   );
+
+  if (section === 'profile-edit' && !isProfileEditAuthorized) {
+    return <PageLoadingState />;
+  }
+
   const dashboardTop =
     section === 'dashboard' && query.data?.member ? (
       <DashboardSummary
@@ -2355,12 +2385,14 @@ function ProfileView({
           className="mt-24 space-y-16"
           onSubmit={(event) => {
             event.preventDefault();
-            setReauthError(
-              password
-                ? '데모 화면입니다. 실제 인증은 진행되지 않았습니다.'
-                : '비밀번호를 입력해 주세요.',
-            );
+            if (!password.trim()) {
+              setReauthError('비밀번호를 입력해 주세요.');
+              return;
+            }
             setPassword('');
+            setReauthError('');
+            pendingProfileEditGrant = true;
+            router.push('/mypage/profile/edit');
           }}
         >
           <TextField label="이메일" type="email" value={member.email} disabled />
@@ -2389,6 +2421,9 @@ function ProfileView({
     );
   return (
     <div className="space-y-24">
+      <p className="rounded-8 bg-info-tint p-12 text-body-s text-info">
+        데모 화면입니다. 입력한 변경 내용은 현재 화면에만 반영되며 서버에는 저장되지 않습니다.
+      </p>
       <section>
         <DividerTitle>기본 정보</DividerTitle>
         <ProfileRow label="이메일">

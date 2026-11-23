@@ -1,5 +1,6 @@
 import { collectCategoryIdsWithDescendants } from './category-tree';
 import { resolveCartOption } from './cart';
+import { canBuyNow } from './price';
 import { assertMockAllowed, type ApiConfig } from './config';
 import { ApiError } from './errors';
 import { mockAddresses } from './mock/addresses';
@@ -37,6 +38,7 @@ import type {
   AdminProductReviewUpdate,
   AdminProductQuestionUpdate,
   AdminNoticeInput,
+  AdminPopupInput,
   AdminProductInput,
   AdminSupplierInput,
   QuoteSubmitInput,
@@ -58,6 +60,7 @@ import type {
   AdminShopSettings,
   AdminFaq,
   AdminNotice,
+  AdminPopup,
   AdminInquiry,
   AdminProductReview,
   AdminProductQuestion,
@@ -68,6 +71,7 @@ import type {
   BrandSummary,
   BrandImageSettings,
   Category,
+  ShopPopup,
   CheckoutOptions,
   CreateOrderInput,
   FacetCount,
@@ -85,7 +89,41 @@ import type {
   ProductReviewSummary,
   ShopEvent,
 } from './types';
-import { canBuyNow } from './price';
+
+const mockBuyerPopup: ShopPopup = {
+  id: 'popup-home-sample',
+  title: '현장에 필요한 안전용품을 확인해 보세요',
+  imageUrl: '/assets/web/promo-concrete-v2.webp',
+  body: '안전모와 보호구부터 작업 환경에 필요한 제품까지 안전맛집에서 살펴보세요.',
+};
+const MAX_POPUP_IMAGE_BYTES = 2 * 1024 * 1024;
+const MAX_POPUP_IMAGE_URL_LENGTH = 2048;
+const POPUP_DATA_URL_PREFIXES = [
+  'data:image/jpeg;base64,',
+  'data:image/png;base64,',
+  'data:image/webp;base64,',
+];
+
+function isValidPopupImageUrl(imageUrl: string | null): boolean {
+  if (imageUrl === null || imageUrl === '') return true;
+  if (/^https?:\/\//i.test(imageUrl) || /^\/(?!\/)/.test(imageUrl))
+    return imageUrl.length <= MAX_POPUP_IMAGE_URL_LENGTH;
+
+  const dataUrlPrefix = POPUP_DATA_URL_PREFIXES.find(
+    (prefix) => imageUrl.slice(0, prefix.length).toLowerCase() === prefix,
+  );
+  if (!dataUrlPrefix) return false;
+  const maxDataUrlLength = dataUrlPrefix.length + 4 * Math.ceil(MAX_POPUP_IMAGE_BYTES / 3);
+  if (imageUrl.length > maxDataUrlLength) return false;
+  const dataUrlMatch = imageUrl.match(
+    /^data:image\/(?:jpeg|png|webp);base64,([A-Za-z0-9+/]*={0,2})$/i,
+  );
+  if (!dataUrlMatch) return false;
+  const payload = dataUrlMatch[1] ?? '';
+  const paddingLength = payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0;
+  const decodedBytes = Math.floor((payload.length * 3) / 4) - paddingLength;
+  return decodedBytes <= MAX_POPUP_IMAGE_BYTES;
+}
 
 const DEFAULT_BRAND_LOGO_SETTINGS: BrandImageSettings = { fit: 'contain', width: 240, height: 96 };
 const DEFAULT_BRAND_COVER_SETTINGS: BrandImageSettings = { fit: 'cover', width: 1200, height: 704 };
@@ -437,6 +475,8 @@ export function createMockApi(
     isVisible: true,
     sortOrder: index,
   }));
+  const adminPopups: AdminPopup[] = [];
+  let popupSequence = 1;
   const adminFaqs: AdminFaq[] = structuredClone(mockFaqs).map((faq, index) => ({
     ...faq,
     isVisible: true,
@@ -2116,6 +2156,49 @@ export function createMockApi(
         const index = adminNotices.findIndex((notice) => notice.id === noticeId);
         if (index < 0) throw new ApiError('NOT_FOUND', '공지를 찾을 수 없습니다.');
         adminNotices.splice(index, 1);
+      },
+    },
+    popups: {
+      list: (options) => respondList([structuredClone(mockBuyerPopup)], options),
+      adminList: (options) =>
+        respondList(
+          [...adminPopups].sort((left, right) => left.sortOrder - right.sortOrder),
+          options,
+        ),
+      async saveAdmin(input: AdminPopupInput, options) {
+        await prepareMutation(options, '팝업');
+        if (!input.title.trim() || !input.body.trim())
+          throw new ApiError('VALIDATION', '팝업 제목과 내용을 입력해 주세요.');
+        if (
+          !Number.isInteger(input.sortOrder) ||
+          input.sortOrder < 0 ||
+          !isValidPopupImageUrl(input.imageUrl)
+        ) {
+          throw new ApiError('VALIDATION', '팝업 이미지와 정렬 순서를 확인해 주세요.');
+        }
+        let popupId = input.id;
+        if (!popupId) {
+          do {
+            popupId = `popup-admin-${String(popupSequence++).padStart(3, '0')}`;
+          } while (adminPopups.some((popup) => popup.id === popupId));
+        }
+        const popup: AdminPopup = {
+          ...structuredClone(input),
+          imageUrl: input.imageUrl?.trim() || null,
+          id: popupId,
+        };
+        const existingIndex = adminPopups.findIndex(
+          (existingPopup) => existingPopup.id === popup.id,
+        );
+        if (existingIndex < 0) adminPopups.unshift(popup);
+        else adminPopups[existingIndex] = popup;
+        return structuredClone(popup);
+      },
+      async deleteAdmin(popupId, options) {
+        await prepareMutation(options, '팝업');
+        const popupIndex = adminPopups.findIndex((popup) => popup.id === popupId);
+        if (popupIndex < 0) throw new ApiError('NOT_FOUND', '팝업을 찾을 수 없습니다.');
+        adminPopups.splice(popupIndex, 1);
       },
     },
     events: {

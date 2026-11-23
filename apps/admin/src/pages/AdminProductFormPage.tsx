@@ -791,7 +791,6 @@ function ProductEditor({
                 type="checkbox"
                 checked={autoSoldOut}
                 onChange={(event) => setAutoSoldOut(event.target.checked)}
-                className="mt-2 size-16 accent-text-1"
               />
               <span>재고 0 옵션은 품절, 모든 옵션 품절 시 상품 전체 품절</span>
             </label>

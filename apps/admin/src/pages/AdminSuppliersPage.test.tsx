@@ -42,13 +42,16 @@ describe('Admin 발주 관리', () => {
     renderPage();
 
     await screen.findByRole('heading', { name: '발주 관리' });
+    const orderChannelSelect = screen.getByLabelText('주문 정보 수신 방식');
+    expect(orderChannelSelect).toHaveAttribute('data-custom-chevron', 'true');
+    expect(orderChannelSelect.parentElement?.querySelector('svg')).toHaveClass('right-32');
     await user.type(screen.getByLabelText('회사명'), '테스트 회사');
     await user.type(screen.getByLabelText('담당자 이름'), '담당자');
     await user.type(screen.getByLabelText('담당자 전화번호'), '01012345678');
     await user.type(screen.getByLabelText('담당자 이메일'), 'contact@example.com');
     expect(screen.getByLabelText('주문 수신 이메일')).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText('주문 정보 수신 방식'), 'fax');
+    await user.selectOptions(orderChannelSelect, 'fax');
     expect(screen.queryByLabelText('주문 수신 이메일')).not.toBeInTheDocument();
     await user.type(screen.getByLabelText('주문 수신 팩스 번호'), '0212345678');
     await user.click(screen.getByRole('button', { name: '저장' }));

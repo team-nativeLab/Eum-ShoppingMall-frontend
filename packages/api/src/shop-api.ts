@@ -19,6 +19,7 @@ import type {
   AdminCoupon,
   AdminFaq,
   AdminNotice,
+  AdminPopup,
   AdminInquiry,
   AdminProductReview,
   AdminProductQuestion,
@@ -45,6 +46,7 @@ import type {
   ProductSuggestion,
   Quote,
   ShopEvent,
+  ShopPopup,
 } from './types';
 
 /** 상품 목록 조회 조건 */
@@ -110,6 +112,7 @@ export type AdminCouponInput = Omit<AdminCoupon, 'id' | 'issuedCount' | 'usedCou
   id?: string;
 };
 export type AdminNoticeInput = Omit<AdminNotice, 'id'> & { id?: string };
+export type AdminPopupInput = Omit<AdminPopup, 'id'> & { id?: string };
 export type AdminFaqInput = Omit<AdminFaq, 'id'> & { id?: string };
 export type AdminInquiryUpdate = Partial<Pick<AdminInquiry, 'status' | 'answer' | 'adminMemo'>>;
 export type AdminProductReviewUpdate = Partial<
@@ -282,6 +285,12 @@ export interface ShopApi {
     adminList(options?: RequestOptions): Promise<AdminNotice[]>;
     saveAdmin(input: AdminNoticeInput, options?: RequestOptions): Promise<AdminNotice>;
     deleteAdmin(noticeId: string, options?: RequestOptions): Promise<void>;
+  };
+  popups: {
+    list(options?: RequestOptions): Promise<ShopPopup[]>;
+    adminList(options?: RequestOptions): Promise<AdminPopup[]>;
+    saveAdmin(input: AdminPopupInput, options?: RequestOptions): Promise<AdminPopup>;
+    deleteAdmin(popupId: string, options?: RequestOptions): Promise<void>;
   };
   events: {
     list(options?: RequestOptions): Promise<ShopEvent[]>;

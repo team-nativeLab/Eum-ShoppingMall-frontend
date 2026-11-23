@@ -144,6 +144,7 @@ function createApi(homeResponse = homeContent, categories: Category[] = []): Sho
   return {
     home: { getContent: async () => homeResponse },
     categories: { list: async () => categories },
+    popups: { list: async () => [] },
     products: { list: async () => ({ items: [], page: 1, pageSize: 10, totalCount: 0 }) },
   } as unknown as ShopApi;
 }

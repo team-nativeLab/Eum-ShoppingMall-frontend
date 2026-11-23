@@ -22,11 +22,28 @@ describe('Modal', () => {
     const dialog = screen.getByRole('dialog', { name: '저장하지 않고 나갈까요?' });
     expect(dialog).toHaveAttribute('open');
     expect(dialog).toHaveAccessibleDescription('변경한 내용이 저장되지 않습니다.');
+    expect(screen.queryByRole('button', { name: '팝업 닫기' })).not.toBeInTheDocument();
   });
 
   it('Esc(cancel 이벤트)로 onClose를 부릅니다', () => {
     const { handleClose } = renderModal(true);
     fireEvent(screen.getByRole('dialog'), new Event('cancel', { cancelable: true }));
+    expect(handleClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('선택적으로 제목 옆 닫기 버튼을 제공합니다', () => {
+    const handleClose = vi.fn();
+    render(
+      <Modal
+        isOpen
+        onClose={handleClose}
+        title="팝업 제목"
+        showCloseButton
+        actions={<button type="button">다시 보지 않기</button>}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '팝업 닫기' }));
     expect(handleClose).toHaveBeenCalledTimes(1);
   });
 
