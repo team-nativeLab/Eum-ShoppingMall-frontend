@@ -142,6 +142,7 @@ export function AdminSuppliersPage() {
         주문 정보 수신 방식
         <div className="relative">
           <select
+            data-custom-chevron="true"
             disabled={disabled}
             value={draft.orderChannel}
             onChange={(event) => {
@@ -157,7 +158,7 @@ export function AdminSuppliersPage() {
           <ChevronDown
             size={16}
             aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 right-14 -translate-y-1/2 text-text-3"
+            className="pointer-events-none absolute top-1/2 right-32 -translate-y-1/2 text-text-3"
           />
         </div>
       </label>

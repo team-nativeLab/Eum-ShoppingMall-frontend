@@ -1201,6 +1201,26 @@ describe('SiteHeader on login and signup pages', () => {
     expect(screen.getByRole('link', { name: label })).toHaveAttribute('href', href);
   });
 
+  it('shows a desktop login label on home hover or keyboard focus only when signed out', () => {
+    navigationMocks.pathname = '/';
+    sessionMocks.status = 'ready';
+    sessionMocks.member = null;
+    const { rerender } = render(<SiteHeader />, { wrapper: createWrapper() });
+
+    const accountLink = screen.getByRole('link', { name: '로그인' });
+    expect(accountLink).toHaveAttribute('href', '/login?redirect=%2Fmypage');
+    expect(within(accountLink).getByText('로그인')).toHaveClass(
+      'lg:group-hover:opacity-100',
+      'lg:group-focus-visible:opacity-100',
+    );
+    fireEvent.mouseEnter(accountLink);
+    accountLink.focus();
+    expect(accountLink).toHaveAttribute('aria-label', '로그인');
+    navigationMocks.pathname = '/products';
+    rerender(<SiteHeader />);
+    expect(screen.queryByText('로그인', { selector: 'span' })).not.toBeInTheDocument();
+  });
+
   it('uses the enlarged logo sizes across home and checkout headers', () => {
     const { rerender } = render(<SiteHeader />, { wrapper: createWrapper() });
     const [desktopLogo, mobileLogo] = screen.getAllByAltText('안전맛집');

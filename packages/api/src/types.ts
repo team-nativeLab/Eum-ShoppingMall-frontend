@@ -730,6 +730,20 @@ export interface AdminNotice extends Notice {
   sortOrder: number;
 }
 
+/** 구매자 홈 중앙 팝업 */
+export interface ShopPopup {
+  id: string;
+  title: string;
+  imageUrl: string | null;
+  body: string;
+}
+
+/** 관리자에서 편집하는 팝업 */
+export interface AdminPopup extends ShopPopup {
+  isVisible: boolean;
+  sortOrder: number;
+}
+
 /** 구매자에게 노출하는 이벤트·기획전 */
 export type ShopEventStatus = 'ongoing' | 'upcoming' | 'ended';
 

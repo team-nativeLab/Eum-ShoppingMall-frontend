@@ -116,6 +116,12 @@ export function createRealApi(_config: ApiConfig): ShopApi {
       saveAdmin: notImplemented('notices.saveAdmin'),
       deleteAdmin: notImplemented('notices.deleteAdmin'),
     },
+    popups: {
+      list: notImplemented('popups.list'),
+      adminList: notImplemented('popups.adminList'),
+      saveAdmin: notImplemented('popups.saveAdmin'),
+      deleteAdmin: notImplemented('popups.deleteAdmin'),
+    },
     events: {
       list: notImplemented('events.list'),
       getById: notImplemented('events.getById'),

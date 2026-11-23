@@ -1977,6 +1977,62 @@ describe('공지·FAQ 운영 목 API', () => {
   });
 });
 
+describe('팝업 운영 목 API', () => {
+  it('uses an independent buyer sample and keeps popup IDs unique after deletion', async () => {
+    const api = createMockApi(testConfig);
+    const buyerPopup = (await api.popups.list())[0];
+    expect(buyerPopup).toMatchObject({ id: 'popup-home-sample', imageUrl: expect.any(String) });
+    expect(await api.popups.adminList()).toEqual([]);
+
+    const popupInput = (title: string) => ({
+      title,
+      imageUrl: null,
+      body: '팝업 내용',
+      isVisible: true,
+      sortOrder: 0,
+    });
+    const first = await api.popups.saveAdmin(popupInput('첫 번째'));
+    const second = await api.popups.saveAdmin(popupInput('두 번째'));
+    const third = await api.popups.saveAdmin(popupInput('세 번째'));
+    await api.popups.deleteAdmin(second.id);
+    const fourth = await api.popups.saveAdmin(popupInput('네 번째'));
+
+    expect(new Set([first.id, third.id, fourth.id]).size).toBe(3);
+    expect((await api.popups.adminList()).map(({ id }) => id)).toEqual([
+      fourth.id,
+      third.id,
+      first.id,
+    ]);
+  });
+
+  it('accepts image URL boundaries and rejects over-limit data URLs and URLs', async () => {
+    const api = createMockApi(testConfig);
+    const popupInput = (imageUrl: string) => ({
+      title: '팝업',
+      imageUrl,
+      body: '내용',
+      isVisible: true,
+      sortOrder: 0,
+    });
+    const prefix = 'data:image/png;base64,';
+    const exactLimitPayload = `${'A'.repeat(2_796_203)}=`;
+    await expect(
+      api.popups.saveAdmin(popupInput(`${prefix}${exactLimitPayload}`)),
+    ).resolves.toBeDefined();
+    const oneByteOverPayload = 'A'.repeat(2_796_204);
+    await expect(
+      api.popups.saveAdmin(popupInput(`${prefix}${oneByteOverPayload}`)),
+    ).rejects.toMatchObject({ code: 'VALIDATION' });
+
+    await expect(
+      api.popups.saveAdmin(popupInput(`https://${'a'.repeat(2040)}`)),
+    ).resolves.toBeDefined();
+    await expect(
+      api.popups.saveAdmin(popupInput(`https://${'a'.repeat(2041)}`)),
+    ).rejects.toMatchObject({ code: 'VALIDATION' });
+  });
+});
+
 describe('1:1 문의·리뷰 공개 답변 분리', () => {
   it('1:1 문의 답변은 회원 목록에 반영하고 내부 메모·이력은 제외합니다', async () => {
     const api = createMockApi(testConfig);

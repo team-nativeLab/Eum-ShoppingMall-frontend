@@ -9,7 +9,8 @@
   "exports": {
     "./tokens.css": "./src/tokens.css",
     "./components/*": "./src/components/*.tsx",
-    "./lib/*": "./src/lib/*.ts"
+    "./lib/*": "./src/lib/*.ts",
+    "./assets/*": "./src/assets/*"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"

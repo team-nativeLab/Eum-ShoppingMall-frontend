@@ -609,7 +609,6 @@ export function AdminProductsPage() {
                         }
                         onChange={(event) => handleSelectPage(event.target.checked)}
                         disabled={pageProducts.every((product) => isProductPending(product.id))}
-                        className="size-20 accent-text-1"
                       />
                     </th>
                     <th scope="col" className="w-48 px-4 py-12 font-medium">
@@ -670,7 +669,6 @@ export function AdminProductsPage() {
                                   : previous.filter((productId) => productId !== product.id),
                               )
                             }
-                            className="size-20 accent-text-1"
                           />
                         </td>
                         <td className="px-4 py-6">

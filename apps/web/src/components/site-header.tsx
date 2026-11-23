@@ -5,6 +5,7 @@ import { Button } from '@eum/ui/components/Button';
 import { Icon } from '@eum/ui/components/Icon';
 import { Toast } from '@eum/ui/components/Toast';
 import { cx } from '@eum/ui/lib/cx';
+import safetyMatjipLogoUrl from '@eum/ui/assets/safety-matjip-logo.png';
 import {
   Check,
   ChevronDown,
@@ -56,7 +57,6 @@ const ALL_MENU_ID = 'site-header-all-menu';
 const MENU_TRANSITION_DURATION_MS = 160;
 /** 메가메뉴 섹션 링크 목록을 2열로 나누는 최소 항목 수(「전체 보기」 포함). */
 const MENU_TWO_COLUMN_MIN_ITEMS = 5;
-const SAFETY_MATJIP_LOGO_SRC = '/assets/web/safety-matjip-logo.png';
 
 /** 데스크톱 GNB 주요 메뉴. 활성 메뉴는 경로만으로 정하므로 쿼리(useSearchParams)·Suspense가 필요 없습니다. */
 function PrimaryNavigation({ pathname, onNavigate }: { pathname: string; onNavigate: () => void }) {
@@ -133,6 +133,7 @@ export function SiteHeader() {
   const router = useRouter();
   const { member, status } = useMemberSession();
   const isSignedOut = status === 'ready' && member === null;
+  const isHomeSignedOut = pathname === '/' && isSignedOut;
   const accountHref = isSignedOut ? '/login?redirect=%2Fmypage' : '/mypage';
   const accountLabel = isSignedOut ? '로그인' : '마이페이지';
   const { isMenuOpen, setIsMenuOpen, registerMenuTriggerHandler } = useSiteMenu();
@@ -393,7 +394,7 @@ export function SiteHeader() {
             className="self-start rounded-4 focus-ring sm:self-auto"
           >
             <Image
-              src={SAFETY_MATJIP_LOGO_SRC}
+              src={safetyMatjipLogoUrl}
               alt="안전맛집"
               width={2000}
               height={667}
@@ -483,7 +484,7 @@ export function SiteHeader() {
           <div className="flex w-284 shrink-0 items-center gap-8">
             <Link ref={desktopLogoRef} href="/" className="rounded-4 focus-ring">
               <Image
-                src={SAFETY_MATJIP_LOGO_SRC}
+                src={safetyMatjipLogoUrl}
                 alt="안전맛집"
                 width={2000}
                 height={667}
@@ -504,9 +505,23 @@ export function SiteHeader() {
             <Link
               href={accountHref}
               aria-label={accountLabel}
-              className="inline-flex size-44 items-center justify-center rounded-8 focus-ring hover:bg-surface"
+              className={cx(
+                'group relative inline-flex size-44 items-center justify-center rounded-8 focus-ring hover:bg-surface',
+              )}
             >
-              <Icon icon={UserRound} size={24} />
+              <Icon
+                icon={UserRound}
+                size={24}
+                className={cx(
+                  isHomeSignedOut &&
+                    'transition-opacity lg:group-hover:opacity-0 lg:group-focus-visible:opacity-0',
+                )}
+              />
+              {isHomeSignedOut ? (
+                <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-body-s opacity-0 lg:transition-opacity lg:group-hover:opacity-100 lg:group-focus-visible:opacity-100">
+                  로그인
+                </span>
+              ) : null}
             </Link>
             <Link
               href="/mypage/wishlist"
@@ -538,7 +553,7 @@ export function SiteHeader() {
                 </button>
                 <Link href="/" className="rounded-4 focus-ring">
                   <Image
-                    src={SAFETY_MATJIP_LOGO_SRC}
+                    src={safetyMatjipLogoUrl}
                     alt="안전맛집"
                     width={2000}
                     height={667}

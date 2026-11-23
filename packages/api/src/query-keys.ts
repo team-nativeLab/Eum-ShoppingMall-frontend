@@ -42,6 +42,10 @@ export const queryKeys = {
   company: { info: ['company', 'info'] as const },
   quotes: { all: ['quotes'] as const },
   notices: { all: ['notices'] as const },
+  popups: {
+    all: ['popups'] as const,
+    adminList: ['admin', 'popups'] as const,
+  },
   events: {
     all: ['events'] as const,
     detail: (eventId: string) => ['events', 'detail', eventId] as const,

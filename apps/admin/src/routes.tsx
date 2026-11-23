@@ -1,6 +1,4 @@
 import type { RouteObject } from 'react-router';
-import { sanitizeRedirectPath } from '@eum/api/redirect';
-import { useEffect } from 'react';
 import { AdminLayout } from './layouts/AdminLayout';
 import { AdminCategoriesPage } from './pages/AdminCategoriesPage';
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
@@ -21,63 +19,15 @@ import { AdminHomePage } from './pages/AdminHomePage';
 import { AdminEventsPage } from './pages/AdminEventsPage';
 import { AdminClaimsPage } from './pages/AdminClaimsPage';
 import { AdminPointsPage } from './pages/AdminPointsPage';
-import { AdminFaqsPage, AdminNoticesPage } from './pages/AdminSupportContentPage';
+import { AdminFaqsPage } from './pages/AdminSupportContentPage';
+import { AdminPopupsPage } from './pages/AdminPopupsPage';
 import { AdminInquiriesPage } from './pages/AdminInquiriesPage';
 import { AdminReviewsPage } from './pages/AdminReviewsPage';
 import { AdminProductQuestionsPage } from './pages/AdminProductQuestionsPage';
 import { AdminCompanyPoliciesPage } from './pages/AdminCompanyPoliciesPage';
 import { AdminSuppliersPage } from './pages/AdminSuppliersPage';
-import { LoginPage } from './pages/LoginPage';
-
-function getSharedWebLoginUrl(
-  rawWebBaseUrl: string | undefined,
-  rawRedirect: string | null,
-  currentUrl: URL,
-): string | null {
-  const configuredBaseUrl = rawWebBaseUrl?.trim();
-  if (!configuredBaseUrl) return null;
-
-  let webBaseUrl: URL;
-  try {
-    webBaseUrl = new URL(configuredBaseUrl);
-  } catch {
-    return null;
-  }
-  if (
-    (webBaseUrl.protocol !== 'http:' && webBaseUrl.protocol !== 'https:') ||
-    webBaseUrl.username ||
-    webBaseUrl.password
-  ) {
-    return null;
-  }
-
-  webBaseUrl.search = '';
-  webBaseUrl.hash = '';
-  webBaseUrl.pathname = `${webBaseUrl.pathname.replace(/\/+$/, '')}/`;
-
-  const webLoginUrl = new URL('login', webBaseUrl);
-  webLoginUrl.searchParams.set('redirect', sanitizeRedirectPath(rawRedirect, '/'));
-  if (webLoginUrl.origin === currentUrl.origin && webLoginUrl.pathname === currentUrl.pathname) {
-    return null;
-  }
-  return webLoginUrl.href;
-}
-
-function SharedLoginRedirect() {
-  const currentUrl = new URL(window.location.href);
-  const webLoginUrl = getSharedWebLoginUrl(
-    import.meta.env.VITE_WEB_BASE_URL,
-    new URLSearchParams(currentUrl.search).get('redirect'),
-    currentUrl,
-  );
-
-  useEffect(() => {
-    if (webLoginUrl) window.location.replace(webLoginUrl);
-  }, [webLoginUrl]);
-
-  if (!webLoginUrl) return <LoginPage />;
-  return <main className="p-32">통합 로그인 화면으로 이동하고 있습니다.</main>;
-}
+import { SharedLoginRedirect } from './components/SharedLoginRedirect';
+import { getAdminWebBaseUrl } from './lib/api-config';
 
 /** 화면 제목·상위 메뉴를 route handle에 담아 TopBar 경로 표시에 씁니다. */
 export interface AdminRouteHandle {
@@ -87,7 +37,11 @@ export interface AdminRouteHandle {
 
 /** Admin 라우트(HANDOFF 9절 및 Stage 6 화면) */
 export const adminRoutes: RouteObject[] = [
-  { path: '/login', element: <SharedLoginRedirect />, handle: { title: '로그인' } },
+  {
+    path: '/login',
+    element: <SharedLoginRedirect webBaseUrl={getAdminWebBaseUrl()} />,
+    handle: { title: '로그인' },
+  },
   {
     path: '/',
     element: <AdminLayout />,
@@ -173,9 +127,9 @@ export const adminRoutes: RouteObject[] = [
         element: <AdminPointsPage />,
       },
       {
-        path: 'content/notices',
-        handle: { title: '공지 관리', section: '몰 콘텐츠' },
-        element: <AdminNoticesPage />,
+        path: 'content/popups',
+        handle: { title: '팝업 관리', section: '몰 콘텐츠' },
+        element: <AdminPopupsPage />,
       },
       {
         path: 'content/faqs',

@@ -49,4 +49,20 @@ describe('Checkbox', () => {
       'h-32',
     );
   });
+
+  it('정보 variant는 파란 체크 색을 쓰고 기본 variant는 검정 체크 색을 유지합니다', () => {
+    const { container } = render(
+      <>
+        <Checkbox checkedVariant="info">Admin 목록</Checkbox>
+        <Checkbox>기본 목록</Checkbox>
+      </>,
+    );
+
+    const visibleBoxes = container.querySelectorAll('span[aria-hidden="true"]');
+    expect(visibleBoxes[0]).toHaveClass('peer-[:checked:enabled]:bg-info');
+    expect(visibleBoxes[0]).toHaveClass('peer-[:indeterminate:enabled]:bg-info');
+    expect(visibleBoxes[0]).not.toHaveClass('peer-[:checked:enabled]:bg-text-1');
+    expect(visibleBoxes[1]).toHaveClass('peer-[:checked:enabled]:bg-text-1');
+    expect(visibleBoxes[1]).not.toHaveClass('peer-[:checked:enabled]:bg-info');
+  });
 });

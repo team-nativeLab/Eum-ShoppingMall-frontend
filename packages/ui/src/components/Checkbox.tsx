@@ -14,14 +14,20 @@ export interface CheckboxProps extends Omit<
   isIndeterminate?: boolean;
   /** 상품 facet처럼 밀집된 목록에만 16px 상자를 사용합니다. 기본은 20px입니다. */
   size?: 'default' | 'small';
+  /** 체크 상태 색상. 기본 검정은 기존 Web 사용처와 호환됩니다. */
+  checkedVariant?: 'default' | 'info';
 }
+
+const CHECKED_BOX_CLASS = {
+  default:
+    'peer-[:checked:enabled]:border-text-1 peer-[:checked:enabled]:bg-text-1 peer-[:indeterminate:enabled]:border-text-1 peer-[:indeterminate:enabled]:bg-text-1',
+  info: 'peer-[:checked:enabled]:border-info peer-[:checked:enabled]:bg-info peer-[:indeterminate:enabled]:border-info peer-[:indeterminate:enabled]:bg-info',
+} as const;
 
 // 상태별 상자 모양. 비활성 규칙은 :checked/:indeterminate와 겹치지 않게 조건을 나눠
 // CSS 생성 순서와 상관없이 비활성+체크에서도 체크 표시가 보이게 합니다.
 const BOX_BASE_CLASS = cx(
   'relative inline-flex shrink-0 items-center justify-center rounded-4 border-[1.5px] border-line-control bg-bg text-inverse',
-  'peer-[:checked:enabled]:border-text-1 peer-[:checked:enabled]:bg-text-1',
-  'peer-[:indeterminate:enabled]:border-text-1 peer-[:indeterminate:enabled]:bg-text-1',
   // Figma Disabled(꺼짐): surface-2 채움. 비활성+체크·일부 선택은 같은 채움에 회색 표시
   'peer-disabled:border-surface-2 peer-disabled:bg-surface-2 peer-disabled:text-text-disabled',
   'peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-text-1',
@@ -37,6 +43,7 @@ export function Checkbox({
   children,
   isIndeterminate = false,
   size = 'default',
+  checkedVariant = 'default',
   className,
   disabled,
   ...inputProps
@@ -65,7 +72,11 @@ export function Checkbox({
       />
       <span
         aria-hidden="true"
-        className={cx(BOX_BASE_CLASS, size === 'small' ? 'size-16' : 'size-20')}
+        className={cx(
+          BOX_BASE_CLASS,
+          CHECKED_BOX_CLASS[checkedVariant],
+          size === 'small' ? 'size-16' : 'size-20',
+        )}
       >
         <Check
           className="checkbox-check hidden"
