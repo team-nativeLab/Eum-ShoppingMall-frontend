@@ -24,13 +24,17 @@ const firstMember: Member = {
 const secondMember: Member = { ...firstMember, id: 'mem-002', name: '다른 회원' };
 
 function SessionProbe() {
-  const { member, clearMember, setMember } = useMemberSession();
+  const { member, status, clearMember, refreshMember, setMember } = useMemberSession();
   const queryClient = useQueryClient();
   return (
     <div>
       <p>{member?.name ?? '로그아웃'}</p>
+      <output aria-label="세션 상태">{status}</output>
       <button type="button" onClick={() => void clearMember()}>
         로그아웃
+      </button>
+      <button type="button" onClick={() => void refreshMember()}>
+        세션 다시 확인
       </button>
       <button type="button" onClick={() => setMember(secondMember)}>
         회원 전환
@@ -220,6 +224,100 @@ describe('member inquiry cache privacy', () => {
         memberId: firstMember.id,
       }),
     );
+  });
+
+  it('does not restore a member after logout when the initial session request resolves late', async () => {
+    let resolveCurrentUser: ((currentMember: Member | null) => void) | undefined;
+    const delayedCurrentUser = new Promise<Member | null>((resolve) => {
+      resolveCurrentUser = resolve;
+    });
+    const logout = vi.fn(async () => undefined);
+    vi.mocked(getMemberAuth).mockResolvedValue({
+      getCurrentUser: vi.fn(() => delayedCurrentUser),
+      logout,
+    } as never);
+    renderSession(<SessionProbe />);
+
+    fireEvent.click(screen.getByRole('button', { name: '로그아웃' }));
+    await waitFor(() => expect(screen.getByLabelText('세션 상태')).toHaveTextContent('ready'));
+    expect(logout).toHaveBeenCalledOnce();
+
+    resolveCurrentUser?.(firstMember);
+    await waitFor(() => {
+      expect(screen.getByText('로그아웃', { selector: 'p' })).toBeInTheDocument();
+      expect(screen.getByLabelText('세션 상태')).toHaveTextContent('ready');
+    });
+  });
+
+  it('keeps an explicitly selected member when the initial session request resolves late', async () => {
+    let resolveCurrentUser: ((currentMember: Member | null) => void) | undefined;
+    const delayedCurrentUser = new Promise<Member | null>((resolve) => {
+      resolveCurrentUser = resolve;
+    });
+    vi.mocked(getMemberAuth).mockResolvedValue({
+      getCurrentUser: vi.fn(() => delayedCurrentUser),
+      logout: vi.fn(async () => undefined),
+    } as never);
+    renderSession(<SessionProbe />);
+
+    fireEvent.click(screen.getByRole('button', { name: '회원 전환' }));
+    expect(screen.getByText('다른 회원')).toBeInTheDocument();
+
+    resolveCurrentUser?.(firstMember);
+    await waitFor(() => expect(screen.getByText('다른 회원')).toBeInTheDocument());
+  });
+
+  it('ignores an outdated refresh response after the member changes', async () => {
+    let resolveRefresh: ((currentMember: Member | null) => void) | undefined;
+    const delayedRefresh = new Promise<Member | null>((resolve) => {
+      resolveRefresh = resolve;
+    });
+    const getCurrentUser = vi
+      .fn<() => Promise<Member | null>>()
+      .mockResolvedValueOnce(firstMember)
+      .mockReturnValueOnce(delayedRefresh);
+    vi.mocked(getMemberAuth).mockResolvedValue({
+      getCurrentUser,
+      logout: vi.fn(async () => undefined),
+    } as never);
+    renderSession(<SessionProbe />);
+    await screen.findByText('첫 회원');
+
+    fireEvent.click(screen.getByRole('button', { name: '세션 다시 확인' }));
+    fireEvent.click(screen.getByRole('button', { name: '회원 전환' }));
+    resolveRefresh?.(firstMember);
+
+    await waitFor(() => {
+      expect(screen.getByText('다른 회원')).toBeInTheDocument();
+      expect(screen.getByLabelText('세션 상태')).toHaveTextContent('ready');
+    });
+  });
+
+  it('clears the local session and navigates after logout fails', async () => {
+    vi.mocked(getMemberAuth).mockResolvedValue({
+      getCurrentUser: vi.fn(async () => firstMember),
+      logout: vi.fn(async () => {
+        throw new Error('logout failed');
+      }),
+    } as never);
+    renderSession(
+      <MyPageShell activeSection="dashboard" title="마이페이지">
+        <SessionProbe />
+      </MyPageShell>,
+    );
+    await screen.findByText('첫 회원');
+
+    fireEvent.click(
+      within(screen.getByRole('complementary', { name: '마이페이지 메뉴' })).getByRole('button', {
+        name: '로그아웃',
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('로그아웃', { selector: 'p' })).toBeInTheDocument();
+      expect(screen.getByLabelText('세션 상태')).toHaveTextContent('ready');
+      expect(routerMock.push).toHaveBeenCalledWith('/login');
+    });
   });
 
   it('mypage logout clears member caches and navigates to login', async () => {

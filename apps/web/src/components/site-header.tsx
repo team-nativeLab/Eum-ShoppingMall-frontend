@@ -129,7 +129,6 @@ export function SiteHeader() {
   const router = useRouter();
   const { member, status } = useMemberSession();
   const isSignedOut = status === 'ready' && member === null;
-  const isHomeSignedOut = pathname === '/' && isSignedOut;
   const accountHref = isSignedOut ? '/login?redirect=%2Fmypage' : '/mypage';
   const accountLabel = isSignedOut ? '로그인' : '마이페이지';
   const { isMenuOpen, setIsMenuOpen, registerMenuTriggerHandler } = useSiteMenu();
@@ -509,11 +508,11 @@ export function SiteHeader() {
                 icon={UserRound}
                 size={24}
                 className={cx(
-                  isHomeSignedOut &&
+                  isSignedOut &&
                     'transition-opacity lg:group-hover:opacity-0 lg:group-focus-visible:opacity-0',
                 )}
               />
-              {isHomeSignedOut ? (
+              {isSignedOut ? (
                 <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-body-s opacity-0 lg:transition-opacity lg:group-hover:opacity-100 lg:group-focus-visible:opacity-100">
                   로그인
                 </span>

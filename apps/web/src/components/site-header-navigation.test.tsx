@@ -1201,23 +1201,43 @@ describe('SiteHeader on login and signup pages', () => {
     expect(screen.getByRole('link', { name: label })).toHaveAttribute('href', href);
   });
 
-  it('shows a desktop login label on home hover or keyboard focus only when signed out', () => {
-    navigationMocks.pathname = '/';
-    sessionMocks.status = 'ready';
-    sessionMocks.member = null;
-    const { rerender } = render(<SiteHeader />, { wrapper: createWrapper() });
+  it.each(['/', '/search', '/brands', '/mypage'])(
+    'shows a desktop login label on hover or keyboard focus when signed out at %s',
+    (pathname) => {
+      navigationMocks.pathname = pathname;
+      sessionMocks.status = 'ready';
+      sessionMocks.member = null;
+      const { rerender } = render(<SiteHeader />, { wrapper: createWrapper() });
 
-    const accountLink = screen.getByRole('link', { name: '로그인' });
-    expect(accountLink).toHaveAttribute('href', '/login?redirect=%2Fmypage');
-    expect(within(accountLink).getByText('로그인')).toHaveClass(
-      'lg:group-hover:opacity-100',
-      'lg:group-focus-visible:opacity-100',
-    );
-    fireEvent.mouseEnter(accountLink);
-    accountLink.focus();
-    expect(accountLink).toHaveAttribute('aria-label', '로그인');
-    navigationMocks.pathname = '/products';
+      const accountLink = screen.getByRole('link', { name: '로그인' });
+      expect(accountLink).toHaveAttribute('href', '/login?redirect=%2Fmypage');
+      expect(within(accountLink).getByText('로그인')).toHaveClass(
+        'lg:group-hover:opacity-100',
+        'lg:group-focus-visible:opacity-100',
+      );
+      fireEvent.mouseEnter(accountLink);
+      accountLink.focus();
+      expect(accountLink).toHaveAttribute('aria-label', '로그인');
+      navigationMocks.pathname = '/products';
+      rerender(<SiteHeader />);
+      expect(
+        within(screen.getByRole('link', { name: '로그인' })).getByText('로그인'),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it('does not show the login hover label for signed-in or unresolved sessions', () => {
+    navigationMocks.pathname = '/search';
+    sessionMocks.status = 'ready';
+    sessionMocks.member = { id: 'member-1' };
+    const { rerender } = render(<SiteHeader />, { wrapper: createWrapper() });
+    expect(screen.getByRole('link', { name: '마이페이지' })).toHaveAttribute('href', '/mypage');
+    expect(screen.queryByText('로그인', { selector: 'span' })).not.toBeInTheDocument();
+
+    sessionMocks.status = 'loading';
+    sessionMocks.member = null;
     rerender(<SiteHeader />);
+    expect(screen.getByRole('link', { name: '마이페이지' })).toHaveAttribute('href', '/mypage');
     expect(screen.queryByText('로그인', { selector: 'span' })).not.toBeInTheDocument();
   });
 

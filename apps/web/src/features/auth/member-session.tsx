@@ -8,6 +8,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -62,19 +63,24 @@ export function MemberSessionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [member, setMember] = useState<Member | null>(null);
   const [status, setStatus] = useState<MemberSessionStatus>('loading');
+  const sessionRevisionRef = useRef(0);
   const setSessionMember = useCallback((nextMember: Member | null) => {
+    sessionRevisionRef.current += 1;
     setMember(nextMember);
     setStatus('ready');
   }, []);
 
   const refreshMember = useCallback(async () => {
+    const requestRevision = ++sessionRevisionRef.current;
     setStatus('loading');
     try {
       const currentMember = await (await getMemberAuth()).getCurrentUser();
+      if (requestRevision !== sessionRevisionRef.current) return null;
       setMember(currentMember);
       setStatus('ready');
       return currentMember;
     } catch {
+      if (requestRevision !== sessionRevisionRef.current) return null;
       setMember(null);
       setStatus('error');
       return null;
@@ -82,12 +88,15 @@ export function MemberSessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const clearMember = useCallback(async () => {
+    const requestRevision = ++sessionRevisionRef.current;
     try {
       await (await getMemberAuth()).logout();
     } finally {
       await clearMemberScopedQueries(queryClient);
-      setMember(null);
-      setStatus('ready');
+      if (requestRevision === sessionRevisionRef.current) {
+        setMember(null);
+        setStatus('ready');
+      }
     }
   }, [queryClient]);
 
@@ -100,15 +109,16 @@ export function MemberSessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
+    const requestRevision = sessionRevisionRef.current;
     void getMemberAuth()
       .then((memberAuth) => memberAuth.getCurrentUser())
       .then((currentMember) => {
-        if (!isMounted) return;
+        if (!isMounted || requestRevision !== sessionRevisionRef.current) return;
         setMember(currentMember);
         setStatus('ready');
       })
       .catch(() => {
-        if (!isMounted) return;
+        if (!isMounted || requestRevision !== sessionRevisionRef.current) return;
         setMember(null);
         setStatus('error');
       });
