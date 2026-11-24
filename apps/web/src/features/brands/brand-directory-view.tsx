@@ -107,7 +107,7 @@ function BrandCardDirectory({ brands }: { brands: BrandSummary[] }) {
             <Link
               href={buildBrandProductsHref(brand.name)}
               aria-label={`${brand.name}, 제품 ${brand.productCount}개`}
-              className="flex min-h-200 w-full flex-col overflow-hidden rounded-12 border border-line bg-bg text-left shadow-1 focus-ring transition-colors hover:border-line-strong"
+              className="flex min-h-200 w-full flex-col overflow-hidden rounded-12 border border-line bg-bg text-left shadow-1 focus-ring transition-colors hover:border-text-accent-black"
             >
               <span className="flex h-148 w-full items-center justify-center overflow-hidden border-b border-line px-16 py-12">
                 {brand.logoUrl ? (
@@ -118,7 +118,7 @@ function BrandCardDirectory({ brands }: { brands: BrandSummary[] }) {
                     settings={brand.logoSettings}
                   />
                 ) : (
-                  <span className="text-label-m text-text-2">{brand.name}</span>
+                  <span className="text-label-m text-text-accent-black">{brand.name}</span>
                 )}
               </span>
               <span className="flex min-h-52 w-full items-center justify-between gap-8 px-12 py-8">

@@ -102,8 +102,11 @@ describe('BrandDirectoryView', () => {
       'href',
       '/search?brand=%ED%95%9C%EA%B2%B0%26%EC%95%88%EC%A0%84',
     );
-    expect(firstBrandLink).toHaveClass('hover:border-line-strong', 'focus-ring');
+    expect(firstBrandLink).toHaveClass('hover:border-text-accent-black', 'focus-ring');
     expect(firstBrandLink).toHaveAttribute('aria-label', '한결&안전, 제품 1개');
+    expect(within(firstBrandLink).getAllByText('한결&안전', { exact: true })[0]).toHaveClass(
+      'text-text-accent-black',
+    );
 
     fireEvent.pointerEnter(firstBrandLink, { pointerType: 'mouse' });
     expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
