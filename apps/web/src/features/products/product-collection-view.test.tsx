@@ -92,7 +92,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('PagedProductCollectionView (베스트·오늘의 상품)', () => {
+describe('PagedProductCollectionView (베스트·할인 상품)', () => {
   it('shows only the title, product grid and pagination for best sellers', async () => {
     apiMocks.listProducts.mockResolvedValue(
       createPagedResult([createProduct(1), createProduct(2)], 2),
@@ -143,9 +143,9 @@ describe('PagedProductCollectionView (베스트·오늘의 상품)', () => {
 
     render(
       <PagedProductCollectionView
-        title="오늘의 상품"
-        collection="today"
-        emptyTitle="등록된 오늘의 상품이 없습니다"
+        title="베스트 셀러"
+        collection="featured"
+        emptyTitle="등록된 베스트 상품이 없습니다"
       />,
       { wrapper: createWrapper() },
     );
@@ -154,7 +154,7 @@ describe('PagedProductCollectionView (베스트·오늘의 상품)', () => {
     await user.click(within(pagination).getByRole('button', { name: '2페이지' }));
 
     await waitFor(() =>
-      expect(lastListParams()).toEqual({ collection: 'today', page: 2, pageSize: 24 }),
+      expect(lastListParams()).toEqual({ collection: 'featured', page: 2, pageSize: 24 }),
     );
   });
 
@@ -163,14 +163,14 @@ describe('PagedProductCollectionView (베스트·오늘의 상품)', () => {
 
     render(
       <PagedProductCollectionView
-        title="오늘의 상품"
-        collection="today"
-        emptyTitle="등록된 오늘의 상품이 없습니다"
+        title="베스트 셀러"
+        collection="featured"
+        emptyTitle="등록된 베스트 상품이 없습니다"
       />,
       { wrapper: createWrapper() },
     );
 
-    expect(await screen.findByText('등록된 오늘의 상품이 없습니다')).toBeInTheDocument();
+    expect(await screen.findByText('등록된 베스트 상품이 없습니다')).toBeInTheDocument();
     expect(screen.queryByRole('list')).toBeNull();
     expect(screen.getByRole('link', { name: '전체 상품 보기' })).toHaveAttribute('href', '/search');
   });

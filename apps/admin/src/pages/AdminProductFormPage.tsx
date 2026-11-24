@@ -344,7 +344,6 @@ function ProductEditor({
         rating: null,
         reviewCount: 0,
         isFeatured: false,
-        isTodayDeal: false,
         supplierId,
       }),
       ...(product ? { id: product.id } : {}),
@@ -352,7 +351,6 @@ function ProductEditor({
       brand: text('brand'),
       supplierId,
       isFeatured: formData.get('isFeatured') === 'on',
-      isTodayDeal: formData.get('isTodayDeal') === 'on',
       categoryId: leafCategoryId,
       price,
       listPrice: normalizedListPrice,
@@ -555,14 +553,6 @@ function ProductEditor({
                 />
                 베스트 상품
               </label>
-              <label className="flex items-center gap-8 text-label-m">
-                <input
-                  type="checkbox"
-                  name="isTodayDeal"
-                  defaultChecked={product?.isTodayDeal ?? false}
-                />
-                오늘의 상품
-              </label>
               <p className="w-full text-caption text-text-3">
                 브랜드몰 노출은 선택한 브랜드 상품으로 자동 구성됩니다.
               </p>
@@ -586,14 +576,6 @@ function ProductEditor({
                   defaultChecked={product?.isFeatured ?? false}
                 />
                 베스트 상품
-              </label>
-              <label className="flex items-center gap-8 text-label-m">
-                <input
-                  type="checkbox"
-                  name="isTodayDeal"
-                  defaultChecked={product?.isTodayDeal ?? false}
-                />
-                오늘의 상품
               </label>
               <p className="w-full text-caption text-text-3">
                 브랜드몰 노출은 선택한 브랜드 상품으로 자동 구성됩니다.

@@ -978,14 +978,14 @@ describe('목 API 시나리오', () => {
     expect(productPage.items).toEqual([]);
   });
 
-  it('오늘의 상품 목록은 목 상품 중 오늘의 상품으로 지정된 항목만 반환하고 발주처 ID를 노출하지 않습니다', async () => {
+  it('베스트 상품 목록은 지정된 상품만 반환하고 발주처 ID를 노출하지 않습니다', async () => {
     const api = createMockApi(testConfig);
-    const todayPage = await api.products.list({ collection: 'today' });
+    const featuredPage = await api.products.list({ collection: 'featured' });
 
-    expect(todayPage.items.length).toBeGreaterThan(0);
-    expect(todayPage.items.every((product) => product.isTodayDeal)).toBe(true);
-    expect(todayPage.items.every((product) => !('supplierId' in product))).toBe(true);
-    expect(await api.products.getById(todayPage.items[0]!.id)).not.toHaveProperty('supplierId');
+    expect(featuredPage.items.length).toBeGreaterThan(0);
+    expect(featuredPage.items.every((product) => product.isFeatured)).toBe(true);
+    expect(featuredPage.items.every((product) => !('supplierId' in product))).toBe(true);
+    expect(await api.products.getById(featuredPage.items[0]!.id)).not.toHaveProperty('supplierId');
   });
 
   it('할인 상품 목록은 공개 가격이 있고 정상가가 판매가보다 높은 상품만 반환합니다', async () => {
