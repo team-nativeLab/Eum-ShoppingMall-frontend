@@ -117,8 +117,6 @@ export interface Product {
   createdAt: string;
   /** 홈 베스트 상품에 포함할지 여부 */
   isFeatured: boolean;
-  /** 오늘의 상품에 노출할지 여부 */
-  isTodayDeal?: boolean;
 }
 
 /** 발주처 주문 수신 채널 */

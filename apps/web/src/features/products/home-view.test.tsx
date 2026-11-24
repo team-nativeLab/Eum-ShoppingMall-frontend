@@ -1,3 +1,4 @@
+import type { ProductLimitParams, ProductListParams } from '@eum/api/shop-api';
 import type { Category, HomeContent, Product } from '@eum/api/types';
 import type { ShopApi } from '@eum/api/shop-api';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -486,6 +487,34 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
 });
 
 describe('HomeView best and recommended view-all links', () => {
+  it('omits today products while retaining recommended and discounted home sections', async () => {
+    const sampleProduct = homeContent.featuredProducts[0];
+    if (!sampleProduct) throw new Error('Expected a home product fixture.');
+
+    const listProducts = vi.fn(async (params: ProductListParams) => ({
+      items: [sampleProduct],
+      page: params.page ?? 1,
+      pageSize: params.pageSize ?? 10,
+      totalCount: 1,
+    }));
+    const listRecommended = vi.fn(async (_params: ProductLimitParams) => [sampleProduct]);
+    vi.mocked(getShopApi).mockResolvedValue({
+      ...createApi(),
+      products: { list: listProducts, listRecommended },
+    } as unknown as ShopApi);
+
+    render(<HomeView />, { wrapper: createWrapper() });
+
+    await screen.findByRole('region', { name: '추천상품' });
+    await screen.findByRole('region', { name: '할인 상품' });
+
+    expect(screen.queryByRole('region', { name: '오늘의 상품' })).toBeNull();
+    expect(listProducts.mock.calls.map(([params]) => params)).toEqual([
+      { collection: 'discounted', pageSize: 10 },
+    ]);
+    expect(listRecommended.mock.calls.map(([params]) => params)).toEqual([{ limit: 10 }]);
+  });
+
   it('sends best seller links to /best and recommended links to /recommended', async () => {
     const sampleProduct = homeContent.featuredProducts[0];
     vi.mocked(getShopApi).mockResolvedValue({

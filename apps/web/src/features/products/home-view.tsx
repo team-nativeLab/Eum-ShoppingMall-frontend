@@ -26,7 +26,7 @@ import { useHomeQuery } from './use-home-query';
 import { useProductsQuery } from './use-products-query';
 import { useRecommendedProductsQuery } from './use-recommended-products-query';
 
-/** 홈 「오늘의 상품」·「추천상품」 섹션에 가져올 최대 개수 */
+/** 홈 추천·할인 상품 섹션에 가져올 최대 개수 */
 const HOME_SHOWCASE_LIMIT = 10;
 
 const HOME_ERROR_COPY: Record<string, string> = {
@@ -117,7 +117,7 @@ function HomeContentView({ content }: { content: HomeContent }) {
 
       <HomeDiscountProductsSection />
 
-      <HomeShowcaseSections />
+      <HomeRecommendedProductsSection />
 
       <PageContainer className="hidden lg:block">
         <ServiceBenefits benefits={content.serviceBenefits} />
@@ -547,42 +547,22 @@ function BestSellerSection({ products }: { products: Product[] }) {
   );
 }
 
-/**
- * 베스트 아래의 「오늘의 상품」·「추천상품」 캐러셀. 기존 상품 목록(collection=today)과 추천 API를 그대로 씁니다.
- * 목록이 비어 있으면 해당 섹션은 그리지 않습니다. 「추천상품」 전체 보기는 전용 화면(/recommended)으로 이동합니다.
- */
-function HomeShowcaseSections() {
-  const todayProductsQuery = useProductsQuery({
-    collection: 'today',
-    pageSize: HOME_SHOWCASE_LIMIT,
-  });
+/** 추천상품 목록이 비어 있으면 홈 섹션을 숨기고, 전체 보기는 전용 화면으로 연결합니다. */
+function HomeRecommendedProductsSection() {
   const recommendedProductsQuery = useRecommendedProductsQuery({ limit: HOME_SHOWCASE_LIMIT });
-  const todayProducts = todayProductsQuery.data?.items ?? [];
   const recommendedProducts = recommendedProductsQuery.data ?? [];
 
+  if (recommendedProducts.length === 0) return null;
+
   return (
-    <>
-      {todayProducts.length > 0 ? (
-        <PageContainer className="mt-48 lg:mt-64">
-          <HomeProductShowcase
-            headingId="today-products-heading"
-            title="오늘의 상품"
-            products={todayProducts}
-            viewAllHref="/today"
-          />
-        </PageContainer>
-      ) : null}
-      {recommendedProducts.length > 0 ? (
-        <PageContainer className="mt-48 lg:mt-64">
-          <HomeProductShowcase
-            headingId="recommended-products-heading"
-            title="추천상품"
-            products={recommendedProducts}
-            viewAllHref="/recommended"
-          />
-        </PageContainer>
-      ) : null}
-    </>
+    <PageContainer className="mt-48 lg:mt-64">
+      <HomeProductShowcase
+        headingId="recommended-products-heading"
+        title="추천상품"
+        products={recommendedProducts}
+        viewAllHref="/recommended"
+      />
+    </PageContainer>
   );
 }
 

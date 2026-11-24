@@ -901,7 +901,6 @@ export function createMockApi(
         const filteredProducts = products.filter((product) => {
           if (!isBuyerVisibleProduct(product)) return false;
           if (params.collection === 'featured' && !product.isFeatured) return false;
-          if (params.collection === 'today' && !product.isTodayDeal) return false;
           if (
             params.collection === 'discounted' &&
             (!product.priceVisible ||

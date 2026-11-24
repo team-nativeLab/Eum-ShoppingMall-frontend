@@ -16,13 +16,13 @@ import { ProductCard } from './product-card';
 import { useProductsQuery } from './use-products-query';
 import { useRecommendedProductsQuery } from './use-recommended-products-query';
 
-/** 베스트·오늘의 상품 화면에서 한 페이지에 보여 줄 상품 수 */
+/** 베스트·할인 상품 화면에서 한 페이지에 보여 줄 상품 수 */
 const COLLECTION_PAGE_SIZE = 24;
 /** 추천상품 화면에 고정으로 보여 줄 상품 수. 페이지네이션은 없습니다. */
 const RECOMMENDED_PAGE_LIMIT = 48;
 const SKELETON_COUNT = 8;
 
-/** 베스트·오늘의 상품·추천상품 전용 화면 그리드. 1280px(xl) 이상에서만 5열이며, 로딩 스켈레톤과 목록이 같은 값을 씁니다. */
+/** 베스트·할인·추천 상품 전용 화면 그리드. 로딩 스켈레톤과 목록이 같은 값을 씁니다. */
 const GRID_CLASS =
   'grid grid-cols-2 gap-x-12 gap-y-16 sm:grid-cols-3 lg:grid-cols-4 lg:gap-x-24 lg:gap-y-40 xl:grid-cols-5';
 
@@ -143,14 +143,14 @@ function CollectionResults({
   );
 }
 
-/** 베스트·오늘의 상품·할인 상품 전용 화면. 필터 없이 페이지 단위로 조회하고 페이지 번호로 이동합니다. */
+/** 베스트·할인 상품 전용 화면. 필터 없이 페이지 단위로 조회하고 페이지 번호로 이동합니다. */
 export function PagedProductCollectionView({
   title,
   collection,
   emptyTitle,
 }: {
   title: string;
-  collection: 'featured' | 'today' | 'discounted';
+  collection: 'featured' | 'discounted';
   emptyTitle: string;
 }) {
   const [page, setPage] = useState(1);

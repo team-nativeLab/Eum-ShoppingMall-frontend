@@ -77,7 +77,6 @@ describe('product and brand navigation', () => {
     expect(getActiveKeys('/best')).toEqual(['best']);
     expect(getActiveKeys('/discounts')).toEqual(['discounts']);
     expect(getActiveKeys('/discounts/page/2')).toEqual(['discounts']);
-    expect(getActiveKeys('/today')).toEqual([]);
     expect(getActiveKeys('/')).toEqual([]);
   });
 

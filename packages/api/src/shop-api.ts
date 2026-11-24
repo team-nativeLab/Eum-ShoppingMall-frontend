@@ -59,7 +59,7 @@ export interface ProductListParams {
   sortBy?: 'recommended' | 'priceAsc' | 'priceDesc' | 'newest' | 'ratingDesc';
   page?: number;
   pageSize?: number;
-  collection?: 'featured' | 'today' | 'discounted';
+  collection?: 'featured' | 'discounted';
 }
 
 /** 필터 개수 조회 조건. 개수는 브랜드·인증·가격 선택과 무관하게 카테고리·검색어 범위에서 셉니다. */

@@ -166,7 +166,7 @@ describe('Admin 상품 등록·수정 폼', () => {
     await user.type(screen.getByLabelText('상품 코드'), 'CUSTOM-100');
     await user.selectOptions(await screen.findByLabelText('발주처'), supplierFixture.id);
     await user.click(screen.getAllByLabelText('베스트 상품')[0]!);
-    await user.click(screen.getAllByLabelText('오늘의 상품')[0]!);
+    expect(screen.queryByLabelText('오늘의 상품')).toBeNull();
     await user.click(screen.getByRole('button', { name: '저장' }));
 
     await waitFor(() => expect(saveAdmin).toHaveBeenCalledOnce());
@@ -175,7 +175,6 @@ describe('Admin 상품 등록·수정 폼', () => {
         brand: '한결안전',
         supplierId: supplierFixture.id,
         isFeatured: true,
-        isTodayDeal: true,
         categoryId: 'helmet',
         summary: '가벼운 안전모',
         detailDescription: '**제품 상세 사양입니다.**',
