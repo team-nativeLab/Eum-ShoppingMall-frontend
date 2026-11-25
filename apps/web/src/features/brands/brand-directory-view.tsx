@@ -4,15 +4,13 @@ import { getApiFailureKind } from '@eum/api/errors';
 import type { BrandSummary } from '@eum/api/types';
 import { Breadcrumb } from '@eum/ui/components/Breadcrumb';
 import { EmptyState } from '@eum/ui/components/EmptyState';
-import { Icon } from '@eum/ui/components/Icon';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { cx } from '@eum/ui/lib/cx';
-import { ArrowRight, Store } from 'lucide-react';
+import { Store } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef } from 'react';
 import { PageContainer } from '@/components/page-container';
-import { buildBrandProductsHref } from '@/features/products/product-navigation';
 import {
   DESKTOP_QUERY,
   getScrollBehavior,
@@ -21,7 +19,9 @@ import {
 } from '@/lib/use-media-query';
 import { BRAND_LOAD_ERROR_COPY } from './brand-load-error';
 import { BrandLogo } from './brand-media';
-import { BrandSpotlightBand, SPOTLIGHT_HEADER_OFFSET_PX } from './brand-spotlight-band';
+import { BrandProductsSection } from './brand-products-section';
+import { BRAND_HEADER_OFFSET_PX } from './brand-scroll';
+import { BrandSpotlightBand } from './brand-spotlight-band';
 import { useBrandsQuery } from './use-brands-query';
 
 /** 선택 브랜드를 URL에 싣는 쿼리 키. 뒤로 가기와 새로고침에서 같은 브랜드를 복원합니다. */
@@ -154,8 +154,8 @@ function BrandDirectoryError({ error, onRetry }: { error: unknown; onRetry: () =
 }
 
 /**
- * 선택 밴드(선택이 있을 때만)와 브랜드 카드 그리드입니다.
- * activeBrand는 목록에서 찾은 선택 브랜드이고, 없으면 밴드를 그리지 않습니다.
+ * 선택 밴드, 선택 브랜드의 상품 섹션(상품이 있을 때만), 브랜드 카드 그리드입니다.
+ * activeBrand는 목록에서 찾은 선택 브랜드이고, 없으면 밴드와 상품 섹션을 그리지 않습니다.
  */
 function BrandCardDirectory({
   brands,
@@ -170,9 +170,7 @@ function BrandCardDirectory({
   const spotlightRef = useRef<HTMLElement>(null);
   const prefersReducedMotion = useMediaQuery(REDUCED_MOTION_QUERY);
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
-  const headerOffsetPx = isDesktop
-    ? SPOTLIGHT_HEADER_OFFSET_PX.desktop
-    : SPOTLIGHT_HEADER_OFFSET_PX.mobile;
+  const headerOffsetPx = isDesktop ? BRAND_HEADER_OFFSET_PX.desktop : BRAND_HEADER_OFFSET_PX.mobile;
   const activeBrandId = activeBrand?.id;
   // 사용자가 마지막으로 고른 카드의 id입니다(스크롤 예약). 여러 번 빠르게 골라도 마지막 선택이 남습니다.
   // 첫 로드의 ?brand=처럼 사용자가 고르지 않은 선택에는 예약이 없으므로 스크롤하지 않습니다.
@@ -204,6 +202,10 @@ function BrandCardDirectory({
   return (
     <>
       {activeBrand ? <BrandSpotlightBand brand={activeBrand} sectionRef={spotlightRef} /> : null}
+      {activeBrand && activeBrand.productCount > 0 ? (
+        // key로 브랜드마다 새로 마운트해, 이전 브랜드의 목록 상태(로딩·포커스 요청)가 남지 않게 합니다.
+        <BrandProductsSection key={activeBrand.id} brand={activeBrand} />
+      ) : null}
       <PageContainer className="pt-24 lg:pt-48">
         <ul className="grid grid-cols-2 gap-12 lg:grid-cols-6 lg:gap-24">
           {brands.map((brand) => (
@@ -222,9 +224,9 @@ function BrandCardDirectory({
 }
 
 /**
- * 브랜드 타일. 본문 button(선택)과 화살표 Link(제품 목록)는 형제 요소입니다.
- * 링크를 button 안에 넣으면 중첩 인터랙티브가 되므로, 링크는 본문 위에 절대 위치로 겹쳐 둡니다.
- * Tab 순서: 타일 본문 → 같은 타일의 화살표 링크 → 다음 타일.
+ * 브랜드 타일. 타일 전체가 하나의 button이며, 누르면 URL의 brand 쿼리로 선택 브랜드가 바뀝니다.
+ * 제품 목록으로 가는 링크는 두지 않습니다(선택 밴드의 「제품 보기」와 상품 섹션이 맡습니다).
+ * Tab 순서: 타일 하나가 정지점 하나입니다.
  */
 function BrandTile({
   brand,
@@ -236,51 +238,41 @@ function BrandTile({
   onSelect: () => void;
 }) {
   return (
-    <div className="relative w-full min-w-0">
-      <button
-        type="button"
-        aria-pressed={isSelected}
-        aria-label={`${brand.name}, 제품 ${brand.productCount}개`}
-        onClick={onSelect}
-        className={cx(
-          // 로고 줄(48) + 간격(12) + 이름 최대 두 줄 + 개수 줄이 본문 높이(128)에 맞도록 간격을 줄였습니다.
-          'flex h-164 w-full flex-col gap-12 overflow-hidden rounded-8 border-2 bg-bg p-16 text-left shadow-1 focus-ring transition-colors',
-          isSelected ? 'border-text-1' : 'border-line hover:border-text-accent-black',
-        )}
-      >
-        <span className="flex h-48 w-full items-center justify-center">
-          <span className="flex h-48 w-full max-w-120 items-center justify-center overflow-hidden rounded-4 bg-surface">
-            <BrandLogo
-              logoUrl={brand.logoUrl}
-              brandName={brand.name}
-              className="size-full"
-              settings={brand.logoSettings}
-            />
-          </span>
+    <button
+      type="button"
+      aria-pressed={isSelected}
+      aria-label={`${brand.name}, 제품 ${brand.productCount}개`}
+      onClick={onSelect}
+      className={cx(
+        // 로고 줄(48) + 간격(12) + 이름 최대 두 줄 + 개수 줄이 본문 높이(128)에 맞도록 간격을 줄였습니다.
+        'flex h-164 w-full flex-col gap-12 overflow-hidden rounded-8 border-2 bg-bg p-16 text-left shadow-1 focus-ring transition-colors',
+        isSelected ? 'border-text-1' : 'border-line hover:border-text-accent-black',
+      )}
+    >
+      <span className="flex h-48 w-full items-center justify-center">
+        <span className="flex h-48 w-full max-w-120 items-center justify-center overflow-hidden rounded-4 bg-surface">
+          <BrandLogo
+            logoUrl={brand.logoUrl}
+            brandName={brand.name}
+            className="size-full"
+            settings={brand.logoSettings}
+          />
         </span>
-        <span className="flex w-full min-w-0 flex-col gap-4">
-          {/* 이름은 카드 폭 전체를 쓰고 두 줄까지 보입니다. 화살표는 아래 「제품 N개」 줄 오른쪽에 둬 이름 폭을 줄이지 않습니다. */}
-          <span
-            className={cx(
-              'line-clamp-2 text-title break-words text-text-1',
-              isSelected ? 'font-bold' : undefined,
-            )}
-          >
-            {brand.name}
-          </span>
-          <span className="text-caption text-text-3">
-            제품 {brand.productCount.toLocaleString('ko-KR')}개
-          </span>
+      </span>
+      <span className="flex w-full min-w-0 flex-col gap-4">
+        {/* 이름은 카드 폭 전체를 쓰고 두 줄까지 보입니다. */}
+        <span
+          className={cx(
+            'line-clamp-2 text-title break-words text-text-1',
+            isSelected ? 'font-bold' : undefined,
+          )}
+        >
+          {brand.name}
         </span>
-      </button>
-      {/* 「제품 N개」 줄 오른쪽 끝에 맞춘 위치입니다. 타일 본문 선택과 별개로 제품 목록으로 갑니다. */}
-      <Link
-        href={buildBrandProductsHref(brand.id)}
-        aria-label={`${brand.name} 제품 보기`}
-        className="absolute right-18 bottom-14 inline-flex size-24 items-center justify-center rounded-capsule text-text-1 focus-ring hover:bg-surface"
-      >
-        <Icon icon={ArrowRight} size={16} />
-      </Link>
-    </div>
+        <span className="text-caption text-text-3">
+          제품 {brand.productCount.toLocaleString('ko-KR')}개
+        </span>
+      </span>
+    </button>
   );
 }

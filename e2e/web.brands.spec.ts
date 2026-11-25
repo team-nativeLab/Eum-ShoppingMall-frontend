@@ -1,6 +1,6 @@
 import { expect, test, type Locator } from '@playwright/test';
 
-test('데스크톱 GNB·모바일 전체 메뉴의 브랜드 링크에서 브랜드 목록 → 카드 선택 → 밴드의 제품 보기 → 브랜드 전용 제품 목록으로 이동합니다', async ({
+test('데스크톱 GNB·모바일 전체 메뉴의 브랜드 링크에서 브랜드 목록 → 카드 선택 → 밴드의 제품 보기 → 같은 화면의 상품 섹션으로 이동합니다', async ({
   page,
 }, testInfo) => {
   await page.goto('/');
@@ -31,34 +31,29 @@ test('데스크톱 GNB·모바일 전체 메뉴의 브랜드 링크에서 브랜
   }
 
   // 처음에는 선택 브랜드가 없어 상단 밴드가 없습니다.
-  await expect(page.getByRole('region', { name: '워크핏' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: '워크핏', exact: true })).toHaveCount(0);
   // 카드는 상품 목록으로 가지 않고 상단 밴드의 선택 브랜드를 고릅니다.
   await page.getByRole('button', { name: /^워크핏, 제품 \d+개$/ }).click();
-  const workfitBand = page.getByRole('region', { name: '워크핏' });
-  await expect(workfitBand.getByRole('heading', { level: 2, name: '워크핏' })).toBeVisible();
-  // 밴드의 「제품 보기」는 그 브랜드만 거는 제품 목록(/brands/[brandId]/products)으로 갑니다.
+  const workfitBand = page.getByRole('region', { name: '워크핏', exact: true });
+  await expect(
+    workfitBand.getByRole('heading', { level: 2, name: '워크핏', exact: true }),
+  ).toBeVisible();
+  // 밴드의 「제품 보기」는 페이지를 옮기지 않고, 같은 화면의 상품 섹션으로 해시 이동합니다.
   await workfitBand.getByRole('link', { name: '제품 보기' }).click();
-  await expect(page).toHaveURL(/\/brands\/brd-workfit\/products$/);
-  await expect(page.getByRole('heading', { level: 1, name: '워크핏' })).toBeVisible();
-  if (testInfo.project.name === 'web-desktop') {
-    // 브랜드 제품 목록은 브랜드 탭이 아니라 「전체상품」 탭이 활성입니다.
-    const primaryNavigation = page.getByRole('navigation', { name: '주요 메뉴' });
-    await expect(primaryNavigation.getByRole('link', { name: '전체상품' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
-    await expect(primaryNavigation.getByRole('link', { name: '브랜드' })).not.toHaveAttribute(
-      'aria-current',
-      'page',
-    );
-  }
+  await expect(page).toHaveURL(/\/brands\?brand=brd-workfit#brand-products$/);
+  const productsSection = page.getByRole('region', { name: '워크핏 제품', exact: true });
+  await expect(productsSection).toBeInViewport();
+  // 섹션 제목으로 포커스가 옮겨가 키보드 사용자가 섹션에서 이어서 조작할 수 있습니다.
+  await expect(
+    productsSection.getByRole('heading', { level: 2, name: '워크핏 제품', exact: true }),
+  ).toBeFocused();
 });
 
 test('키보드로 카드에 포커스를 옮겨 Enter로 고르면 밴드 제목이 나타납니다', async ({ page }) => {
   await page.goto('/brands');
   const workfitCard = page.getByRole('button', { name: /^워크핏, 제품 \d+개$/ });
   await expect(workfitCard).toBeVisible();
-  await expect(page.getByRole('region', { name: '워크핏' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: '워크핏', exact: true })).toHaveCount(0);
 
   // 탭 순서에는 앞 카드들이 끼어 있으므로, 워크핏 카드에 닿을 때까지 Tab을 누릅니다.
   for (let step = 0; step < 60; step += 1) {
@@ -71,7 +66,9 @@ test('키보드로 카드에 포커스를 옮겨 Enter로 고르면 밴드 제�
 
   await expect(workfitCard).toHaveAttribute('aria-pressed', 'true');
   await expect(
-    page.getByRole('region', { name: '워크핏' }).getByRole('heading', { level: 2, name: '워크핏' }),
+    page
+      .getByRole('region', { name: '워크핏', exact: true })
+      .getByRole('heading', { level: 2, name: '워크핏', exact: true }),
   ).toBeVisible();
 });
 
@@ -159,31 +156,61 @@ test('모바일에서 목록 맨 아래 카드를 고르면 밴드가 화면 안
   await lastCard.scrollIntoViewIfNeeded();
   await lastCard.click();
 
-  await expect(page.getByRole('heading', { level: 2, name: 'Duraguard' })).toBeInViewport();
+  await expect(
+    page.getByRole('heading', { level: 2, name: 'Duraguard', exact: true }),
+  ).toBeInViewport();
 });
 
-test('선택한 브랜드는 「제품 보기」 뒤 뒤로 가기로 돌아오면 그대로 복원됩니다', async ({
+test('「제품 보기」는 뒤로 가기 기록을 하나 남기고, 뒤로 가면 선택 브랜드가 그대로 복원됩니다', async ({
   page,
 }) => {
   await page.goto('/brands');
   await page.getByRole('button', { name: /^워크핏, 제품 \d+개$/ }).click();
   await expect(page).toHaveURL(/\/brands\?brand=brd-workfit$/);
+  const workfitBand = page.getByRole('region', { name: '워크핏', exact: true });
   await expect(
-    page.getByRole('region', { name: '워크핏' }).getByRole('heading', { level: 2, name: '워크핏' }),
+    workfitBand.getByRole('heading', { level: 2, name: '워크핏', exact: true }),
   ).toBeVisible();
 
-  await page
-    .getByRole('region', { name: '워크핏' })
-    .getByRole('link', { name: '제품 보기' })
-    .click();
-  await expect(page).toHaveURL(/\/brands\/brd-workfit\/products$/);
+  await workfitBand.getByRole('link', { name: '제품 보기' }).click();
+  await expect(page).toHaveURL(/#brand-products$/);
 
   await page.goBack();
 
   await expect(page).toHaveURL(/\/brands\?brand=brd-workfit$/);
   await expect(
-    page.getByRole('region', { name: '워크핏' }).getByRole('heading', { level: 2, name: '워크핏' }),
+    page
+      .getByRole('region', { name: '워크핏', exact: true })
+      .getByRole('heading', { level: 2, name: '워크핏', exact: true }),
   ).toBeVisible();
+});
+
+test('선택 브랜드의 상품은 밴드 아래 두 줄 그리드로 보이고, 브랜드 카드 모음은 그 아래에 있습니다', async ({
+  page,
+}) => {
+  await page.goto('/brands?brand=brd-workfit');
+  const productsSection = page.getByRole('region', { name: '워크핏 제품', exact: true });
+  const productGrid = productsSection.getByRole('list', { name: '워크핏 제품' });
+  await expect(productsSection).toBeVisible();
+  await expect(productGrid.getByRole('listitem').first()).toBeVisible();
+
+  // 상품은 최대 10개이고, 화면 폭과 관계없이 두 줄(행)에 놓입니다(데스크톱 5열×2행, 모바일 2행 가로 배치).
+  const itemBoxes = [];
+  const itemCount = await productGrid.getByRole('listitem').count();
+  expect(itemCount, '상품 카드 개수').toBeGreaterThan(0);
+  expect(itemCount, '상품 카드 개수 상한').toBeLessThanOrEqual(10);
+  for (let index = 0; index < itemCount; index += 1) {
+    itemBoxes.push(await requireBox(productGrid.getByRole('listitem').nth(index)));
+  }
+  const rowTops = new Set(itemBoxes.map((box) => Math.round(box.y)));
+  expect(rowTops.size, '상품 줄 수').toBeLessThanOrEqual(2);
+
+  // 브랜드 카드 모음은 상품 섹션 아래에 있습니다.
+  const sectionBox = await requireBox(productsSection);
+  const brandTileBox = await requireBox(page.getByRole('button', { name: /^워크핏, 제품 \d+개$/ }));
+  expect(brandTileBox.y, '브랜드 카드 모음은 상품 섹션 아래').toBeGreaterThanOrEqual(
+    sectionBox.y + sectionBox.height,
+  );
 });
 
 test('존재하지 않는 브랜드 주소는 404 상태와 안내를 보여 줍니다', async ({ page }) => {
@@ -247,29 +274,13 @@ for (const width of [1024, 1136, 1440]) {
   });
 }
 
-test('타일의 화살표 링크는 브랜드 제품 목록으로 가고, 외곽선이 잘리지 않습니다', async ({
+test('타일에는 제품 목록으로 가는 화살표 링크가 없고, 타일 전체가 선택 버튼입니다', async ({
   page,
 }) => {
   await page.goto('/brands');
-  const arrowLink = page.getByRole('link', { name: '워크핏 제품 보기' });
-  await expect(arrowLink).toBeVisible();
-
-  // 링크의 포커스 외곽선이 잘리지 않도록 조상 어디에도 overflow 클리핑이 없어야 합니다.
-  await arrowLink.focus();
-  const clippingAncestors = await arrowLink.evaluate((element) => {
-    const names: string[] = [];
-    let ancestor = element.parentElement;
-    while (ancestor) {
-      const overflow = getComputedStyle(ancestor).overflow;
-      if (overflow !== 'visible') names.push(`${ancestor.tagName}:${overflow}`);
-      ancestor = ancestor.parentElement;
-    }
-    return names;
-  });
-  expect(clippingAncestors).toEqual([]);
-
-  await arrowLink.click();
-  await expect(page).toHaveURL(/\/brands\/brd-workfit\/products$/);
+  await expect(page.getByRole('button', { name: /^워크핏, 제품 \d+개$/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /워크핏 제품 보기$/ })).toHaveCount(0);
+  await expect(page.locator('a[href^="/brands/"][href$="/products"]')).toHaveCount(0);
 });
 
 /** 화면에 그려진 요소의 박스를 가져오고, 없으면 원인을 드러내며 실패합니다. */

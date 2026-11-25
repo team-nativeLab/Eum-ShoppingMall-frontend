@@ -467,8 +467,36 @@ function buildGeneratedProduct(seed: GeneratedProductSeed, seedIndex: number): A
   };
 }
 
-/** 화면 상태 재현용 기본 상품 + 목록 확인용 추가 상품 */
+/**
+ * 점검용 상품(화면 상태 재현). 판매 중지 상품만 가진 브랜드("판매중지브랜드")와
+ * 공백 없는 긴 브랜드명("ALONGUNBROKENBRANDNAMEFORTEST")의 상품을 담습니다.
+ * 기존 상품 id와 최신순 정렬을 흩뜨리지 않도록 시드 뒤 번호를 쓰고, 날짜는 가장 오래된 값으로 둡니다.
+ */
+const CHECK_PRODUCT_SEEDS: GeneratedProductSeed[] = [
+  ['판매 중지 안전모', '판매중지브랜드', 'cat-head', 19000, null, ['KCs 안전인증']],
+  ['판매 중지 안전장갑', '판매중지브랜드', 'cat-hand', 12000, null, []],
+  ['긴 이름 안전화', 'ALONGUNBROKENBRANDNAMEFORTEST', 'cat-foot', 45000, null, ['KCs 안전인증']],
+  // 정가를 두지 않아 할인 목록(정상가 > 판매가)에 들어가지 않습니다. 홈 할인 섹션은 정가 판정으로 목록이 정해집니다.
+  ['긴 이름 보안경', 'ALONGUNBROKENBRANDNAMEFORTEST', 'cat-eye', 16000, null, []],
+  ['긴 이름 귀마개', 'ALONGUNBROKENBRANDNAMEFORTEST', 'cat-ear', 5000, null, []],
+];
+
+const CHECK_PRODUCTS: AdminProduct[] = CHECK_PRODUCT_SEEDS.map((seed, checkIndex) => {
+  const product = buildGeneratedProduct(seed, GENERATED_PRODUCT_SEEDS.length + checkIndex);
+  const isPausedBrand = seed[1] === '판매중지브랜드';
+  return {
+    ...product,
+    isFeatured: false,
+    rating: null,
+    reviewCount: 0,
+    createdAt: '2026-01-01T09:00:00.000Z',
+    salesStatus: isPausedBrand ? 'paused' : 'active',
+  };
+});
+
+/** 화면 상태 재현용 기본 상품 + 목록 확인용 추가 상품 + 점검용 상품 */
 export const mockProducts: AdminProduct[] = [
   ...baseMockProducts,
   ...GENERATED_PRODUCT_SEEDS.map(buildGeneratedProduct),
+  ...CHECK_PRODUCTS,
 ];
