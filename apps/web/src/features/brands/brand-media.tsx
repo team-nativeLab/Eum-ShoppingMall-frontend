@@ -52,18 +52,21 @@ export function BrandLogo({
 }
 
 /**
- * 브랜드 히어로 사진. 첫 화면에서 보이므로 eager/high로 요청합니다.
- * 호출하는 히어로 영역이 높이를 예약하며, 실제 이미지 비율은 영역에 맞춰 자릅니다.
+ * 브랜드 밴드 사진. 첫 화면에서 보이므로 eager/high로 요청합니다(기본값, 호출부가 바꾸지 않음).
+ * 호출하는 영역이 높이를 예약하며, 실제 이미지 비율은 영역에 맞춰 자릅니다.
  * 장식용이라 alt를 비웁니다(브랜드 이름은 옆 제목이 읽어 줍니다).
  */
 export function BrandCover({
   coverImageUrl,
   className,
   settings,
+  onError,
 }: {
   coverImageUrl: string;
   className?: string;
   settings?: BrandImageSettings;
+  /** 이미지 로드 실패 시 호출됩니다. 호출한 쪽이 사진 대신 대체 화면을 정합니다. */
+  onError?: () => void;
 }) {
   const activeSettings = settings ?? DEFAULT_COVER_SETTINGS;
   return (
@@ -74,6 +77,7 @@ export function BrandCover({
       loading="eager"
       fetchPriority="high"
       decoding="async"
+      onError={onError}
       className={cx('size-full object-cover', className)}
       style={{
         maxWidth: `${activeSettings.width}px`,
@@ -84,31 +88,7 @@ export function BrandCover({
   );
 }
 
-/** 사진이 없는 브랜드의 데스크톱 히어로 오른쪽 로고 패널(Figma Media=NoPhoto). 왼쪽 로고와 겹치므로 장식으로 숨깁니다. */
-export function BrandLogoPanel({
-  logoUrl,
-  brandName,
-  settings,
-}: {
-  logoUrl: string | null;
-  brandName: string;
-  settings?: BrandImageSettings;
-}) {
-  return (
-    <div aria-hidden="true" className="flex size-full items-center justify-center bg-pressed-dark">
-      <div className="flex h-96 w-240 items-center justify-center rounded-8 bg-inverse">
-        <BrandLogo
-          logoUrl={logoUrl}
-          brandName={brandName}
-          className="h-64 w-180"
-          settings={settings}
-        />
-      </div>
-    </div>
-  );
-}
-
-/** 히어로 보조 줄(영문 표기 · 주력 분야). 둘 다 없으면 null */
+/** 브랜드 밴드 보조 줄(영문 표기 · 주력 분야). 둘 다 없으면 null */
 export function getBrandSubline(brand: {
   englishName: string | null;
   mainField?: string | null;

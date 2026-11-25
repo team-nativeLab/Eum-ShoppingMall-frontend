@@ -31,9 +31,9 @@ export function serializeSearchParams(searchParams: Record<string, SearchParamVa
   return params.toString();
 }
 
-/** 브랜드 목록 또는 상세 화면 경로를 만듭니다. */
-export function buildBrandHref(brandId?: string): string {
-  return brandId ? '/brands/' + encodeURIComponent(brandId) : '/brands';
+/** 브랜드 목록 화면 경로입니다. 브랜드 상세 화면은 없습니다. */
+export function buildBrandHref(): string {
+  return '/brands';
 }
 
 /** 상세 화면의 전체 제품 CTA가 기존 이름 기반 제품 필터를 엽니다. */

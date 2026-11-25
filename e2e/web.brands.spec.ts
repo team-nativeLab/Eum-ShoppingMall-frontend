@@ -1,6 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 
-test('데스크톱 GNB·모바일 전체 메뉴의 브랜드 링크에서 브랜드 목록 → 상세 → 브랜드 제품 목록으로 이동합니다', async ({
+test('데스크톱 GNB·모바일 전체 메뉴의 브랜드 링크에서 브랜드 목록 → 카드 선택 → 밴드의 제품 보기 → 브랜드 필터 상품 목록으로 이동합니다', async ({
   page,
 }, testInfo) => {
   await page.goto('/');
@@ -29,15 +29,13 @@ test('데스크톱 GNB·모바일 전체 메뉴의 브랜드 링크에서 브랜
       page.getByRole('navigation', { name: '주요 메뉴' }).getByRole('link', { name: '브랜드' }),
     ).toHaveAttribute('aria-current', 'page');
   }
-  await expect(page.getByRole('region', { name: '이달의 브랜드' })).toBeVisible();
 
-  await page.getByRole('link', { name: /^워크핏, 제품 \d+개$/ }).click();
-  await expect(page).toHaveURL(/\/brands\/brd-workfit$/);
-  await expect(page.getByRole('heading', { level: 1, name: '워크핏' })).toBeVisible();
-
-  const productsCta = page.getByRole('link', { name: /^제품 \d+개 보기$/ });
-  await expect(productsCta).toBeVisible();
-  await productsCta.click();
+  // 카드는 상품 목록으로 가지 않고 상단 밴드의 선택 브랜드를 바꿉니다.
+  await page.getByRole('button', { name: /^워크핏, 제품 \d+개$/ }).click();
+  const workfitBand = page.getByRole('region', { name: '워크핏' });
+  await expect(workfitBand.getByRole('heading', { level: 2, name: '워크핏' })).toBeVisible();
+  // 밴드의 「제품 보기」는 기존 브랜드 필터가 걸린 전체 상품 목록으로 갑니다.
+  await workfitBand.getByRole('link', { name: '제품 보기' }).click();
   await expect(page).toHaveURL(/\/search\?brand=%EC%9B%8C%ED%81%AC%ED%95%8F$/);
   if (testInfo.project.name === 'web-desktop') {
     // 브랜드 필터가 걸린 상품 목록은 「전체상품」이 활성입니다.
@@ -47,113 +45,129 @@ test('데스크톱 GNB·모바일 전체 메뉴의 브랜드 링크에서 브랜
   }
 });
 
-test('브랜드 색인은 키보드로 고른 묶음까지 펼치고 그 제목으로 이동합니다', async ({ page }) => {
+test('키보드로 카드에 포커스를 옮겨 Enter로 고르면 밴드 제목이 바뀝니다', async ({ page }) => {
   await page.goto('/brands');
-  const brandIndex = page.getByRole('navigation', { name: '브랜드 색인' });
-  await expect(brandIndex).toBeVisible();
-  await expect(brandIndex.getByText('ㄴ', { exact: true })).toHaveAttribute(
-    'aria-disabled',
-    'true',
-  );
+  const workfitCard = page.getByRole('button', { name: /^워크핏, 제품 \d+개$/ });
+  await expect(workfitCard).toBeVisible();
 
-  const allKey = brandIndex.getByRole('link', { name: '전체' });
-  await allKey.focus();
-  await page.keyboard.press('Enter');
-  const directoryList = page.locator('#brand-directory-list');
-  await expect(directoryList).toBeFocused();
-  await expect(directoryList).toHaveCSS('outline-style', 'solid');
-  await expect(directoryList).toHaveCSS('outline-width', '2px');
+  // 탭 순서에는 밴드 CTA와 앞 카드들이 끼어 있으므로, 워크핏 카드에 닿을 때까지 Tab을 누릅니다.
+  for (let step = 0; step < 60; step += 1) {
+    if (await workfitCard.evaluate((element) => element === document.activeElement)) break;
+    await page.keyboard.press('Tab');
+  }
+  await expect(workfitCard).toBeFocused();
 
-  const latinKey = brandIndex.getByRole('link', { name: 'A–Z' });
-  await latinKey.focus();
   await page.keyboard.press('Enter');
 
-  const latinHeading = page.getByRole('heading', { level: 3, name: /A–Z/ });
-  await expect(latinHeading).toBeFocused();
-  await expect(latinHeading).toHaveCSS('outline-style', 'solid');
-  await expect(latinHeading).toHaveCSS('outline-width', '2px');
-  await expect(latinHeading).toBeInViewport();
-  await expect(page.getByRole('link', { name: /^Duraguard, 제품 \d+개$/ })).toBeVisible();
-  await expect(latinKey).toHaveAttribute('aria-current', 'location');
+  await expect(workfitCard).toHaveAttribute('aria-pressed', 'true');
+  await expect(
+    page.getByRole('region', { name: '워크핏' }).getByRole('heading', { level: 2, name: '워크핏' }),
+  ).toBeVisible();
 });
 
-test('브랜드 상세 주소로 바로 진입한 뒤 새로고침해도 유지합니다', async ({ page }) => {
-  await page.goto('/brands/brd-workfit');
-  await expect(page).toHaveURL(/\/brands\/brd-workfit$/);
-  await expect(page.getByRole('heading', { level: 1, name: '워크핏' })).toBeVisible();
-  await expect(page.getByRole('link', { name: /^제품 \d+개 보기$/ })).toBeVisible();
-
-  await page.reload();
-
-  await expect(page).toHaveURL(/\/brands\/brd-workfit$/);
-  await expect(page.getByRole('heading', { level: 1, name: '워크핏' })).toBeVisible();
-  await expect(page.getByRole('link', { name: /^제품 \d+개 보기$/ })).toBeVisible();
-});
-
-test('이달의 브랜드 긴 무공백 문구는 모바일과 데스크톱에서 넘치지 않습니다', async ({ page }) => {
+test('선택 브랜드 밴드의 긴 무공백 문구는 밴드 안에서 넘치지 않고, 사진 열은 모바일에서 위·데스크톱에서 오른쪽에 놓입니다', async ({
+  page,
+}, testInfo) => {
   await page.goto('/brands');
-  await expect(page.getByRole('region', { name: '이달의 브랜드' })).toBeVisible();
+  await page.getByRole('button', { name: /^워크핏, 제품 \d+개$/ }).click();
 
-  const metrics = await page.evaluate(() => {
-    const spotlight = document.querySelector('[aria-label="이달의 브랜드"]');
-    if (!spotlight) throw new Error('이달의 브랜드 영역을 찾지 못했습니다.');
+  // 밴드는 CTA 링크를 가진 가장 안쪽 region으로 찾습니다. 제목 이름은 긴 문자열로 바뀌므로 이름에 기대지 않습니다.
+  const band = page
+    .getByRole('region')
+    .filter({ has: page.getByRole('link', { name: '제품 보기' }) })
+    .filter({ hasNot: page.getByRole('region') });
+  await expect(band).toBeVisible();
+  // 로고 플레이트는 상세 조회가 끝난 뒤에만 그려지므로, 사진 열이 채워진 것을 먼저 기다립니다.
+  const logoPlate = band.getByRole('img', { name: '워크핏 로고' });
+  await expect(logoPlate).toBeVisible();
+  const heightBeforeChange = (await requireBox(band)).height;
 
-    const longText = 'WORKFITLONG'.repeat(32);
-    const mobileLink = spotlight.querySelector('a.lg\\:hidden');
-    const desktopContainer = spotlight.querySelector('div.hidden.lg\\:flex');
-    const mobileCopy = mobileLink?.querySelector('span.flex.min-w-0');
-    const desktopTitle = desktopContainer?.querySelector('h2');
-    const desktopSubline = desktopTitle?.parentElement?.querySelector('p');
-    const desktopTagline = desktopContainer?.querySelector('p.line-clamp-2');
-    const mobileName = mobileCopy?.children.item(1);
-    const mobileTagline = mobileCopy?.children.item(2);
+  // 제목·영문명·주력 분야·소개 문구를 긴 무공백 문자열로 바꿉니다.
+  const longText = 'WORKFITLONG'.repeat(32);
+  const textBlocks = band.getByRole('heading', { level: 2 }).or(band.getByRole('paragraph'));
+  const textBlockCount = await textBlocks.count();
+  expect(textBlockCount).toBeGreaterThan(1);
+  for (let index = 0; index < textBlockCount; index += 1) {
+    await textBlocks.nth(index).evaluate((element, text) => {
+      element.textContent = text;
+    }, longText);
+  }
 
-    for (const element of [
-      mobileName,
-      mobileTagline,
-      desktopTitle,
-      desktopSubline,
-      desktopTagline,
-    ]) {
-      if (element) element.textContent = longText;
-    }
-
-    const visibleElements = [
-      mobileName,
-      mobileTagline,
-      desktopTitle,
-      desktopSubline,
-      desktopTagline,
-    ].filter((element): element is Element =>
-      Boolean(element && element.getBoundingClientRect().width > 0),
+  const bandBox = await requireBox(band);
+  for (let index = 0; index < textBlockCount; index += 1) {
+    const textBox = await requireBox(textBlocks.nth(index));
+    const textName = `텍스트 ${index + 1}`;
+    expect(textBox.x, `${textName} 왼쪽 경계`).toBeGreaterThanOrEqual(bandBox.x);
+    expect(textBox.x + textBox.width, `${textName} 오른쪽 경계`).toBeLessThanOrEqual(
+      bandBox.x + bandBox.width,
     );
 
-    return {
-      elements: visibleElements.map((element) => ({
-        text: element.textContent,
-        clientWidth: element.clientWidth,
-        scrollWidth: element.scrollWidth,
-      })),
-      documentClientWidth: document.documentElement.clientWidth,
-      documentScrollWidth: document.documentElement.scrollWidth,
-    };
-  });
+    const hasInnerOverflow = await textBlocks
+      .nth(index)
+      .evaluate((element) => element.scrollWidth > element.clientWidth);
+    expect(hasInnerOverflow, `${textName} 안쪽 넘침`).toBe(false);
+  }
 
-  expect(metrics.elements.length).toBeGreaterThan(0);
-  for (const element of metrics.elements) {
-    expect(element.clientWidth, `${element.text?.slice(0, 16)} clientWidth`).toBeGreaterThan(0);
-    expect(element.scrollWidth, `${element.text?.slice(0, 16)} scrollWidth`).toBeLessThanOrEqual(
-      element.clientWidth,
+  const documentFitsViewport = await page.evaluate(
+    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+  );
+  expect(documentFitsViewport, '문서 가로 넘침').toBe(true);
+
+  const titleBox = await requireBox(band.getByRole('heading', { level: 2 }));
+  const plateBox = await requireBox(logoPlate);
+  if (testInfo.project.name === 'web-mobile') {
+    expect(plateBox.y, '모바일: 사진 열이 제목보다 위에 있어야 합니다').toBeLessThan(titleBox.y);
+    // 모바일 밴드 높이는 텍스트 열 최소 높이로 고정되어, 긴 문구가 와도 높이가 변하지 않습니다.
+    expect((await requireBox(band)).height, '모바일: 긴 문구에도 밴드 높이 유지').toBe(
+      heightBeforeChange,
+    );
+  } else {
+    expect(plateBox.x, '데스크톱: 사진 열이 제목 열의 오른쪽에 있어야 합니다').toBeGreaterThan(
+      titleBox.x,
     );
   }
-  expect(metrics.documentScrollWidth).toBeLessThanOrEqual(metrics.documentClientWidth);
 });
 
-test('잘못된 브랜드 주소는 찾을 수 없음 안내와 목록 링크를 보여 줍니다', async ({ page }) => {
-  await page.goto('/brands/brd-does-not-exist');
-  await expect(page.getByRole('heading', { name: '브랜드를 찾을 수 없습니다' })).toBeVisible();
-  await page.getByRole('link', { name: '브랜드 목록 보기' }).click();
-  await expect(page).toHaveURL(/\/brands$/);
+test('모바일에서 맨 아래 카드를 고르면 밴드가 화면 안으로 옮겨집니다', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'web-mobile', '모바일 화면에서만 밴드가 화면 밖에 놓입니다.');
+  await page.goto('/brands');
+  const lastCard = page.getByRole('button', { name: /^Duraguard, 제품 \d+개$/ });
+  await lastCard.scrollIntoViewIfNeeded();
+  await lastCard.click();
+
+  await expect(page.getByRole('heading', { level: 2, name: 'Duraguard' })).toBeInViewport();
+});
+
+test('선택한 브랜드는 「제품 보기」 뒤 뒤로 가기로 돌아오면 그대로 복원됩니다', async ({
+  page,
+}) => {
+  await page.goto('/brands');
+  await page.getByRole('button', { name: /^워크핏, 제품 \d+개$/ }).click();
+  await expect(page).toHaveURL(/\/brands\?brand=brd-workfit$/);
+  await expect(
+    page.getByRole('region', { name: '워크핏' }).getByRole('heading', { level: 2, name: '워크핏' }),
+  ).toBeVisible();
+
+  await page
+    .getByRole('region', { name: '워크핏' })
+    .getByRole('link', { name: '제품 보기' })
+    .click();
+  await expect(page).toHaveURL(/\/search\?brand=/);
+
+  await page.goBack();
+
+  await expect(page).toHaveURL(/\/brands\?brand=brd-workfit$/);
+  await expect(
+    page.getByRole('region', { name: '워크핏' }).getByRole('heading', { level: 2, name: '워크핏' }),
+  ).toBeVisible();
+});
+
+test('존재하지 않는 브랜드 주소는 404 상태와 안내를 보여 줍니다', async ({ page }) => {
+  const response = await page.goto('/brands/brd-does-not-exist');
+  expect(response?.status()).toBe(404);
+  await expect(page.getByRole('heading', { name: '페이지를 찾을 수 없습니다' })).toBeVisible();
 });
 
 test('예전 브랜드 주소(/search?browse=brands)는 브랜드 목록으로 보냅니다', async ({ page }) => {
@@ -163,12 +177,19 @@ test('예전 브랜드 주소(/search?browse=brands)는 브랜드 목록으로 �
 });
 
 test('브랜드 화면은 가로로 넘치지 않습니다', async ({ page }) => {
-  for (const brandPath of ['/brands', '/brands/brd-safeguard']) {
-    await page.goto(brandPath);
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    const hasHorizontalOverflow = await page.evaluate(
-      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
-    );
-    expect(hasHorizontalOverflow, `${brandPath} 가로 넘침`).toBe(false);
-  }
+  await page.goto('/brands');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  const hasHorizontalOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  );
+  expect(hasHorizontalOverflow, '/brands 가로 넘침').toBe(false);
 });
+
+/** 화면에 그려진 요소의 박스를 가져오고, 없으면 원인을 드러내며 실패합니다. */
+async function requireBox(
+  locator: Locator,
+): Promise<{ x: number; y: number; width: number; height: number }> {
+  const box = await locator.boundingBox();
+  if (!box) throw new Error('화면에 그려진 박스를 찾지 못했습니다.');
+  return box;
+}
