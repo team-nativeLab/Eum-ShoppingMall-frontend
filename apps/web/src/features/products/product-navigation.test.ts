@@ -5,6 +5,7 @@ import {
   buildBrandSelectionHref,
   getBrandFilterValues,
   getPrimaryNavigationItems,
+  isBrandProductsPath,
   isPrimaryNavigationItemActive,
   type PrimaryNavigationItem,
 } from './product-navigation';
@@ -34,12 +35,22 @@ describe('product and brand navigation', () => {
     expect(getPrimaryNavigationItems()).toHaveLength(6);
   });
 
-  it('builds the brand directory and brand product listing destinations', () => {
+  it('builds the brand directory and brand product listing destinations by brand id', () => {
     expect(buildBrandHref()).toBe('/brands');
-    expect(buildBrandProductsHref('3M & Co')).toBe('/search?brand=3M+%26+Co');
-    expect(buildBrandProductsHref('세이프가드')).toBe(
-      '/search?brand=%EC%84%B8%EC%9D%B4%ED%94%84%EA%B0%80%EB%93%9C',
+    expect(buildBrandProductsHref('brd-workfit')).toBe('/brands/brd-workfit/products');
+    expect(buildBrandProductsHref('3M & Co')).toBe('/brands/3M%20%26%20Co/products');
+    expect(buildBrandProductsHref('브랜드/1')).toBe(
+      '/brands/%EB%B8%8C%EB%9E%9C%EB%93%9C%2F1/products',
     );
+  });
+
+  it('recognizes only the brand-scoped product list path', () => {
+    expect(isBrandProductsPath('/brands/brd-1/products')).toBe(true);
+    expect(isBrandProductsPath('/brands')).toBe(false);
+    expect(isBrandProductsPath('/brands/brd-1')).toBe(false);
+    expect(isBrandProductsPath('/brands/x/products/y')).toBe(false);
+    expect(isBrandProductsPath('/brands/x/products/')).toBe(false);
+    expect(isBrandProductsPath('/search')).toBe(false);
   });
 
   it('reads repeated brand parameters as unique selected filters', () => {
@@ -76,6 +87,11 @@ describe('product and brand navigation', () => {
     expect(getActiveKeys('/discounts')).toEqual(['discounts']);
     expect(getActiveKeys('/discounts/page/2')).toEqual(['discounts']);
     expect(getActiveKeys('/')).toEqual([]);
+  });
+
+  it('activates only 「전체상품」 on a brand-scoped product list, not the Brand tab', () => {
+    expect(getActiveKeys('/brands/brd-1/products')).toEqual(['products']);
+    expect(getActiveKeys('/brands')).toEqual(['brands']);
   });
 
   it('activates Recommended only on /recommended and its sub-paths', () => {

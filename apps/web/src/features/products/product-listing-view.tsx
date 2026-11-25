@@ -12,7 +12,7 @@ import { Icon } from '@eum/ui/components/Icon';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { Pagination } from '@eum/ui/components/Pagination';
 import { cx } from '@eum/ui/lib/cx';
-import { ChevronDown, LayoutGrid, List, Plus, RotateCcw, SearchX } from 'lucide-react';
+import { ChevronDown, ChevronLeft, LayoutGrid, List, Plus, RotateCcw, SearchX } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useMemo, useState, type ReactNode } from 'react';
@@ -83,14 +83,27 @@ export function ProductListingView({
   initialKeyword = '',
   initialBrands = [],
   initialSearchParams = '',
+  lockedBrand,
+  pageTitle,
+  hideBreadcrumb = false,
+  backLink,
 }: {
   categorySlug?: string;
   initialKeyword?: string;
   initialBrands?: string[];
   initialSearchParams?: string;
+  /** 제목 위에 두는 「‹ 목록」 텍스트 링크입니다(브랜드 전용 목록의 브랜드 목록 복귀). */
+  backLink?: { href: string; label: string };
+  /** 브랜드 전용 목록의 고정 브랜드 이름입니다. 항상 선택 상태이며 칩 해제·전체 해제·카테고리 선택으로 지워지지 않습니다. */
+  lockedBrand?: string;
+  /** 제목을 바꿉니다. 없으면 카테고리명·검색어·「전체 상품」을 씁니다. */
+  pageTitle?: string;
+  /** true면 빵부스러기를 그리지 않습니다(기본은 카테고리 화면에서만 그립니다). */
+  hideBreadcrumb?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const lockedBrandName = lockedBrand?.trim() || undefined;
   const categoriesQuery = useCategoriesQuery();
   const categoryList = useMemo(() => categoriesQuery.data ?? [], [categoriesQuery.data]);
   const isSearch = categorySlug === undefined;
@@ -107,7 +120,10 @@ export function ProductListingView({
   // 입력 중인 값(만원 단위 숫자 문자열). 적용 전에는 목록 조회에 쓰지 않으며 데스크톱·모바일이 함께 씁니다.
   const [pendingMin, setPendingMin] = useState('');
   const [pendingMax, setPendingMax] = useState('');
-  const normalizedInitialBrands = getBrandFilterValues(initialBrands);
+  // 고정 브랜드가 있으면 어떤 브랜드 목록에도 항상 포함합니다.
+  const withLockedBrand = (brands: string[]) =>
+    getBrandFilterValues(lockedBrandName ? [lockedBrandName, ...brands] : brands);
+  const normalizedInitialBrands = withLockedBrand(initialBrands);
   const initialBrandsKey = JSON.stringify(normalizedInitialBrands);
   const [selectedBrands, setSelectedBrands] = useState(normalizedInitialBrands);
   const [syncedInitialBrandsKey, setSyncedInitialBrandsKey] = useState(initialBrandsKey);
@@ -122,15 +138,19 @@ export function ProductListingView({
   const prefersReducedMotion = usePrefersReducedMotion();
 
   const updateSelectedBrands = (nextBrands: string[]) => {
-    const normalizedBrands = getBrandFilterValues(nextBrands);
+    const normalizedBrands = withLockedBrand(nextBrands);
     setSelectedBrands(normalizedBrands);
     setPage(1);
+    // 고정 브랜드 목록은 브랜드를 경로(/brands/[brandId]/products)가 정하므로 쿼리를 바꾸지 않습니다.
+    if (lockedBrandName) return;
     const nextHref = buildBrandSelectionHref(pathname, initialSearchParams, normalizedBrands);
     const currentHref = initialSearchParams ? pathname + '?' + initialSearchParams : pathname;
     if (nextHref !== currentHref) router.push(nextHref);
   };
 
   const toggleBrand = (brand: string) => {
+    // 고정 브랜드는 끌 수 없습니다(칩·체크박스도 비활성으로 그립니다).
+    if (brand === lockedBrandName) return;
     updateSelectedBrands(
       selectedBrands.includes(brand)
         ? selectedBrands.filter((selectedBrand) => selectedBrand !== brand)
@@ -186,9 +206,10 @@ export function ProductListingView({
   const activeFilters: ActiveFilter[] = [];
   const priceChipLabel = formatPriceChipLabel(appliedPrice);
   if (priceChipLabel) activeFilters.push({ key: 'price', label: priceChipLabel });
-  selectedBrands.forEach((brand) =>
-    activeFilters.push({ key: 'brand', value: brand, label: brand }),
-  );
+  // 고정 브랜드는 제목으로 드러나므로 지울 수 있는 필터 칩으로 두지 않습니다.
+  selectedBrands
+    .filter((brand) => brand !== lockedBrandName)
+    .forEach((brand) => activeFilters.push({ key: 'brand', value: brand, label: brand }));
   selectedCertifications.forEach((certification) =>
     activeFilters.push({ key: 'certification', value: certification, label: certification }),
   );
@@ -292,10 +313,12 @@ export function ProductListingView({
       : []),
     { label: selectedCategory?.name ?? '카테고리' },
   ];
-  const title = isSearch
-    ? (categoryNameById.get(selectedSearchCategoryId ?? '') ??
-      (keyword ? '‘' + keyword + '’ 검색 결과' : '전체 상품'))
-    : (selectedCategory?.name ?? '카테고리');
+  const title =
+    pageTitle ??
+    (isSearch
+      ? (categoryNameById.get(selectedSearchCategoryId ?? '') ??
+        (keyword ? '‘' + keyword + '’ 검색 결과' : '전체 상품'))
+      : (selectedCategory?.name ?? '카테고리'));
   const isLoading = categoriesQuery.isPending || productsQuery.isPending || !isCategoryResolved;
   // 이전 결과를 보여 주며 새 페이지·필터 결과를 받는 중
   const isRefreshing = productsQuery.isPlaceholderData;
@@ -312,7 +335,16 @@ export function ProductListingView({
 
   return (
     <PageContainer className={cx('pb-56', isSearch ? 'pt-24 lg:pt-48' : 'pt-24')}>
-      {isSearch ? null : (
+      {backLink ? (
+        <Link
+          href={backLink.href}
+          className="mb-16 inline-flex items-center gap-4 rounded-4 text-label-m text-text-2 focus-ring hover:text-text-1"
+        >
+          <Icon icon={ChevronLeft} size={16} />
+          {backLink.label}
+        </Link>
+      ) : null}
+      {isSearch || hideBreadcrumb ? null : (
         <Breadcrumb
           items={breadcrumbs}
           className="mb-24"
@@ -326,12 +358,13 @@ export function ProductListingView({
       <header className="flex flex-wrap items-end gap-x-12 gap-y-4">
         <h1 className="text-h1 lg:text-display">{title}</h1>
         <p className="pb-2 text-body-s text-text-3 lg:pb-4">
-          {isSearch ? '' : '총 '}
+          {isSearch && !lockedBrandName ? '' : '총 '}
           {totalCount === undefined ? '–' : totalCount.toLocaleString('ko-KR')}개
         </p>
       </header>
 
-      {isSearch ? (
+      {/* 고정 브랜드 목록에서는 「전체 N」·카테고리 집계가 전체 상품 기준이라 칩 그룹을 그리지 않습니다. */}
+      {isSearch && lockedBrandName ? null : isSearch ? (
         <div
           role="group"
           aria-label="검색 결과 카테고리"
@@ -448,25 +481,30 @@ export function ProductListingView({
             {facetsStatus === 'error' ? (
               <FacetsErrorNotice onRetry={retryFacets} className="mt-12" />
             ) : null}
-            <h2 id="mobile-brand-filter-heading" className="mt-12 text-label-m">
-              브랜드
-            </h2>
-            <div
-              role="group"
-              aria-labelledby="mobile-brand-filter-heading"
-              tabIndex={-1}
-              className="mt-8 flex flex-wrap gap-8"
-            >
-              {brandFacets.map((brandFacet) => (
-                <Chip
-                  key={brandFacet.value}
-                  isSelected={selectedBrands.includes(brandFacet.value)}
-                  onClick={() => toggleBrand(brandFacet.value)}
+            {/* 고정 브랜드 목록에서는 다른 브랜드를 고를 수 없으므로 브랜드 필터를 그리지 않습니다. */}
+            {lockedBrandName ? null : (
+              <>
+                <h2 id="mobile-brand-filter-heading" className="mt-12 text-label-m">
+                  브랜드
+                </h2>
+                <div
+                  role="group"
+                  aria-labelledby="mobile-brand-filter-heading"
+                  tabIndex={-1}
+                  className="mt-8 flex flex-wrap gap-8"
                 >
-                  {brandFacet.value}
-                </Chip>
-              ))}
-            </div>
+                  {brandFacets.map((brandFacet) => (
+                    <Chip
+                      key={brandFacet.value}
+                      isSelected={selectedBrands.includes(brandFacet.value)}
+                      onClick={() => toggleBrand(brandFacet.value)}
+                    >
+                      {brandFacet.value}
+                    </Chip>
+                  ))}
+                </div>
+              </>
+            )}
             <div role="group" aria-label="안전인증" className="mt-12 flex flex-wrap gap-8">
               {certificationFacets.map((certificationFacet) => (
                 <Chip
@@ -524,20 +562,25 @@ export function ProductListingView({
               onApply={applyPrice}
             />
           </FilterSection>
-          <FilterSection title="브랜드">
-            <FacetCheckboxList
-              facets={brandFacets}
-              status={facetsStatus}
-              selectedValues={selectedBrands}
-              emptyText="브랜드 정보가 없습니다."
-              onToggle={toggleBrand}
-            />
-          </FilterSection>
+          {/* 고정 브랜드 목록에서는 다른 브랜드를 고를 수 없으므로 브랜드 필터를 그리지 않습니다. */}
+          {lockedBrandName ? null : (
+            <FilterSection title="브랜드">
+              <FacetCheckboxList
+                facets={brandFacets}
+                status={facetsStatus}
+                selectedValues={selectedBrands}
+                emptyText="브랜드 정보가 없습니다."
+                onToggle={toggleBrand}
+              />
+            </FilterSection>
+          )}
+          {/* 안전인증 개수는 브랜드와 무관한 전체 집계라, 고정 브랜드 목록에서는 개수를 숨깁니다. */}
           <FilterSection title="안전인증">
             <FacetCheckboxList
               facets={certificationFacets}
               status={facetsStatus}
               selectedValues={selectedCertifications}
+              showCounts={!lockedBrandName}
               emptyText="인증 정보가 없습니다."
               onToggle={(certification) =>
                 toggleSelection(selectedCertifications, certification, setSelectedCertifications)
@@ -734,7 +777,9 @@ export function ProductListingView({
                   title={
                     activeFilters.length > 0
                       ? '조건에 맞는 상품이 없습니다'
-                      : '등록된 상품이 없습니다'
+                      : lockedBrandName
+                        ? '이 브랜드의 상품이 없습니다'
+                        : '등록된 상품이 없습니다'
                   }
                   description={
                     activeFilters.length > 0 ? '필터 조건을 바꿔 다시 확인해 주세요.' : undefined
@@ -746,10 +791,10 @@ export function ProductListingView({
                       </Button>
                     ) : (
                       <Link
-                        href="/search"
+                        href={lockedBrandName ? '/brands' : '/search'}
                         className="inline-flex h-48 items-center rounded-8 border border-line-strong px-16 text-label-m focus-ring hover:bg-surface"
                       >
-                        전체 상품 보기
+                        {lockedBrandName ? '브랜드 목록 보기' : '전체 상품 보기'}
                       </Link>
                     )
                   }
@@ -849,12 +894,15 @@ function FacetCheckboxList({
   facets,
   status,
   selectedValues,
+  showCounts = true,
   emptyText,
   onToggle,
 }: {
   facets: FacetCount[];
   status: FacetsStatus;
   selectedValues: string[];
+  /** false면 개수를 그리지 않습니다(목록 범위와 집계 범위가 다를 때). */
+  showCounts?: boolean;
   emptyText: string;
   onToggle: (facetValue: string) => void;
 }) {
@@ -883,10 +931,12 @@ function FacetCheckboxList({
           className="h-32"
         >
           <span>{facet.value}</span>
-          <span className="text-caption text-text-3">
-            {facet.count.toLocaleString('ko-KR')}
-            <span className="sr-only">개</span>
-          </span>
+          {showCounts ? (
+            <span className="text-caption text-text-3">
+              {facet.count.toLocaleString('ko-KR')}
+              <span className="sr-only">개</span>
+            </span>
+          ) : null}
         </Checkbox>
       ))}
       {hiddenCount > 0 || isExpanded ? (

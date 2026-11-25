@@ -1,6 +1,6 @@
 import { expect, test, type Locator } from '@playwright/test';
 
-test('데스크톱 GNB·모바일 전체 메뉴의 브랜드 링크에서 브랜드 목록 → 카드 선택 → 밴드의 제품 보기 → 브랜드 필터 상품 목록으로 이동합니다', async ({
+test('데스크톱 GNB·모바일 전체 메뉴의 브랜드 링크에서 브랜드 목록 → 카드 선택 → 밴드의 제품 보기 → 브랜드 전용 제품 목록으로 이동합니다', async ({
   page,
 }, testInfo) => {
   await page.goto('/');
@@ -30,27 +30,37 @@ test('데스크톱 GNB·모바일 전체 메뉴의 브랜드 링크에서 브랜
     ).toHaveAttribute('aria-current', 'page');
   }
 
-  // 카드는 상품 목록으로 가지 않고 상단 밴드의 선택 브랜드를 바꿉니다.
+  // 처음에는 선택 브랜드가 없어 상단 밴드가 없습니다.
+  await expect(page.getByRole('region', { name: '워크핏' })).toHaveCount(0);
+  // 카드는 상품 목록으로 가지 않고 상단 밴드의 선택 브랜드를 고릅니다.
   await page.getByRole('button', { name: /^워크핏, 제품 \d+개$/ }).click();
   const workfitBand = page.getByRole('region', { name: '워크핏' });
   await expect(workfitBand.getByRole('heading', { level: 2, name: '워크핏' })).toBeVisible();
-  // 밴드의 「제품 보기」는 기존 브랜드 필터가 걸린 전체 상품 목록으로 갑니다.
+  // 밴드의 「제품 보기」는 그 브랜드만 거는 제품 목록(/brands/[brandId]/products)으로 갑니다.
   await workfitBand.getByRole('link', { name: '제품 보기' }).click();
-  await expect(page).toHaveURL(/\/search\?brand=%EC%9B%8C%ED%81%AC%ED%95%8F$/);
+  await expect(page).toHaveURL(/\/brands\/brd-workfit\/products$/);
+  await expect(page.getByRole('heading', { level: 1, name: '워크핏' })).toBeVisible();
   if (testInfo.project.name === 'web-desktop') {
-    // 브랜드 필터가 걸린 상품 목록은 「전체상품」이 활성입니다.
-    await expect(
-      page.getByRole('navigation', { name: '주요 메뉴' }).getByRole('link', { name: '전체상품' }),
-    ).toHaveAttribute('aria-current', 'page');
+    // 브랜드 제품 목록은 브랜드 탭이 아니라 「전체상품」 탭이 활성입니다.
+    const primaryNavigation = page.getByRole('navigation', { name: '주요 메뉴' });
+    await expect(primaryNavigation.getByRole('link', { name: '전체상품' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await expect(primaryNavigation.getByRole('link', { name: '브랜드' })).not.toHaveAttribute(
+      'aria-current',
+      'page',
+    );
   }
 });
 
-test('키보드로 카드에 포커스를 옮겨 Enter로 고르면 밴드 제목이 바뀝니다', async ({ page }) => {
+test('키보드로 카드에 포커스를 옮겨 Enter로 고르면 밴드 제목이 나타납니다', async ({ page }) => {
   await page.goto('/brands');
   const workfitCard = page.getByRole('button', { name: /^워크핏, 제품 \d+개$/ });
   await expect(workfitCard).toBeVisible();
+  await expect(page.getByRole('region', { name: '워크핏' })).toHaveCount(0);
 
-  // 탭 순서에는 밴드 CTA와 앞 카드들이 끼어 있으므로, 워크핏 카드에 닿을 때까지 Tab을 누릅니다.
+  // 탭 순서에는 앞 카드들이 끼어 있으므로, 워크핏 카드에 닿을 때까지 Tab을 누릅니다.
   for (let step = 0; step < 60; step += 1) {
     if (await workfitCard.evaluate((element) => element === document.activeElement)) break;
     await page.keyboard.press('Tab');
@@ -65,14 +75,27 @@ test('키보드로 카드에 포커스를 옮겨 Enter로 고르면 밴드 제�
   ).toBeVisible();
 });
 
+test('선택 브랜드 밴드는 헤더 바로 아래 첫 요소로 시작하고, 그때 목록 제목 블록은 화면에서 숨겨집니다', async ({
+  page,
+}) => {
+  await page.goto('/brands?brand=brd-workfit');
+  const band = page.locator('section[aria-labelledby="brand-spotlight-title"]');
+  await expect(band).toBeVisible();
+  await expect(page.getByText('현장에서 검증한 안전용품 브랜드를 한곳에 모았습니다.')).toBeHidden();
+
+  const headerBox = await requireBox(page.getByRole('banner'));
+  const bandBox = await requireBox(band);
+  // 밴드 위쪽에 흰 띠(제목 블록 자리)가 남지 않아야 합니다. 허용 오차는 1px입니다.
+  expect(Math.abs(bandBox.y - (headerBox.y + headerBox.height))).toBeLessThanOrEqual(1);
+});
+
 test('선택 브랜드 밴드의 긴 무공백 문구는 밴드 안에서 넘치지 않고, 로고 열은 모바일에서 위·데스크톱에서 오른쪽에 놓입니다', async ({
   page,
 }, testInfo) => {
   await page.goto('/brands');
   await page.getByRole('button', { name: /^워크핏, 제품 \d+개$/ }).click();
 
-  // 밴드는 CTA 링크를 가진 가장 안쪽 region으로 찾습니다. 제목 이름은 긴 문자열로 바뀌므로 이름에 기대지 않습니다.
-  // 상단 밴드 section만 고릅니다(목록 섹션도 region이고, 타일 화살표 링크 이름에도 「제품 보기」가 들어갑니다).
+  // 밴드는 상단 밴드 section(aria-labelledby 제목)으로만 찾습니다. 제목 이름은 긴 문자열로 바뀌므로 이름에 기대지 않습니다.
   const band = page.locator('section[aria-labelledby="brand-spotlight-title"]');
   await expect(band).toBeVisible();
   // 히어로 로고는 목록 요약으로 바로 그려지며, 사진 열 자리에 가운데 놓입니다.
@@ -131,34 +154,12 @@ test('모바일에서 목록 맨 아래 카드를 고르면 밴드가 화면 안
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'web-mobile', '모바일 화면에서만 밴드가 화면 밖에 놓입니다.');
   await page.goto('/brands');
-  // 섹션은 ㄱ~ㅎ, A–Z, # 순입니다. Duraguard는 A–Z 그룹(D)에 있고 목록의 마지막 그룹이라 맨 아래 카드가 됩니다.
+  // 목록은 API 순서의 한 그리드입니다. Duraguard는 목록의 마지막 브랜드이므로 맨 아래 카드가 됩니다.
   const lastCard = page.getByRole('button', { name: /^Duraguard, 제품 \d+개$/ });
   await lastCard.scrollIntoViewIfNeeded();
   await lastCard.click();
 
   await expect(page.getByRole('heading', { level: 2, name: 'Duraguard' })).toBeInViewport();
-});
-
-test('인덱스 키를 누르면 해당 섹션 헤더가 sticky 헤더 아래에 보입니다', async ({ page }) => {
-  await page.goto('/brands');
-  const sectionHeading = page.getByRole('heading', { level: 3, name: 'ㅅ', exact: true });
-  await expect(sectionHeading).toBeVisible();
-
-  await page.getByRole('button', { name: 'ㅅ', exact: true }).click();
-
-  await expect(page.getByRole('button', { name: 'ㅅ', exact: true })).toHaveAttribute(
-    'aria-current',
-    'true',
-  );
-  await expect(sectionHeading).toBeInViewport();
-  // 헤더가 가리지 않는지 확인합니다. 스크롤이 끝날 때까지 기다리며 헤더 아래 여백이 0 이상인지 봅니다.
-  await expect
-    .poll(async () => {
-      const headingBox = await requireBox(sectionHeading);
-      const headerBox = await requireBox(page.getByRole('banner'));
-      return headingBox.y - (headerBox.y + headerBox.height);
-    })
-    .toBeGreaterThanOrEqual(0);
 });
 
 test('선택한 브랜드는 「제품 보기」 뒤 뒤로 가기로 돌아오면 그대로 복원됩니다', async ({
@@ -175,7 +176,7 @@ test('선택한 브랜드는 「제품 보기」 뒤 뒤로 가기로 돌아오�
     .getByRole('region', { name: '워크핏' })
     .getByRole('link', { name: '제품 보기' })
     .click();
-  await expect(page).toHaveURL(/\/search\?brand=/);
+  await expect(page).toHaveURL(/\/brands\/brd-workfit\/products$/);
 
   await page.goBack();
 
@@ -191,6 +192,17 @@ test('존재하지 않는 브랜드 주소는 404 상태와 안내를 보여 줍
   await expect(page.getByRole('heading', { name: '페이지를 찾을 수 없습니다' })).toBeVisible();
 });
 
+test('존재하지 않는 브랜드의 제품 목록은 안내와 브랜드 목록 링크를 보여 줍니다', async ({
+  page,
+}) => {
+  await page.goto('/brands/brd-does-not-exist/products');
+  await expect(page.getByRole('heading', { name: '브랜드를 찾을 수 없습니다' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '브랜드 목록 보기' })).toHaveAttribute(
+    'href',
+    '/brands',
+  );
+});
+
 test('예전 브랜드 주소(/search?browse=brands)는 브랜드 목록으로 보냅니다', async ({ page }) => {
   await page.goto('/search?browse=brands');
   await expect(page).toHaveURL(/\/brands$/);
@@ -204,55 +216,6 @@ test('브랜드 화면은 가로로 넘치지 않습니다', async ({ page }) =>
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
   );
   expect(hasHorizontalOverflow, '/brands 가로 넘침').toBe(false);
-});
-
-test('키보드로 인덱스 키에 포커스하면 외곽선 4면(2px 선 + 2px 오프셋)이 키 행 안에 모두 보입니다', async ({
-  page,
-}) => {
-  await page.goto('/brands');
-  const keyRow = page.getByRole('group', { name: '브랜드 초성·알파벳 인덱스' });
-  await expect(keyRow).toBeVisible();
-  const siKey = page.getByRole('button', { name: 'ㅅ', exact: true });
-
-  // 검색창에서 Tab으로 키 행을 따라가 ㅅ 키에 닿습니다. 키 행은 가로로 스크롤되므로 중간 키를 거칩니다.
-  await page.getByRole('searchbox', { name: '브랜드 검색' }).focus();
-  for (let step = 0; step < 60; step += 1) {
-    if (await siKey.evaluate((element) => element === document.activeElement)) break;
-    await page.keyboard.press('Tab');
-  }
-  await expect(siKey).toBeFocused();
-  const outlineStyle = await siKey.evaluate((element) => getComputedStyle(element).outlineStyle);
-  expect(outlineStyle).not.toBe('none');
-
-  // 키 행은 포커스된 키를 부드럽게(smooth) 옮기므로, 이동이 끝날 때까지 기다리며 네 면을 확인합니다.
-  const OUTLINE_REACH = 4; // outline 2px + outline-offset 2px
-  const readOutlineFits = async () => {
-    const rowBox = await requireBox(keyRow);
-    const keyBox = await requireBox(siKey);
-    return {
-      left: keyBox.x - OUTLINE_REACH >= rowBox.x,
-      right: keyBox.x + keyBox.width + OUTLINE_REACH <= rowBox.x + rowBox.width,
-      top: keyBox.y - OUTLINE_REACH >= rowBox.y,
-      bottom: keyBox.y + keyBox.height + OUTLINE_REACH <= rowBox.y + rowBox.height,
-    };
-  };
-  await expect.poll(readOutlineFits).toEqual({ left: true, right: true, top: true, bottom: true });
-});
-
-test('인덱스 키 행을 가로로 스크롤해도 문서는 가로로 넘치지 않습니다', async ({ page }) => {
-  await page.goto('/brands');
-  const keyRow = page.getByRole('group', { name: '브랜드 초성·알파벳 인덱스' });
-  // 1440에서는 뒤쪽 알파벳 키가 화면 밖에 있어 행이 넘칩니다. 끝까지 가로로 밀어 넘침을 확인합니다.
-  await keyRow.evaluate((element) => {
-    element.scrollLeft = element.scrollWidth;
-  });
-
-  // 행이 실제로 넘쳐 스크롤됐는지 먼저 확인합니다(넘치지 않으면 이 검사는 의미가 없습니다).
-  await expect.poll(() => keyRow.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
-  const documentFitsViewport = await page.evaluate(
-    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-  );
-  expect(documentFitsViewport, '키 행 스크롤 후 문서 가로 넘침').toBe(true);
 });
 
 for (const width of [1024, 1136, 1440]) {
@@ -306,38 +269,7 @@ test('타일의 화살표 링크는 브랜드 제품 목록으로 가고, 외곽
   expect(clippingAncestors).toEqual([]);
 
   await arrowLink.click();
-  await expect(page).toHaveURL(/\/search\?brand=%EC%9B%8C%ED%81%AC%ED%95%8F$/);
-});
-
-test('인덱스 키를 누르거나 Tab으로 포커스하면 키와 외곽선 4면이 헤더 아래에 온전히 보입니다', async ({
-  page,
-}, testInfo) => {
-  const siKey = page.getByRole('button', { name: 'ㅅ', exact: true });
-  const readKeyPlacement = async () => {
-    const headerBox = await requireBox(page.getByRole('banner'));
-    const keyBox = await requireBox(siKey);
-    const viewportHeight = testInfo.project.use.viewport?.height ?? 0;
-    return {
-      belowHeader: keyBox.y - 4 >= headerBox.y + headerBox.height,
-      insideViewport: keyBox.y + keyBox.height + 4 <= viewportHeight,
-    };
-  };
-
-  // 1) 키를 누른 뒤
-  await page.goto('/brands');
-  await siKey.click();
-  await expect.poll(readKeyPlacement).toEqual({ belowHeader: true, insideViewport: true });
-
-  // 2) 키 행이 헤더 밑으로 들어가도록 페이지를 내린 뒤 Tab으로 키에 포커스를 옮깁니다.
-  await page.goto('/brands');
-  await page.getByRole('searchbox', { name: '브랜드 검색' }).focus();
-  await page.evaluate(() => window.scrollBy(0, 160));
-  for (let step = 0; step < 60; step += 1) {
-    if (await siKey.evaluate((element) => element === document.activeElement)) break;
-    await page.keyboard.press('Tab');
-  }
-  await expect(siKey).toBeFocused();
-  await expect.poll(readKeyPlacement).toEqual({ belowHeader: true, insideViewport: true });
+  await expect(page).toHaveURL(/\/brands\/brd-workfit\/products$/);
 });
 
 /** 화면에 그려진 요소의 박스를 가져오고, 없으면 원인을 드러내며 실패합니다. */

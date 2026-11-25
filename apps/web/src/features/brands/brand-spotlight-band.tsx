@@ -11,6 +11,18 @@ import { BrandLogo, getBrandSubline } from './brand-media';
 import { useBrandQuery } from './use-brand-query';
 
 const SPOTLIGHT_TITLE_ID = 'brand-spotlight-title';
+/**
+ * sticky 사이트 헤더가 화면 위쪽을 가리는 높이(px)입니다. 헤더 높이 + 16px 여백의 근거는 아래와 같습니다.
+ * 근거: site-header.tsx의 모바일 상단 행 h-56(56px, 경계선 없음 → 72px),
+ * 데스크톱 헤더 h-72 + lg:border-b 1px(스크롤 후 h-64 → 최대 73px, 그래서 89px).
+ */
+export const SPOTLIGHT_HEADER_OFFSET_PX = { mobile: 72, desktop: 89 } as const;
+/**
+ * 밴드가 스크롤로 옮겨질 때 헤더 아래에 보이도록 주는 scroll-margin 클래스입니다.
+ * Tailwind가 클래스를 찾으려면 문자열 리터럴이어야 하므로 값을 템플릿으로 만들지 않습니다.
+ * 위 SPOTLIGHT_HEADER_OFFSET_PX와 같은 값인지는 brand-directory-view.test.tsx에서 확인합니다.
+ */
+export const SPOTLIGHT_SCROLL_MARGIN_CLASS = 'scroll-mt-72 lg:scroll-mt-89';
 
 // 히어로 로고 박스는 목록 타일(120×48)보다 큽니다. 데스크톱 최대 320×160에 맞추고, 모바일은 기본 240×96 박스입니다.
 // 박스는 사진 열 폭(w-full)을 넘지 않고, 높이·최대 폭은 모바일 240×96, 데스크톱 320×160입니다.
@@ -50,7 +62,7 @@ export function BrandSpotlightBand({
       aria-labelledby={SPOTLIGHT_TITLE_ID}
       // 배경은 브랜드 accentColor라 토큰으로 줄 수 없는 예외입니다. 값은 resolveBrandAccentColor로 검증한 hex만 들어갑니다.
       style={{ backgroundColor: accentColor }}
-      className={cx('py-24 lg:py-0', tone.textClassName)}
+      className={cx('py-24 lg:py-0', tone.textClassName, SPOTLIGHT_SCROLL_MARGIN_CLASS)}
     >
       <PageContainer className="flex flex-col gap-20 lg:h-400 lg:flex-row-reverse lg:items-center lg:gap-24 lg:py-48">
         <BrandSpotlightLogoColumn
@@ -58,8 +70,13 @@ export function BrandSpotlightBand({
           logoUrl={brand.logoUrl}
           logoSettings={brand.logoSettings}
         />
-        {/* 모바일 텍스트 열 높이는 제목 2줄 + 보조 1줄 + 소개 2줄 + 버튼 기준(220)으로 고정합니다. 데스크톱은 밴드 높이(lg:h-400)가 정합니다. */}
-        <div className="flex min-h-220 min-w-0 flex-col gap-20 lg:min-h-0 lg:w-636 lg:shrink-0 lg:gap-32">
+        {/* 모바일 텍스트 열 높이는 제목 2줄 + 보조 1줄 + 소개 2줄 + 버튼 기준(220)으로 고정합니다. 로고가 없으면 사진 열이 접히므로 최소 높이도 두지 않습니다. 데스크톱은 밴드 높이(lg:h-400)가 정합니다. */}
+        <div
+          className={cx(
+            'flex min-w-0 flex-col gap-20 lg:min-h-0 lg:w-636 lg:shrink-0 lg:gap-32',
+            brand.logoUrl ? 'min-h-220' : undefined,
+          )}
+        >
           <div className="flex min-w-0 flex-col gap-8">
             <h2 id={SPOTLIGHT_TITLE_ID} className="line-clamp-2 text-h2 break-words lg:text-web-h2">
               {brand.name}
@@ -73,7 +90,7 @@ export function BrandSpotlightBand({
           ) : null}
           {brand.productCount > 0 ? (
             <Link
-              href={buildBrandProductsHref(brand.name)}
+              href={buildBrandProductsHref(brand.id)}
               className={cx(SPOTLIGHT_CTA_CLASS, tone.ctaClassName, tone.focusClassName)}
             >
               제품 보기
@@ -113,7 +130,13 @@ function BrandSpotlightLogoColumn({
   logoSettings: BrandImageSettings | undefined;
 }) {
   return (
-    <div className="flex h-220 shrink-0 items-center justify-center lg:h-304 lg:min-w-0 lg:flex-1">
+    <div
+      className={cx(
+        'items-center justify-center lg:flex lg:h-304 lg:min-w-0 lg:flex-1',
+        // 로고가 없으면 모바일에서는 열을 접어 제목이 위로 올라오게 하고, 데스크톱은 기존처럼 열 자리를 유지합니다.
+        logoUrl ? 'flex h-220 shrink-0' : 'hidden',
+      )}
+    >
       {/* 로고가 없으면 사진 열을 비워 둡니다. 밝은 플레이스홀더 박스는 어두운 밴드 위에서 튀므로 그리지 않습니다. */}
       {logoUrl ? (
         // 로고 박스는 사진 열 폭을 넘지 않습니다. 전역 카테고리 여백 때문에 1024~1335에서는 열이 좁아지므로, 박스가 열 폭에 맞춰 줄고 로고는 그 안에서 contain으로 맞습니다.
