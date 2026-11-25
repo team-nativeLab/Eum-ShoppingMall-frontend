@@ -31,16 +31,19 @@ export function serializeSearchParams(searchParams: Record<string, SearchParamVa
   return params.toString();
 }
 
-/** 브랜드 목록 화면 경로입니다. 브랜드 상세 화면은 없습니다. */
+/** 브랜드 목록 화면 경로입니다. 브랜드 카드를 모아 보여 주며, 선택 브랜드는 쿼리로 고릅니다. */
 export function buildBrandHref(): string {
   return '/brands';
 }
 
-/** 상세 화면의 전체 제품 CTA가 기존 이름 기반 제품 필터를 엽니다. */
-export function buildBrandProductsHref(brandName: string): string {
-  const params = new URLSearchParams();
-  params.set('brand', brandName);
-  return '/search?' + params.toString();
+/** 「제품 보기」가 여는 브랜드 전용 제품 목록 경로입니다. 브랜드 카드 목록 없이 그 브랜드의 제품만 보여 줍니다. */
+export function buildBrandProductsHref(brandId: string): string {
+  return `/brands/${encodeURIComponent(brandId)}/products`;
+}
+
+/** 브랜드 전용 제품 목록 경로(/brands/[brandId]/products)인지 확인합니다. */
+export function isBrandProductsPath(pathname: string): boolean {
+  return /^\/brands\/[^/]+\/products$/.test(pathname);
 }
 
 /** 현재 상품 목록의 필터와 검색어를 보존하면서 브랜드 선택을 갱신합니다. */
@@ -78,6 +81,10 @@ export function isPrimaryNavigationItemActive(
   item: PrimaryNavigationItem,
   pathname: string,
 ): boolean {
+  // 브랜드 전용 제품 목록은 「전체상품」 탭이 활성입니다(경로가 /brands 아래라도 브랜드 탭은 꺼 둡니다).
+  if (isBrandProductsPath(pathname)) {
+    return item.key === 'products';
+  }
   const activePathPrefixes: Record<PrimaryNavigationKey, string[]> = {
     products: ['/search', '/category', '/products'],
     best: ['/best'],
