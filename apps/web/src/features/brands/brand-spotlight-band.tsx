@@ -3,14 +3,21 @@ import { Icon } from '@eum/ui/components/Icon';
 import { cx } from '@eum/ui/lib/cx';
 import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-import { type Ref, useState } from 'react';
+import type { Ref } from 'react';
 import { PageContainer } from '@/components/page-container';
 import { buildBrandProductsHref } from '@/features/products/product-navigation';
 import { getBrandBandTone, resolveBrandAccentColor } from './brand-accent';
-import { BrandCover, BrandLogo, getBrandSubline } from './brand-media';
+import { BrandLogo, getBrandSubline } from './brand-media';
 import { useBrandQuery } from './use-brand-query';
 
 const SPOTLIGHT_TITLE_ID = 'brand-spotlight-title';
+
+// 히어로 로고 박스는 목록 타일(120×48)보다 큽니다. 데스크톱 최대 320×160에 맞추고, 모바일은 기본 240×96 박스입니다.
+// 박스는 사진 열 폭(w-full)을 넘지 않고, 높이·최대 폭은 모바일 240×96, 데스크톱 320×160입니다.
+const HERO_LOGO_BOX_CLASS_NAME =
+  'flex h-96 w-full max-w-240 items-center justify-center lg:h-160 lg:max-w-320';
+const HERO_LOGO_MAX_SETTINGS_WIDTH = 320;
+const HERO_LOGO_MAX_SETTINGS_HEIGHT = 160;
 
 // 밴드 CTA의 크기 규칙입니다. 색은 밴드 톤에서 받습니다.
 const SPOTLIGHT_CTA_CLASS =
@@ -18,7 +25,7 @@ const SPOTLIGHT_CTA_CLASS =
 
 /**
  * 선택 브랜드를 보여 주는 상단 다크 밴드(Figma 614:11628 기준).
- * 목록 요약으로 텍스트를 먼저 그리고, 상세 조회가 끝나면 사진과 주력 분야를 채웁니다.
+ * 로고와 이름은 목록 요약으로 바로 그리고, 상세 조회가 끝나면 주력 분야(부제)를 채웁니다.
  */
 export function BrandSpotlightBand({
   brand,
@@ -46,13 +53,10 @@ export function BrandSpotlightBand({
       className={cx('py-24 lg:py-0', tone.textClassName)}
     >
       <PageContainer className="flex flex-col gap-20 lg:h-400 lg:flex-row-reverse lg:items-center lg:gap-24 lg:py-48">
-        <BrandSpotlightMedia
+        <BrandSpotlightLogoColumn
           brandName={brand.name}
           logoUrl={brand.logoUrl}
           logoSettings={brand.logoSettings}
-          isPending={detailQuery.isPending}
-          coverImageUrl={detail?.coverImageUrl ?? null}
-          coverSettings={detail?.coverSettings}
         />
         {/* 모바일 텍스트 열 높이는 제목 2줄 + 보조 1줄 + 소개 2줄 + 버튼 기준(220)으로 고정합니다. 데스크톱은 밴드 높이(lg:h-400)가 정합니다. */}
         <div className="flex min-h-220 min-w-0 flex-col gap-20 lg:min-h-0 lg:w-636 lg:shrink-0 lg:gap-32">
@@ -96,64 +100,36 @@ export function BrandSpotlightBand({
 }
 
 /**
- * 사진 열. 상세 조회 중이면 같은 크기의 중립 skeleton을 보여 주고,
- * 사진이 있으면 사진 좌상단에 로고 플레이트를 겹칩니다.
- * 사진이 없거나 상세가 실패하면 사진 열을 비운 채(밴드 배경) 로고 플레이트를 가운데 둡니다.
+ * 사진 열에는 로고만 가운데에 둡니다. 로고는 목록 요약의 logoUrl로 그리므로 상세 조회를 기다리지 않습니다.
+ * 로고가 없으면 같은 자리를 비웁니다(플레이스홀더를 그리지 않습니다).
  */
-function BrandSpotlightMedia({
+function BrandSpotlightLogoColumn({
   brandName,
   logoUrl,
   logoSettings,
-  isPending,
-  coverImageUrl,
-  coverSettings,
 }: {
   brandName: string;
   logoUrl: string | null;
   logoSettings: BrandImageSettings | undefined;
-  isPending: boolean;
-  coverImageUrl: string | null;
-  coverSettings: BrandImageSettings | undefined;
 }) {
-  // 사진 로드 실패 시 그 URL만 기억해 사진 열을 비웁니다. 다른 URL이 오면 자연히 다시 시도합니다.
-  const [failedCoverUrl, setFailedCoverUrl] = useState<string | null>(null);
-  const hasVisibleCover = coverImageUrl !== null && coverImageUrl !== failedCoverUrl;
-  const logoPlate = (
-    <div className="flex h-64 w-160 items-center justify-center overflow-hidden rounded-8 bg-inverse">
-      <BrandLogo
-        logoUrl={logoUrl}
-        brandName={brandName}
-        className="h-40 w-120"
-        settings={logoSettings}
-      />
-    </div>
-  );
-
-  if (isPending) {
-    return (
-      <div
-        aria-busy="true"
-        className="h-220 shrink-0 animate-pulse rounded-12 bg-surface lg:h-304 lg:min-w-0 lg:flex-1"
-      />
-    );
-  }
-
-  if (coverImageUrl && hasVisibleCover) {
-    return (
-      <div className="relative h-220 shrink-0 overflow-hidden rounded-12 lg:h-304 lg:min-w-0 lg:flex-1">
-        <BrandCover
-          coverImageUrl={coverImageUrl}
-          settings={coverSettings}
-          onError={() => setFailedCoverUrl(coverImageUrl)}
-        />
-        <div className="absolute top-16 left-16 lg:top-24 lg:left-24">{logoPlate}</div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-220 shrink-0 items-center justify-center lg:h-304 lg:min-w-0 lg:flex-1">
-      {logoPlate}
+      {/* 로고가 없으면 사진 열을 비워 둡니다. 밝은 플레이스홀더 박스는 어두운 밴드 위에서 튀므로 그리지 않습니다. */}
+      {logoUrl ? (
+        // 로고 박스는 사진 열 폭을 넘지 않습니다. 전역 카테고리 여백 때문에 1024~1335에서는 열이 좁아지므로, 박스가 열 폭에 맞춰 줄고 로고는 그 안에서 contain으로 맞습니다.
+        <div className={HERO_LOGO_BOX_CLASS_NAME}>
+          <BrandLogo
+            logoUrl={logoUrl}
+            brandName={brandName}
+            className="size-full"
+            settings={{
+              fit: logoSettings?.fit ?? 'contain',
+              width: HERO_LOGO_MAX_SETTINGS_WIDTH,
+              height: HERO_LOGO_MAX_SETTINGS_HEIGHT,
+            }}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
