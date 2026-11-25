@@ -3,6 +3,7 @@ import { resolveCartOption } from './cart';
 import { canBuyNow } from './price';
 import { assertMockAllowed, type ApiConfig } from './config';
 import { ApiError } from './errors';
+import { DEFAULT_BRAND_ACCENT_COLOR } from './brand-defaults';
 import { mockAddresses } from './mock/addresses';
 import { mockAdminCoupons, mockAdminPoints, mockCoupons } from './mock/benefits';
 import { mockBrands, type MockBrandRecord } from './mock/brands';
@@ -147,7 +148,6 @@ function isValidPopupImageUrl(imageUrl: string | null): boolean {
 
 const DEFAULT_BRAND_LOGO_SETTINGS: BrandImageSettings = { fit: 'contain', width: 240, height: 96 };
 const DEFAULT_BRAND_COVER_SETTINGS: BrandImageSettings = { fit: 'cover', width: 1200, height: 704 };
-const DEFAULT_BRAND_ACCENT_COLOR = '#2F6F62';
 const BRAND_ACCENT_COLOR_PATTERN = /^#[0-9A-F]{6}$/i;
 
 function isValidBrandImageSettings(

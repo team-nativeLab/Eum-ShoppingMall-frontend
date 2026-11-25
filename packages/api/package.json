@@ -18,7 +18,8 @@
     "./unified-auth": "./src/unified-auth.ts",
     "./mock-auth": "./src/mock-auth.ts",
     "./redirect": "./src/redirect.ts",
-    "./query-keys": "./src/query-keys.ts"
+    "./query-keys": "./src/query-keys.ts",
+    "./brand-defaults": "./src/brand-defaults.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"

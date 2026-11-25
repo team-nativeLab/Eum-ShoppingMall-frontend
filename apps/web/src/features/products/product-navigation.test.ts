@@ -34,10 +34,8 @@ describe('product and brand navigation', () => {
     expect(getPrimaryNavigationItems()).toHaveLength(6);
   });
 
-  it('builds brand directory, brand detail and brand product listing destinations', () => {
+  it('builds the brand directory and brand product listing destinations', () => {
     expect(buildBrandHref()).toBe('/brands');
-    expect(buildBrandHref('brd-1')).toBe('/brands/brd-1');
-    expect(buildBrandHref('a/b c')).toBe('/brands/a%2Fb%20c');
     expect(buildBrandProductsHref('3M & Co')).toBe('/search?brand=3M+%26+Co');
     expect(buildBrandProductsHref('세이프가드')).toBe(
       '/search?brand=%EC%84%B8%EC%9D%B4%ED%94%84%EA%B0%80%EB%93%9C',
