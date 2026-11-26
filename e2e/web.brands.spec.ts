@@ -1,4 +1,4 @@
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test, type Locator, type TestInfo } from '@playwright/test';
 
 test('데스크톱 GNB·모바일 전체 메뉴의 브랜드 링크에서 브랜드 목록 → 카드 선택 → 밴드의 제품 보기 → 같은 화면의 상품 섹션으로 이동합니다', async ({
   page,
@@ -38,6 +38,8 @@ test('데스크톱 GNB·모바일 전체 메뉴의 브랜드 링크에서 브랜
   await expect(
     workfitBand.getByRole('heading', { level: 2, name: '워크핏', exact: true }),
   ).toBeVisible();
+  // 카드를 고른 것만으로는 상품 섹션이 열리지 않습니다(밴드만 보입니다).
+  await expect(page.getByRole('region', { name: '워크핏 제품', exact: true })).toHaveCount(0);
   // 밴드의 「제품 보기」는 페이지를 옮기지 않고, 같은 화면의 상품 섹션으로 해시 이동합니다.
   await workfitBand.getByRole('link', { name: '제품 보기' }).click();
   await expect(page).toHaveURL(/\/brands\?brand=brd-workfit#brand-products$/);
@@ -174,10 +176,13 @@ test('「제품 보기」는 뒤로 가기 기록을 하나 남기고, 뒤로 �
 
   await workfitBand.getByRole('link', { name: '제품 보기' }).click();
   await expect(page).toHaveURL(/#brand-products$/);
+  await expect(page.getByRole('region', { name: '워크핏 제품', exact: true })).toBeVisible();
 
   await page.goBack();
 
+  // 뒤로 가면 해시가 빠지므로 상품 섹션도 닫히고, 선택 브랜드의 밴드만 남습니다.
   await expect(page).toHaveURL(/\/brands\?brand=brd-workfit$/);
+  await expect(page.getByRole('region', { name: '워크핏 제품', exact: true })).toHaveCount(0);
   await expect(
     page
       .getByRole('region', { name: '워크핏', exact: true })
@@ -188,7 +193,8 @@ test('「제품 보기」는 뒤로 가기 기록을 하나 남기고, 뒤로 �
 test('선택 브랜드의 상품은 밴드 아래 두 줄 그리드로 보이고, 브랜드 카드 모음은 그 아래에 있습니다', async ({
   page,
 }) => {
-  await page.goto('/brands?brand=brd-workfit');
+  // 해시가 있는 주소로 여는 것은 새로고침과 같은 경로입니다. 해시가 있으면 상품 섹션이 열려 있습니다.
+  await page.goto('/brands?brand=brd-workfit#brand-products');
   const productsSection = page.getByRole('region', { name: '워크핏 제품', exact: true });
   const productGrid = productsSection.getByRole('list', { name: '워크핏 제품' });
   await expect(productsSection).toBeVisible();
@@ -282,6 +288,52 @@ test('타일에는 제품 목록으로 가는 화살표 링크가 없고, 타일
   await expect(page.getByRole('link', { name: /워크핏 제품 보기$/ })).toHaveCount(0);
   await expect(page.locator('a[href^="/brands/"][href$="/products"]')).toHaveCount(0);
 });
+
+test('상품 섹션이 열린 채 맨 위로 올라가 「제품 보기」를 다시 누르면 섹션 제목이 헤더 바로 아래에 옵니다', async ({
+  page,
+}, testInfo) => {
+  await page.goto('/brands');
+  await page.getByRole('button', { name: /^워크핏, 제품 \d+개$/ }).click();
+  const workfitBand = page.getByRole('region', { name: '워크핏', exact: true });
+  await workfitBand.getByRole('link', { name: '제품 보기' }).click();
+  const productsHeading = page.getByRole('heading', { level: 2, name: '워크핏 제품', exact: true });
+  await expect(productsHeading).toBeFocused();
+
+  // 섹션은 열린 채 화면이 맨 위로 올라가 있습니다. 같은 「제품 보기」를 다시 누르면 섹션 머리로 돌아와야 합니다.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await workfitBand.getByRole('link', { name: '제품 보기' }).click();
+
+  await expectHeadingJustBelowHeader(productsHeading, testInfo);
+});
+
+test('상품 섹션이 열린 주소로 새로고침하면 섹션 제목이 헤더 바로 아래에 옵니다', async ({
+  page,
+}, testInfo) => {
+  await page.goto('/brands?brand=brd-workfit#brand-products');
+  const productsSection = page.getByRole('region', { name: '워크핏 제품', exact: true });
+  // 상품이 도착해 섹션 높이가 바뀐 뒤에도 위치가 유지되는지 확인하려고 카드가 그려질 때까지 기다립니다.
+  await expect(productsSection.getByRole('listitem').first()).toBeVisible();
+
+  await expectHeadingJustBelowHeader(
+    productsSection.getByRole('heading', { level: 2, name: '워크핏 제품', exact: true }),
+    testInfo,
+  );
+});
+
+/**
+ * 섹션 제목이 sticky 헤더 바로 아래에 있는지 확인합니다.
+ * 위치는 헤더 높이(모바일 72px, 데스크톱 89px, brand-scroll.ts의 BRAND_HEADER_OFFSET_PX)부터 그 위에 제목 여백(최대 64px)을 더한 범위입니다.
+ * 스크롤하지 않은 위치는 밴드 아래라 이 범위 밖이므로, 이 확인은 스크롤이 실제로 일어났는지를 가립니다.
+ */
+async function expectHeadingJustBelowHeader(heading: Locator, testInfo: TestInfo) {
+  const headerOffset = testInfo.project.name === 'web-mobile' ? 72 : 89;
+  await expect
+    .poll(async () => {
+      const { y } = await requireBox(heading);
+      return y >= headerOffset && y <= headerOffset + 64;
+    })
+    .toBe(true);
+}
 
 /** 화면에 그려진 요소의 박스를 가져오고, 없으면 원인을 드러내며 실패합니다. */
 async function requireBox(
