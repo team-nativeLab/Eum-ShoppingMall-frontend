@@ -36,14 +36,9 @@ export function buildBrandHref(): string {
   return '/brands';
 }
 
-/** 「제품 보기」가 여는 브랜드 전용 제품 목록 경로입니다. 브랜드 카드 목록 없이 그 브랜드의 제품만 보여 줍니다. */
-export function buildBrandProductsHref(brandId: string): string {
-  return `/brands/${encodeURIComponent(brandId)}/products`;
-}
-
-/** 브랜드 전용 제품 목록 경로(/brands/[brandId]/products)인지 확인합니다. */
-export function isBrandProductsPath(pathname: string): boolean {
-  return /^\/brands\/[^/]+\/products$/.test(pathname);
+/** 브랜드 페이지 경로(/brands/[brandId])입니다. 현재 사용처는 브랜드 목록의 타일 링크입니다(브랜드 페이지의 「브랜드 목록」 링크는 '/brands' 리터럴을 씁니다). */
+export function buildBrandDetailHref(brandId: string): string {
+  return `/brands/${encodeURIComponent(brandId)}`;
 }
 
 /** 현재 상품 목록의 필터와 검색어를 보존하면서 브랜드 선택을 갱신합니다. */
@@ -81,10 +76,6 @@ export function isPrimaryNavigationItemActive(
   item: PrimaryNavigationItem,
   pathname: string,
 ): boolean {
-  // 브랜드 전용 제품 목록은 「전체상품」 탭이 활성입니다(경로가 /brands 아래라도 브랜드 탭은 꺼 둡니다).
-  if (isBrandProductsPath(pathname)) {
-    return item.key === 'products';
-  }
   const activePathPrefixes: Record<PrimaryNavigationKey, string[]> = {
     products: ['/search', '/category', '/products'],
     best: ['/best'],

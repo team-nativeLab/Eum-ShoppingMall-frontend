@@ -1,12 +1,12 @@
 import { ApiError } from '@eum/api/errors';
 import type { Brand, BrandSummary } from '@eum/api/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ProductListParams } from '@eum/api/shop-api';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BrandProductsView } from './brand-products-view';
+import { BrandDetailView } from './brand-detail-view';
 
 const apiMocks = vi.hoisted(() => ({
   getShopApi: vi.fn(),
@@ -19,7 +19,7 @@ const apiMocks = vi.hoisted(() => ({
 vi.mock('@/lib/shop-api', () => ({ getShopApi: apiMocks.getShopApi }));
 
 vi.mock('next/navigation', () => ({
-  usePathname: () => '/brands/brd-workfit/products',
+  usePathname: () => '/brands/brd-workfit',
   useRouter: () => ({ push: vi.fn() }),
 }));
 
@@ -71,6 +71,16 @@ function buildBrandDetail(overrides: Partial<Brand> = {}): Brand {
   };
 }
 
+/**
+ * 빈 상태와 안내 상태는 헤더가 나온 뒤 늦은 요청이 없는지 봐야 합니다.
+ * 상품 목록 뷰는 성공 분기에서만 마운트되므로, 헤더가 나온 뒤 짧게 기다리면 목록 요청이 있었다면 드러납니다.
+ */
+async function waitForLateRequests() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+}
+
 function createWrapper() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: 0 } },
@@ -81,7 +91,7 @@ function createWrapper() {
   };
 }
 
-describe('BrandProductsView', () => {
+describe('BrandDetailView', () => {
   beforeEach(() => {
     apiMocks.getShopApi.mockResolvedValue({
       brands: { getById: apiMocks.getBrandById },
@@ -124,7 +134,7 @@ describe('BrandProductsView', () => {
 
   it('shows only a busy placeholder while the brand is resolving and does not list all products', () => {
     apiMocks.getBrandById.mockReturnValue(new Promise<never>(() => {}));
-    const { container } = render(<BrandProductsView brandId={BRAND_ID} />, {
+    const { container } = render(<BrandDetailView brandId={BRAND_ID} />, {
       wrapper: createWrapper(),
     });
 
@@ -134,7 +144,7 @@ describe('BrandProductsView', () => {
   });
 
   it('lists the brand products with the brand name as a fixed filter and as the heading', async () => {
-    render(<BrandProductsView brandId={BRAND_ID} />, { wrapper: createWrapper() });
+    render(<BrandDetailView brandId={BRAND_ID} />, { wrapper: createWrapper() });
 
     expect(await screen.findByRole('heading', { level: 1, name: BRAND_NAME })).toBeVisible();
     await waitFor(() => expect(apiMocks.listProducts).toHaveBeenCalled());
@@ -144,14 +154,14 @@ describe('BrandProductsView', () => {
   });
 
   it('shows a text back link to the brand list above the product list heading', async () => {
-    render(<BrandProductsView brandId={BRAND_ID} />, { wrapper: createWrapper() });
+    render(<BrandDetailView brandId={BRAND_ID} />, { wrapper: createWrapper() });
 
     await screen.findByRole('heading', { level: 1, name: BRAND_NAME });
     expect(screen.getByRole('link', { name: '브랜드 목록' })).toHaveAttribute('href', '/brands');
   });
 
   it('does not show a breadcrumb on the brand product list', async () => {
-    render(<BrandProductsView brandId={BRAND_ID} />, { wrapper: createWrapper() });
+    render(<BrandDetailView brandId={BRAND_ID} />, { wrapper: createWrapper() });
 
     await screen.findByRole('heading', { level: 1, name: BRAND_NAME });
     expect(screen.queryByRole('link', { name: '홈' })).not.toBeInTheDocument();
@@ -159,14 +169,14 @@ describe('BrandProductsView', () => {
 
   it('does not query products before the brand name is known', () => {
     apiMocks.getBrandById.mockReturnValue(new Promise<never>(() => {}));
-    render(<BrandProductsView brandId={BRAND_ID} />, { wrapper: createWrapper() });
+    render(<BrandDetailView brandId={BRAND_ID} />, { wrapper: createWrapper() });
 
     expect(apiMocks.listProducts).not.toHaveBeenCalled();
   });
 
   it('shows the brand-only empty state with a link to the brand list when the brand has no products', async () => {
     apiMocks.getBrandById.mockResolvedValue(buildBrandDetail({ productCount: 0 }));
-    render(<BrandProductsView brandId={BRAND_ID} />, { wrapper: createWrapper() });
+    render(<BrandDetailView brandId={BRAND_ID} />, { wrapper: createWrapper() });
 
     expect(
       await screen.findByRole('heading', { name: '이 브랜드의 상품이 없습니다' }),
@@ -175,12 +185,28 @@ describe('BrandProductsView', () => {
       'href',
       '/brands',
     );
+    await waitForLateRequests();
+    expect(screen.queryByRole('list')).not.toBeInTheDocument();
+    expect(apiMocks.listProducts).not.toHaveBeenCalled();
+  });
+
+  it('shows the not-found guidance and requests no product list when the brand name is blank', async () => {
+    apiMocks.getBrandById.mockResolvedValue(buildBrandDetail({ name: '   ' }));
+    render(<BrandDetailView brandId={BRAND_ID} />, { wrapper: createWrapper() });
+
+    expect(await screen.findByRole('heading', { name: '브랜드를 찾을 수 없습니다' })).toBeVisible();
+    expect(screen.getByRole('link', { name: '브랜드 목록 보기' })).toHaveAttribute(
+      'href',
+      '/brands',
+    );
+    await waitForLateRequests();
+    expect(screen.queryByRole('list')).not.toBeInTheDocument();
     expect(apiMocks.listProducts).not.toHaveBeenCalled();
   });
 
   it('shows the not-found guidance with a link back to the brand list for an unknown brand', async () => {
     apiMocks.getBrandById.mockRejectedValue(new ApiError('NOT_FOUND', BRAND_ID));
-    render(<BrandProductsView brandId={BRAND_ID} />, { wrapper: createWrapper() });
+    render(<BrandDetailView brandId={BRAND_ID} />, { wrapper: createWrapper() });
 
     expect(await screen.findByRole('heading', { name: '브랜드를 찾을 수 없습니다' })).toBeVisible();
     expect(screen.getByText('주소가 바뀌었거나 더 이상 공개하지 않는 브랜드입니다.')).toBeVisible();
@@ -194,7 +220,7 @@ describe('BrandProductsView', () => {
 
   it('shows the not-implemented notice without a retry button', async () => {
     apiMocks.getBrandById.mockRejectedValue(new ApiError('NOT_IMPLEMENTED', 'brands.getById'));
-    render(<BrandProductsView brandId={BRAND_ID} />, { wrapper: createWrapper() });
+    render(<BrandDetailView brandId={BRAND_ID} />, { wrapper: createWrapper() });
 
     const errorAlert = await screen.findByRole('alert');
     expect(errorAlert).toHaveTextContent('브랜드 조회 기능을 준비하고 있습니다');
@@ -207,7 +233,7 @@ describe('BrandProductsView', () => {
     apiMocks.getBrandById
       .mockRejectedValueOnce(new ApiError('NETWORK', 'temporary'))
       .mockResolvedValueOnce(buildBrandDetail());
-    render(<BrandProductsView brandId={BRAND_ID} />, { wrapper: createWrapper() });
+    render(<BrandDetailView brandId={BRAND_ID} />, { wrapper: createWrapper() });
 
     const errorAlert = await screen.findByRole('alert');
     expect(errorAlert).toHaveTextContent('브랜드를 불러오지 못했습니다');
@@ -215,5 +241,31 @@ describe('BrandProductsView', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: BRAND_NAME })).toBeVisible();
     expect(apiMocks.getBrandById).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the brand name as the only heading, with the tagline and the product count under it', async () => {
+    render(<BrandDetailView brandId={BRAND_ID} />, { wrapper: createWrapper() });
+
+    expect(await screen.findByRole('heading', { level: 1, name: BRAND_NAME })).toBeVisible();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.getByText('현장 안전화 전문 브랜드입니다.')).toBeVisible();
+    expect(screen.getByText('제품 3개')).toBeVisible();
+  });
+
+  it('does not render a description line when the brand has no tagline', async () => {
+    apiMocks.getBrandById.mockResolvedValue(buildBrandDetail({ tagline: null }));
+    render(<BrandDetailView brandId={BRAND_ID} />, { wrapper: createWrapper() });
+
+    expect(await screen.findByRole('heading', { level: 1, name: BRAND_NAME })).toBeVisible();
+    expect(screen.queryByText('현장 안전화 전문 브랜드입니다.')).not.toBeInTheDocument();
+  });
+
+  it('does not show the brand card grid or a 제품 보기 link on the brand page', async () => {
+    render(<BrandDetailView brandId={BRAND_ID} />, { wrapper: createWrapper() });
+
+    await screen.findByRole('heading', { level: 1, name: BRAND_NAME });
+    expect(screen.queryByRole('link', { name: '제품 보기' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /제품 \d+개$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^워크핏, 제품/ })).not.toBeInTheDocument();
   });
 });

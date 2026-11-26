@@ -85,6 +85,12 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: '/:path*', headers: SECURITY_HEADERS }];
   },
+  // 예전 브랜드 상품 목록 주소(/brands/[brandId]/products)는 브랜드 페이지(/brands/[brandId])로 영구 이동합니다.
+  async redirects() {
+    return [
+      { source: '/brands/:brandId/products', destination: '/brands/:brandId', permanent: true },
+    ];
+  },
 };
 
 /**

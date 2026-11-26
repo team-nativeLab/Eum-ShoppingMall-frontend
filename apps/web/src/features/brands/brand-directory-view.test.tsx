@@ -1,14 +1,12 @@
 import { ApiError } from '@eum/api/errors';
 import { queryKeys } from '@eum/api/query-keys';
-import type { Brand, BrandSummary, PagedResult, Product } from '@eum/api/types';
+import type { BrandSummary } from '@eum/api/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
-import userEvent, { type UserEvent } from '@testing-library/user-event';
-import type { MouseEvent, ReactNode } from 'react';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DESKTOP_QUERY, REDUCED_MOTION_QUERY } from '@/lib/use-media-query';
 import { BrandDirectoryView } from './brand-directory-view';
-import { BRAND_HEADER_OFFSET_PX, BRAND_SCROLL_MARGIN_CLASS } from './brand-scroll';
 
 const apiMocks = vi.hoisted(() => ({
   getShopApi: vi.fn(),
@@ -19,99 +17,24 @@ const apiMocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/shop-api', () => ({ getShopApi: apiMocks.getShopApi }));
 
-// 상품 카드는 장바구니·찜 컨텍스트가 필요하므로 이름만 그리는 가짜 카드로 바꿉니다.
-vi.mock('@/features/products/product-card', () => ({
-  ProductCard: ({ product }: { product: Product }) => <article>{product.name}</article>,
-}));
-
-// 선택 브랜드는 URL 쿼리에 있으므로, replace가 쿼리를 바꾸면 useSearchParams가 새 값을 읽도록 작은 저장소로 흉내 냅니다.
-const navigationMocks = vi.hoisted(() => {
-  let currentQuery = new URLSearchParams();
-  const listeners = new Set<() => void>();
-  const setQuery = (nextQuery: URLSearchParams) => {
-    currentQuery = nextQuery;
-    listeners.forEach((listener) => listener());
-  };
-  return {
-    replace: vi.fn((href: string) => {
-      // 실제 라우터처럼 URL을 바꿉니다. 새 주소에 해시가 없으면 상품 섹션 해시도 함께 빠집니다.
-      window.history.replaceState(null, '', href);
-      setQuery(new URLSearchParams(href.split('?')[1] ?? ''));
-    }),
-    getQuery: () => currentQuery,
-    subscribe: (listener: () => void) => {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
-    setQuery,
-  };
-});
-
-vi.mock('next/navigation', async () => {
-  const { useSyncExternalStore } = await import('react');
-  return {
-    useRouter: () => ({ replace: navigationMocks.replace }),
-    useSearchParams: () =>
-      useSyncExternalStore(
-        navigationMocks.subscribe,
-        navigationMocks.getQuery,
-        navigationMocks.getQuery,
-      ),
-  };
-});
+// 타일은 브랜드 페이지 링크이므로, 실제 라우터 없이 href만 확인하도록 앵커로 바꿉니다.
 vi.mock('next/link', () => ({
   default: ({
     href,
     children,
-    onClick,
     ...linkProps
   }: {
     href: string;
     children: ReactNode;
-    onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
     [propName: string]: unknown;
   }) => (
-    <a
-      href={href}
-      {...linkProps}
-      onClick={(event) => {
-        onClick?.(event);
-        // 실제 Next Link는 같은 앱 안의 이동을 라우터가 처리하며 브라우저 기본 이동을 막습니다.
-        // 목도 기본 이동은 막고, 해시 링크만 pushState로 해시를 바꿉니다(뒤로 가기 기록 추가, popstate 없음).
-        // 기본 이동을 그대로 두면 jsdom이 프래그먼트 이동을 popstate로 만들어 상품 섹션이 바로 닫힙니다.
-        event.preventDefault();
-        if (href.startsWith('#')) {
-          window.history.pushState(
-            null,
-            '',
-            `${window.location.pathname}${window.location.search}${href}`,
-          );
-        }
-      }}
-    >
+    <a href={href} {...linkProps}>
       {children}
     </a>
   ),
 }));
 
-const DEFAULT_ACCENT_COLOR = '#2F6F62';
 const INTRO_TEXT = '현장에서 검증한 안전용품 브랜드를 한곳에 모았습니다.';
-const PRODUCT_SECTION_HREF = '#brand-products';
-
-function buildProduct(productId: string, name: string): Product {
-  return { id: productId, name } as Product;
-}
-
-function buildPagedProducts(items: Product[]): PagedResult<Product> {
-  return { items, page: 1, pageSize: 10, totalCount: items.length };
-}
-
-/** 선택 브랜드 상품 섹션(제목 "{브랜드명} 제품"이 있는 region)을 찾습니다. */
-function findProductSection(brandName: string) {
-  return screen.findByRole('region', { name: `${brandName} 제품` });
-}
 
 function buildBrandSummary(
   brandId: string,
@@ -129,29 +52,14 @@ function buildBrandSummary(
   };
 }
 
-function buildBrandDetail(summary: BrandSummary, overrides: Partial<Brand> = {}): Brand {
-  return {
-    ...summary,
-    coverImageUrl: null,
-    mainField: '안전장비',
-    originCountry: null,
-    certification: null,
-    story: null,
-    ...overrides,
-  };
-}
-
 const brandOne = buildBrandSummary('brand-one', '한결&안전');
 const brandTwo = buildBrandSummary('brand-two', '세이프원');
 const brands = [brandOne, brandTwo];
 
-function createTestQueryClient() {
-  return new QueryClient({
+function renderDirectory() {
+  const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: 0 } },
   });
-}
-
-function renderDirectory(queryClient = createTestQueryClient()) {
   const renderResult = render(
     <QueryClientProvider client={queryClient}>
       <BrandDirectoryView />
@@ -160,1386 +68,112 @@ function renderDirectory(queryClient = createTestQueryClient()) {
   return { ...renderResult, queryClient };
 }
 
-/** 선택 브랜드 밴드(section, aria-labelledby의 제목 이름)를 찾습니다. */
-function findSpotlightBand(brandName: string) {
-  return screen.findByRole('region', { name: brandName });
-}
-
-/** 선택 밴드의 「제품 보기」를 눌러 상품 섹션을 열고, 열린 섹션을 돌려줍니다. */
-async function openBrandProducts(user: UserEvent, brandName: string) {
-  const band = await findSpotlightBand(brandName);
-  await user.click(within(band).getByRole('link', { name: '제품 보기' }));
-  return findProductSection(brandName);
-}
-
-/** 밴드 section의 화면 위치(getBoundingClientRect)를 고정합니다. */
-function stubBandRect(band: HTMLElement, top: number, height: number) {
-  vi.spyOn(band, 'getBoundingClientRect').mockReturnValue({
-    top,
-    bottom: top + height,
-    left: 0,
-    right: 0,
-    width: 0,
-    height,
-    x: 0,
-    y: top,
-    toJSON: () => ({}),
-  } as DOMRect);
-}
-
-/** 미디어 쿼리 문자열별로 matches를 줍니다. 목록에 없는 쿼리는 false입니다(기본은 모바일, 감속 모드 꺼짐). */
-function stubMediaQueries(matchesByQuery: Record<string, boolean>) {
-  vi.stubGlobal(
-    'matchMedia',
-    vi.fn((query: string) => ({
-      matches: matchesByQuery[query] ?? false,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    })),
-  );
-}
-
-function stubReducedMotion(matches: boolean) {
-  stubMediaQueries({ [REDUCED_MOTION_QUERY]: matches });
-}
-
 describe('BrandDirectoryView', () => {
   beforeEach(() => {
-    navigationMocks.setQuery(new URLSearchParams());
-    navigationMocks.replace.mockClear();
-    // 이전 테스트의 해시(#brand-products)가 새 테스트의 열림 상태로 새지 않게 주소를 되돌립니다.
-    window.history.replaceState(null, '', '/brands');
-    stubReducedMotion(false);
-    // jsdom에는 scrollIntoView가 없으므로 기본 스텁을 둡니다. 스크롤을 검사하는 테스트는 밴드별로 다시 바꿉니다.
-    HTMLElement.prototype.scrollIntoView = vi.fn();
     apiMocks.getShopApi.mockReset();
     apiMocks.getShopApi.mockResolvedValue({
       brands: { list: apiMocks.listBrands, getById: apiMocks.getBrandById },
       products: { list: apiMocks.listProducts },
     });
     apiMocks.listBrands.mockReset().mockResolvedValue(brands);
-    apiMocks.getBrandById.mockReset().mockImplementation(async (brandId: string) => {
-      const summary = brands.find((brand) => brand.id === brandId);
-      if (!summary) throw new ApiError('NOT_FOUND', brandId);
-      return buildBrandDetail(summary);
-    });
-    apiMocks.listProducts
-      .mockReset()
-      .mockResolvedValue(buildPagedProducts([buildProduct('product-default', '기본 안전장갑')]));
+    apiMocks.getBrandById.mockReset();
+    apiMocks.listProducts.mockReset();
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  describe('without a selected brand', () => {
-    it('shows the grid of every brand with no spotlight, no search, and no index keys', async () => {
-      renderDirectory();
+  it('shows every brand as a link to its brand page, with no selection, spotlight, or 제품 보기', async () => {
+    renderDirectory();
 
-      expect(await screen.findByRole('button', { name: '한결&안전, 제품 1개' })).toBeVisible();
-      expect(screen.getByRole('button', { name: '세이프원, 제품 1개' })).toBeVisible();
-      expect(screen.queryByRole('region', { name: '한결&안전' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('region', { name: '세이프원' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { pressed: true })).not.toBeInTheDocument();
-      expect(screen.queryByRole('textbox', { name: '브랜드 검색' })).not.toBeInTheDocument();
-      expect(
-        screen.queryByRole('group', { name: '브랜드 초성·알파벳 인덱스' }),
-      ).not.toBeInTheDocument();
-      expect(apiMocks.getBrandById).not.toHaveBeenCalled();
-    });
-
-    it('keeps the visible title block with the brand count and the intro text', async () => {
-      renderDirectory();
-
-      expect(await screen.findByText('브랜드 2개')).toBeVisible();
-      expect(screen.getByRole('heading', { level: 1, name: '브랜드' })).toBeVisible();
-      expect(screen.getByText(INTRO_TEXT)).toBeVisible();
-    });
-
-    it('does not select the first brand by default', async () => {
-      renderDirectory();
-
-      await screen.findByRole('button', { name: '한결&안전, 제품 1개' });
-      expect(screen.getByRole('button', { name: '한결&안전, 제품 1개' })).toHaveAttribute(
-        'aria-pressed',
-        'false',
-      );
-      expect(screen.getByRole('button', { name: '세이프원, 제품 1개' })).toHaveAttribute(
-        'aria-pressed',
-        'false',
-      );
-      expect(navigationMocks.replace).not.toHaveBeenCalled();
-    });
-
-    it('selects a brand card from the keyboard with Tab to focus and Enter to select', async () => {
-      const user = userEvent.setup();
-      renderDirectory();
-
-      const secondCard = await screen.findByRole('button', { name: '세이프원, 제품 1개' });
-      for (let step = 0; step < 20 && document.activeElement !== secondCard; step += 1) {
-        await user.tab();
-      }
-      expect(secondCard).toHaveFocus();
-      expect(secondCard).toHaveAttribute('aria-pressed', 'false');
-
-      await user.keyboard('{Enter}');
-
-      expect(secondCard).toHaveAttribute('aria-pressed', 'true');
-      expect(await findSpotlightBand('세이프원')).toBeInTheDocument();
-    });
-
-    it('renders each brand card as a button that selects the spotlight instead of navigating', async () => {
-      const user = userEvent.setup();
-      renderDirectory();
-
-      const secondCard = await screen.findByRole('button', { name: '세이프원, 제품 1개' });
-      expect(secondCard.tagName).toBe('BUTTON');
-      expect(secondCard).not.toHaveAttribute('href');
-      expect(screen.queryByRole('link', { name: '세이프원, 제품 1개' })).not.toBeInTheDocument();
-
-      await user.click(secondCard);
-
-      const band = await findSpotlightBand('세이프원');
-      expect(within(band).getByRole('link', { name: '제품 보기' })).toHaveAttribute(
-        'href',
-        PRODUCT_SECTION_HREF,
-      );
-      expect(secondCard).toHaveAttribute('aria-pressed', 'true');
-    });
-
-    it('shows a busy placeholder while brands load and keeps the title block when no brand is requested', () => {
-      apiMocks.listBrands.mockReturnValue(new Promise<never>(() => {}));
-      const { container } = renderDirectory();
-
-      expect(screen.getByRole('heading', { level: 1, name: '브랜드' })).toBeInTheDocument();
-      expect(screen.getByText(INTRO_TEXT)).toBeVisible();
-      expect(container.querySelector('[aria-busy="true"]')).toBeInTheDocument();
-      // 요청된 브랜드가 없으면 밴드 자리를 비워 두지 않습니다.
-      expect(container.querySelector('.h-508')).toBeNull();
-    });
-
-    it('reserves the spotlight height and hides the title block while a requested brand is loading', () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      apiMocks.listBrands.mockReturnValue(new Promise<never>(() => {}));
-      const { container } = renderDirectory();
-
-      expect(screen.getByRole('heading', { level: 1, name: '브랜드' })).toHaveClass('sr-only');
-      expect(screen.queryByText(INTRO_TEXT)).not.toBeInTheDocument();
-      const placeholder = container.querySelector('.h-508');
-      expect(placeholder).toHaveAttribute('aria-hidden', 'true');
-      expect(container.querySelector('[aria-busy="true"]')).toBeInTheDocument();
-    });
-
-    it('shows the title block again when the requested brand is not in the loaded list', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brd-missing'));
-      renderDirectory();
-
-      expect(await screen.findByText(INTRO_TEXT)).toBeVisible();
-      expect(screen.getByRole('heading', { level: 1, name: '브랜드' })).not.toHaveClass('sr-only');
-      expect(screen.queryByRole('region', { name: '한결&안전' })).not.toBeInTheDocument();
-    });
-
-    it('shows the title block when the list fails while a brand is requested', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      apiMocks.listBrands.mockRejectedValue(new ApiError('NETWORK', 'temporary'));
-      renderDirectory();
-
-      expect(await screen.findByRole('alert')).toHaveTextContent('브랜드를 불러오지 못했습니다');
-      expect(screen.getByText(INTRO_TEXT)).toBeVisible();
-    });
-
-    it('shows an empty state and no spotlight when there are no brands', async () => {
-      apiMocks.listBrands.mockResolvedValue([]);
-      const { container } = renderDirectory();
-
-      expect(
-        await screen.findByRole('heading', { name: '등록된 브랜드가 없습니다' }),
-      ).toBeVisible();
-      expect(
-        container.querySelector('section[aria-labelledby="brand-spotlight-title"]'),
-      ).toBeNull();
-      expect(screen.queryByRole('button', { pressed: true })).not.toBeInTheDocument();
-      expect(screen.queryByRole('link', { name: '제품 보기' })).not.toBeInTheDocument();
-      expect(apiMocks.getBrandById).not.toHaveBeenCalled();
-      expect(apiMocks.listProducts).not.toHaveBeenCalled();
-    });
-
-    it('shows the not-implemented notice without a retry button', async () => {
-      apiMocks.listBrands.mockRejectedValue(new ApiError('NOT_IMPLEMENTED', 'brands.list'));
-      renderDirectory();
-
-      const errorAlert = await screen.findByRole('alert');
-      expect(errorAlert).toHaveTextContent('브랜드 조회 기능을 준비하고 있습니다');
-      expect(within(errorAlert).queryByRole('button')).not.toBeInTheDocument();
-    });
-
-    it('retries a temporary brand list failure', async () => {
-      const user = userEvent.setup();
-      apiMocks.listBrands
-        .mockRejectedValueOnce(new ApiError('NETWORK', 'temporary'))
-        .mockResolvedValueOnce(brands);
-      renderDirectory();
-
-      const errorAlert = await screen.findByRole('alert');
-      expect(errorAlert).toHaveTextContent('브랜드를 불러오지 못했습니다');
-      await user.click(within(errorAlert).getByRole('button', { name: '다시 시도' }));
-      expect(
-        await screen.findByRole('button', { name: '한결&안전, 제품 1개' }),
-      ).toBeInTheDocument();
-    });
-
-    it('scrolls the band that appears after the first card pick, once the band is mounted', async () => {
-      const user = userEvent.setup();
-      renderDirectory();
-
-      const secondCard = await screen.findByRole('button', { name: '세이프원, 제품 1개' });
-      await user.click(secondCard);
-
-      await findSpotlightBand('세이프원');
-      // jsdom은 요소 위치가 0이므로 화면 밖으로 판정되고, 밴드가 마운트된 뒤 effect에서 한 번 옮깁니다.
-      expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
-      expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({
-        block: 'start',
-        behavior: 'smooth',
-      });
-    });
+    const firstTile = await screen.findByRole('link', { name: '한결&안전, 제품 1개' });
+    expect(firstTile).toHaveAttribute('href', '/brands/brand-one');
+    expect(screen.getByRole('link', { name: '세이프원, 제품 1개' })).toHaveAttribute(
+      'href',
+      '/brands/brand-two',
+    );
+    expect(screen.queryByRole('link', { name: '제품 보기' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { pressed: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: '한결&안전' })).not.toBeInTheDocument();
   });
 
-  describe('with a selected brand in the query', () => {
-    it('selects the brand named by the brand query and shows its spotlight', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-two'));
-      renderDirectory();
-
-      expect(await findSpotlightBand('세이프원')).toBeInTheDocument();
-      expect(
-        screen.getByRole('button', { name: '세이프원, 제품 1개', pressed: true }),
-      ).toBeVisible();
-    });
-
-    it('shows no spotlight and no pressed card for an unknown brand id, and keeps the list', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brd-missing'));
-      renderDirectory();
-
-      expect(await screen.findByRole('button', { name: '한결&안전, 제품 1개' })).toBeVisible();
-      expect(screen.queryByRole('region', { name: '한결&안전' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('region', { name: '세이프원' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { pressed: true })).not.toBeInTheDocument();
-      expect(screen.getByRole('heading', { level: 1, name: '브랜드' })).toBeVisible();
-      expect(screen.getByText(INTRO_TEXT)).toBeVisible();
-      expect(apiMocks.getBrandById).not.toHaveBeenCalled();
-    });
-
-    it('hides the title block and keeps only a screen-reader h1 while a brand is selected', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      renderDirectory();
-
-      await findSpotlightBand('한결&안전');
-      const pageHeading = screen.getByRole('heading', { level: 1, name: '브랜드' });
-      expect(pageHeading).toHaveClass('sr-only');
-      expect(screen.queryByText(INTRO_TEXT)).not.toBeInTheDocument();
-      expect(screen.queryByText('브랜드 2개')).not.toBeInTheDocument();
-    });
-
-    it('keeps the spotlight CTA as a same-page link to the product section when the brand has products', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      renderDirectory();
-
-      const band = await findSpotlightBand('한결&안전');
-      const cta = within(band).getByRole('link', { name: '제품 보기' });
-      expect(cta).toHaveAttribute('href', PRODUCT_SECTION_HREF);
-      expect(within(band).queryByRole('button', { name: '제품 보기' })).not.toBeInTheDocument();
-    });
-
-    it('disables the spotlight CTA without a link when the selected brand has no products', async () => {
-      const user = userEvent.setup();
-      apiMocks.listBrands.mockResolvedValue([
-        brandOne,
-        buildBrandSummary('brand-empty', '빈브랜드', { productCount: 0 }),
-      ]);
-      renderDirectory();
-
-      await user.click(await screen.findByRole('button', { name: '빈브랜드, 제품 0개' }));
-      const band = await findSpotlightBand('빈브랜드');
-
-      const disabledCta = within(band).getByRole('button', { name: '제품 보기' });
-      expect(disabledCta).toBeDisabled();
-      expect(within(band).queryByRole('link', { name: '제품 보기' })).not.toBeInTheDocument();
-      expect(disabledCta).toHaveClass('text-text-disabled', 'cursor-not-allowed');
-      // 비활성 「제품 보기」는 상품 섹션을 열지 못하고, 상품 목록도 요청하지 않습니다.
-      expect(screen.queryByRole('region', { name: '빈브랜드 제품' })).not.toBeInTheDocument();
-      expect(apiMocks.listProducts).not.toHaveBeenCalled();
-    });
-
-    it('does not scroll on the first load from the query, because the user did not pick the brand', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-two'));
-      renderDirectory();
-
-      await findSpotlightBand('세이프원');
-      await waitFor(() => expect(apiMocks.getBrandById).toHaveBeenCalled());
-
-      expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
-    });
-
-    it('updates the brand query with replace, not a new history entry, when a card is selected', async () => {
-      const user = userEvent.setup();
-      renderDirectory();
-
-      await user.click(await screen.findByRole('button', { name: '세이프원, 제품 1개' }));
-
-      expect(navigationMocks.replace).toHaveBeenCalledTimes(1);
-      expect(navigationMocks.replace).toHaveBeenCalledWith('/brands?brand=brand-two', {
-        scroll: false,
-      });
-      expect(await findSpotlightBand('세이프원')).toBeInTheDocument();
-    });
-
-    it('scrolls the spotlight into view when a card selected from outside the viewport moves it out of sight', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      const user = userEvent.setup();
-      renderDirectory();
-
-      const band = await findSpotlightBand('한결&안전');
-      const scrollIntoView = vi.fn();
-      band.scrollIntoView = scrollIntoView;
-      stubBandRect(band, -985, 508);
-
-      await user.click(await screen.findByRole('button', { name: '세이프원, 제품 1개' }));
-
-      expect(scrollIntoView).toHaveBeenCalledTimes(1);
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'smooth' });
-    });
-
-    it('does not scroll when the spotlight is already visible', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      const user = userEvent.setup();
-      renderDirectory();
-
-      const band = await findSpotlightBand('한결&안전');
-      const scrollIntoView = vi.fn();
-      band.scrollIntoView = scrollIntoView;
-      stubBandRect(band, 120, 508);
-
-      await user.click(await screen.findByRole('button', { name: '세이프원, 제품 1개' }));
-
-      expect(await findSpotlightBand('세이프원')).toBeInTheDocument();
-      expect(scrollIntoView).not.toHaveBeenCalled();
-    });
-
-    it('scrolls without animation when reduced motion is requested', async () => {
-      stubReducedMotion(true);
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      const user = userEvent.setup();
-      renderDirectory();
-
-      const band = await findSpotlightBand('한결&안전');
-      const scrollIntoView = vi.fn();
-      band.scrollIntoView = scrollIntoView;
-      stubBandRect(band, -985, 508);
-
-      await user.click(await screen.findByRole('button', { name: '세이프원, 제품 1개' }));
-
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' });
-    });
-
-    it('does not scroll again when the already selected card is clicked again', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-two'));
-      const user = userEvent.setup();
-      renderDirectory();
-
-      const band = await findSpotlightBand('세이프원');
-      const scrollIntoView = vi.fn();
-      band.scrollIntoView = scrollIntoView;
-      stubBandRect(band, -985, 508);
-
-      await user.click(screen.getByRole('button', { name: '세이프원, 제품 1개' }));
-
-      expect(navigationMocks.replace).toHaveBeenCalledTimes(1);
-      expect(scrollIntoView).not.toHaveBeenCalled();
-    });
-
-    it('scrolls a band that is hidden behind the sticky header (top 40px on mobile)', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      const user = userEvent.setup();
-      renderDirectory();
-
-      const band = await findSpotlightBand('한결&안전');
-      const scrollIntoView = vi.fn();
-      band.scrollIntoView = scrollIntoView;
-      // 밴드 상단이 헤더 높이(모바일 72px) 안쪽에 있어 가려지므로 화면 안이어도 옮깁니다.
-      stubBandRect(band, 40, 508);
-
-      await user.click(await screen.findByRole('button', { name: '세이프원, 제품 1개' }));
-
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'smooth' });
-    });
-
-    it('uses the desktop header offset on desktop, so a band just under the mobile offset is still scrolled there', async () => {
-      stubMediaQueries({ [DESKTOP_QUERY]: true });
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      const user = userEvent.setup();
-      renderDirectory();
-
-      const band = await findSpotlightBand('한결&안전');
-      const scrollIntoView = vi.fn();
-      band.scrollIntoView = scrollIntoView;
-      // 상단 80px는 모바일 기준(72px)이면 보이지만 데스크톱 기준(89px)이면 헤더 뒤입니다.
-      stubBandRect(band, 80, 400);
-
-      await user.click(await screen.findByRole('button', { name: '세이프원, 제품 1개' }));
-
-      expect(scrollIntoView).toHaveBeenCalledTimes(1);
-    });
-
-    it('does not scroll a band that sits fully below the header on mobile', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      const user = userEvent.setup();
-      renderDirectory();
-
-      const band = await findSpotlightBand('한결&안전');
-      const scrollIntoView = vi.fn();
-      band.scrollIntoView = scrollIntoView;
-      stubBandRect(band, 80, 400);
-
-      await user.click(await screen.findByRole('button', { name: '세이프원, 제품 1개' }));
-
-      expect(scrollIntoView).not.toHaveBeenCalled();
-    });
-
-    it('scrolls to the band of the last card picked when two cards are picked quickly, once the URL shows it', async () => {
-      // 두 번의 replace가 URL을 바꾸지 않도록 막아 두고(예약만 남김), URL이 마지막 카드로 한 번 바뀌는 상황을 흉내 냅니다.
-      navigationMocks.replace.mockImplementationOnce(() => {}).mockImplementationOnce(() => {});
-      const user = userEvent.setup();
-      renderDirectory();
-
-      await user.click(await screen.findByRole('button', { name: '한결&안전, 제품 1개' }));
-      await user.click(screen.getByRole('button', { name: '세이프원, 제품 1개' }));
-      expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
-
-      act(() => {
-        navigationMocks.setQuery(new URLSearchParams('brand=brand-two'));
-      });
-
-      await findSpotlightBand('세이프원');
-      expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
-    });
-
-    it('keeps a reservation for another card while the URL still shows the previous card, then scrolls once when the URL catches up', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      navigationMocks.replace.mockImplementationOnce(() => {});
-      const user = userEvent.setup();
-      const { queryClient } = renderDirectory();
-
-      await findSpotlightBand('한결&안전');
-      await user.click(screen.getByRole('button', { name: '세이프원, 제품 1개' }));
-
-      // URL이 아직 brand-one이므로 예약은 남고 스크롤은 없습니다.
-      // 목록을 다시 받아 effect가 한 번 더 돌아도 맞지 않는 예약은 지우지 않아야 합니다.
-      apiMocks.listBrands.mockResolvedValue([
-        brandOne,
-        brandTwo,
-        buildBrandSummary('brand-three', '에어가드'),
-      ]);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.brands.list });
-      await screen.findByRole('button', { name: '에어가드, 제품 1개' });
-      expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
-
-      act(() => {
-        navigationMocks.setQuery(new URLSearchParams('brand=brand-two'));
-      });
-
-      await findSpotlightBand('세이프원');
-      expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
-    });
-
-    it('drops a scroll reservation whose brand left the list, so that brand does not scroll when it comes back', async () => {
-      navigationMocks.replace.mockImplementationOnce(() => {});
-      const user = userEvent.setup();
-      const { queryClient } = renderDirectory();
-
-      await user.click(await screen.findByRole('button', { name: '세이프원, 제품 1개' }));
-      apiMocks.listBrands.mockResolvedValue([brandOne]);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.brands.list });
-      await waitFor(() =>
-        expect(
-          screen.queryByRole('button', { name: '세이프원, 제품 1개' }),
-        ).not.toBeInTheDocument(),
-      );
-
-      apiMocks.listBrands.mockResolvedValue(brands);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.brands.list });
-      await screen.findByRole('button', { name: '세이프원, 제품 1개' });
-      act(() => {
-        navigationMocks.setQuery(new URLSearchParams('brand=brand-two'));
-      });
-
-      await findSpotlightBand('세이프원');
-      expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
-    });
-
-    it('drops an earlier reservation when the last pick is the card already shown, so a later URL change does not scroll', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      navigationMocks.replace.mockImplementationOnce(() => {});
-      const user = userEvent.setup();
-      renderDirectory();
-
-      await findSpotlightBand('한결&안전');
-      await user.click(screen.getByRole('button', { name: '세이프원, 제품 1개' }));
-      // 마지막 클릭이 지금 표시된 한결&안전이므로, 앞의 세이프원 예약은 버려집니다.
-      await user.click(screen.getByRole('button', { name: '한결&안전, 제품 1개' }));
-
-      act(() => {
-        navigationMocks.setQuery(new URLSearchParams('brand=brand-two'));
-      });
-
-      await findSpotlightBand('세이프원');
-      expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
-    });
-
-    it('does not scroll when history returns to a brand that was already selected by the user', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      const user = userEvent.setup();
-      renderDirectory();
-
-      await user.click(await screen.findByRole('button', { name: '세이프원, 제품 1개' }));
-      await findSpotlightBand('세이프원');
-      expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
-
-      // 뒤로 가기로 다른 브랜드로 돌아갔다가 같은 id(세이프원)로 다시 오면 예약이 남아 있지 않아야 합니다.
-      act(() => {
-        navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      });
-      await findSpotlightBand('한결&안전');
-      act(() => {
-        navigationMocks.setQuery(new URLSearchParams('brand=brand-two'));
-      });
-      await findSpotlightBand('세이프원');
-
-      expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
-    });
-
-    it('gives the spotlight band and the product section the same scroll margin for the sticky header, matching the offset constants', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      const { container } = renderDirectory();
-
-      const band = await findSpotlightBand('한결&안전');
-      const productSection = await openBrandProducts(user, '한결&안전');
-      // 목록이 도착해 제목 노드가 바뀐 뒤에 섹션을 잡아야 DOM 안에서 확인할 수 있습니다.
-      await screen.findByText('기본 안전장갑');
-      expect(band).toHaveClass('scroll-mt-72', 'lg:scroll-mt-89');
-      expect(container.querySelector('#brand-products')).toHaveClass(
-        'scroll-mt-72',
-        'lg:scroll-mt-89',
-      );
-      expect(productSection.closest('#brand-products')).not.toBeNull();
-      expect(BRAND_SCROLL_MARGIN_CLASS).toBe(
-        `scroll-mt-${BRAND_HEADER_OFFSET_PX.mobile} lg:scroll-mt-${BRAND_HEADER_OFFSET_PX.desktop}`,
-      );
-    });
-
-    it('같은 카드를 다시 누르면 상품 섹션과 해시가 닫히고 선택 표시는 유지된다', async () => {
-      const user = userEvent.setup();
-      renderDirectory();
-
-      const secondCard = await screen.findByRole('button', { name: '세이프원, 제품 1개' });
-      await user.click(secondCard);
-      await openBrandProducts(user, '세이프원');
-      expect(window.location.hash).toBe('#brand-products');
-
-      await user.click(secondCard);
-
-      // 같은 카드를 다시 누르면 replace가 해시를 떼므로 상품 섹션도 함께 닫힙니다.
-      expect(window.location.hash).toBe('');
-      expect(screen.queryByRole('region', { name: '세이프원 제품' })).not.toBeInTheDocument();
-      expect(secondCard).toHaveAttribute('aria-pressed', 'true');
-      expect(await findSpotlightBand('세이프원')).toBeInTheDocument();
-      expect(screen.getAllByRole('button', { pressed: true })).toHaveLength(1);
-    });
-
-    it('marks only one card as pressed and shows selection with the border and weight, not color alone', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      const user = userEvent.setup();
-      renderDirectory();
-
-      const firstCard = await screen.findByRole('button', { name: '한결&안전, 제품 1개' });
-      const secondCard = screen.getByRole('button', { name: '세이프원, 제품 1개' });
-      expect(firstCard).toHaveClass('border-text-1');
-      expect(secondCard).toHaveClass('border-line', 'hover:border-text-accent-black');
-
-      await user.click(secondCard);
-      await findSpotlightBand('세이프원');
-
-      expect(screen.getAllByRole('button', { pressed: true })).toEqual([secondCard]);
-      expect(secondCard).toHaveClass('border-text-1');
-      // 로고 플레이스홀더에도 같은 이름이 있으므로 이름 줄(font-bold)을 직접 찾습니다.
-      expect(secondCard.querySelector('.font-bold')).toHaveTextContent('세이프원');
-      expect(firstCard.querySelector('.font-bold')).toBeNull();
-      expect(firstCard).toHaveClass('border-line');
-    });
-
-    it('paints the band with the brand accent color', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      apiMocks.listBrands.mockResolvedValue([
-        brandOne,
-        buildBrandSummary('brand-two', '세이프원', { accentColor: '#466B9A' }),
-      ]);
-      const user = userEvent.setup();
-      renderDirectory();
-
-      const firstBand = await findSpotlightBand('한결&안전');
-      expect(firstBand).toHaveStyle({ backgroundColor: DEFAULT_ACCENT_COLOR });
-
-      await user.click(await screen.findByRole('button', { name: '세이프원, 제품 1개' }));
-      expect(await findSpotlightBand('세이프원')).toHaveStyle({ backgroundColor: '#466B9A' });
-    });
-
-    it('falls back to the default color when the accent color is missing or malformed', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      apiMocks.listBrands.mockResolvedValue([
-        buildBrandSummary('brand-one', '한결&안전', { accentColor: 'red' }),
-        buildBrandSummary('brand-two', '세이프원', { accentColor: '#12345' }),
-      ]);
-      const user = userEvent.setup();
-      renderDirectory();
-
-      expect(await findSpotlightBand('한결&안전')).toHaveStyle({
-        backgroundColor: DEFAULT_ACCENT_COLOR,
-      });
-
-      await user.click(await screen.findByRole('button', { name: '세이프원, 제품 1개' }));
-      expect(await findSpotlightBand('세이프원')).toHaveStyle({
-        backgroundColor: DEFAULT_ACCENT_COLOR,
-      });
-    });
-
-    it('uses black text and a black CTA on a light accent, and white text on a dark accent', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      apiMocks.listBrands.mockResolvedValue([
-        buildBrandSummary('brand-one', '한결&안전', { accentColor: '#F2F2F2' }),
-        buildBrandSummary('brand-two', '세이프원', { accentColor: '#2F6F62' }),
-      ]);
-      const user = userEvent.setup();
-      renderDirectory();
-
-      const lightBand = await findSpotlightBand('한결&안전');
-      expect(lightBand).toHaveClass('text-text-accent-black');
-      expect(lightBand).not.toHaveClass('text-inverse');
-      expect(within(lightBand).getByRole('link', { name: '제품 보기' })).toHaveClass(
-        'bg-text-accent-black',
-        'text-inverse',
-      );
-
-      await user.click(await screen.findByRole('button', { name: '세이프원, 제품 1개' }));
-      const darkBand = await findSpotlightBand('세이프원');
-      expect(darkBand).toHaveClass('text-inverse');
-      expect(within(darkBand).getByRole('link', { name: '제품 보기' })).toHaveClass(
-        'bg-inverse',
-        'text-text-1',
-      );
-    });
-
-    it('shows no photo and no light placeholder in the hero when the brand has no logo, even when the detail has a cover', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      apiMocks.getBrandById.mockResolvedValueOnce(
-        buildBrandDetail(brandOne, { coverImageUrl: 'https://example.com/brand-one-cover.jpg' }),
-      );
-      renderDirectory();
-
-      const band = await findSpotlightBand('한결&안전');
-      await waitFor(() =>
-        expect(within(band).getByText('안전장비', { exact: false })).toBeVisible(),
-      );
-      // 로고가 없으면 사진 열을 비웁니다. 플레이스홀더(role=img, bg-surface)와 사진 모두 없어야 합니다.
-      expect(within(band).queryByRole('img')).not.toBeInTheDocument();
-      expect(band.querySelector('img')).toBeNull();
-      expect(band.querySelector('.bg-surface')).toBeNull();
-    });
-
-    it('collapses the logo column and the mobile text minimum height when the brand has no logo', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      renderDirectory();
-
-      const band = await findSpotlightBand('한결&안전');
-      // 로고 열(h-220)과 텍스트 열의 모바일 최소 높이(min-h-220)가 없어야 제목이 위로 올라옵니다.
-      // 데스크톱 열 자리는 lg:flex로 남겨 두므로 모바일에서만 hidden입니다.
-      expect(band.querySelector('.h-220')).toBeNull();
-      expect(band.querySelector('.min-h-220')).toBeNull();
-      expect(band.querySelector('.hidden')).not.toBeNull();
-      const titleBox = within(band).getByRole('heading', { level: 2, name: '한결&안전' });
-      expect(titleBox).toBeVisible();
-    });
-
-    it('shows the hero logo image with its brand name when the brand has a logo URL', async () => {
-      const logoUrl = 'https://example.com/brand-one-logo.png';
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      apiMocks.listBrands.mockResolvedValue([{ ...brandOne, logoUrl }, brandTwo]);
-      renderDirectory();
-
-      const band = await findSpotlightBand('한결&안전');
-      expect(within(band).getByRole('img', { name: '한결&안전 로고' })).toHaveAttribute(
-        'src',
-        logoUrl,
-      );
-      // 로고가 있는 밴드는 기존 높이 규칙(모바일 로고 열 h-220, 텍스트 열 min-h-220)을 그대로 씁니다.
-      expect(band.querySelector('.h-220')).not.toBeNull();
-      expect(band.querySelector('.min-h-220')).not.toBeNull();
-    });
-
-    it('keeps the list text and shows no alert when the detail request fails', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      apiMocks.getBrandById.mockRejectedValueOnce(new ApiError('NETWORK', 'temporary'));
-      renderDirectory();
-
-      const band = await findSpotlightBand('한결&안전');
-      await waitFor(() => expect(band.querySelector('[aria-busy="true"]')).toBeNull());
-
-      expect(within(band).getByRole('heading', { level: 2, name: '한결&안전' })).toBeVisible();
-      expect(within(band).getByText('한결&안전 EN')).toBeVisible();
-      expect(within(band).getByRole('link', { name: '제품 보기' })).toBeVisible();
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    });
-
-    it('clears the spotlight and restores the title block when the refetched list no longer has the selected brand', async () => {
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-two'));
-      apiMocks.listBrands.mockResolvedValueOnce(brands).mockResolvedValue([brandOne]);
-      const { queryClient } = renderDirectory();
-
-      await findSpotlightBand('세이프원');
-
-      await queryClient.invalidateQueries({ queryKey: queryKeys.brands.list });
-
-      await waitFor(() =>
-        expect(screen.queryByRole('region', { name: '세이프원' })).not.toBeInTheDocument(),
-      );
-      expect(screen.getByText(INTRO_TEXT)).toBeVisible();
-      expect(screen.getByRole('button', { name: '한결&안전, 제품 1개' })).toHaveAttribute(
-        'aria-pressed',
-        'false',
-      );
-    });
-
-    it('ignores a late detail response for a brand that is no longer selected', async () => {
-      // 첫 브랜드(brand-one) 상세 응답을 테스트가 직접 늦게 풉니다.
-      // 다른 카드로 옮기면 React Query가 그 조회를 취소하므로, 응답이 와도 화면에는 반영되면 안 됩니다.
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      let resolveBrandOneDetail: (detail: Brand) => void = () => {};
-      let isBrandOneDetailSettled = false;
-      apiMocks.getBrandById.mockImplementation((brandId: string) => {
-        if (brandId === 'brand-one') {
-          const lateBrandOneDetail = new Promise<Brand>((resolve) => {
-            resolveBrandOneDetail = resolve;
-          });
-          void lateBrandOneDetail.then(() => {
-            isBrandOneDetailSettled = true;
-          });
-          return lateBrandOneDetail;
-        }
-        return Promise.resolve(buildBrandDetail(brandTwo, { mainField: '물류안전' }));
-      });
-      const user = userEvent.setup();
-      renderDirectory();
-
-      await findSpotlightBand('한결&안전');
-      await user.click(await screen.findByRole('button', { name: '세이프원, 제품 1개' }));
-      const band = await findSpotlightBand('세이프원');
-      await waitFor(() => expect(within(band).getByText(/물류안전/)).toBeVisible());
-
-      resolveBrandOneDetail(buildBrandDetail(brandOne, { mainField: '늦은응답분야' }));
-      await waitFor(() => expect(isBrandOneDetailSettled).toBe(true));
-
-      expect(within(band).getByRole('heading', { level: 2, name: '세이프원' })).toBeVisible();
-      expect(within(band).getByText(/물류안전/)).toBeVisible();
-      expect(within(band).queryByText(/늦은응답분야/)).not.toBeInTheDocument();
-    });
+  it('keeps the title block with the brand count and the intro text', async () => {
+    renderDirectory();
+
+    expect(await screen.findByText('브랜드 2개')).toBeVisible();
+    expect(screen.getByRole('heading', { level: 1, name: '브랜드' })).toBeVisible();
+    expect(screen.getByText(INTRO_TEXT)).toBeVisible();
   });
 
-  describe('product section opening', () => {
-    it('shows only the spotlight after a brand is selected, and requests no product list until 제품 보기 is pressed', async () => {
-      const user = userEvent.setup();
-      renderDirectory();
+  it('does not request brand details or product lists on the list page', async () => {
+    renderDirectory();
 
-      await user.click(await screen.findByRole('button', { name: '한결&안전, 제품 1개' }));
-      await findSpotlightBand('한결&안전');
-
-      expect(screen.queryByRole('region', { name: '한결&안전 제품' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('list', { name: '한결&안전 제품' })).not.toBeInTheDocument();
-      expect(apiMocks.listProducts).not.toHaveBeenCalled();
-      expect(window.location.hash).toBe('');
-    });
-
-    it('hides the product section again when another brand is selected', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      renderDirectory();
-
-      await openBrandProducts(user, '한결&안전');
-      await screen.findByText('기본 안전장갑');
-      expect(window.location.hash).toBe('#brand-products');
-
-      await user.click(screen.getByRole('button', { name: '세이프원, 제품 1개' }));
-
-      expect(await findSpotlightBand('세이프원')).toBeInTheDocument();
-      expect(screen.queryByRole('region', { name: '한결&안전 제품' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('region', { name: '세이프원 제품' })).not.toBeInTheDocument();
-      expect(window.location.hash).toBe('');
-    });
-
-    it('opens the section from a reloaded URL that has the products hash, without moving focus', async () => {
-      window.history.replaceState(null, '', '/brands?brand=brand-one#brand-products');
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      renderDirectory();
-
-      const section = await findProductSection('한결&안전');
-      expect(
-        within(section).getByRole('heading', { level: 2, name: '한결&안전 제품' }),
-      ).not.toHaveFocus();
-    });
-
-    it('closes the section on back (hash removed) and reopens it on forward (hash restored)', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      renderDirectory();
-
-      await openBrandProducts(user, '한결&안전');
-
-      // 뒤로 가기: 해시가 빠진 기록으로 돌아오면 섹션을 닫습니다(라우터의 popstate 이동을 흉내 냅니다).
-      act(() => {
-        window.history.replaceState(null, '', '/brands?brand=brand-one');
-        window.dispatchEvent(new PopStateEvent('popstate'));
-      });
-      expect(screen.queryByRole('region', { name: '한결&안전 제품' })).not.toBeInTheDocument();
-      expect(await findSpotlightBand('한결&안전')).toBeInTheDocument();
-
-      // 앞으로 가기: 해시가 있는 기록으로 돌아오면 다시 엽니다.
-      act(() => {
-        window.history.replaceState(null, '', '/brands?brand=brand-one#brand-products');
-        window.dispatchEvent(new PopStateEvent('popstate'));
-      });
-      expect(await findProductSection('한결&안전')).toBeInTheDocument();
-    });
+    await screen.findByRole('link', { name: '한결&안전, 제품 1개' });
+    expect(apiMocks.getBrandById).not.toHaveBeenCalled();
+    expect(apiMocks.listProducts).not.toHaveBeenCalled();
   });
 
-  describe('product section hash, history, and focus', () => {
-    it('「제품 보기」 클릭은 해시를 설정하고 뒤로 가기 기록을 하나 추가한다', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      renderDirectory();
+  it('moves focus from one brand tile to the next with a single Tab stop per brand', async () => {
+    const user = userEvent.setup();
+    renderDirectory();
 
-      const band = await findSpotlightBand('한결&안전');
-      const historyLengthBefore = window.history.length;
-      expect(window.location.hash).toBe('');
-
-      await user.click(within(band).getByRole('link', { name: '제품 보기' }));
-
-      expect(window.location.hash).toBe('#brand-products');
-      expect(window.history.length).toBe(historyLengthBefore + 1);
-      expect(await findProductSection('한결&안전')).toBeInTheDocument();
-    });
-
-    it('「제품 보기」를 다시 누르면 포커스가 제목으로 다시 간다', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      renderDirectory();
-
-      const band = await findSpotlightBand('한결&안전');
-      const section = await openBrandProducts(user, '한결&안전');
-      const heading = within(section).getByRole('heading', { level: 2, name: '한결&안전 제품' });
-      expect(heading).toHaveFocus();
-
-      within(section).getByRole('link', { name: '전체 보기' }).focus();
-      expect(heading).not.toHaveFocus();
-
-      await user.click(within(band).getByRole('link', { name: '제품 보기' }));
-
-      expect(heading).toHaveFocus();
-    });
-
-    it('뒤로 가기와 앞으로 가기로 섹션이 다시 열려도 포커스는 옮겨지지 않는다', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      renderDirectory();
-
-      const section = await openBrandProducts(user, '한결&안전');
-      within(section).getByRole('link', { name: '전체 보기' }).focus();
-
-      act(() => {
-        window.history.replaceState(null, '', '/brands?brand=brand-one');
-        window.dispatchEvent(new PopStateEvent('popstate'));
-      });
-      expect(screen.queryByRole('region', { name: '한결&안전 제품' })).not.toBeInTheDocument();
-
-      act(() => {
-        window.history.replaceState(null, '', '/brands?brand=brand-one#brand-products');
-        window.dispatchEvent(new PopStateEvent('popstate'));
-      });
-      const reopened = await findProductSection('한결&안전');
-      expect(
-        within(reopened).getByRole('heading', { level: 2, name: '한결&안전 제품' }),
-      ).not.toHaveFocus();
-    });
-
-    it('해시가 붙은 주소로 열었는데 브랜드가 0개면 상품 섹션을 열지 않는다', async () => {
-      apiMocks.listBrands.mockResolvedValue([
-        brandOne,
-        buildBrandSummary('brand-empty', '빈브랜드', { productCount: 0 }),
-      ]);
-      window.history.replaceState(null, '', '/brands?brand=brand-empty#brand-products');
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-empty'));
-      renderDirectory();
-
-      const band = await findSpotlightBand('빈브랜드');
-      expect(within(band).getByRole('button', { name: '제품 보기' })).toBeDisabled();
-      expect(screen.queryByRole('region', { name: '빈브랜드 제품' })).not.toBeInTheDocument();
-      expect(apiMocks.listProducts).not.toHaveBeenCalled();
-    });
-
-    it('상품 0개로 섹션이 내려갔다가 다시 마운트돼도 사용자 조작 없이 포커스를 옮기지 않는다', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      const { queryClient } = renderDirectory();
-
-      const section = await openBrandProducts(user, '한결&안전');
-      const heading = within(section).getByRole('heading', { level: 2, name: '한결&안전 제품' });
-      expect(heading).toHaveFocus();
-      within(section).getByRole('link', { name: '전체 보기' }).focus();
-
-      // 목록에서 상품 수가 0이 되면 섹션이 내려갑니다.
-      apiMocks.listBrands.mockResolvedValue([
-        buildBrandSummary('brand-one', '한결&안전', { productCount: 0 }),
-        brandTwo,
-      ]);
-      await act(async () => {
-        await queryClient.refetchQueries({ queryKey: queryKeys.brands.list });
-      });
-      // react-query 알림은 act 뒤 타이머로 흘러 들어오므로, 화면이 0개를 반영할 때까지 기다립니다.
-      await waitFor(() =>
-        expect(screen.queryByRole('region', { name: '한결&안전 제품' })).not.toBeInTheDocument(),
-      );
-
-      // 상품 수가 다시 생겨 섹션이 다시 마운트되어도 포커스는 옮겨지지 않습니다.
-      apiMocks.listBrands.mockResolvedValue(brands);
-      await act(async () => {
-        await queryClient.refetchQueries({ queryKey: queryKeys.brands.list });
-      });
-      const remounted = await findProductSection('한결&안전');
-      expect(
-        within(remounted).getByRole('heading', { level: 2, name: '한결&안전 제품' }),
-      ).not.toHaveFocus();
-    });
+    // jsdom은 CSS 숨김을 적용하지 않아 모바일에서 숨겨진 빵부스러기 링크도 탭 순서에 들어갑니다. 타일끼리의 순서만 봅니다.
+    const firstTile = await screen.findByRole('link', { name: '한결&안전, 제품 1개' });
+    firstTile.focus();
+    await user.tab();
+    expect(screen.getByRole('link', { name: '세이프원, 제품 1개' })).toHaveFocus();
   });
 
-  describe('product section scroll', () => {
-    /** 스크롤 호출 한 번이 상품 섹션 루트(#brand-products, scroll-margin을 가진 요소)를 block start로 옮겼는지 확인합니다. */
-    function expectSectionRootScrolled(callIndex: number) {
-      const scrollMock = vi.mocked(HTMLElement.prototype.scrollIntoView);
-      expect(scrollMock.mock.contexts[callIndex]).toBe(document.getElementById('brand-products'));
-      expect(scrollMock.mock.calls[callIndex]?.[0]).toEqual({ block: 'start', behavior: 'smooth' });
-    }
+  it('shows a busy placeholder while the brands load', () => {
+    apiMocks.listBrands.mockReturnValue(new Promise<never>(() => {}));
+    const { container } = renderDirectory();
 
-    it('「제품 보기」 첫 클릭은 섹션 루트를 헤더 아래로 한 번 스크롤한다', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      renderDirectory();
-
-      const band = await findSpotlightBand('한결&안전');
-      await user.click(within(band).getByRole('link', { name: '제품 보기' }));
-      await findProductSection('한결&안전');
-
-      expect(vi.mocked(HTMLElement.prototype.scrollIntoView)).toHaveBeenCalledTimes(1);
-      expectSectionRootScrolled(0);
-    });
-
-    it('상품 섹션이 열린 채 「제품 보기」를 다시 누르면 섹션 루트로 다시 스크롤한다', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      renderDirectory();
-
-      const band = await findSpotlightBand('한결&안전');
-      await openBrandProducts(user, '한결&안전');
-      const scrollMock = vi.mocked(HTMLElement.prototype.scrollIntoView);
-      scrollMock.mockClear();
-
-      await user.click(within(band).getByRole('link', { name: '제품 보기' }));
-
-      expect(scrollMock).toHaveBeenCalledTimes(1);
-      expectSectionRootScrolled(0);
-    });
-
-    it('상품 섹션이 열린 주소로 새로고침하면 마운트 때 한 번 스크롤하고 포커스는 옮기지 않는다', async () => {
-      window.history.replaceState(null, '', '/brands?brand=brand-one#brand-products');
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      renderDirectory();
-
-      const section = await findProductSection('한결&안전');
-
-      expect(vi.mocked(HTMLElement.prototype.scrollIntoView)).toHaveBeenCalledTimes(1);
-      expectSectionRootScrolled(0);
-      expect(
-        within(section).getByRole('heading', { level: 2, name: '한결&안전 제품' }),
-      ).not.toHaveFocus();
-    });
-
-    it('뒤로 가기와 앞으로 가기로 열린 섹션은 스크롤하지 않는다', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      renderDirectory();
-
-      await openBrandProducts(user, '한결&안전');
-      const scrollMock = vi.mocked(HTMLElement.prototype.scrollIntoView);
-      scrollMock.mockClear();
-
-      act(() => {
-        window.history.replaceState(null, '', '/brands?brand=brand-one');
-        window.dispatchEvent(new PopStateEvent('popstate'));
-      });
-      expect(screen.queryByRole('region', { name: '한결&안전 제품' })).not.toBeInTheDocument();
-
-      act(() => {
-        window.history.replaceState(null, '', '/brands?brand=brand-one#brand-products');
-        window.dispatchEvent(new PopStateEvent('popstate'));
-      });
-      await findProductSection('한결&안전');
-
-      expect(scrollMock).not.toHaveBeenCalled();
-    });
+    expect(container.querySelector('[aria-busy="true"]')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /제품 \d+개$/ })).not.toBeInTheDocument();
   });
 
-  describe('brand tile', () => {
-    it('lets the brand name use up to two lines across the card width', async () => {
-      renderDirectory();
-      const card = await screen.findByRole('button', { name: '세이프원, 제품 1개' });
+  it('shows a danger alert with a retry button only for a temporary failure and reloads the grid', async () => {
+    const user = userEvent.setup();
+    apiMocks.listBrands
+      .mockRejectedValueOnce(new ApiError('NETWORK', 'temporary'))
+      .mockResolvedValueOnce(brands);
+    renderDirectory();
 
-      expect(card.querySelector('.line-clamp-2')).toHaveTextContent('세이프원');
-      expect(card.querySelector('.truncate')).toBeNull();
-    });
+    const errorAlert = await screen.findByRole('alert');
+    expect(errorAlert).toHaveTextContent('브랜드를 불러오지 못했습니다');
+    await user.click(within(errorAlert).getByRole('button', { name: '다시 시도' }));
 
-    it('has no arrow link to a product list, so the tile is a single button stop in Tab order', async () => {
-      const user = userEvent.setup();
-      renderDirectory();
-      const firstCard = await screen.findByRole('button', { name: '한결&안전, 제품 1개' });
-
-      expect(screen.queryByRole('link', { name: /제품 보기/ })).not.toBeInTheDocument();
-      firstCard.focus();
-      await user.tab();
-      expect(screen.getByRole('button', { name: '세이프원, 제품 1개' })).toHaveFocus();
-    });
-
-    it('keeps the tile body click selecting the brand in the URL instead of navigating', async () => {
-      const user = userEvent.setup();
-      renderDirectory();
-
-      await user.click(await screen.findByRole('button', { name: '세이프원, 제품 1개' }));
-
-      expect(navigationMocks.replace).toHaveBeenCalledWith('/brands?brand=brand-two', {
-        scroll: false,
-      });
-      expect(screen.getByRole('button', { name: '세이프원, 제품 1개' })).toHaveAttribute(
-        'aria-pressed',
-        'true',
-      );
-    });
+    expect(await screen.findByRole('link', { name: '한결&안전, 제품 1개' })).toBeVisible();
   });
 
-  describe('selected brand product section', () => {
-    it('shows a product list titled with the brand name, loaded by brand name with pageSize 10', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      apiMocks.listProducts.mockResolvedValue(
-        buildPagedProducts([buildProduct('product-a', '안전화 A')]),
-      );
-      renderDirectory();
+  it('shows the not-implemented notice without a retry button', async () => {
+    apiMocks.listBrands.mockRejectedValue(new ApiError('NOT_IMPLEMENTED', 'brands.list'));
+    renderDirectory();
 
-      const section = await openBrandProducts(user, '한결&안전');
-      expect(await screen.findByText('안전화 A')).toBeVisible();
-      expect(
-        within(section).getByRole('heading', { level: 2, name: '한결&안전 제품' }),
-      ).toBeVisible();
-      expect(within(section).getByRole('list', { name: '한결&안전 제품' })).toBeVisible();
-      expect(within(section).getByRole('link', { name: '전체 보기' })).toHaveAttribute(
-        'href',
-        '/brands/brand-one/products',
-      );
-      expect(apiMocks.listProducts).toHaveBeenCalledWith(
-        { brand: ['한결&안전'], pageSize: 10 },
-        expect.anything(),
-      );
-    });
+    const errorAlert = await screen.findByRole('alert');
+    expect(errorAlert).toHaveTextContent('브랜드 조회 기능을 준비하고 있습니다');
+    expect(within(errorAlert).queryByRole('button')).not.toBeInTheDocument();
+  });
 
-    it('places the product section between the spotlight band and the brand grid', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      renderDirectory();
+  it('shows an empty state when there are no brands', async () => {
+    apiMocks.listBrands.mockResolvedValue([]);
+    renderDirectory();
 
-      const band = await findSpotlightBand('한결&안전');
-      const section = await openBrandProducts(user, '한결&안전');
-      await screen.findByText('기본 안전장갑');
-      const gridList = (await screen.findByRole('button', { name: '세이프원, 제품 1개' })).closest(
-        'ul',
-      );
-      expect(band.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-      expect(
-        section.compareDocumentPosition(gridList!) & Node.DOCUMENT_POSITION_FOLLOWING,
-      ).toBeTruthy();
-    });
+    expect(await screen.findByText('등록된 브랜드가 없습니다')).toBeVisible();
+    expect(screen.queryByRole('link', { name: /제품 \d+개$/ })).not.toBeInTheDocument();
+  });
 
-    it('shows a busy skeleton with the title while the products load', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      apiMocks.listProducts.mockReturnValue(new Promise<never>(() => {}));
-      renderDirectory();
+  it('keeps the list in sync when the refetched brand list changes a product count', async () => {
+    const { queryClient } = renderDirectory();
+    await screen.findByRole('link', { name: '한결&안전, 제품 1개' });
 
-      const section = await openBrandProducts(user, '한결&안전');
-      expect(
-        within(section).getByRole('heading', { level: 2, name: '한결&안전 제품' }),
-      ).toBeVisible();
-      expect(section.querySelector('[aria-busy="true"]')).toBeInTheDocument();
-      expect(
-        within(section).queryByRole('list', { name: '한결&안전 제품' }),
-      ).not.toBeInTheDocument();
-    });
+    apiMocks.listBrands.mockResolvedValue([
+      buildBrandSummary('brand-one', '한결&안전', { productCount: 4 }),
+      brandTwo,
+    ]);
+    await queryClient.refetchQueries({ queryKey: queryKeys.brands.list });
 
-    it('shows a danger alert with a retry button only for a temporary product list failure', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      apiMocks.listProducts
-        .mockRejectedValueOnce(new ApiError('NETWORK', 'temporary'))
-        .mockResolvedValueOnce(buildPagedProducts([buildProduct('product-a', '안전화 A')]));
-      renderDirectory();
-
-      await openBrandProducts(user, '한결&안전');
-      const errorAlert = await screen.findByRole('alert');
-      expect(errorAlert).toHaveTextContent('상품을 불러오지 못했습니다');
-      await user.click(within(errorAlert).getByRole('button', { name: '다시 시도' }));
-
-      expect(await screen.findByText('안전화 A')).toBeVisible();
-      expect(apiMocks.listProducts).toHaveBeenCalledTimes(2);
-    });
-
-    it('shows the alert without a retry button when the product list fails with a non-temporary error', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      apiMocks.listProducts.mockRejectedValue(new ApiError('NOT_IMPLEMENTED', 'products.list'));
-      renderDirectory();
-
-      await openBrandProducts(user, '한결&안전');
-      const errorAlert = await screen.findByRole('alert');
-      expect(errorAlert).toHaveTextContent('상품 조회 기능을 준비하고 있습니다');
-      expect(within(errorAlert).queryByRole('button')).not.toBeInTheDocument();
-    });
-
-    it('shows the empty message under the title when the list comes back empty', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      apiMocks.listProducts.mockResolvedValue(buildPagedProducts([]));
-      renderDirectory();
-
-      const section = await openBrandProducts(user, '한결&안전');
-      expect(await screen.findByText('현재 판매 중인 상품이 없습니다')).toBeVisible();
-      expect(
-        within(section).getByRole('heading', { level: 2, name: '한결&안전 제품' }),
-      ).toBeVisible();
-      expect(
-        within(section).queryByRole('list', { name: '한결&안전 제품' }),
-      ).not.toBeInTheDocument();
-    });
-
-    it('does not mount the product section or call the product list for a brand with no products', async () => {
-      apiMocks.listBrands.mockResolvedValue([
-        brandOne,
-        buildBrandSummary('brand-empty', '빈브랜드', { productCount: 0 }),
-      ]);
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-empty'));
-      const { container } = renderDirectory();
-
-      await findSpotlightBand('빈브랜드');
-      expect(container.querySelector('#brand-products')).toBeNull();
-      expect(apiMocks.listProducts).not.toHaveBeenCalled();
-    });
-
-    it('does not show the previous brand products after another brand is selected', async () => {
-      const user = userEvent.setup();
-      apiMocks.listProducts.mockImplementation(async (params: { brand?: string[] }) =>
-        buildPagedProducts(
-          params.brand?.[0] === '한결&안전'
-            ? [buildProduct('product-a', '한결 안전화')]
-            : [buildProduct('product-b', '세이프 헬멧')],
-        ),
-      );
-      renderDirectory();
-
-      await user.click(await screen.findByRole('button', { name: '한결&안전, 제품 1개' }));
-      await openBrandProducts(user, '한결&안전');
-      expect(await screen.findByText('한결 안전화')).toBeVisible();
-
-      await user.click(screen.getByRole('button', { name: '세이프원, 제품 1개' }));
-      expect(screen.queryByText('한결 안전화')).not.toBeInTheDocument();
-      await openBrandProducts(user, '세이프원');
-      expect(await screen.findByText('세이프 헬멧')).toBeVisible();
-      expect(screen.queryByText('한결 안전화')).not.toBeInTheDocument();
-    });
-
-    it('shows at most ten products in a two-row grid and no page arrows', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      // 한 번에 10개까지만 받으므로 목록이 더 길어도 그리드는 10장 이하입니다.
-      apiMocks.listProducts.mockResolvedValue(
-        buildPagedProducts(
-          Array.from({ length: 10 }, (_, index) =>
-            buildProduct(`one-${index}`, `one 상품 ${index}`),
-          ),
-        ),
-      );
-      renderDirectory();
-
-      const section = await openBrandProducts(user, '한결&안전');
-      await screen.findByText('one 상품 9');
-      const grid = within(section).getByRole('list', { name: '한결&안전 제품' });
-      expect(within(grid).getAllByRole('listitem')).toHaveLength(10);
-      expect(
-        within(section).queryByRole('button', { name: /^다음 |^이전 / }),
-      ).not.toBeInTheDocument();
-    });
-
-    it('replaces the grid with the next brand products when the brand changes', async () => {
-      const user = userEvent.setup();
-      apiMocks.listProducts.mockImplementation(async (params: { brand?: string[] }) => {
-        const prefix = params.brand?.[0] === '한결&안전' ? 'one' : 'two';
-        return buildPagedProducts(
-          Array.from({ length: 10 }, (_, index) =>
-            buildProduct(`${prefix}-${index}`, `${prefix} 상품 ${index}`),
-          ),
-        );
-      });
-      renderDirectory();
-
-      await user.click(await screen.findByRole('button', { name: '한결&안전, 제품 1개' }));
-      await openBrandProducts(user, '한결&안전');
-      await screen.findByText('one 상품 0');
-
-      await user.click(await screen.findByRole('button', { name: '세이프원, 제품 1개' }));
-      const secondSection = await openBrandProducts(user, '세이프원');
-      await screen.findByText('two 상품 0');
-      expect(within(secondSection).getByRole('list', { name: '세이프원 제품' })).toBeVisible();
-      expect(screen.queryByText('one 상품 0')).not.toBeInTheDocument();
-    });
-
-    it('moves focus to the product section heading when the spotlight 제품 보기 link is clicked', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      renderDirectory();
-
-      const band = await findSpotlightBand('한결&안전');
-      expect(screen.queryByRole('region', { name: '한결&안전 제품' })).not.toBeInTheDocument();
-      await user.click(within(band).getByRole('link', { name: '제품 보기' }));
-
-      const section = await findProductSection('한결&안전');
-      expect(
-        within(section).getByRole('heading', { level: 2, name: '한결&안전 제품' }),
-      ).toHaveFocus();
-    });
-
-    it('keeps focus on the product section heading when the list arrives after a 제품 보기 click during loading', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      let resolveProducts: (result: PagedResult<Product>) => void = () => {};
-      apiMocks.listProducts.mockReturnValue(
-        new Promise<PagedResult<Product>>((resolve) => {
-          resolveProducts = resolve;
-        }),
-      );
-      renderDirectory();
-
-      const band = await findSpotlightBand('한결&안전');
-      await user.click(within(band).getByRole('link', { name: '제품 보기' }));
-      await findProductSection('한결&안전');
-
-      resolveProducts(buildPagedProducts([buildProduct('product-a', '안전화 A')]));
-
-      // 제목 노드는 로딩 중과 도착 뒤가 같은 노드이므로, 로딩 중 누른 「제품 보기」의 포커스가 도착 뒤에도 제목에 남아야 합니다.
-      expect(await screen.findByText('안전화 A')).toBeVisible();
-      await waitFor(() =>
-        expect(screen.getByRole('heading', { level: 2, name: '한결&안전 제품' })).toHaveFocus(),
-      );
-    });
-
-    it('ignores the late product list of the previous brand when another brand is selected during loading', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      const { queryClient } = renderDirectory();
-      let resolveBrandOne: (result: PagedResult<Product>) => void = () => {};
-      apiMocks.listProducts.mockImplementation((params: { brand?: string[] }) => {
-        if (params.brand?.[0] === '한결&안전') {
-          return new Promise<PagedResult<Product>>((resolve) => {
-            resolveBrandOne = resolve;
-          });
-        }
-        return Promise.resolve(buildPagedProducts([buildProduct('product-b', '세이프 상품')]));
-      });
-
-      const band = await findSpotlightBand('한결&안전');
-      await user.click(within(band).getByRole('link', { name: '제품 보기' }));
-      expect(screen.getByRole('heading', { level: 2, name: '한결&안전 제품' })).toHaveFocus();
-
-      // 한결&안전 목록이 아직 도착하지 않은 상태에서 세이프원을 고르고 「제품 보기」를 누릅니다.
-      const secondCard = screen.getByRole('button', { name: '세이프원, 제품 1개' });
-      await user.click(secondCard);
-      await openBrandProducts(user, '세이프원');
-      expect(await screen.findByText('세이프 상품')).toBeVisible();
-
-      // 늦게 도착한 이전 브랜드 응답은 화면에 나타나지 않고, 포커스도 옮겨가지 않아야 합니다.
-      resolveBrandOne(buildPagedProducts([buildProduct('product-a', '늦은 상품')]));
-      // 이전 브랜드 요청은 관찰자가 없어져 취소되거나, 끝났더라도 캐시에 들어가지 않아야 합니다.
-      // 요청이 settled(fetchStatus idle)된 뒤에 캐시 데이터와 화면을 확인합니다.
-      const lateQueryKey = queryKeys.products.list({ brand: ['한결&안전'], pageSize: 10 });
-      await waitFor(() =>
-        expect(queryClient.getQueryState(lateQueryKey)?.fetchStatus).toBe('idle'),
-      );
-      expect(queryClient.getQueryData(lateQueryKey)).toBeUndefined();
-      expect(screen.queryByText('늦은 상품')).not.toBeInTheDocument();
-      // 포커스는 방금 연 세이프원 섹션의 제목에 있어야 하고, 이전 브랜드 제목으로 가면 안 됩니다.
-      expect(screen.getByRole('heading', { level: 2, name: '세이프원 제품' })).toHaveFocus();
-    });
-
-    it('does not move focus to another brand heading when a brand is selected after a 제품 보기 click', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      renderDirectory();
-
-      const band = await findSpotlightBand('한결&안전');
-      await user.click(within(band).getByRole('link', { name: '제품 보기' }));
-      // 로딩이 끝난 뒤 다른 브랜드를 고르면 포커스는 선택한 타일에 있어야 하고, 새 브랜드의 제목으로 가면 안 됩니다.
-      await screen.findByText('기본 안전장갑');
-      const secondCard = screen.getByRole('button', { name: '세이프원, 제품 1개' });
-      await user.click(secondCard);
-      // 다른 브랜드를 고르면 상품 섹션은 닫혀 있고, 포커스는 고른 타일에 남습니다.
-      expect(screen.queryByRole('region', { name: '세이프원 제품' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('region', { name: '한결&안전 제품' })).not.toBeInTheDocument();
-      expect(secondCard).toHaveFocus();
-    });
-
-    it('does not move focus to the product heading when a reload fails after a settled 제품 보기 click', async () => {
-      const user = userEvent.setup();
-      navigationMocks.setQuery(new URLSearchParams('brand=brand-one'));
-      const { queryClient } = renderDirectory();
-
-      const band = await findSpotlightBand('한결&안전');
-      await user.click(within(band).getByRole('link', { name: '제품 보기' }));
-      const section = await findProductSection('한결&안전');
-      expect(await screen.findByText('기본 안전장갑')).toBeVisible();
-      // 로딩이 끝난 뒤 누른 「제품 보기」 뒤에 포커스를 「전체 보기」 링크로 옮겨 둡니다.
-      const viewAllLink = within(section).getByRole('link', { name: '전체 보기' });
-      viewAllLink.focus();
-
-      // 재조회가 실패하면 본문만 오류 안내로 바뀌고, 「전체 보기」 링크는 같은 노드로 남아 포커스가 그대로 있어야 합니다(제목으로 옮겨가지 않습니다).
-      apiMocks.listProducts.mockRejectedValue(new ApiError('NETWORK', 'temporary'));
-      await queryClient.refetchQueries({
-        queryKey: queryKeys.products.list({ brand: ['한결&안전'], pageSize: 10 }),
-      });
-
-      expect(await screen.findByRole('alert')).toHaveTextContent('상품을 불러오지 못했습니다');
-      expect(viewAllLink).toBeInTheDocument();
-      expect(viewAllLink).toHaveFocus();
-      expect(screen.getByRole('heading', { level: 2, name: '한결&안전 제품' })).not.toHaveFocus();
-    });
+    expect(await screen.findByRole('link', { name: '한결&안전, 제품 4개' })).toBeVisible();
   });
 });

@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProductListingView } from './product-listing-view';
 
 const navigationMocks = vi.hoisted(() => ({
-  pathname: '/brands/brd-workfit/products',
+  pathname: '/brands/brd-workfit',
   push: vi.fn(),
 }));
 
@@ -75,7 +75,7 @@ function stubMatchMedia() {
 
 describe('ProductListingView with a locked brand', () => {
   beforeEach(() => {
-    navigationMocks.pathname = '/brands/brd-workfit/products';
+    navigationMocks.pathname = '/brands/brd-workfit';
     navigationMocks.push.mockReset();
     apiMocks.getShopApi.mockResolvedValue({
       products: { list: apiMocks.listProducts, facets: apiMocks.listFacets },
