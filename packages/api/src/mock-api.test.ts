@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createMemoryStore, HOME_SERVICE_BENEFITS_STORAGE_KEY } from './auth';
 import type { BrandImageSettings } from './types';
 import { ApiConfigError } from './errors';
-import { createMockApi } from './mock-api';
+import { createMockApi, isBuyerVisibleProduct } from './mock-api';
 import { calculateCartTotals, createCartOptionId, groupCartItems } from './cart';
 import { mockBrands } from './mock/brands';
 import { mockProducts } from './mock/products';
@@ -24,6 +24,17 @@ const returnDetails = {
     address2: '마포구',
   },
 };
+
+/**
+ * 구매자 목록에 보이는 목 상품 수입니다. 브랜드 이름을 주면 그 브랜드만 셉니다.
+ * 판단 기준은 mock-api.ts의 isBuyerVisibleProduct를 그대로 씁니다(기준을 여기서 따로 정의하지 않습니다).
+ */
+function countBuyerVisibleMockProducts(brandName?: string): number {
+  return mockProducts.filter(
+    (product) =>
+      (brandName === undefined || product.brand === brandName) && isBuyerVisibleProduct(product),
+  ).length;
+}
 
 describe('목 API 시나리오', () => {
   it('기본 문의 seed와 가격 미표시 상품은 견적 대신 고객센터 문의를 안내합니다', async () => {
@@ -758,7 +769,11 @@ describe('목 API 시나리오', () => {
 
     const secondPage = await mockApi.products.list({ page: 2, pageSize: 2 });
     expect(secondPage.items.map((product) => product.id)).toEqual(['prd-1003', 'prd-1004']);
-    expect(secondPage).toMatchObject({ page: 2, pageSize: 2, totalCount: mockProducts.length });
+    expect(secondPage).toMatchObject({
+      page: 2,
+      pageSize: 2,
+      totalCount: countBuyerVisibleMockProducts(),
+    });
   });
 
   it('평점순은 평점이 없는 상품을 뒤에 두고, 모든 정렬은 품절 상품을 페이지 분할 전에 뒤로 보냅니다', async () => {
@@ -882,7 +897,7 @@ describe('목 API 시나리오', () => {
     const keywordPage = await mockApi.products.list({ keyword: '안전', pageSize: 100 });
     expect(keywordFacets.keywordTotalCount).toBe(keywordPage.totalCount);
     const allFacets = await mockApi.products.facets();
-    expect(allFacets.keywordTotalCount).toBe(mockProducts.length);
+    expect(allFacets.keywordTotalCount).toBe(countBuyerVisibleMockProducts());
   });
 
   it('관련 상품은 기준 상품을 빼고 같은 상위 카테고리를 먼저, 개수 제한을 지켜 돌려줍니다', async () => {
@@ -1004,6 +1019,22 @@ describe('목 API 시나리오', () => {
     ).toBe(true);
     expect(page.items.map((product) => product.id)).not.toContain('prd-1002');
     expect(page.items.map((product) => product.id)).not.toContain('prd-1006');
+
+    // 정가가 없으면 할인 목록에서 빠집니다(개수는 mockProducts에서 같은 조건으로 직접 셉니다).
+    const expectedDiscountedCount = mockProducts.filter(
+      (product) =>
+        isBuyerVisibleProduct(product) &&
+        product.priceVisible &&
+        product.price !== null &&
+        product.listPrice !== null &&
+        product.listPrice > product.price,
+    ).length;
+    expect(page.totalCount).toBe(expectedDiscountedCount);
+
+    const checkProduct = mockProducts.find((product) => product.name === '긴 이름 보안경');
+    if (!checkProduct) throw new Error('점검용 보안경 상품이 필요합니다.');
+    expect(checkProduct.listPrice).toBeNull();
+    expect(page.items.map((product) => product.id)).not.toContain(checkProduct.id);
   });
 
   it('error: NETWORK 오류를 냅니다', async () => {
@@ -1094,9 +1125,28 @@ describe('목 브랜드 API', () => {
     expect(brandList[0]).not.toHaveProperty('isVisible');
     expect(brandList[0]).not.toHaveProperty('sortOrder');
     for (const brandSummary of brandList) {
+      const brandProducts = mockProducts.filter((product) => product.brand === brandSummary.name);
       const brandProductPage = await mockApi.products.list({ brand: [brandSummary.name] });
-      expect(brandSummary.productCount, brandSummary.name).toBe(brandProductPage.totalCount);
+      // 판매중지 상품 포함(현재 mock 기준, 서버 정책은 추후 결정): 상품 수는 노출 조건과 무관하게 전체 개수입니다(숨김·종료 상품 포함).
+      expect(brandSummary.productCount, brandSummary.name).toBe(brandProducts.length);
+      expect(brandProductPage.totalCount, brandSummary.name).toBe(
+        countBuyerVisibleMockProducts(brandSummary.name),
+      );
     }
+  });
+
+  it('판매 중지 상품만 가진 브랜드는 상품 수는 있지만 구매자 상품 목록은 비어 있습니다', async () => {
+    const mockApi = createMockApi(testConfig);
+    const pausedBrand = (await mockApi.brands.list()).find(
+      (brandSummary) => brandSummary.name === '판매중지브랜드',
+    );
+    if (!pausedBrand) throw new Error('판매 중지 점검용 브랜드가 필요합니다.');
+    // 판매 중지 상품 2개는 상품 수에 포함되고, 구매자 목록에서는 빠집니다.
+    // 판매중지 상품 포함(현재 mock 기준, 서버 정책은 추후 결정): 상품 수 2개에는 판매 중지 상품이 들어 있습니다.
+    expect(pausedBrand.productCount).toBe(2);
+    expect(countBuyerVisibleMockProducts(pausedBrand.name)).toBe(0);
+    const brandProductPage = await mockApi.products.list({ brand: [pausedBrand.name] });
+    expect(brandProductPage.totalCount).toBe(0);
   });
 
   it('목 상품의 모든 브랜드는 노출 브랜드로 등록되어 있습니다', () => {

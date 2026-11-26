@@ -231,7 +231,10 @@ function matchesKeyword(product: AdminProduct, normalizedKeyword: string): boole
   );
 }
 
-function isBuyerVisibleProduct(product: AdminProduct): boolean {
+/**
+ * 구매자 목록·검색·상세에 보이는 상품인지 확인합니다. 테스트가 개수를 셀 때도 이 함수를 씁니다(기준 동기화).
+ */
+export function isBuyerVisibleProduct(product: AdminProduct): boolean {
   return (
     product.isVisible !== false &&
     product.salesStatus !== 'paused' &&

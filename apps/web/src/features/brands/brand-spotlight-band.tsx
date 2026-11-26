@@ -5,24 +5,13 @@ import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import type { Ref } from 'react';
 import { PageContainer } from '@/components/page-container';
-import { buildBrandProductsHref } from '@/features/products/product-navigation';
 import { getBrandBandTone, resolveBrandAccentColor } from './brand-accent';
 import { BrandLogo, getBrandSubline } from './brand-media';
+import { BRAND_PRODUCTS_SECTION_HREF, focusBrandProductsHeading } from './brand-products-section';
+import { BRAND_SCROLL_MARGIN_CLASS } from './brand-scroll';
 import { useBrandQuery } from './use-brand-query';
 
 const SPOTLIGHT_TITLE_ID = 'brand-spotlight-title';
-/**
- * sticky 사이트 헤더가 화면 위쪽을 가리는 높이(px)입니다. 헤더 높이 + 16px 여백의 근거는 아래와 같습니다.
- * 근거: site-header.tsx의 모바일 상단 행 h-56(56px, 경계선 없음 → 72px),
- * 데스크톱 헤더 h-72 + lg:border-b 1px(스크롤 후 h-64 → 최대 73px, 그래서 89px).
- */
-export const SPOTLIGHT_HEADER_OFFSET_PX = { mobile: 72, desktop: 89 } as const;
-/**
- * 밴드가 스크롤로 옮겨질 때 헤더 아래에 보이도록 주는 scroll-margin 클래스입니다.
- * Tailwind가 클래스를 찾으려면 문자열 리터럴이어야 하므로 값을 템플릿으로 만들지 않습니다.
- * 위 SPOTLIGHT_HEADER_OFFSET_PX와 같은 값인지는 brand-directory-view.test.tsx에서 확인합니다.
- */
-export const SPOTLIGHT_SCROLL_MARGIN_CLASS = 'scroll-mt-72 lg:scroll-mt-89';
 
 // 히어로 로고 박스는 목록 타일(120×48)보다 큽니다. 데스크톱 최대 320×160에 맞추고, 모바일은 기본 240×96 박스입니다.
 // 박스는 사진 열 폭(w-full)을 넘지 않고, 높이·최대 폭은 모바일 240×96, 데스크톱 320×160입니다.
@@ -62,7 +51,7 @@ export function BrandSpotlightBand({
       aria-labelledby={SPOTLIGHT_TITLE_ID}
       // 배경은 브랜드 accentColor라 토큰으로 줄 수 없는 예외입니다. 값은 resolveBrandAccentColor로 검증한 hex만 들어갑니다.
       style={{ backgroundColor: accentColor }}
-      className={cx('py-24 lg:py-0', tone.textClassName, SPOTLIGHT_SCROLL_MARGIN_CLASS)}
+      className={cx('py-24 lg:py-0', tone.textClassName, BRAND_SCROLL_MARGIN_CLASS)}
     >
       <PageContainer className="flex flex-col gap-20 lg:h-400 lg:flex-row-reverse lg:items-center lg:gap-24 lg:py-48">
         <BrandSpotlightLogoColumn
@@ -89,8 +78,10 @@ export function BrandSpotlightBand({
             <p className="line-clamp-2 text-body-m break-words">{brand.tagline}</p>
           ) : null}
           {brand.productCount > 0 ? (
+            // 같은 페이지의 상품 섹션으로 해시 이동합니다. 포커스는 섹션 제목으로 옮깁니다.
             <Link
-              href={buildBrandProductsHref(brand.id)}
+              href={BRAND_PRODUCTS_SECTION_HREF}
+              onClick={() => focusBrandProductsHeading()}
               className={cx(SPOTLIGHT_CTA_CLASS, tone.ctaClassName, tone.focusClassName)}
             >
               제품 보기
