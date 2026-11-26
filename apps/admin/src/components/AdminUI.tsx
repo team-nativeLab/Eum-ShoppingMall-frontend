@@ -3,6 +3,7 @@ import { useRef, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { Badge, type BadgeTone } from '@eum/ui/components/Badge';
 import { Button } from '@eum/ui/components/Button';
 import { Icon } from '@eum/ui/components/Icon';
+import { SelectableTabs } from '@eum/ui/components/SelectableTabs';
 import { Link } from 'react-router';
 import { cx } from '@eum/ui/lib/cx';
 
@@ -236,30 +237,22 @@ export function AdminTabs<TValue extends string>({
   value,
   onChange,
 }: AdminTabsProps<TValue>) {
+  const tabOptions = options.map((option) => ({
+    value: option.value,
+    label: option.label,
+    ...(option.count !== undefined ? { count: option.count } : {}),
+  }));
+
   return (
-    <div role="group" aria-label={label} className="flex border-b border-line">
-      {options.map((option) => {
-        const isSelected = option.value === value;
-        return (
-          <button
-            key={option.value}
-            type="button"
-            aria-pressed={isSelected}
-            className={`relative -mb-px flex h-44 items-center gap-6 border-b-2 px-12 text-body-s focus-ring ${
-              isSelected
-                ? 'border-text-1 text-text-1'
-                : 'border-transparent text-text-2 hover:text-text-1'
-            }`}
-            onClick={() => onChange(option.value)}
-          >
-            <span>{option.label}</span>
-            {option.count !== undefined ? (
-              <span className="text-caption text-text-3">{option.count}</span>
-            ) : null}
-          </button>
-        );
-      })}
-    </div>
+    <SelectableTabs
+      options={tabOptions}
+      value={value}
+      onValueChange={onChange}
+      label={label}
+      horizontalPadding="12"
+      countPresentation="muted"
+      selectedFontWeight="normal"
+    />
   );
 }
 
