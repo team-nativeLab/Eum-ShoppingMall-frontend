@@ -9,7 +9,7 @@ import { cx } from '@eum/ui/lib/cx';
 import { Store } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { PageContainer } from '@/components/page-container';
 import {
   DESKTOP_QUERY,
@@ -19,7 +19,11 @@ import {
 } from '@/lib/use-media-query';
 import { BRAND_LOAD_ERROR_COPY } from './brand-load-error';
 import { BrandLogo } from './brand-media';
-import { BrandProductsSection } from './brand-products-section';
+import {
+  BRAND_PRODUCTS_SECTION_HREF,
+  type BrandProductsOpenRequest,
+  BrandProductsSection,
+} from './brand-products-section';
 import { BRAND_HEADER_OFFSET_PX } from './brand-scroll';
 import { BrandSpotlightBand } from './brand-spotlight-band';
 import { useBrandsQuery } from './use-brands-query';
@@ -42,6 +46,16 @@ function scrollSpotlightIntoViewIfHidden(
   const isBelowViewport = top > window.innerHeight;
   if (!isCoveredByHeader && !isBelowViewport) return;
   band.scrollIntoView({ block: 'start', behavior: getScrollBehavior(prefersReducedMotion) });
+}
+
+/**
+ * URL 해시가 상품 섹션(#brand-products)이면 그 브랜드의 섹션을 열린 상태로 돌려줍니다. 해시가 없으면 닫힌 상태(null)입니다.
+ * 이 경로로 열면 포커스는 옮기지 않습니다. 스크롤은 scrollOnOpen이 true일 때만 요청합니다(새로고침에서만 true).
+ */
+function readBrandProductsOpenFromLocation(scrollOnOpen: boolean): BrandProductsOpenRequest | null {
+  if (window.location.hash !== BRAND_PRODUCTS_SECTION_HREF) return null;
+  const brandId = new URLSearchParams(window.location.search).get(BRAND_QUERY_KEY);
+  return brandId === null ? null : { brandId, shouldFocus: false, shouldScroll: scrollOnOpen };
 }
 
 /**
@@ -154,7 +168,7 @@ function BrandDirectoryError({ error, onRetry }: { error: unknown; onRetry: () =
 }
 
 /**
- * 선택 밴드, 선택 브랜드의 상품 섹션(상품이 있을 때만), 브랜드 카드 그리드입니다.
+ * 선택 밴드, 선택 브랜드의 상품 섹션(「제품 보기」로 연 경우에만, 상품이 있을 때만), 브랜드 카드 그리드입니다.
  * activeBrand는 목록에서 찾은 선택 브랜드이고, 없으면 밴드와 상품 섹션을 그리지 않습니다.
  */
 function BrandCardDirectory({
@@ -175,6 +189,40 @@ function BrandCardDirectory({
   // 사용자가 마지막으로 고른 카드의 id입니다(스크롤 예약). 여러 번 빠르게 골라도 마지막 선택이 남습니다.
   // 첫 로드의 ?brand=처럼 사용자가 고르지 않은 선택에는 예약이 없으므로 스크롤하지 않습니다.
   const pendingScrollBrandIdRef = useRef<string | null>(null);
+  // 「제품 보기」로 연 상품 섹션의 요청입니다. 해시(#brand-products)와 맞춰 둡니다.
+  // 클릭은 이 상태를 바로 바꾸고, 새로고침은 마운트 때 해시를 읽으며, 뒤로·앞으로 가기는 아래 popstate에서 다시 맞춥니다.
+  const [productsOpenRequest, setProductsOpenRequest] = useState<BrandProductsOpenRequest | null>(
+    () => {
+      const requestFromHash = readBrandProductsOpenFromLocation(false);
+      // 새로고침으로 바로 열리는 섹션만 스크롤합니다. 상품이 없거나 다른 브랜드의 해시면 섹션이 열리지 않으므로 스크롤 요청도 만들지 않습니다.
+      const opensNow =
+        requestFromHash !== null &&
+        activeBrand !== undefined &&
+        activeBrand.id === requestFromHash.brandId &&
+        activeBrand.productCount > 0;
+      return opensNow ? { ...requestFromHash, shouldScroll: true } : requestFromHash;
+    },
+  );
+
+  // 뒤로·앞으로 가기는 해시를 URL 그대로 되돌리므로, 상품 섹션 상태를 URL 해시에 다시 맞춥니다. 스크롤은 하지 않습니다.
+  useEffect(() => {
+    function handlePopState() {
+      setProductsOpenRequest(readBrandProductsOpenFromLocation(false));
+    }
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // 스크롤·포커스 요청을 처리한 뒤 두 플래그를 false로 되돌립니다. 같은 브랜드의 요청일 때만 바꿉니다.
+  const handleBrandProductsOpenRequestHandled = useCallback((brandId: string) => {
+    setProductsOpenRequest((current) =>
+      current !== null &&
+      current.brandId === brandId &&
+      (current.shouldFocus || current.shouldScroll)
+        ? { brandId, shouldFocus: false, shouldScroll: false }
+        : current,
+    );
+  }, []);
 
   // 예약은 URL의 brand가 그 id와 같아졌을 때 한 번만 쓰고 비웁니다.
   // URL이 아직 다른 카드를 가리키면 예약을 유지하고(이전 클릭의 반영 전), 목록에서 사라진 id는 확정적으로 무효이므로 버립니다.
@@ -195,16 +243,45 @@ function BrandCardDirectory({
     // 마지막 클릭이 지금 표시된 카드면 스크롤할 이유가 없으므로 남은 예약을 비웁니다(같은 카드 재클릭 무스크롤).
     // 그 밖의 클릭은 예약을 덮어써, 마지막으로 고른 카드가 기준이 되게 합니다.
     pendingScrollBrandIdRef.current = brandId === activeBrandId ? null : brandId;
+    // 카드를 누르면 다른 카드든 이미 고른 카드든 상품 섹션을 닫습니다(같은 카드 재클릭도 닫힘).
+    // 아래 replace가 해시도 떼므로 상태와 URL이 함께 닫힙니다. 선택 표시는 replace가 정합니다.
+    setProductsOpenRequest(null);
     // 히스토리 항목을 늘리지 않도록 replace로 갱신하고, 페이지 맨 위로 튀지 않게 scroll을 끕니다.
     router.replace(`/brands?${BRAND_QUERY_KEY}=${encodeURIComponent(brandId)}`, { scroll: false });
   }
 
+  function handleOpenBrandProducts(brandId: string) {
+    // 「제품 보기」 링크가 해시 이동으로 뒤로 가기 기록을 남깁니다. 섹션은 이 상태로 열고, 스크롤과 포커스는 섹션이 마운트된 뒤 옮깁니다.
+    // 이미 열린 섹션을 다시 누르면 새 객체가 되어 같은 처리가 다시 돕니다.
+    setProductsOpenRequest({ brandId, shouldFocus: true, shouldScroll: true });
+  }
+
+  // 상품 섹션은 선택 브랜드가 상품을 가지고 있고, 그 브랜드에 대해 「제품 보기」로 열렸을 때만 그립니다.
+  const openedProductsRequest =
+    activeBrand !== undefined &&
+    activeBrand.productCount > 0 &&
+    productsOpenRequest !== null &&
+    productsOpenRequest.brandId === activeBrand.id
+      ? productsOpenRequest
+      : null;
+
   return (
     <>
-      {activeBrand ? <BrandSpotlightBand brand={activeBrand} sectionRef={spotlightRef} /> : null}
-      {activeBrand && activeBrand.productCount > 0 ? (
+      {activeBrand ? (
+        <BrandSpotlightBand
+          brand={activeBrand}
+          sectionRef={spotlightRef}
+          onOpenProducts={() => handleOpenBrandProducts(activeBrand.id)}
+        />
+      ) : null}
+      {activeBrand && openedProductsRequest ? (
         // key로 브랜드마다 새로 마운트해, 이전 브랜드의 목록 상태(로딩·포커스 요청)가 남지 않게 합니다.
-        <BrandProductsSection key={activeBrand.id} brand={activeBrand} />
+        <BrandProductsSection
+          key={activeBrand.id}
+          brand={activeBrand}
+          openRequest={openedProductsRequest}
+          onOpenRequestHandled={handleBrandProductsOpenRequestHandled}
+        />
       ) : null}
       <PageContainer className="pt-24 lg:pt-48">
         <ul className="grid grid-cols-2 gap-12 lg:grid-cols-6 lg:gap-24">

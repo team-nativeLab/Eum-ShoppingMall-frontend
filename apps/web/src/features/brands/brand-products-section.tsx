@@ -8,11 +8,12 @@ import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { cx } from '@eum/ui/lib/cx';
 import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect, useRef } from 'react';
 import { PageContainer } from '@/components/page-container';
 import { ProductCard } from '@/features/products/product-card';
 import { buildBrandProductsHref } from '@/features/products/product-navigation';
 import { useProductsQuery } from '@/features/products/use-products-query';
+import { getScrollBehavior, REDUCED_MOTION_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { BRAND_SCROLL_MARGIN_CLASS } from './brand-scroll';
 
 /** 「제품 보기」 해시 이동이 가리키는 섹션 id입니다. */
@@ -86,7 +87,21 @@ const PRODUCTS_LOAD_ERROR_COPY: Record<ApiFailureKind, { title: string; descript
 };
 
 /**
- * 「제품 보기」 클릭 뒤 포커스를 섹션 제목으로 옮깁니다.
+ * 상품 섹션의 열림 요청입니다. brandId는 섹션이 속한 브랜드입니다.
+ * - shouldFocus: 이 열기가 제목 포커스를 요청했는지입니다. 「제품 보기」 클릭에서만 true입니다.
+ * - shouldScroll: 섹션 머리를 헤더 아래로 옮길지입니다. 「제품 보기」 클릭(다시 누른 경우 포함)과, 상품 섹션이 열린 주소로 새로고침한 경우에만 true입니다.
+ *   뒤로·앞으로 가기로 열면 false입니다(F-4 범위: 기본은 옮기지 않음).
+ * 클릭마다 새 객체를 만들어, 섹션이 이미 열린 상태에서 다시 눌러도 effect가 다시 돕니다.
+ * 처리한 요청은 부모가 소비해 두 플래그를 false로 되돌립니다(나중에 다시 마운트되어도 움직이지 않게 합니다).
+ */
+export interface BrandProductsOpenRequest {
+  brandId: string;
+  shouldFocus: boolean;
+  shouldScroll: boolean;
+}
+
+/**
+ * 「제품 보기」 클릭 뒤 포커스를 섹션 제목으로 옮깁니다. 섹션이 마운트된 뒤에 호출합니다.
  * 위치 이동은 해시 이동이 맡으므로 preventScroll로 스크롤을 두 번 하지 않습니다.
  */
 export function focusBrandProductsHeading() {
@@ -95,19 +110,53 @@ export function focusBrandProductsHeading() {
 
 /**
  * 선택 브랜드의 상품을 두 줄 그리드로 보여 주는 섹션입니다(선택 밴드 아래, 브랜드 카드 그리드 위).
- * 상품이 없는 브랜드는 마운트하지 않습니다(호출하는 쪽이 productCount를 확인합니다).
+ * 「제품 보기」로 연 경우에만 마운트하므로(호출하는 쪽이 열림 상태를 정합니다), 선택만 한 브랜드는 상품 목록을 요청하지 않습니다.
+ * 상품이 없는 브랜드도 마운트하지 않습니다(호출하는 쪽이 productCount를 확인합니다).
  * 제목과 「전체 보기」는 상태와 무관하게 같은 자리에 그려, 「제품 보기」 앵커 대상과 포커스 대상이 사라지지 않게 합니다.
  */
-export function BrandProductsSection({ brand }: { brand: BrandSummary }) {
-  // 이 컴포넌트는 productCount가 0보다 클 때만 마운트되므로(호출하는 쪽에서 확인), 조회는 항상 켜 둡니다.
+export function BrandProductsSection({
+  brand,
+  openRequest,
+  onOpenRequestHandled,
+}: {
+  brand: BrandSummary;
+  openRequest: BrandProductsOpenRequest;
+  /** 스크롤·포커스 요청을 처리했음을 부모에 알려, 요청을 한 번만 쓰게 합니다. */
+  onOpenRequestHandled: (brandId: string) => void;
+}) {
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const prefersReducedMotion = useMediaQuery(REDUCED_MOTION_QUERY);
+  // 이 컴포넌트는 열린 뒤에만 마운트되므로(호출하는 쪽에서 확인), 조회는 항상 켜 둡니다.
   const productsQuery = useProductsQuery({
     brand: [brand.name],
     pageSize: BRAND_PRODUCTS_PAGE_SIZE,
   });
   const title = `${brand.name} 제품`;
   const products = productsQuery.data?.items ?? [];
+
+  // 열림 요청을 마운트 직후(또는 새 요청이 생긴 직후) 한 번 처리합니다.
+  // 스크롤: 루트의 scroll-margin(BRAND_SCROLL_MARGIN_CLASS)이 헤더 높이만큼 띄우므로, 루트를 block start로 옮기면 제목이 헤더 바로 아래에 옵니다.
+  //   루트 위치는 섹션 안의 로딩 상태와 무관하므로(위에 있는 밴드는 고정 높이), 상품이 도착해도 위치가 밀리지 않습니다.
+  // 포커스: 「제품 보기」 클릭일 때만 제목으로 옮기며, 스크롤과 별개로 처리합니다(focus는 preventScroll).
+  // 요청은 한 번 처리하고 바로 소비합니다. 소비하지 않으면 상품 0개로 섹션이 내려갔다가 다시 마운트될 때 사용자 조작 없이 움직입니다.
+  useEffect(() => {
+    if (!openRequest.shouldScroll && !openRequest.shouldFocus) return;
+    if (openRequest.shouldScroll) {
+      sectionRef.current?.scrollIntoView({
+        block: 'start',
+        behavior: getScrollBehavior(prefersReducedMotion),
+      });
+    }
+    if (openRequest.shouldFocus) focusBrandProductsHeading();
+    onOpenRequestHandled(brand.id);
+  }, [openRequest, onOpenRequestHandled, brand.id, prefersReducedMotion]);
+
   return (
-    <div id={BRAND_PRODUCTS_SECTION_ID} className={cx(BRAND_SCROLL_MARGIN_CLASS, 'pt-24 lg:pt-48')}>
+    <div
+      ref={sectionRef}
+      id={BRAND_PRODUCTS_SECTION_ID}
+      className={cx(BRAND_SCROLL_MARGIN_CLASS, 'pt-24 lg:pt-48')}
+    >
       <PageContainer>
         <BrandProductsLayout title={title} viewAllHref={buildBrandProductsHref(brand.id)}>
           {productsQuery.isPending ? (

@@ -7,7 +7,7 @@ import type { Ref } from 'react';
 import { PageContainer } from '@/components/page-container';
 import { getBrandBandTone, resolveBrandAccentColor } from './brand-accent';
 import { BrandLogo, getBrandSubline } from './brand-media';
-import { BRAND_PRODUCTS_SECTION_HREF, focusBrandProductsHeading } from './brand-products-section';
+import { BRAND_PRODUCTS_SECTION_HREF } from './brand-products-section';
 import { BRAND_SCROLL_MARGIN_CLASS } from './brand-scroll';
 import { useBrandQuery } from './use-brand-query';
 
@@ -31,10 +31,13 @@ const SPOTLIGHT_CTA_CLASS =
 export function BrandSpotlightBand({
   brand,
   sectionRef,
+  onOpenProducts,
 }: {
   brand: BrandSummary;
   /** 카드 선택 시 밴드 위치를 재려고 부모가 잡는 ref */
   sectionRef?: Ref<HTMLElement>;
+  /** 「제품 보기」를 누르면 부모가 상품 섹션을 엽니다(섹션의 열림 상태는 부모가 정합니다). */
+  onOpenProducts: () => void;
 }) {
   const accentColor = resolveBrandAccentColor(brand.accentColor);
   const tone = getBrandBandTone(accentColor);
@@ -78,10 +81,10 @@ export function BrandSpotlightBand({
             <p className="line-clamp-2 text-body-m break-words">{brand.tagline}</p>
           ) : null}
           {brand.productCount > 0 ? (
-            // 같은 페이지의 상품 섹션으로 해시 이동합니다. 포커스는 섹션 제목으로 옮깁니다.
+            // 같은 페이지의 상품 섹션으로 해시 이동합니다(뒤로 가기 기록을 남깁니다). 섹션을 여는 일은 부모가 맡습니다.
             <Link
               href={BRAND_PRODUCTS_SECTION_HREF}
-              onClick={() => focusBrandProductsHeading()}
+              onClick={onOpenProducts}
               className={cx(SPOTLIGHT_CTA_CLASS, tone.ctaClassName, tone.focusClassName)}
             >
               제품 보기
