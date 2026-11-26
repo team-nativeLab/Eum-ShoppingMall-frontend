@@ -62,18 +62,19 @@ npm ci
 
 ```bash
 # apps/web/.env.local
-NEXT_PUBLIC_API_MODE=mock
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8080/api
+NEXT_PUBLIC_API_MODE=real
+NEXT_PUBLIC_API_BASE_URL=https://eum.https.gsmsv.site
 NEXT_PUBLIC_MOCK_SCENARIO=normal
 
 # apps/admin/.env.local
-VITE_API_MODE=mock
-VITE_API_BASE_URL=http://localhost:8080/api
+VITE_API_MODE=real
+VITE_API_BASE_URL=https://eum.https.gsmsv.site
 VITE_MOCK_SCENARIO=normal
 VITE_WEB_BASE_URL=http://localhost:3000
 ```
 
 > `NEXT_PUBLIC_*`, `VITE_*` 변수는 브라우저 번들에 포함되므로 비밀값을 넣지 않습니다.
+> base URL은 origin이며 API endpoint는 `/api/v1/...` 경로를 사용합니다. `real` 모드는 mock 호출을 멈추며, 연결되지 않은 기능은 `NOT_IMPLEMENTED` 오류를 반환합니다.
 > 개발 서버에서는 모드 값이 비어 있으면 자동으로 `mock`이 쓰입니다. 자세한 규칙은 [목 API와 환경변수](#목-api와-환경변수)를 참고하세요.
 
 ### 3. 개발 서버 실행
@@ -188,8 +189,8 @@ Eum-ShoppingMall-frontend/
 - **배포는 앱별 빌드 명령과 배포 환경변수로 합니다.** Production에서 `real` 모드를 쓰면 HTTPS API 주소가 필요합니다. 테스트 전용 `mock` 모드는 각 앱의 `*_ALLOW_MOCK_IN_PRODUCTION=true`를 별도로 명시해야 합니다. 루트의 `build:web`/`build:admin`은 각각 `npm run build -w @eum/web`, `npm run build -w @eum/admin`과 같습니다. 예:
 
   ```bash
-  NEXT_PUBLIC_API_MODE=real NEXT_PUBLIC_API_BASE_URL=https://YOUR_API_HOST/api npm run build -w @eum/web
-  VITE_API_MODE=real VITE_API_BASE_URL=https://YOUR_API_HOST/api npm run build -w @eum/admin
+  NEXT_PUBLIC_API_MODE=real NEXT_PUBLIC_API_BASE_URL=https://eum.https.gsmsv.site npm run build -w @eum/web
+  VITE_API_MODE=real VITE_API_BASE_URL=https://eum.https.gsmsv.site npm run build -w @eum/admin
   ```
 
   테스트 전용 Production mock 빌드는 앱에 맞는 opt-in 변수를 함께 지정합니다. Web과 Admin을 묶어 빌드할 때 두 변수 모두 필요합니다.

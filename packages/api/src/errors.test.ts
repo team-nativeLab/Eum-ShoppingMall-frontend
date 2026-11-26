@@ -20,6 +20,11 @@ describe('재시도 판단', () => {
     expect(shouldRetryQuery(0, networkError)).toBe(true);
     expect(shouldRetryQuery(1, networkError)).toBe(false);
   });
+
+  it('4xx는 재시도하지 않고 5xx는 정책에 맡깁니다', () => {
+    expect(isRetryableError(new ApiError('HTTP', '제한', { status: 429 }))).toBe(false);
+    expect(isRetryableError(new ApiError('HTTP', '서버 오류', { status: 503 }))).toBe(true);
+  });
 });
 
 describe('getApiFailureKind', () => {
