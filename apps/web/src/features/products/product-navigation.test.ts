@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildBrandDetailHref,
   buildBrandHref,
-  buildBrandProductsHref,
   buildBrandSelectionHref,
   getBrandFilterValues,
   getPrimaryNavigationItems,
-  isBrandProductsPath,
   isPrimaryNavigationItemActive,
   type PrimaryNavigationItem,
 } from './product-navigation';
@@ -35,22 +34,11 @@ describe('product and brand navigation', () => {
     expect(getPrimaryNavigationItems()).toHaveLength(6);
   });
 
-  it('builds the brand directory and brand product listing destinations by brand id', () => {
+  it('builds the brand directory and brand page destinations by brand id', () => {
     expect(buildBrandHref()).toBe('/brands');
-    expect(buildBrandProductsHref('brd-workfit')).toBe('/brands/brd-workfit/products');
-    expect(buildBrandProductsHref('3M & Co')).toBe('/brands/3M%20%26%20Co/products');
-    expect(buildBrandProductsHref('브랜드/1')).toBe(
-      '/brands/%EB%B8%8C%EB%9E%9C%EB%93%9C%2F1/products',
-    );
-  });
-
-  it('recognizes only the brand-scoped product list path', () => {
-    expect(isBrandProductsPath('/brands/brd-1/products')).toBe(true);
-    expect(isBrandProductsPath('/brands')).toBe(false);
-    expect(isBrandProductsPath('/brands/brd-1')).toBe(false);
-    expect(isBrandProductsPath('/brands/x/products/y')).toBe(false);
-    expect(isBrandProductsPath('/brands/x/products/')).toBe(false);
-    expect(isBrandProductsPath('/search')).toBe(false);
+    expect(buildBrandDetailHref('brd-workfit')).toBe('/brands/brd-workfit');
+    expect(buildBrandDetailHref('3M & Co')).toBe('/brands/3M%20%26%20Co');
+    expect(buildBrandDetailHref('브랜드/1')).toBe('/brands/%EB%B8%8C%EB%9E%9C%EB%93%9C%2F1');
   });
 
   it('reads repeated brand parameters as unique selected filters', () => {
@@ -87,11 +75,6 @@ describe('product and brand navigation', () => {
     expect(getActiveKeys('/discounts')).toEqual(['discounts']);
     expect(getActiveKeys('/discounts/page/2')).toEqual(['discounts']);
     expect(getActiveKeys('/')).toEqual([]);
-  });
-
-  it('activates only 「전체상품」 on a brand-scoped product list, not the Brand tab', () => {
-    expect(getActiveKeys('/brands/brd-1/products')).toEqual(['products']);
-    expect(getActiveKeys('/brands')).toEqual(['brands']);
   });
 
   it('activates Recommended only on /recommended and its sub-paths', () => {

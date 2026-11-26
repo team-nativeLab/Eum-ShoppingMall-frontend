@@ -4,7 +4,7 @@ import { useCallback, useSyncExternalStore } from 'react';
 import { minWidthQuery } from './breakpoints';
 
 /** 감속 모드(애니메이션 줄이기) 미디어 쿼리 */
-export const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 /** 데스크톱 디자인을 적용하는 폭(Tailwind lg: 와 같은 조건, 값은 breakpoints.ts 한 곳에서 관리) */
 export const DESKTOP_QUERY = minWidthQuery('lg');
 

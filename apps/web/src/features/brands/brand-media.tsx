@@ -49,14 +49,3 @@ export function BrandLogo({
     </span>
   );
 }
-
-/** 브랜드 밴드 보조 줄(영문 표기 · 주력 분야). 둘 다 없으면 null */
-export function getBrandSubline(brand: {
-  englishName: string | null;
-  mainField?: string | null;
-}): string | null {
-  const sublineParts = [brand.englishName, brand.mainField].filter(
-    (sublinePart): sublinePart is string => Boolean(sublinePart?.trim()),
-  );
-  return sublineParts.length > 0 ? sublineParts.join(' · ') : null;
-}
