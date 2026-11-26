@@ -5,17 +5,37 @@ export { ApiConfigError };
 /** API 호출 실패를 화면에서 구분하기 위한 오류 */
 export class ApiError extends Error {
   readonly code: ApiErrorCode;
+  readonly status?: number;
+  readonly serverCode?: string;
+  readonly fieldErrors?: readonly { field: string; reason: string }[];
 
-  constructor(code: ApiErrorCode, message: string) {
+  constructor(
+    code: ApiErrorCode,
+    message: string,
+    details: {
+      status?: number;
+      serverCode?: string;
+      fieldErrors?: readonly { field: string; reason: string }[];
+    } = {},
+  ) {
     super(message);
     this.name = 'ApiError';
     this.code = code;
+    this.status = details.status;
+    this.serverCode = details.serverCode;
+    this.fieldErrors = details.fieldErrors;
   }
 }
 
 /** 오류 종류. 화면 문구는 이 코드를 보고 고릅니다. */
 export type ApiErrorCode =
-  'NOT_FOUND' | 'NETWORK' | 'NOT_IMPLEMENTED' | 'INVALID_CREDENTIALS' | 'VALIDATION';
+  | 'NOT_FOUND'
+  | 'NETWORK'
+  | 'NOT_IMPLEMENTED'
+  | 'INVALID_CREDENTIALS'
+  | 'VALIDATION'
+  | 'HTTP'
+  | 'INVALID_RESPONSE';
 
 // 다시 시도해도 결과가 같은 오류 코드
 const NON_RETRYABLE_CODES: ReadonlySet<ApiErrorCode> = new Set([
@@ -23,13 +43,19 @@ const NON_RETRYABLE_CODES: ReadonlySet<ApiErrorCode> = new Set([
   'NOT_IMPLEMENTED',
   'INVALID_CREDENTIALS',
   'VALIDATION',
+  'INVALID_RESPONSE',
 ]);
 
 /** 다시 시도할 가치가 있는 오류인지. 설정 오류·요청 취소·확정적 실패는 false입니다. */
 export function isRetryableError(error: unknown): boolean {
   if (error instanceof ApiConfigError) return false;
   if (error instanceof DOMException && error.name === 'AbortError') return false;
-  if (error instanceof ApiError) return !NON_RETRYABLE_CODES.has(error.code);
+  if (error instanceof ApiError) {
+    if (error.status !== undefined && error.status >= 400 && error.status < 500) return false;
+    if (error.status !== undefined && error.status >= 500) return true;
+    if (error.status !== undefined && error.status >= 200 && error.status < 300) return false;
+    return !NON_RETRYABLE_CODES.has(error.code);
+  }
   return true;
 }
 
