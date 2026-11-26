@@ -14,11 +14,14 @@ export function BrandLogo({
   brandName,
   className,
   settings,
+  loading = 'lazy',
 }: {
   logoUrl: string | null;
   brandName: string;
   className?: string;
   settings?: BrandImageSettings;
+  /** 첫 화면의 히어로 로고는 eager로 받아 LCP 후보가 늦지 않게 합니다. 목록 타일은 기본 lazy입니다. */
+  loading?: 'lazy' | 'eager';
 }) {
   const logoLabel = `${brandName} 로고`;
   const activeSettings = settings ?? DEFAULT_LOGO_SETTINGS;
@@ -28,7 +31,7 @@ export function BrandLogo({
     <img
       src={logoUrl}
       alt={logoLabel}
-      loading="lazy"
+      loading={loading}
       className={cx('shrink-0', className)}
       style={{
         maxWidth: `${activeSettings.width}px`,

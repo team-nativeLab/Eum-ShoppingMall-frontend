@@ -176,4 +176,18 @@ describe('BrandDirectoryView', () => {
 
     expect(await screen.findByRole('link', { name: '한결&안전, 제품 4개' })).toBeVisible();
   });
+
+  it('keeps the logo slot inside each tile, with the product count after the brand name', async () => {
+    renderDirectory();
+
+    const tile = await screen.findByRole('link', { name: '한결&안전, 제품 1개' });
+    // 로고가 없으면 같은 자리의 플레이스홀더가 그려지며, 타일 안에서 이름과 개수 줄이 함께 있습니다.
+    expect(within(tile).getByRole('img', { name: '한결&안전 로고' })).toBeInTheDocument();
+    expect(within(tile).getByText('한결&안전')).toBeInTheDocument();
+    const countLine = within(tile).getByText('제품 1개');
+    expect(
+      within(tile).getByText('한결&안전').compareDocumentPosition(countLine) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
 });

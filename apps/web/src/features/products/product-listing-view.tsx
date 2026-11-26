@@ -85,7 +85,6 @@ export function ProductListingView({
   initialSearchParams = '',
   lockedBrand,
   pageTitle,
-  hideHeader = false,
   hideBreadcrumb = false,
   backLink,
 }: {
@@ -99,8 +98,6 @@ export function ProductListingView({
   lockedBrand?: string;
   /** 제목을 바꿉니다. 없으면 카테고리명·검색어·「전체 상품」을 씁니다. */
   pageTitle?: string;
-  /** true면 뒤로 링크와 제목·개수 헤더를 그리지 않습니다(호출하는 쪽이 헤더를 따로 그릴 때). 필터와 목록은 그대로입니다. */
-  hideHeader?: boolean;
   /** true면 빵부스러기를 그리지 않습니다(기본은 카테고리 화면에서만 그립니다). */
   hideBreadcrumb?: boolean;
 }) {
@@ -338,7 +335,7 @@ export function ProductListingView({
 
   return (
     <PageContainer className={cx('pb-56', isSearch ? 'pt-24 lg:pt-48' : 'pt-24')}>
-      {backLink && !hideHeader ? (
+      {backLink ? (
         <Link
           href={backLink.href}
           className="mb-16 inline-flex items-center gap-4 rounded-4 text-label-m text-text-2 focus-ring hover:text-text-1"
@@ -358,15 +355,13 @@ export function ProductListingView({
           )}
         />
       )}
-      {hideHeader ? null : (
-        <header className="flex flex-wrap items-end gap-x-12 gap-y-4">
-          <h1 className="text-h1 lg:text-display">{title}</h1>
-          <p className="pb-2 text-body-s text-text-3 lg:pb-4">
-            {isSearch && !lockedBrandName ? '' : '총 '}
-            {totalCount === undefined ? '–' : totalCount.toLocaleString('ko-KR')}개
-          </p>
-        </header>
-      )}
+      <header className="flex flex-wrap items-end gap-x-12 gap-y-4">
+        <h1 className="text-h1 lg:text-display">{title}</h1>
+        <p className="pb-2 text-body-s text-text-3 lg:pb-4">
+          {isSearch && !lockedBrandName ? '' : '총 '}
+          {totalCount === undefined ? '–' : totalCount.toLocaleString('ko-KR')}개
+        </p>
+      </header>
 
       {/* 고정 브랜드 목록에서는 「전체 N」·카테고리 집계가 전체 상품 기준이라 칩 그룹을 그리지 않습니다. */}
       {isSearch && lockedBrandName ? null : isSearch ? (

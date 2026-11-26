@@ -8,19 +8,17 @@ import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { ChevronLeft, Store } from 'lucide-react';
 import Link from 'next/link';
 import { PageContainer } from '@/components/page-container';
-import { ProductListingView } from '@/features/products/product-listing-view';
+import { BRAND_LIST_LINK_CLASS } from './brand-link-classes';
+import { BrandHero } from './brand-hero';
+import { BrandProductsCarousel } from './brand-products-carousel';
 import { BRAND_LOAD_ERROR_COPY } from './brand-load-error';
 import { useBrandQuery } from './use-brand-query';
 
-const BRAND_LIST_LINK_CLASS =
-  'inline-flex h-48 items-center rounded-8 border border-line-strong px-16 text-label-m focus-ring hover:bg-surface';
-
 /**
  * 브랜드 페이지(/brands/[brandId])입니다.
- * 상단 헤더(「← 브랜드 목록」, 브랜드 이름, 한 줄 설명, 제품 수)는 이 페이지가 그리고,
- * 본문 상품 목록은 상품 목록 뷰가 그립니다(목록 뷰는 hideHeader로 자기 헤더를 숨깁니다).
- * 상품 목록은 브랜드 이름으로 고정한 필터입니다. 브랜드 카드 목록과 「제품 보기」는 이 페이지에 없습니다.
- * 브랜드 이름이 확정되기 전에는 전체 상품이 잠깐 보이지 않도록 목록을 그리지 않고 스켈레톤만 둡니다.
+ * 구성은 「← 브랜드 목록」 링크, 히어로(이름·설명·제품 수, 브랜드 색 배경), 히어로 아래 상품 캐러셀입니다.
+ * 필터·정렬이 있는 전체 상품 목록은 쓰지 않습니다. 「제품 보기」와 「전체 보기」 링크도 두지 않습니다.
+ * 브랜드 이름이 확정되기 전에는 스켈레톤만 두고, 없는 브랜드·이름이 빈 브랜드·0개 브랜드는 각각 안내 화면을 보여 줍니다.
  */
 export function BrandDetailView({ brandId }: { brandId: string }) {
   const brandQuery = useBrandQuery(brandId);
@@ -85,11 +83,11 @@ export function BrandDetailView({ brandId }: { brandId: string }) {
     );
   }
 
-  // 헤더(뒤로 링크·이름·설명·제품 수)는 이 페이지가 그리고, 본문은 브랜드 이름으로 고정한 상품 목록입니다.
-  // 목록 뷰의 기본 헤더는 숨깁니다(빵부스러기도 두지 않습니다).
+  // 「← 브랜드 목록」 아래에 히어로(이름·설명·제품 수)를 두고, 그 아래에 이 브랜드 상품 캐러셀을 둡니다.
+  // 필터·정렬이 있는 전체 목록은 이 페이지에 없습니다.
   return (
     <>
-      <PageContainer className="pt-24">
+      <PageContainer className="pt-24 pb-16">
         <Link
           href="/brands"
           className="inline-flex items-center gap-4 rounded-4 text-label-m text-text-2 focus-ring hover:text-text-1"
@@ -97,26 +95,9 @@ export function BrandDetailView({ brandId }: { brandId: string }) {
           <Icon icon={ChevronLeft} size={16} />
           브랜드 목록
         </Link>
-        <header className="mt-16 flex min-w-0 flex-col gap-16">
-          <h1 className="min-w-0 text-web-h2 break-words lg:text-web-display-l">{brand.name}</h1>
-          {brand.tagline ? (
-            <p className="min-w-0 text-body-l break-words text-text-2 lg:text-web-body-xl">
-              {brand.tagline}
-            </p>
-          ) : null}
-          <p className="text-body-s text-text-3">
-            제품 {brand.productCount.toLocaleString('ko-KR')}개
-          </p>
-        </header>
       </PageContainer>
-      <ProductListingView
-        key={brand.id}
-        initialBrands={[brand.name]}
-        lockedBrand={brand.name}
-        pageTitle={brand.name}
-        hideHeader
-        hideBreadcrumb
-      />
+      <BrandHero brand={brand} />
+      <BrandProductsCarousel key={brand.id} brandName={brand.name} />
     </>
   );
 }

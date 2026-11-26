@@ -119,12 +119,12 @@ function BrandTile({ brand }: { brand: BrandSummary }) {
       href={buildBrandDetailHref(brand.id)}
       aria-label={`${brand.name}, 제품 ${brand.productCount}개`}
       className={cx(
-        // 로고 줄(48) + 간격(12) + 이름 최대 두 줄 + 개수 줄이 본문 높이(128)에 맞도록 간격을 줄였습니다.
-        'flex h-164 w-full flex-col gap-12 overflow-hidden rounded-8 border-2 border-line bg-bg p-16 text-left shadow-1 focus-ring transition-colors hover:border-text-accent-black',
+        // 높이 계산: 테두리 4 + 패딩 24(12×2) + 로고 줄 60 + 간격 8 + 이름 두 줄 예약 48 + 간격 4 + 개수 줄 16 = 164(h-164).
+        'flex h-164 w-full flex-col gap-8 overflow-hidden rounded-8 border-2 border-line bg-bg p-12 text-left shadow-1 focus-ring transition-colors hover:border-text-accent-black',
       )}
     >
-      <span className="flex h-48 w-full items-center justify-center">
-        <span className="flex h-48 w-full max-w-120 items-center justify-center overflow-hidden rounded-4 bg-surface">
+      <span className="flex h-60 w-full items-center justify-center">
+        <span className="flex h-60 w-full max-w-120 items-center justify-center overflow-hidden rounded-4 bg-surface">
           <BrandLogo
             logoUrl={brand.logoUrl}
             brandName={brand.name}
@@ -134,8 +134,10 @@ function BrandTile({ brand }: { brand: BrandSummary }) {
         </span>
       </span>
       <span className="flex w-full min-w-0 flex-col gap-4">
-        {/* 이름은 카드 폭 전체를 쓰고 두 줄까지 보입니다. */}
-        <span className="line-clamp-2 text-title break-words text-text-1">{brand.name}</span>
+        {/* 이름은 두 줄 높이를 항상 예약해, 한 줄 이름과 두 줄 이름 카드의 이름 시작 위치가 같게 합니다. */}
+        <span className="line-clamp-2 min-h-48 text-title break-words text-text-1">
+          {brand.name}
+        </span>
         <span className="text-caption text-text-3">
           제품 {brand.productCount.toLocaleString('ko-KR')}개
         </span>
