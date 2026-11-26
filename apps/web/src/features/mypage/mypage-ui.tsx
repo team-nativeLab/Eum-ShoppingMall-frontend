@@ -2,7 +2,6 @@ import { Badge } from '@eum/ui/components/Badge';
 import { Button } from '@eum/ui/components/Button';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { SelectableTabs } from '@eum/ui/components/SelectableTabs';
-import { cx } from '@eum/ui/lib/cx';
 import { CalendarDays, CircleAlert } from 'lucide-react';
 import type { ReactNode } from 'react';
 

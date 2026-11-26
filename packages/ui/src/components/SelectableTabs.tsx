@@ -54,10 +54,7 @@ export function SelectableTabs<TValue extends string>({
               !isScrollable && '-mb-px flex h-44 items-center',
               hasMutedCount && 'gap-6',
               isSelected
-                ? cx(
-                    'border-text-1 text-text-1',
-                    selectedFontWeight === 'medium' && 'font-medium',
-                  )
+                ? cx('border-text-1 text-text-1', selectedFontWeight === 'medium' && 'font-medium')
                 : 'border-transparent text-text-2 hover:text-text-1',
             )}
           >
