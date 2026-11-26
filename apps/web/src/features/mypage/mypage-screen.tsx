@@ -79,6 +79,15 @@ import {
   type LocalNotice,
 } from './mypage-ui';
 import { PasswordChangeDemoModal } from './password-change-demo-modal';
+import {
+  ADDRESS_LAYOUT_SAMPLE_KEYS,
+  ADDRESS_LAYOUT_SAMPLE,
+  CLAIM_LAYOUT_SAMPLE_DETAILS,
+  CLAIM_LAYOUT_SAMPLES,
+  COUPON_LAYOUT_SAMPLES,
+  ORDER_LAYOUT_SAMPLE,
+  POINT_LAYOUT_SAMPLES,
+} from './mypage-presentation-fixtures';
 
 type OrderTab = OrderStatus | 'all';
 type ClaimTab = ClaimType | 'all';
@@ -731,8 +740,10 @@ function OrderLayoutSampleCard({ status }: { status: 'paymentPending' | 'paid' }
     <article className="rounded-12 border border-line px-16 py-16 lg:px-24 lg:py-20">
       <div className="flex flex-wrap items-center justify-between gap-8 border-b border-line pb-12">
         <div className="flex flex-wrap items-center gap-10">
-          <time className="text-label-m">0000.00.00</time>
-          <span className="text-caption text-text-3">주문번호 0000000000</span>
+          <time className="text-label-m">{ORDER_LAYOUT_SAMPLE.date}</time>
+          <span className="text-caption text-text-3">
+            주문번호 {ORDER_LAYOUT_SAMPLE.orderNumber}
+          </span>
         </div>
         <span className="text-label-s text-text-2">주문 상세</span>
       </div>
@@ -741,15 +752,19 @@ function OrderLayoutSampleCard({ status }: { status: 'paymentPending' | 'paid' }
           <div aria-hidden="true" className="size-64 shrink-0 rounded-8 bg-surface" />
           <div className="min-w-0">
             <StatusBadge {...ORDER_STATUS_META[status]} />
-            <p className="mt-6 truncate text-label-m">제품명</p>
-            <p className="mt-4 text-caption text-text-2">₩00,000 · 1개</p>
+            <p className="mt-6 truncate text-label-m">{ORDER_LAYOUT_SAMPLE.productName}</p>
+            <p className="mt-4 text-caption text-text-2">
+              {ORDER_LAYOUT_SAMPLE.unitPrice} · {ORDER_LAYOUT_SAMPLE.quantity}
+            </p>
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-8 sm:justify-end">
           <Button size="s" variant="secondary" disabled>
             주문 취소
           </Button>
-          <span className="min-w-104 text-right text-price-m">₩00,000</span>
+          <span className="min-w-104 text-right text-price-m">
+            {ORDER_LAYOUT_SAMPLE.totalPrice}
+          </span>
         </div>
       </div>
     </article>
@@ -921,46 +936,12 @@ function ClaimsView({ claims, orders }: { claims: Claim[]; orders: Order[] }) {
     shouldShowPresentationRows(getWebApiConfig().mode) &&
     appliedRange.start === dateInputValue(subtractMonthsClamped(today, 1)) &&
     appliedRange.end === dateInputValue(today);
-  const claimLayoutSamples = [
-    {
-      key: 'claim-layout-requested',
-      type: 'return' as const,
-      status: 'requested' as const,
-      statusLabel: '반품 요청',
-      action: '신청 철회',
-      refund: '₩00,000',
-    },
-    {
-      key: 'claim-layout-recovery',
-      type: 'return' as const,
-      status: 'processing' as const,
-      statusLabel: '회수중',
-      action: '신청 상세',
-      refund: '₩00,000',
-    },
-    {
-      key: 'claim-layout-cancelled',
-      type: 'cancel' as const,
-      status: 'completed' as const,
-      statusLabel: '취소 완료',
-      action: '신청 상세',
-      refund: '₩00,000',
-    },
-    {
-      key: 'claim-layout-rejected',
-      type: 'return' as const,
-      status: 'rejected' as const,
-      statusLabel: '반려',
-      action: '반려 사유',
-      refund: '₩00,000',
-    },
-  ];
   const displayClaims = [
     ...pageClaims.map((claim) => ({ kind: 'claim' as const, claim })),
     ...(showLayoutSamples
-      ? claimLayoutSamples
-          .filter((claim) => tab === 'all' || claim.type === tab)
-          .map((claim) => ({ kind: 'sample' as const, claim }))
+      ? CLAIM_LAYOUT_SAMPLES.filter((claim) => tab === 'all' || claim.type === tab).map(
+          (claim) => ({ kind: 'sample' as const, claim }),
+        )
       : []),
   ];
   const counts = Object.fromEntries(
@@ -1042,8 +1023,10 @@ function ClaimsView({ claims, orders }: { claims: Claim[]; orders: Order[] }) {
                     className="grid gap-10 py-16 lg:grid-cols-[128px_52px_minmax(140px,1.2fr)_minmax(132px,1fr)_72px_58px_112px_96px_104px] lg:items-center lg:px-12"
                   >
                     <div>
-                      <time className="text-body-s">0000.00.00</time>
-                      <p className="mt-4 text-caption text-text-3">0000000000</p>
+                      <time className="text-body-s">{CLAIM_LAYOUT_SAMPLE_DETAILS.date}</time>
+                      <p className="mt-4 text-caption text-text-3">
+                        {CLAIM_LAYOUT_SAMPLE_DETAILS.orderNumber}
+                      </p>
                     </div>
                     <div
                       aria-hidden="true"
@@ -1052,12 +1035,18 @@ function ClaimsView({ claims, orders }: { claims: Claim[]; orders: Order[] }) {
                       <Package size={20} />
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-label-m">제품명</p>
-                      <p className="mt-4 truncate text-caption text-text-3">옵션명</p>
+                      <p className="truncate text-label-m">
+                        {CLAIM_LAYOUT_SAMPLE_DETAILS.productName}
+                      </p>
+                      <p className="mt-4 truncate text-caption text-text-3">
+                        {CLAIM_LAYOUT_SAMPLE_DETAILS.optionName}
+                      </p>
                     </div>
                     <p className="truncate text-body-s text-text-2">—</p>
                     <p className="text-body-s">{labels[row.claim.type]}</p>
-                    <p className="text-body-s lg:text-center">0개</p>
+                    <p className="text-body-s lg:text-center">
+                      {CLAIM_LAYOUT_SAMPLE_DETAILS.quantity}
+                    </p>
                     <p className="text-body-s lg:text-right">{row.claim.refund}</p>
                     <div>
                       <StatusBadge
@@ -1857,48 +1846,6 @@ function CouponsView({
       ? coupon.isUsed || isCouponExpired(coupon, today)
       : !coupon.isUsed && !isCouponExpired(coupon, today),
   );
-  const layoutCouponSamples = [
-    {
-      key: 'coupon-layout-rate-a',
-      discount: '00%',
-      name: '쿠폰명',
-      minimum: '₩00,000',
-      date: '0000.00.00',
-      scope: '적용 상품',
-    },
-    {
-      key: 'coupon-layout-amount-a',
-      discount: '₩0,000',
-      name: '쿠폰명',
-      minimum: '₩00,000',
-      date: '0000.00.00',
-      scope: '적용 상품',
-    },
-    {
-      key: 'coupon-layout-rate-b',
-      discount: '00%',
-      name: '쿠폰명',
-      minimum: '₩00,000',
-      date: '0000.00.00',
-      scope: '전 상품',
-    },
-    {
-      key: 'coupon-layout-shipping',
-      discount: '₩0,000',
-      name: '배송비 쿠폰',
-      minimum: '₩00,000',
-      date: '0000.00.00',
-      scope: '배송비',
-    },
-    {
-      key: 'coupon-layout-rate-c',
-      discount: '00%',
-      name: '쿠폰명',
-      minimum: '₩00,000',
-      date: '0000.00.00',
-      scope: '전 상품',
-    },
-  ];
   const refreshCoupons = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.myPage.byMember(memberId) }),
@@ -2071,7 +2018,7 @@ function CouponsView({
             </li>
           ))}
           {isPresentationMode && tab === 'available'
-            ? layoutCouponSamples.map((coupon) => (
+            ? COUPON_LAYOUT_SAMPLES.map((coupon) => (
                 <li
                   key={coupon.key}
                   className="relative flex min-h-128 overflow-hidden rounded-12 border border-line"
@@ -2124,67 +2071,9 @@ function PointsView({ memberBalance, points }: { memberBalance: number; points: 
     return matchesTab && new Date(point.occurredAt) >= threshold;
   });
   const rows = filtered.slice((currentPage - 1) * 8, currentPage * 8);
-  const layoutRows = [
-    {
-      key: 'order-earned-a',
-      description: '주문 적립',
-      bucket: 'earned',
-      amount: '+0원',
-      order: '0000000000',
-      expires: '0000.00.00',
-    },
-    {
-      key: 'order-spent-a',
-      description: '주문 사용',
-      bucket: 'spent',
-      amount: '-0원',
-      order: '0000000000',
-      expires: '-',
-    },
-    {
-      key: 'event-earned',
-      description: '이벤트 적립',
-      bucket: 'earned',
-      amount: '+0원',
-      order: '-',
-      expires: '0000.00.00',
-    },
-    {
-      key: 'expired-points',
-      description: '기간 만료 소멸',
-      bucket: 'expired',
-      amount: '-0원',
-      order: '-',
-      expires: '-',
-    },
-    {
-      key: 'order-earned-b',
-      description: '주문 적립',
-      bucket: 'earned',
-      amount: '+0원',
-      order: '0000000000',
-      expires: '0000.00.00',
-    },
-    {
-      key: 'cancel-return',
-      description: '주문 취소 환원',
-      bucket: 'earned',
-      amount: '+0원',
-      order: '0000000000',
-      expires: '0000.00.00',
-    },
-    {
-      key: 'order-spent-b',
-      description: '주문 사용',
-      bucket: 'spent',
-      amount: '-0원',
-      order: '0000000000',
-      expires: '-',
-    },
-  ] as const;
   const pointLayoutRows =
     isPresentationMode && periodMonths === 3
-      ? layoutRows.filter((point) => tab === 'all' || point.bucket === tab)
+      ? POINT_LAYOUT_SAMPLES.filter((point) => tab === 'all' || point.bucket === tab)
       : [];
   const displayRows = [
     ...rows.map((point) => ({ kind: 'point' as const, point })),
@@ -2660,10 +2549,7 @@ function AddressesView({
   const addressRows = [
     ...addresses.map((address) => ({ kind: 'address' as const, address })),
     ...(isPresentationMode
-      ? [
-          { kind: 'sample' as const, key: 'layout-address-1' },
-          { kind: 'sample' as const, key: 'layout-address-2' },
-        ]
+      ? ADDRESS_LAYOUT_SAMPLE_KEYS.map((key) => ({ kind: 'sample' as const, key }))
       : []),
   ];
   return (
@@ -2719,10 +2605,10 @@ function AddressesView({
                   key={row.key}
                   className="grid gap-10 py-16 text-text-2 lg:grid-cols-[minmax(120px,0.8fr)_minmax(120px,0.8fr)_minmax(220px,2fr)_minmax(120px,1fr)_112px] lg:items-center lg:px-16"
                 >
-                  <span className="text-label-m">배송지명</span>
-                  <p className="text-body-s">홍길동</p>
-                  <p className="text-body-s">(00000) 주소 상세주소</p>
-                  <p className="text-body-s">010-0000-0000</p>
+                  <span className="text-label-m">{ADDRESS_LAYOUT_SAMPLE.label}</span>
+                  <p className="text-body-s">{ADDRESS_LAYOUT_SAMPLE.recipientName}</p>
+                  <p className="text-body-s">{ADDRESS_LAYOUT_SAMPLE.postalAddress}</p>
+                  <p className="text-body-s">{ADDRESS_LAYOUT_SAMPLE.phone}</p>
                   <div className="flex flex-wrap gap-8 lg:justify-center">
                     <Button size="s" variant="secondary" disabled>
                       수정

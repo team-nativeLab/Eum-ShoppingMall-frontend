@@ -1,6 +1,7 @@
 import { Badge } from '@eum/ui/components/Badge';
 import { Button } from '@eum/ui/components/Button';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
+import { SelectableTabs } from '@eum/ui/components/SelectableTabs';
 import { cx } from '@eum/ui/lib/cx';
 import { CalendarDays, CircleAlert } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -34,30 +35,22 @@ export function TabBar<T extends string>({
   label: string;
   counts?: Partial<Record<T, number>>;
 }) {
+  const tabOptions = options.map((option) => ({
+    ...option,
+    ...(counts ? { count: counts[option.value] ?? 0 } : {}),
+  }));
+
   return (
-    <div
-      role="group"
-      aria-label={label}
-      className="flex min-w-0 [scrollbar-width:none] overflow-x-auto border-b border-line"
-    >
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          aria-pressed={option.value === value}
-          onClick={() => onChange(option.value)}
-          className={cx(
-            'min-h-44 shrink-0 border-b-2 px-16 text-body-s focus-ring',
-            option.value === value
-              ? 'border-text-1 font-medium text-text-1'
-              : 'border-transparent text-text-2 hover:text-text-1',
-          )}
-        >
-          {option.label}
-          {counts ? ` ${counts[option.value] ?? 0}` : ''}
-        </button>
-      ))}
-    </div>
+    <SelectableTabs
+      options={tabOptions}
+      value={value}
+      onValueChange={onChange}
+      label={label}
+      isScrollable
+      horizontalPadding="16"
+      countPresentation="inline"
+      selectedFontWeight="medium"
+    />
   );
 }
 
