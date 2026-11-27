@@ -44,7 +44,225 @@ function productDetailResponse(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function homeResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    heroSlides: [
+      {
+        id: 1,
+        eyebrow: '현장 안전',
+        title: ['안전한 하루'],
+        description: '설명',
+        tagline: [],
+        imageUrl: 'https://images.example.test/hero.jpg',
+        destination: '/about',
+        ctaLabel: '보기',
+        secondaryCta: { label: '안내', destination: 'https://evil.example/path' },
+      },
+    ],
+    promoBanners: [
+      {
+        id: 2,
+        title: ['프로모션'],
+        description: '설명',
+        imageUrl: 'https://images.example.test/promo.jpg',
+        tone: 'dark',
+        destination: '//evil.example/path',
+      },
+    ],
+    serviceBenefits: [{ id: 3, title: '배송 안내', description: '설명', visible: true }],
+    featuredProducts: [
+      {
+        id: 12,
+        name: '안전모',
+        brand: null,
+        categoryId: null,
+        imageUrl: null,
+        price: 12000,
+        listPrice: null,
+        priceVisible: true,
+        status: 'ON_SALE',
+        soldOut: false,
+        optionRequired: true,
+        certifications: [],
+        rating: null,
+        reviewCount: 0,
+        featured: true,
+        todayDeal: false,
+      },
+    ],
+    banners: [{ id: 999 }],
+    newProducts: [{ id: 998 }],
+    ...overrides,
+  };
+}
+
 describe('real ShopApi stubs', () => {
+  it('maps home fields to current UI models, drops unsafe links, ignores extra sections, and forwards AbortSignal', async () => {
+    const fetchMock = stubApiResponse(homeResponse());
+    const api = createRealApi(
+      buildMockConfig({ mode: 'real', baseUrl: 'https://api.example.test' }),
+    );
+    const abortController = new AbortController();
+
+    const home = await api.home.getContent({ signal: abortController.signal });
+
+    expect(home.heroSlides[0]).toMatchObject({ id: '1', destination: '/about' });
+    expect(home.heroSlides[0]?.secondaryCta).toBeUndefined();
+    expect(home.promoBanners[0]?.destination).toBe('');
+    expect(home.serviceBenefits[0]?.isVisible).toBe(true);
+    expect(home.featuredProducts[0]).toMatchObject({
+      kind: 'summary',
+      id: '12',
+      optionRequired: true,
+    });
+    expect('banners' in home).toBe(false);
+    expect('newProducts' in home).toBe(false);
+    expect(new URL(fetchMock.mock.calls[0]?.[0] as string).pathname).toBe('/api/v1/home');
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBe(abortController.signal);
+  });
+
+  it('requires a success/data envelope for home and rejects raw, missing, and malformed envelopes', async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal('fetch', fetchMock);
+    const api = createRealApi(
+      buildMockConfig({ mode: 'real', baseUrl: 'https://api.example.test' }),
+    );
+    const invalidResponses: unknown[] = [
+      homeResponse(),
+      {},
+      { success: true },
+      { success: true, data: null },
+    ];
+
+    for (const body of invalidResponses) {
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(body), { status: 200 }));
+      await expect(api.home.getContent()).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+    }
+  });
+
+  it('preserves success:false server errors on strict home requests', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({ success: false, code: 'HOME_UNAVAILABLE', message: '일시 오류' }),
+        {
+          status: 503,
+        },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const api = createRealApi(
+      buildMockConfig({ mode: 'real', baseUrl: 'https://api.example.test' }),
+    );
+
+    await expect(api.home.getContent()).rejects.toMatchObject({
+      code: 'HTTP',
+      status: 503,
+      serverCode: 'HOME_UNAVAILABLE',
+      message: '일시 오류',
+    });
+  });
+
+  it('requires a success/data envelope for popups and rejects raw, missing, and malformed envelopes', async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal('fetch', fetchMock);
+    const api = createRealApi(
+      buildMockConfig({ mode: 'real', baseUrl: 'https://api.example.test' }),
+    );
+    const invalidResponses: unknown[] = [[], {}, { success: true }, { success: true, data: {} }];
+
+    for (const body of invalidResponses) {
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(body), { status: 200 }));
+      await expect(api.popups.list()).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+    }
+  });
+
+  it('maps an empty popup data array and defaults optional home collections and fields', async () => {
+    stubApiResponse([]);
+    const api = createRealApi(
+      buildMockConfig({ mode: 'real', baseUrl: 'https://api.example.test' }),
+    );
+    await expect(api.popups.list()).resolves.toEqual([]);
+
+    stubApiResponse({
+      heroSlides: [
+        {
+          id: 1,
+          eyebrow: '안내',
+          title: ['제목'],
+          imageUrl: 'https://images.example.test/hero.jpg',
+          destination: '/',
+          ctaLabel: '보기',
+        },
+      ],
+      promoBanners: [
+        {
+          id: 2,
+          title: ['프로모션'],
+          imageUrl: 'https://images.example.test/promo.jpg',
+          tone: 'light',
+          destination: '/',
+        },
+      ],
+      serviceBenefits: [{ id: 3, title: '배송' }],
+    });
+    const homeApi = createRealApi(
+      buildMockConfig({ mode: 'real', baseUrl: 'https://api.example.test' }),
+    );
+    await expect(homeApi.home.getContent()).resolves.toMatchObject({
+      heroSlides: [{ description: '', tagline: [] }],
+      promoBanners: [{ description: '' }],
+      serviceBenefits: [{ description: '', isVisible: true }],
+      featuredProducts: [],
+    });
+  });
+
+  it('rejects malformed home arrays, unknown enum values, and unsafe product status', async () => {
+    const fetchMock = stubApiResponse(
+      homeResponse({ promoBanners: [{ ...homeResponse().promoBanners[0], tone: 'bright' }] }),
+    );
+    const api = createRealApi(
+      buildMockConfig({ mode: 'real', baseUrl: 'https://api.example.test' }),
+    );
+    await expect(api.home.getContent()).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+    fetchMock.mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: homeResponse({
+              featuredProducts: [{ ...homeResponse().featuredProducts[0], status: 'PAUSED' }],
+            }),
+          }),
+          { status: 200 },
+        ),
+    );
+    await expect(api.home.getContent()).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+    fetchMock.mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({ success: true, data: homeResponse({ serviceBenefits: null }) }),
+          { status: 200 },
+        ),
+    );
+    await expect(api.home.getContent()).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+  });
+
+  it('maps popup order and nullable images while forwarding AbortSignal', async () => {
+    const fetchMock = stubApiResponse([
+      { id: 8, title: '첫째', imageUrl: null, body: '본문' },
+      { id: 7, title: '둘째', imageUrl: '/popup.jpg', body: '본문2' },
+    ]);
+    const api = createRealApi(
+      buildMockConfig({ mode: 'real', baseUrl: 'https://api.example.test' }),
+    );
+    const abortController = new AbortController();
+    const popups = await api.popups.list({ signal: abortController.signal });
+    expect(popups.map(({ id }) => id)).toEqual(['8', '7']);
+    expect(popups[0]?.imageUrl).toBeNull();
+    expect(popups[1]?.imageUrl).toBe('/popup.jpg');
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBe(abortController.signal);
+  });
+
   it('maps product detail fields, preserves image order, and forwards the request signal', async () => {
     const fetchMock = stubApiResponse(productDetailResponse());
     const api = createRealApi(

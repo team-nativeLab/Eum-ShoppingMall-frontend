@@ -7,6 +7,8 @@ export interface ApiRequestOptions {
   credentials?: RequestCredentials;
   json?: unknown;
   body?: BodyInit | null;
+  /** 이 요청만 success:true + data API envelope를 필수로 검증합니다. */
+  requireEnvelope?: boolean;
 }
 
 export interface ApiClient {
@@ -130,6 +132,11 @@ export function createApiClient(baseUrl: string, fetcher: typeof fetch = fetch):
       if (!response.ok || (isRecord(data) && data.success === false))
         throw toApiError(response.status, data);
       if (isRecord(data) && data.success === true && 'data' in data) return data.data;
+      if (options.requireEnvelope) {
+        throw new ApiError('INVALID_RESPONSE', '서버 응답 envelope 형식이 올바르지 않습니다.', {
+          status: response.status,
+        });
+      }
       return data;
     },
   };

@@ -25,7 +25,7 @@ npm workspaces 모노레포로 구성되며, 두 앱이 디자인 토큰·공통
 - **Web** (`apps/web`): 구매자용 쇼핑몰. 데스크톱(1440) 디자인과, 모바일 디자인이 있는 일부 화면(메인, 상품 상세)의 모바일웹(390) 디자인을 함께 대응합니다. 스타일은 모바일 우선으로 작성합니다([디자인 토큰](#디자인-토큰) 참고).
 - **Admin** (`apps/admin`): 상품·카테고리·주문·회원·고객지원 문의와 홈 배송·서비스 혜택을 관리하는 관리자 SPA. 데스크톱만 대응합니다.
 
-서버 API는 아직 연결되지 않았습니다. 화면과 로그인은 `packages/api`의 목 API·목 인증으로 동작하며, 상품명·가격·이름·전화번호처럼 서버에서 와야 할 값은 화면 코드에 하드코딩하지 않습니다. 실제 API와 실제 인증(`real` 모드)은 현재 스텁입니다.
+Web의 `real` 모드는 일부 구매자 조회를 실제 서버에 연결합니다. 현재 홈 조회(`home.getContent`, `GET /api/v1/home`; 화면 사용 필드 `heroSlides`, `promoBanners`, `serviceBenefits`, `featuredProducts`), 노출 중인 팝업 조회(`popups.list`, `GET /api/v1/popups`), 상품 목록·검색·자동완성·카테고리·브랜드 목록·필터 집계·추천 상품·상품 상세·관련 상품과 추천 검색어(`search.recommendedKeywords`, `GET /api/v1/search/recommended-keywords`)를 지원합니다. 관리자 홈 편성(`home.getAdminContent`, `home.saveAdminContent`)과 실제 회원·관리자 인증은 아직 미구현이며, 그 밖의 연결되지 않은 API는 `NOT_IMPLEMENTED` 오류를 반환합니다. `mock` 모드에서는 화면과 로그인에 목 API·목 인증을 사용합니다. 상품명·가격·이름·전화번호처럼 서버에서 와야 할 값을 화면 코드에 하드코딩하지 않습니다.
 
 ## 기술 스택
 | 영역 | 사용 기술 |
@@ -135,7 +135,7 @@ Eum-ShoppingMall-frontend/
 │           ├── config.ts        # 환경변수 검증 → ApiConfig
 │           ├── shop-api.ts      # ShopApi 인터페이스
 │           ├── mock-api.ts      # 목 구현 (createMockApi)
-│           ├── real-api.ts      # 실제 API 스텁 (createRealApi, NOT_IMPLEMENTED)
+│           ├── real-api.ts      # 실제 API (구매자 홈·팝업·상품 조회 연결, 미구현 메서드는 NOT_IMPLEMENTED)
 │           ├── mock/            # 목 데이터 (패키지 내부 전용)
 │           ├── price.ts         # 금액 표시 규칙
 │           ├── cart.ts          # 장바구니 그룹·합계 규칙
@@ -159,7 +159,7 @@ Eum-ShoppingMall-frontend/
 워크스페이스 패키지(`@eum/ui`, `@eum/api`)는 빌드 없이 TypeScript 소스로 배포되며, Web은 `next.config.ts`의 `transpilePackages`로 함께 변환합니다. 두 앱 모두 `@/`가 각 앱의 `src`를 가리킵니다.
 
 ## 목 API와 환경변수
-화면은 각 앱의 `src/lib/shop-api.ts`의 `getShopApi()`가 돌려주는 `ShopApi`(`@eum/api/shop-api` 인터페이스)로만 데이터를 조회합니다. 이 함수가 설정에 따라 `createMockApi()`(`@eum/api/mock-api`) 또는 `createRealApi()`(`@eum/api/real-api`)를 고릅니다. `mock`과 `real` 구현이 같은 인터페이스를 따르므로, 실제 API가 준비되면 화면 코드를 바꾸지 않고 모드만 전환합니다. 목 구현은 동적 import로 불러와 `real` 모드 번들에 목 데이터가 들어가지 않게 합니다.
+화면은 각 앱의 `src/lib/shop-api.ts`의 `getShopApi()`가 돌려주는 `ShopApi`(`@eum/api/shop-api` 인터페이스)로만 데이터를 조회합니다. 이 함수가 설정에 따라 `createMockApi()`(`@eum/api/mock-api`) 또는 `createRealApi()`(`@eum/api/real-api`)를 고릅니다. 두 구현은 같은 인터페이스를 따르며, `real` 모드는 연결된 API만 서버에 요청합니다. 아직 연결되지 않은 메서드는 mock 결과로 대체하지 않고 `NOT_IMPLEMENTED` 오류를 반환합니다. 목 구현은 동적 import로 불러와 `real` 모드 번들에 목 데이터가 들어가지 않게 합니다.
 
 `packages/api`는 환경변수를 직접 읽지 않습니다. 각 앱의 `src/lib/api-config.ts`와 빌드 설정(`next.config.ts`, `vite.config.ts`)이 자기 환경변수를 읽어 `resolveApiConfig()`에 넘깁니다.
 
@@ -206,7 +206,7 @@ Eum-ShoppingMall-frontend/
 - 단, Web은 커밋된 `apps/web/.env.production`이 로컬에서 모드가 비어 있으면 검증용 목 빌드가 됩니다([배포(Vercel Preview 목 데모)](#배포vercel-preview-목-데모)). 셸·CI·Vercel에서 지정한 환경변수가 이 파일보다 우선합니다.
 - 검사 시점: Web은 `next build`(`next typegen` 제외), Admin은 `vite build`면 `--mode`와 무관하게(예: `--mode staging`) 항상 검사합니다. Admin의 운영 여부는 `NODE_ENV`(없으면 `production`) 기준입니다.
 - 각 앱의 `src/lib/shop-api.ts`·인증 로더는 빌드 때 치환되는 모드 상수로 분기하므로, `real`로 빌드하면 목 구현·목 데이터·목 인증 chunk가 산출물에서 제외됩니다.
-- 현재 `real` API와 인증은 스텁이라 `real` 빌드 산출물은 조회 시 `NOT_IMPLEMENTED` 오류를 냅니다. 실제 배포 대상·배포 환경은 확인 필요입니다.
+- `real` API는 부분 구현입니다. 구매자 홈·팝업·상품 목록·검색·상세 등 지원하는 조회는 서버에 요청하며, 미구현 API를 호출하는 화면은 `NOT_IMPLEMENTED` 오류를 보여 줍니다. 관리자 홈 편성(`home.getAdminContent`, `home.saveAdminContent`)과 실제 회원·관리자 인증은 아직 미구현입니다. 실제 배포 대상·배포 환경은 확인 필요입니다.
 
 ### 목 데이터 접근 제한
 `packages/api/src/mock/*`는 패키지 내부 전용입니다. 앱과 `packages/ui`에서 `@eum/api/mock`을 import하면 ESLint(`no-restricted-imports`) 오류가 납니다. 반드시 `getShopApi()`가 돌려주는 `ShopApi`로 조회합니다.
@@ -299,7 +299,7 @@ Vercel Preview에서 Web과 Admin을 한 도메인으로 검증합니다. Previe
 - Production에서 실 API를 쓰면 실제 HTTPS 주소가 필요합니다. 현재 테스트 단계에서만 앱별 `*_API_MODE=mock`과 `*_ALLOW_MOCK_IN_PRODUCTION=true`를 함께 설정해 mock 배포를 허용합니다. 문의를 제외한 mock 데이터는 테스트용 초기 데이터이며 실제 서버 영속 저장·실제 인증이 없습니다. 문의 mock은 브라우저에 자동 만료 없이 저장되고 실제 API 제출은 미구현입니다. 실제 사용자 운영에는 사용하지 마세요. opt-in이 없으면 빌드가 실패합니다.
 - Production opt-in은 Vercel 환경변수에서 제거할 때까지 유지되므로, 실제 서비스 전에 mock 변수를 제거하고 실 API 설정으로 전환해야 합니다.
 - 로컬에서 API 모드를 지정하지 않으면 검증용 mock 빌드를 사용합니다. Vercel Production에는 이 기본값을 적용하지 않습니다.
-- 실제 인증·상품 저장·발주·주문 알림 API는 아직 스텁입니다. 주문 완료 이메일/팩스 전송 및 발주처 직배송 처리는 서버 구현이 필요합니다.
+- 실제 인증, Admin 상품 저장, 관리자 홈 편성, 장바구니·주문·결제 등 아직 연결되지 않은 API는 `NOT_IMPLEMENTED` 상태입니다. Web 구매자 홈·팝업 및 상품 조회(목록·검색·상세 등)는 real API에 연결되어 있습니다. 주문 완료 이메일/팩스 전송 및 발주처 직배송 처리는 서버 구현이 필요합니다.
 - Web과 Admin의 mock 인증은 비밀번호를 검증하지 않고 실제 세션을 발급하지 않습니다. 목 관리자 분기는 화면 시연 기능일 뿐 권한 경계가 아닙니다.
 - Vercel Preview의 SSO 보호는 Preview 접근만 보호하며 앱 인증·인가를 대체하지 않습니다. 실제 운영 권한 검사는 서버가 담당해야 합니다.
 

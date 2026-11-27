@@ -10,6 +10,6 @@ export function useRecommendedProductsQuery(params: ProductLimitParams = {}) {
   return useQuery({
     queryKey: queryKeys.products.recommended(params),
     queryFn: async ({ signal }) =>
-      (await getShopApi()).products.listRecommended(params, { signal }),
+      (await getShopApi()).products.listCatalogRecommended(params, { signal }),
   });
 }
