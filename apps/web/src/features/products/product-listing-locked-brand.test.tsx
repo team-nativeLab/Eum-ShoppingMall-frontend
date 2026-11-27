@@ -78,7 +78,11 @@ describe('ProductListingView with a locked brand', () => {
     navigationMocks.pathname = '/brands/brd-workfit';
     navigationMocks.push.mockReset();
     apiMocks.getShopApi.mockResolvedValue({
-      products: { list: apiMocks.listProducts, facets: apiMocks.listFacets },
+      products: {
+        list: apiMocks.listProducts,
+        listCatalog: apiMocks.listProducts,
+        facets: apiMocks.listFacets,
+      },
       categories: { list: apiMocks.listCategories },
     });
     apiMocks.listProducts.mockReset().mockResolvedValue({
@@ -244,7 +248,11 @@ describe('ProductListingView without a locked brand', () => {
     navigationMocks.pathname = '/search';
     navigationMocks.push.mockReset();
     apiMocks.getShopApi.mockResolvedValue({
-      products: { list: apiMocks.listProducts, facets: apiMocks.listFacets },
+      products: {
+        list: apiMocks.listProducts,
+        listCatalog: apiMocks.listProducts,
+        facets: apiMocks.listFacets,
+      },
       categories: { list: apiMocks.listCategories },
     });
     apiMocks.listProducts.mockReset().mockResolvedValue({

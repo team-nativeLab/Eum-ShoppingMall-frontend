@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Product } from '@eum/api/types';
+import type { Product, ProductSummary } from '@eum/api/types';
 import { ProductCard } from './product-card';
 
 const cardMocks = vi.hoisted(() => ({
@@ -57,11 +57,105 @@ function createProduct(overrides: Partial<Product> = {}): Product {
   };
 }
 
+function createProductSummary(overrides: Partial<ProductSummary> = {}): ProductSummary {
+  return {
+    kind: 'summary',
+    id: '42',
+    name: '목록 요약 상품',
+    brand: '요약 브랜드',
+    categoryId: '3',
+    price: null,
+    listPrice: null,
+    priceVisible: false,
+    stockStatus: 'inStock',
+    thumbnailUrl: null,
+    rating: null,
+    reviewCount: 0,
+    certifications: [],
+    isFeatured: false,
+    todayDeal: false,
+    optionRequired: false,
+    ...overrides,
+  };
+}
+
 describe('ProductCard', () => {
   beforeEach(() => {
     cardMocks.addToCart.mockReset();
     cardMocks.addToCart.mockReturnValue(true);
     cardMocks.isOrderPending = false;
+  });
+
+  it('renders catalog summaries without showing cart controls or using full Product data', () => {
+    render(<ProductCard product={createProductSummary({ brand: '' })} />);
+
+    expect(screen.getByRole('link', { name: '목록 요약 상품' })).toHaveAttribute(
+      'href',
+      '/products/42',
+    );
+    expect(screen.getByText('구매 불가')).toBeInTheDocument();
+    expect(screen.getByText('금액 미표시')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /장바구니|옵션 선택/ })).not.toBeInTheDocument();
+    expect(cardMocks.addToCart).not.toHaveBeenCalled();
+  });
+
+  it('dims the image link for sold-out catalog summaries', () => {
+    render(
+      <ProductCard
+        product={createProductSummary({ stockStatus: 'soldOut', thumbnailUrl: '/sold-out.png' })}
+      />,
+    );
+
+    const imageFrame = screen.getByRole('article').firstElementChild;
+    expect(imageFrame?.querySelector('a')).toHaveClass('opacity-48');
+    expect(screen.getByText('품절')).toBeInTheDocument();
+  });
+
+  it('keeps compact home-carousel summary layout and image sizing', () => {
+    render(
+      <ProductCard
+        product={createProductSummary({ thumbnailUrl: '/catalog-summary.png' })}
+        mobileVariant="compact"
+        cardVariant="home-carousel"
+      />,
+    );
+
+    const card = screen.getByRole('article');
+    expect(card).toHaveClass(
+      'aspect-[181/284]',
+      'min-h-[384px]',
+      'lg:min-h-[var(--home-carousel-card-min-height)]',
+    );
+    const imageFrame = card.firstElementChild;
+    if (!(imageFrame instanceof HTMLElement)) throw new Error('Expected a product image frame.');
+    expect(imageFrame).toHaveClass('aspect-[2/3]', 'max-w-[116px]', 'lg:aspect-video');
+    expect(imageFrame.querySelector('img')?.getAttribute('sizes')).toContain('116px');
+    expect(within(card).getByText('요약 브랜드')).toHaveClass('hidden', 'lg:block');
+    expect(
+      within(card).queryByRole('button', { name: /장바구니|옵션 선택/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps list layout sizing and compact brand-card image sizing for summaries', () => {
+    const { rerender } = render(
+      <ProductCard
+        product={createProductSummary({ thumbnailUrl: '/catalog-summary.png' })}
+        layout="list"
+      />,
+    );
+    let card = screen.getByRole('article');
+    expect(card).toHaveClass('flex-row', 'gap-16');
+    expect(card.firstElementChild?.querySelector('img')).toHaveAttribute('sizes', '144px');
+
+    rerender(
+      <ProductCard
+        product={createProductSummary({ thumbnailUrl: '/catalog-summary.png' })}
+        mobileVariant="compact"
+      />,
+    );
+    card = screen.getByRole('article');
+    expect(within(card).getByText('요약 브랜드')).toHaveClass('hidden', 'lg:block');
+    expect(card.firstElementChild?.querySelector('img')?.getAttribute('sizes')).toContain('224px');
   });
 
   it('disables cart add while checkout is pending and restores it after the request settles', async () => {

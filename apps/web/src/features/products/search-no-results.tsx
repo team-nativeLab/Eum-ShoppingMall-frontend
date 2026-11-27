@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { PageContainer } from '@/components/page-container';
 import { ProductCarouselSection } from './product-carousel';
 import { useRecommendedKeywordsQuery } from './use-recommended-keywords-query';
-import { useRecommendedProductsQuery } from './use-recommended-products-query';
+import { useCatalogRecommendedProductsQuery } from './use-catalog-recommended-products-query';
 
 /** 추천 상품 최대 수(5열 × 2페이지) */
 const RECOMMENDED_PRODUCT_LIMIT = 10;
@@ -19,7 +19,7 @@ const RECOMMENDED_PRODUCT_LIMIT = 10;
  */
 export function SearchNoResults({ keyword }: { keyword: string }) {
   const recommendedKeywordsQuery = useRecommendedKeywordsQuery();
-  const recommendedProductsQuery = useRecommendedProductsQuery({
+  const recommendedProductsQuery = useCatalogRecommendedProductsQuery({
     limit: RECOMMENDED_PRODUCT_LIMIT,
   });
   const recommendedKeywords = recommendedKeywordsQuery.data ?? [];

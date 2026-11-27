@@ -38,6 +38,7 @@ import type {
   PagedResult,
   Point,
   Product,
+  ProductListItem,
   ProductFacets,
   ProductReview,
   ProductQuestion,
@@ -56,7 +57,7 @@ export interface ProductListParams {
   brand?: string[];
   certification?: string[];
   excludeSoldOut?: boolean;
-  sortBy?: 'recommended' | 'priceAsc' | 'priceDesc' | 'newest' | 'ratingDesc';
+  sortBy?: 'recommended' | 'priceAsc' | 'priceDesc' | 'newest' | 'ratingDesc' | 'popular';
   page?: number;
   pageSize?: number;
   collection?: 'featured' | 'discounted';
@@ -123,6 +124,11 @@ export interface ShopApi {
   };
   products: {
     list(params?: ProductListParams, options?: RequestOptions): Promise<PagedResult<Product>>;
+    /** 탐색 화면용 요약 목록. 상세·구매 정보가 없는 실제 API 응답을 그대로 표현합니다. */
+    listCatalog(
+      params?: ProductListParams,
+      options?: RequestOptions,
+    ): Promise<PagedResult<ProductListItem>>;
     getById(productId: string, options?: RequestOptions): Promise<Product>;
     suggest(keyword: string, options?: RequestOptions): Promise<ProductSuggestion[]>;
     /** 목록 필터에 표시할 카테고리·브랜드·인증별 상품 수 */
@@ -135,6 +141,10 @@ export interface ShopApi {
     ): Promise<Product[]>;
     /** 검색 결과 없음 화면의 "추천 상품". 고르는 규칙은 서버가 정합니다. */
     listRecommended(params?: ProductLimitParams, options?: RequestOptions): Promise<Product[]>;
+    listCatalogRecommended(
+      params?: ProductLimitParams,
+      options?: RequestOptions,
+    ): Promise<ProductListItem[]>;
     /** 관리자용 전체 상품과 판매가·재고 편집 모델 */
     adminList(options?: RequestOptions): Promise<AdminProduct[]>;
     saveAdmin(input: AdminProductInput, options?: RequestOptions): Promise<AdminProduct>;

@@ -1,7 +1,7 @@
 'use client';
 
 import { canAddToCart, getPriceDisplay } from '@eum/api/price';
-import type { Product } from '@eum/api/types';
+import type { Product, ProductListItem, ProductSummary } from '@eum/api/types';
 import { Badge } from '@eum/ui/components/Badge';
 import { Icon } from '@eum/ui/components/Icon';
 import { cx } from '@eum/ui/lib/cx';
@@ -27,7 +27,7 @@ const HOME_CAROUSEL_COMPACT_IMAGE_SIZES =
  * 구매자 가격과 구매 가능 여부만 표시하며, 숨김 가격 데이터는 사용하지 않습니다.
  * mobileVariant="compact"이면 모바일(lg 미만)에서 브랜드·장바구니 버튼을 빼고 이름·가격만 보여 줍니다(W-01m).
  */
-export function ProductCard({
+function FullProductCard({
   product,
   className,
   layout = 'grid',
@@ -282,5 +282,242 @@ export function ProductCard({
         </p>
       </div>
     </article>
+  );
+}
+
+function isProductSummary(product: ProductListItem): product is ProductSummary {
+  return 'kind' in product && product.kind === 'summary';
+}
+
+function ProductSummaryCard({
+  product,
+  className,
+  layout = 'grid',
+  mobileVariant = 'full',
+  cardVariant = 'default',
+}: {
+  product: ProductSummary;
+  className?: string;
+  layout?: 'grid' | 'list';
+  mobileVariant?: 'full' | 'compact';
+  cardVariant?: 'default' | 'home-carousel';
+}) {
+  const { wishlistIds, toggleWishlist } = useLocalCollections();
+  const isWishlisted = wishlistIds.includes(product.id);
+  const priceDisplay = getPriceDisplay(product);
+  const isSoldOut = product.stockStatus === 'soldOut';
+  const isCompactOnMobile = mobileVariant === 'compact';
+  const isHomeCarouselCard = cardVariant === 'home-carousel';
+  const isHomeCarouselCompactCard = isCompactOnMobile && isHomeCarouselCard;
+  const productImageSizes =
+    layout === 'list'
+      ? PRODUCT_LIST_IMAGE_SIZES
+      : isHomeCarouselCompactCard
+        ? HOME_CAROUSEL_COMPACT_IMAGE_SIZES
+        : isCompactOnMobile
+          ? PRODUCT_COMPACT_CAROUSEL_IMAGE_SIZES
+          : PRODUCT_GRID_IMAGE_SIZES;
+  const productHref = `/products/${encodeURIComponent(product.id)}`;
+  const productBadges = (
+    <>
+      {!priceDisplay.isPriceVisible ? (
+        <Badge tone="outline" className="bg-bg">
+          금액 미표시
+        </Badge>
+      ) : null}
+      {isSoldOut ? <Badge tone="soldout">품절</Badge> : null}
+    </>
+  );
+  const favoriteButton = (
+    <button
+      type="button"
+      aria-label={isWishlisted ? `${product.name} 찜 취소` : `${product.name} 찜하기`}
+      aria-pressed={isWishlisted}
+      onClick={() => toggleWishlist(product.id)}
+      className={cx(
+        'absolute inline-flex items-center justify-center rounded-capsule focus-ring',
+        isWishlisted ? 'text-danger' : 'text-text-1',
+        isHomeCarouselCard
+          ? 'top-8 right-4 z-20 size-44'
+          : isCompactOnMobile
+            ? 'top-0 right-0 size-44 lg:top-4 lg:right-4 lg:size-40'
+            : 'top-4 right-4 size-40',
+      )}
+    >
+      <Icon icon={Heart} size={16} fill={isWishlisted ? 'currentColor' : 'none'} />
+    </button>
+  );
+  return (
+    <article
+      className={cx(
+        'group flex min-w-0 rounded-8 border border-line bg-bg p-8 transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-1',
+        layout === 'list'
+          ? 'flex-row gap-16'
+          : isHomeCarouselCard
+            ? 'aspect-[181/284] flex-col lg:aspect-auto'
+            : 'min-h-max flex-col lg:aspect-[181/284]',
+        isCompactOnMobile && (isHomeCarouselCard ? 'pb-24 lg:pb-8' : 'pb-10 lg:pb-8'),
+        isHomeCarouselCompactCard && 'min-h-[384px]',
+        isCompactOnMobile && (layout === 'list' ? 'gap-10 lg:gap-0' : 'gap-16 lg:gap-0'),
+        isHomeCarouselCard &&
+          'relative lg:min-h-[var(--home-carousel-card-min-height)] lg:border-0 lg:before:pointer-events-none lg:before:absolute lg:before:inset-0 lg:before:rounded-8 lg:before:border lg:before:border-line lg:hover:before:border-line-strong',
+        className,
+      )}
+    >
+      <div
+        className={cx(
+          'relative shrink-0 overflow-hidden rounded-6 bg-surface',
+          layout === 'list'
+            ? 'aspect-square w-144'
+            : isHomeCarouselCompactCard
+              ? 'mx-auto aspect-[2/3] w-[calc(100%_-_24px)] max-w-[116px] lg:mx-0 lg:aspect-video lg:w-full lg:max-w-none'
+              : 'aspect-[23/20]',
+        )}
+      >
+        <Link
+          href={productHref}
+          tabIndex={-1}
+          aria-hidden="true"
+          className={cx('block size-full', isSoldOut && 'opacity-48')}
+        >
+          <ProductImage src={product.thumbnailUrl} alt={product.name} sizes={productImageSizes} />
+        </Link>
+        {!isHomeCarouselCard ? (
+          <div className="pointer-events-none absolute top-8 left-8 flex flex-wrap gap-4">
+            {productBadges}
+          </div>
+        ) : null}
+        {!isHomeCarouselCard ? favoriteButton : null}
+      </div>
+      {isHomeCarouselCard ? (
+        <div className="pointer-events-none absolute top-8 right-48 left-12 z-10 flex flex-col items-start gap-4 pr-4">
+          {productBadges}
+        </div>
+      ) : null}
+      {isHomeCarouselCard ? favoriteButton : null}
+      <div
+        className={cx(
+          'flex min-w-0 flex-1 flex-col px-4',
+          isCompactOnMobile ? 'gap-4' : layout === 'list' ? 'pt-12' : 'pt-16',
+          isCompactOnMobile && (layout === 'list' ? 'lg:gap-0 lg:pt-12' : 'lg:gap-0 lg:pt-16'),
+        )}
+      >
+        <p
+          className={cx(
+            'truncate text-caption text-text-3',
+            isCompactOnMobile && 'hidden lg:block',
+          )}
+        >
+          {product.brand}
+        </p>
+        <Link
+          href={productHref}
+          className={cx(
+            'rounded-4 focus-ring',
+            isSoldOut ? 'text-text-3' : 'text-text-1',
+            isCompactOnMobile
+              ? 'truncate text-body-s lg:mt-4 lg:line-clamp-2 lg:min-h-48 lg:text-body-m lg:whitespace-normal'
+              : 'mt-4 line-clamp-2 min-h-48 text-body-m',
+          )}
+        >
+          {product.name}
+        </Link>
+        <div
+          className={cx(
+            'mt-6 flex items-center gap-4 text-caption text-text-2',
+            isHomeCarouselCompactCard &&
+              product.rating === null &&
+              'max-lg:flex-col max-lg:items-start max-lg:gap-2',
+          )}
+        >
+          <ProductRatingStars
+            rating={product.rating}
+            variant={isHomeCarouselCard ? 'home-carousel' : 'default'}
+          />
+          {product.rating === null ? (
+            <span
+              className={cx(
+                'flex items-center gap-4',
+                isHomeCarouselCompactCard && 'max-lg:whitespace-nowrap',
+              )}
+            >
+              <span>평점 없음</span>
+              <span role="img" aria-label={`리뷰 ${product.reviewCount.toLocaleString('ko-KR')}개`}>
+                ({product.reviewCount.toLocaleString('ko-KR')})
+              </span>
+            </span>
+          ) : (
+            <span className="text-caption-medium text-text-1">{product.rating.toFixed(1)}</span>
+          )}
+          {product.rating !== null ? (
+            <span role="img" aria-label={`리뷰 ${product.reviewCount.toLocaleString('ko-KR')}개`}>
+              ({product.reviewCount.toLocaleString('ko-KR')})
+            </span>
+          ) : null}
+        </div>
+        <div
+          className={cx(
+            'mt-auto flex items-end justify-between gap-8',
+            isCompactOnMobile ? 'lg:pt-8' : 'pt-8',
+          )}
+        >
+          <div
+            className={cx(
+              'min-w-0',
+              isCompactOnMobile && !isHomeCarouselCompactCard && 'lg:w-full',
+            )}
+          >
+            {priceDisplay.listPriceText ? (
+              <p
+                className={
+                  isHomeCarouselCompactCard
+                    ? 'text-caption text-text-3 line-through lg:break-all'
+                    : 'truncate text-caption text-text-3 line-through'
+                }
+              >
+                {priceDisplay.listPriceText}
+              </p>
+            ) : null}
+            <p
+              className={cx(
+                isHomeCarouselCompactCard ? 'text-price-m lg:break-all' : 'truncate text-price-m',
+                isSoldOut
+                  ? 'text-text-3'
+                  : priceDisplay.discountRateLabel !== null
+                    ? 'text-danger'
+                    : !priceDisplay.isPriceVisible && 'text-text-2',
+              )}
+            >
+              {priceDisplay.discountRateLabel ? (
+                <span className="mr-4 text-label-m text-danger">
+                  {priceDisplay.discountRateLabel}
+                </span>
+              ) : null}
+              {priceDisplay.text}
+            </p>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+export function ProductCard(props: {
+  product: ProductListItem;
+  className?: string;
+  layout?: 'grid' | 'list';
+  mobileVariant?: 'full' | 'compact';
+  cardVariant?: 'default' | 'home-carousel';
+}) {
+  return isProductSummary(props.product) ? (
+    <ProductSummaryCard
+      product={props.product}
+      className={props.className}
+      layout={props.layout}
+      mobileVariant={props.mobileVariant}
+      cardVariant={props.cardVariant}
+    />
+  ) : (
+    <FullProductCard {...props} product={props.product} />
   );
 }

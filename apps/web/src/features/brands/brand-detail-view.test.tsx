@@ -95,7 +95,11 @@ describe('BrandDetailView', () => {
   beforeEach(() => {
     apiMocks.getShopApi.mockResolvedValue({
       brands: { getById: apiMocks.getBrandById },
-      products: { list: apiMocks.listProducts, facets: apiMocks.listFacets },
+      products: {
+        list: apiMocks.listProducts,
+        listCatalog: apiMocks.listProducts,
+        facets: apiMocks.listFacets,
+      },
       categories: { list: apiMocks.listCategories },
     });
     apiMocks.getBrandById.mockReset().mockResolvedValue(buildBrandDetail());

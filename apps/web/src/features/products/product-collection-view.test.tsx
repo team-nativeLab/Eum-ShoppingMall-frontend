@@ -84,7 +84,12 @@ beforeEach(() => {
   apiMocks.listProducts.mockReset();
   apiMocks.listRecommended.mockReset();
   apiMocks.getShopApi.mockResolvedValue({
-    products: { list: apiMocks.listProducts, listRecommended: apiMocks.listRecommended },
+    products: {
+      list: apiMocks.listProducts,
+      listCatalog: apiMocks.listProducts,
+      listRecommended: apiMocks.listRecommended,
+      listCatalogRecommended: apiMocks.listRecommended,
+    },
   });
 });
 

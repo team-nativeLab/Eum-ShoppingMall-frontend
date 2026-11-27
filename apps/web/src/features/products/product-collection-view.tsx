@@ -1,7 +1,7 @@
 'use client';
 
 import { getApiFailureKind } from '@eum/api/errors';
-import type { PagedResult, Product } from '@eum/api/types';
+import type { PagedResult, ProductListItem } from '@eum/api/types';
 import { Button } from '@eum/ui/components/Button';
 import { EmptyState } from '@eum/ui/components/EmptyState';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
@@ -13,8 +13,8 @@ import { useRef, useState, type ReactNode } from 'react';
 import { PageContainer } from '@/components/page-container';
 import { getScrollBehavior, usePrefersReducedMotion } from '@/lib/use-media-query';
 import { ProductCard } from './product-card';
-import { useProductsQuery } from './use-products-query';
-import { useRecommendedProductsQuery } from './use-recommended-products-query';
+import { useCatalogProductsQuery } from './use-catalog-products-query';
+import { useCatalogRecommendedProductsQuery } from './use-catalog-recommended-products-query';
 
 /** 베스트·할인 상품 화면에서 한 페이지에 보여 줄 상품 수 */
 const COLLECTION_PAGE_SIZE = 24;
@@ -41,7 +41,7 @@ function CollectionFrame({ title, children }: { title: string; children: ReactNo
  * totalCount·pageSize가 정상 숫자가 아니면 undefined를 돌려줘 직전에 확인한 값을 유지하게 합니다.
  * 처음부터 비정상이면 호출부의 초기값(1페이지)이 쓰입니다. NaN을 상태로 두면 렌더마다 갱신되어 수렴하지 않습니다.
  */
-function getPageCount(data: PagedResult<Product> | undefined): number | undefined {
+function getPageCount(data: PagedResult<ProductListItem> | undefined): number | undefined {
   if (!data) return undefined;
   if (!Number.isFinite(data.totalCount) || !Number.isFinite(data.pageSize)) return undefined;
   return Math.max(1, Math.ceil(data.totalCount / Math.max(1, data.pageSize)));
@@ -60,7 +60,7 @@ function CollectionResults({
   isLoading: boolean;
   isError: boolean;
   error: unknown;
-  products: Product[];
+  products: ProductListItem[];
   emptyTitle: string;
   /** 오류 안내에 다시 시도 버튼을 둘 때 넘깁니다(페이지 이동이 있는 화면). */
   onRetry?: () => void;
@@ -156,7 +156,7 @@ export function PagedProductCollectionView({
   const [page, setPage] = useState(1);
   const prefersReducedMotion = usePrefersReducedMotion();
   // 페이지를 바꾸는 동안 이전 결과를 남겨 두어 페이지 이동 버튼(포커스)이 사라지지 않게 합니다.
-  const productsQuery = useProductsQuery(
+  const productsQuery = useCatalogProductsQuery(
     { collection, page, pageSize: COLLECTION_PAGE_SIZE },
     { shouldKeepPreviousData: true },
   );
@@ -232,7 +232,7 @@ export function RecommendedProductCollectionView({
   title: string;
   emptyTitle: string;
 }) {
-  const recommendedProductsQuery = useRecommendedProductsQuery({
+  const recommendedProductsQuery = useCatalogRecommendedProductsQuery({
     limit: RECOMMENDED_PAGE_LIMIT,
   });
 

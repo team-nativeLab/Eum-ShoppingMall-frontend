@@ -37,6 +37,22 @@ function countBuyerVisibleMockProducts(brandName?: string): number {
 }
 
 describe('목 API 시나리오', () => {
+  it('카탈로그 요약 어댑터는 기존 목 상품 전체 모델과 목록 동작을 유지합니다', async () => {
+    const api = createMockApi(testConfig);
+    const [catalogPage, productPage] = await Promise.all([
+      api.products.listCatalog({ page: 1, pageSize: 5 }),
+      api.products.list({ page: 1, pageSize: 5 }),
+    ]);
+    expect(catalogPage.items).toEqual(productPage.items);
+    expect(catalogPage.items[0]).toHaveProperty('options');
+
+    const [catalogRecommendations, recommendations] = await Promise.all([
+      api.products.listCatalogRecommended({ limit: 48 }),
+      api.products.listRecommended({ limit: 48 }),
+    ]);
+    expect(catalogRecommendations).toEqual(recommendations);
+  });
+
   it('기본 문의 seed와 가격 미표시 상품은 견적 대신 고객센터 문의를 안내합니다', async () => {
     const api = createMockApi(testConfig);
     const [faqs, notices, inquiries] = await Promise.all([
