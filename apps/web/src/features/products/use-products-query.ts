@@ -23,7 +23,7 @@ export function useProductsQuery(
 ) {
   return useQuery({
     queryKey: queryKeys.products.list(params),
-    queryFn: async ({ signal }) => (await getShopApi()).products.list(params, { signal }),
+    queryFn: async ({ signal }) => (await getShopApi()).products.listCatalog(params, { signal }),
     enabled,
     placeholderData: shouldKeepPreviousData ? keepPreviousData : undefined,
   });

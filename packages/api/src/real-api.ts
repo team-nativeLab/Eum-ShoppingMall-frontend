@@ -15,7 +15,10 @@ import type {
   ProductSpecification,
   ProductSummary,
   ProductSuggestion,
+  HomeContent,
+  ShopPopup,
 } from './types';
+import { sanitizeRedirectPath } from './redirect';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -253,6 +256,115 @@ function mapProductSummary(input: unknown): ProductSummary {
   };
 }
 
+function mapHomeContent(input: unknown): HomeContent {
+  const home = asRecord(input, '홈 콘텐츠');
+  const readArray = (field: string): unknown[] => {
+    const value = home[field];
+    if (value === undefined) return [];
+    if (!Array.isArray(value))
+      throw new ApiError('INVALID_RESPONSE', `실제 API 응답(${field}) 형식이 올바르지 않습니다.`);
+    return value;
+  };
+  const safeDestination = (value: unknown, field: string) => {
+    const rawPath = asString(value, field);
+    const path = sanitizeRedirectPath(rawPath, '');
+    return path === '' ? '' : path;
+  };
+  const heroSlides = readArray('heroSlides').map((entry) => {
+    const slide = asRecord(entry, '히어로 배너');
+    const title = slide.title;
+    const tagline = slide.tagline === undefined ? [] : slide.tagline;
+    if (!Array.isArray(title) || !title.every((line) => typeof line === 'string'))
+      throw new ApiError(
+        'INVALID_RESPONSE',
+        '실제 API 응답(히어로 제목) 형식이 올바르지 않습니다.',
+      );
+    if (!Array.isArray(tagline) || !tagline.every((line) => typeof line === 'string'))
+      throw new ApiError(
+        'INVALID_RESPONSE',
+        '실제 API 응답(히어로 태그라인) 형식이 올바르지 않습니다.',
+      );
+    const secondary = slide.secondaryCta;
+    const secondaryCta =
+      secondary === null
+        ? null
+        : secondary === undefined
+          ? undefined
+          : (() => {
+              const link = asRecord(secondary, '보조 링크');
+              const destination = safeDestination(link.destination, '보조 링크 경로');
+              return destination
+                ? { label: asString(link.label, '보조 링크 이름'), destination }
+                : undefined;
+            })();
+    const destination = safeDestination(slide.destination, '히어로 링크 경로');
+    return {
+      id: asSafeId(slide.id, '히어로 배너'),
+      eyebrow: asString(slide.eyebrow, '히어로 문구'),
+      title: title as string[],
+      description:
+        slide.description === undefined ? '' : asString(slide.description, '히어로 설명'),
+      tagline: tagline as string[],
+      imageUrl: asImageUrl(slide.imageUrl, '히어로 이미지'),
+      destination,
+      ctaLabel: asString(slide.ctaLabel, '히어로 버튼'),
+      ...(secondaryCta ? { secondaryCta } : {}),
+    };
+  });
+  const promoBanners = readArray('promoBanners').map((entry) => {
+    const banner = asRecord(entry, '프로모션 배너');
+    const title = banner.title;
+    if (!Array.isArray(title) || !title.every((line) => typeof line === 'string'))
+      throw new ApiError(
+        'INVALID_RESPONSE',
+        '실제 API 응답(프로모션 제목) 형식이 올바르지 않습니다.',
+      );
+    const tone = asString(banner.tone, '프로모션 스타일');
+    if (tone !== 'dark' && tone !== 'light')
+      throw new ApiError(
+        'INVALID_RESPONSE',
+        '실제 API 응답(프로모션 스타일)을 처리할 수 없습니다.',
+      );
+    return {
+      id: asSafeId(banner.id, '프로모션 배너'),
+      title: title as string[],
+      description:
+        banner.description === undefined ? '' : asString(banner.description, '프로모션 설명'),
+      imageUrl: asImageUrl(banner.imageUrl, '프로모션 이미지'),
+      tone: tone as 'dark' | 'light',
+      destination: safeDestination(banner.destination, '프로모션 링크 경로'),
+    };
+  });
+  const serviceBenefits = readArray('serviceBenefits').map((entry) => {
+    const benefit = asRecord(entry, '서비스 안내');
+    return {
+      id: asSafeId(benefit.id, '서비스 안내'),
+      title: asString(benefit.title, '서비스 안내 제목'),
+      description:
+        benefit.description === undefined ? '' : asString(benefit.description, '서비스 안내 설명'),
+      isVisible:
+        benefit.visible === undefined ? true : asBoolean(benefit.visible, '서비스 안내 표시 여부'),
+    };
+  });
+  return {
+    heroSlides,
+    promoBanners,
+    serviceBenefits,
+    featuredProducts: readArray('featuredProducts').map(mapProductSummary),
+  };
+}
+
+function mapPopup(input: unknown): ShopPopup {
+  const popup = asRecord(input, '팝업');
+  const imageUrl = asNullableString(popup.imageUrl, '팝업 이미지');
+  return {
+    id: asSafeId(popup.id, '팝업'),
+    title: asString(popup.title, '팝업 제목'),
+    imageUrl: imageUrl === null ? null : asImageUrl(imageUrl, '팝업 이미지'),
+    body: asString(popup.body, '팝업 본문'),
+  };
+}
+
 function mapFacetRows(input: unknown, field: string, numericValue = false): FacetCount[] {
   if (!Array.isArray(input))
     throw new ApiError('INVALID_RESPONSE', `실제 API 응답(${field}) 형식이 올바르지 않습니다.`);
@@ -386,12 +498,12 @@ function notImplemented(endpointName: string): () => Promise<never> {
 }
 
 /**
- * 실제 서버용 ShopApi 스텁.
- * API 스펙이 확정되면 config.baseUrl로 fetch하도록 엔드포인트별로 채웁니다.
+ * 실제 서버용 ShopApi. 연결되지 않은 엔드포인트는 명시적으로 실패시킵니다.
  */
 export function createRealApi(config: ApiConfig): ShopApi {
   const client = createApiClient(config.baseUrl);
-  const get = (path: string, signal?: AbortSignal) => client.request(path, { signal });
+  const get = (path: string, signal?: AbortSignal, requireEnvelope = false) =>
+    client.request(path, { signal, requireEnvelope });
   return {
     suppliers: {
       adminList: notImplemented('suppliers.adminList'),
@@ -514,7 +626,8 @@ export function createRealApi(config: ApiConfig): ShopApi {
       delete: notImplemented('categories.delete'),
     },
     home: {
-      getContent: notImplemented('home.getContent'),
+      getContent: async (options): Promise<HomeContent> =>
+        mapHomeContent(await get('/api/v1/home', options?.signal, true)),
       getAdminContent: notImplemented('home.getAdminContent'),
       saveAdminContent: notImplemented('home.saveAdminContent'),
     },
@@ -566,7 +679,15 @@ export function createRealApi(config: ApiConfig): ShopApi {
       deleteAdmin: notImplemented('notices.deleteAdmin'),
     },
     popups: {
-      list: notImplemented('popups.list'),
+      list: async (options): Promise<ShopPopup[]> => {
+        const response = await get('/api/v1/popups', options?.signal, true);
+        if (!Array.isArray(response))
+          throw new ApiError(
+            'INVALID_RESPONSE',
+            '실제 API 응답(팝업 목록) 형식이 올바르지 않습니다.',
+          );
+        return response.map(mapPopup);
+      },
       adminList: notImplemented('popups.adminList'),
       saveAdmin: notImplemented('popups.saveAdmin'),
       deleteAdmin: notImplemented('popups.deleteAdmin'),

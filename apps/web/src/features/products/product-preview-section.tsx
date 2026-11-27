@@ -2,7 +2,7 @@
 
 import { getApiFailureKind, type ApiFailureKind } from '@eum/api/errors';
 import { canAddToCart, getPriceDisplay } from '@eum/api/price';
-import type { Product } from '@eum/api/types';
+import type { Product, ProductListItem } from '@eum/api/types';
 import { Badge } from '@eum/ui/components/Badge';
 import { Button } from '@eum/ui/components/Button';
 import { EmptyState } from '@eum/ui/components/EmptyState';
@@ -34,7 +34,19 @@ export function ProductPreviewSection() {
           <ul className="grid grid-cols-1 gap-24 sm:grid-cols-2 lg:grid-cols-4">
             {productsQuery.data.items.map((product) => (
               <li key={product.id}>
-                <ProductPreviewCard product={product} />
+                {isProductSummary(product) ? (
+                  <article className="rounded-8 border border-line p-16">
+                    <h3 className="text-body-s-medium">{product.name}</h3>
+                    <p className="mt-8 text-caption text-text-3">{product.brand}</p>
+                    <p className="mt-8 text-price-m">
+                      {product.priceVisible && product.price !== null
+                        ? `${product.price.toLocaleString('ko-KR')}원`
+                        : '금액 미표시'}
+                    </p>
+                  </article>
+                ) : (
+                  <ProductPreviewCard product={product} />
+                )}
               </li>
             ))}
           </ul>
@@ -42,6 +54,10 @@ export function ProductPreviewSection() {
       </div>
     </section>
   );
+}
+
+function isProductSummary(product: ProductListItem): product is Exclude<ProductListItem, Product> {
+  return 'kind' in product && product.kind === 'summary';
 }
 
 // 조회 실패 종류별 안내 문구

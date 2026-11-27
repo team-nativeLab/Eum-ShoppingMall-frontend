@@ -397,7 +397,7 @@ export interface HomeContent {
   heroSlides: HeroSlide[];
   promoBanners: PromoBanner[];
   serviceBenefits: ServiceBenefit[];
-  featuredProducts: Product[];
+  featuredProducts: ProductListItem[];
 }
 
 /** 관리자 홈 편성 저장 모델. 상품 상세는 ID로 연결해 Web 응답에서 최신 데이터를 구성합니다. */

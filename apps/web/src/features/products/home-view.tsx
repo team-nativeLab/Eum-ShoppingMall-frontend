@@ -1,7 +1,7 @@
 'use client';
 
 import { getApiFailureKind } from '@eum/api/errors';
-import type { HomeContent, Product } from '@eum/api/types';
+import type { HomeContent, ProductListItem } from '@eum/api/types';
 import { buttonClassName } from '@eum/ui/components/Button';
 import { capsuleButtonClassName } from '@eum/ui/components/ButtonCapsule';
 import { Icon } from '@eum/ui/components/Icon';
@@ -10,7 +10,13 @@ import { cx } from '@eum/ui/lib/cx';
 import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState, type CSSProperties, type FocusEvent, type PointerEvent } from 'react';
+import {
+  useState,
+  type CSSProperties,
+  type FocusEvent,
+  type PointerEvent,
+  type ReactNode,
+} from 'react';
 import { PageContainer } from '@/components/page-container';
 import { isLocalImageSource } from '@/lib/image-source';
 import { HomePopup } from './home-popup';
@@ -37,6 +43,24 @@ const HOME_ERROR_COPY: Record<string, string> = {
   notFound: '홈 콘텐츠를 찾을 수 없습니다.',
   temporary: '홈 콘텐츠를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
 };
+
+function InternalDestination({
+  href,
+  className,
+  children,
+}: {
+  href: string;
+  className: string;
+  children: ReactNode;
+}) {
+  return href ? (
+    <Link href={href} className={className}>
+      {children}
+    </Link>
+  ) : (
+    <div className={className}>{children}</div>
+  );
+}
 
 /** 슬라이드 번호를 Figma 인디케이터처럼 두 자리(01, 02…)로 바꿉니다. */
 function formatSlideNumber(slideIndex: number): string {
@@ -66,7 +90,14 @@ export function HomeView() {
       ) : homeQuery.isError ? (
         <PageContainer className="py-64">
           <NoticeInline tone="danger" role="alert">
-            {HOME_ERROR_COPY[getApiFailureKind(homeQuery.error)]}
+            {HOME_ERROR_COPY[getApiFailureKind(homeQuery.error)]}{' '}
+            <button
+              type="button"
+              onClick={() => void homeQuery.refetch()}
+              className="rounded-4 underline focus-ring"
+            >
+              다시 시도
+            </button>
           </NoticeInline>
         </PageContainer>
       ) : (
@@ -278,10 +309,10 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
                   ))}
                 </p>
                 <div className="mt-24 flex items-center gap-24">
-                  <Link href={slide.destination} className={capsuleButtonClassName}>
+                  <InternalDestination href={slide.destination} className={capsuleButtonClassName}>
                     {slide.ctaLabel}
                     <Icon icon={ArrowRight} size={16} />
-                  </Link>
+                  </InternalDestination>
                   {slide.secondaryCta ? (
                     <Link
                       href={slide.secondaryCta.destination}
@@ -415,7 +446,7 @@ function PromoBannerSection({ banners }: { banners: HomeContent['promoBanners'] 
         {banners.map((banner) => {
           const isLight = banner.tone === 'light';
           return (
-            <Link
+            <InternalDestination
               key={banner.id}
               href={banner.destination}
               className="group relative isolate flex h-216 w-300 shrink-0 snap-start flex-col overflow-hidden rounded-12 bg-surface px-32 pt-24 pb-21 focus-ring lg:h-auto lg:min-h-204 lg:w-auto"
@@ -478,7 +509,7 @@ function PromoBannerSection({ banners }: { banners: HomeContent['promoBanners'] 
                   <Icon icon={ArrowRight} size={16} />
                 </span>
               </div>
-            </Link>
+            </InternalDestination>
           );
         })}
       </PageContainer>
@@ -491,7 +522,7 @@ function PromoBannerSection({ banners }: { banners: HomeContent['promoBanners'] 
  * 모바일은 2×2 카드 페이지를 스와이프로 넘기고 하단 "전체 보기" 버튼을 둡니다(W-01m).
  * 카테고리 칩은 두지 않습니다. 카테고리 이동은 상단 카테고리 바가 맡습니다.
  */
-function BestSellerSection({ products }: { products: Product[] }) {
+function BestSellerSection({ products }: { products: ProductListItem[] }) {
   const desktopLayout = useHomeCarouselLayout();
   const carouselPaging = useCarouselPaging(
     Math.ceil(products.length / desktopLayout.pageSize),
@@ -635,7 +666,7 @@ function HomeProductShowcase({
 }: {
   headingId: string;
   title: string;
-  products: Product[];
+  products: ProductListItem[];
   viewAllHref: string;
   status?: 'pending' | 'error' | 'empty' | 'success';
   error?: unknown;

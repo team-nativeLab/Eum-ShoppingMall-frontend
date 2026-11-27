@@ -140,7 +140,12 @@ function createApi(homeResponse = homeContent, categories: Category[] = []): Sho
     home: { getContent: async () => homeResponse },
     categories: { list: async () => categories },
     popups: { list: async () => [] },
-    products: { list: async () => ({ items: [], page: 1, pageSize: 10, totalCount: 0 }) },
+    products: {
+      list: async () => ({ items: [], page: 1, pageSize: 10, totalCount: 0 }),
+      listCatalog: async () => ({ items: [], page: 1, pageSize: 10, totalCount: 0 }),
+      listRecommended: async () => [],
+      listCatalogRecommended: async () => [],
+    },
   } as unknown as ShopApi;
 }
 
@@ -155,6 +160,24 @@ beforeEach(() => {
 });
 
 describe('HomeView section layout and responsive promo copy spacing', () => {
+  it('shows a retry action after the home request fails', async () => {
+    const getContent = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValue(homeContent);
+    vi.mocked(getShopApi).mockResolvedValue({
+      ...createApi(),
+      home: { getContent },
+    } as unknown as ShopApi);
+
+    render(<HomeView />, { wrapper: createWrapper() });
+    const retryButton = await screen.findByRole('button', { name: '다시 시도' });
+    await userEvent.click(retryButton);
+
+    await screen.findByRole('region', { name: '베스트' });
+    expect(getContent).toHaveBeenCalledTimes(2);
+  });
+
   it.each([
     [1024, 8],
     [1279, 8],
@@ -172,7 +195,7 @@ describe('HomeView section layout and responsive promo copy spacing', () => {
     });
     vi.mocked(getShopApi).mockResolvedValue({
       ...createApi(),
-      products: { list: () => new Promise(() => undefined) },
+      products: { listCatalog: () => new Promise(() => undefined) },
     } as unknown as ShopApi);
 
     try {
@@ -500,7 +523,7 @@ describe('HomeView best and recommended view-all links', () => {
     const listRecommended = vi.fn(async (_params: ProductLimitParams) => [sampleProduct]);
     vi.mocked(getShopApi).mockResolvedValue({
       ...createApi(),
-      products: { list: listProducts, listRecommended },
+      products: { listCatalog: listProducts, listCatalogRecommended: listRecommended },
     } as unknown as ShopApi);
 
     render(<HomeView />, { wrapper: createWrapper() });
@@ -520,8 +543,8 @@ describe('HomeView best and recommended view-all links', () => {
     vi.mocked(getShopApi).mockResolvedValue({
       ...createApi(),
       products: {
-        list: async () => ({ items: [sampleProduct], page: 1, pageSize: 7, totalCount: 1 }),
-        listRecommended: async () => [sampleProduct],
+        listCatalog: async () => ({ items: [sampleProduct], page: 1, pageSize: 7, totalCount: 1 }),
+        listCatalogRecommended: async () => [sampleProduct],
       },
     } as unknown as ShopApi);
 
