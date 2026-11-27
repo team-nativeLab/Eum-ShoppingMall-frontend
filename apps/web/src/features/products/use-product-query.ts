@@ -8,7 +8,8 @@ import { getShopApi } from '@/lib/shop-api';
 export function useProductQuery(productId: string) {
   return useQuery({
     queryKey: queryKeys.products.detail(productId),
-    queryFn: async ({ signal }) => (await getShopApi()).products.getById(productId, { signal }),
+    queryFn: async ({ signal }) =>
+      (await getShopApi()).products.getDetailById(productId, { signal }),
     enabled: productId.length > 0,
   });
 }

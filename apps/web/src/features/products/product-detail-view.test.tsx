@@ -1,4 +1,4 @@
-import type { Product, ProductOption } from '@eum/api/types';
+import type { ApiProductDetail, Product, ProductOption } from '@eum/api/types';
 import { render as renderWithoutProviders, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
@@ -18,6 +18,7 @@ const detailMocks = vi.hoisted(() => ({
   toggleWishlist: vi.fn(),
   recordRecent: vi.fn(),
   routerPush: vi.fn(),
+  productReviewsSection: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: detailMocks.routerPush }) }));
@@ -65,7 +66,12 @@ vi.mock('./product-carousel', () => ({
     <a href={viewAllHref}>{title} 전체 보기</a>
   ),
 }));
-vi.mock('./product-reviews-section', () => ({ ProductReviewsSection: () => <section /> }));
+vi.mock('./product-reviews-section', () => ({
+  ProductReviewsSection: () => {
+    detailMocks.productReviewsSection();
+    return <section />;
+  },
+}));
 vi.mock('./use-categories-query', () => ({ useCategoriesQuery: detailMocks.categoriesQuery }));
 vi.mock('./use-product-query', () => ({ useProductQuery: detailMocks.productQuery }));
 vi.mock('./use-related-products-query', () => ({
@@ -103,6 +109,33 @@ const testProduct: Product = {
   reviewCount: 6,
   createdAt: '2026-10-15T00:00:00.000Z',
   isFeatured: false,
+};
+
+const apiProductDetail: ApiProductDetail = {
+  kind: 'api-detail',
+  id: '12',
+  name: 'API 안전모',
+  brand: '서버 브랜드',
+  categoryId: null,
+  price: 42000,
+  listPrice: 50000,
+  priceVisible: true,
+  stockStatus: 'inStock',
+  thumbnailUrl: '/api-helmet.jpg',
+  summary: '서버 요약',
+  detailDescription: '서버 상세 설명',
+  detailDescriptionFormat: 'plain',
+  modelName: 'API-12',
+  images: [{ id: 'api-image', url: '/api-detail.jpg', alt: 'API 안전모 이미지' }],
+  skus: [{ id: 'sku-1', optionName: 'M', price: 42000, soldOut: false }],
+  specifications: [{ label: '재질', value: '강화 플라스틱' }],
+  certifications: ['KCs'],
+  countryOfOrigin: '대한민국',
+  shippingEstimate: '3일 이내 출고',
+  rating: 4.5,
+  reviewCount: 3,
+  isFeatured: false,
+  todayDeal: false,
 };
 
 const sizeOption: ProductOption = {
@@ -169,6 +202,7 @@ beforeEach(() => {
   detailMocks.toggleWishlist.mockReset();
   detailMocks.recordRecent.mockReset();
   detailMocks.routerPush.mockReset();
+  detailMocks.productReviewsSection.mockReset();
   vi.stubGlobal('IntersectionObserver', TestIntersectionObserver);
   Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
     configurable: true,
@@ -434,5 +468,100 @@ describe('ProductDetailView category links', () => {
       'href',
       '/category/safety%2Fgear',
     );
+  });
+});
+
+describe('ProductDetailView API detail', () => {
+  it('shows server detail values and guides clicks for unavailable API actions', async () => {
+    const user = userEvent.setup();
+    detailMocks.productQuery.mockReturnValue({
+      data: apiProductDetail,
+      isPending: false,
+      isError: false,
+    });
+    render(<ProductDetailView productId="12" />);
+    expect(detailMocks.productReviewsSection).not.toHaveBeenCalled();
+
+    expect(screen.getByRole('heading', { name: 'API 안전모' })).toBeInTheDocument();
+    expect(screen.getByText('서버 요약')).toBeInTheDocument();
+    expect(screen.getByText('서버 상세 설명')).toBeInTheDocument();
+    expect(screen.getByText('강화 플라스틱')).toBeInTheDocument();
+    expect(screen.getByText('배송 예정: 3일 이내 출고')).toBeInTheDocument();
+    expect(screen.queryByText(/배송비/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/구매 안내/)).not.toBeInTheDocument();
+
+    const reviewsTab = within(screen.getByRole('navigation', { name: '상품 상세 탭' })).getByRole(
+      'link',
+      { name: /리뷰/ },
+    );
+    await user.click(reviewsTab);
+    expect(reviewsTab).toHaveAttribute('aria-current', 'location');
+    expect(
+      screen
+        .getAllByRole('status')
+        .filter((status) => status.textContent === '상품 리뷰 기능은 준비 중입니다.'),
+    ).toHaveLength(1);
+
+    await user.click(screen.getByRole('button', { name: '옵션 선택' }));
+    expect(
+      screen
+        .getAllByRole('status')
+        .some((status) => status.textContent === '상품 옵션 정보는 준비 중입니다.'),
+    ).toBe(true);
+    await user.click(getButtonAt(screen.getAllByRole('button', { name: '장바구니 담기' }), 0));
+    expect(
+      screen
+        .getAllByRole('status')
+        .some((status) => status.textContent === '장바구니 연동은 준비 중입니다.'),
+    ).toBe(true);
+    await user.click(getButtonAt(screen.getAllByRole('button', { name: '바로 구매' }), 0));
+    expect(
+      screen
+        .getAllByRole('status')
+        .some((status) => status.textContent === '주문 기능은 준비 중입니다.'),
+    ).toBe(true);
+    await user.click(screen.getByRole('button', { name: '구매 전 안내 확인' }));
+    expect(
+      screen
+        .getAllByRole('status')
+        .some((status) => status.textContent === '상품별 구매 안내는 준비 중입니다.'),
+    ).toBe(true);
+    await user.click(screen.getByRole('button', { name: '배송·교환·반품 상세 안내 확인' }));
+    expect(
+      screen
+        .getAllByRole('status')
+        .some((status) => status.textContent === '상품별 배송·교환·반품 안내는 준비 중입니다.'),
+    ).toBe(true);
+    await user.click(screen.getByRole('button', { name: '문의 기능 확인' }));
+    expect(
+      screen
+        .getAllByRole('status')
+        .some((status) => status.textContent === '상품 문의 기능은 준비 중입니다.'),
+    ).toBe(true);
+    expect(detailMocks.addToCart).not.toHaveBeenCalled();
+    expect(detailMocks.routerPush).not.toHaveBeenCalled();
+  });
+
+  it('redacts hidden prices and keeps the customer inquiry path without purchase controls', () => {
+    detailMocks.productQuery.mockReturnValue({
+      data: {
+        ...apiProductDetail,
+        price: null,
+        listPrice: null,
+        priceVisible: false,
+        skus: [{ ...apiProductDetail.skus[0], price: null }],
+      },
+      isPending: false,
+      isError: false,
+    });
+    render(<ProductDetailView productId="12" />);
+
+    expect(
+      screen.getAllByText('금액이 표시되지 않는 상품입니다. 고객센터에 문의해 주세요.'),
+    ).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: '상품 문의 →' })).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: '장바구니 담기' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '바로 구매' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/₩/)).not.toBeInTheDocument();
   });
 });

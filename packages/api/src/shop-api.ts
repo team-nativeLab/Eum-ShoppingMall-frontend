@@ -38,6 +38,7 @@ import type {
   PagedResult,
   Point,
   Product,
+  ProductDetailItem,
   ProductListItem,
   ProductFacets,
   ProductReview,
@@ -130,6 +131,7 @@ export interface ShopApi {
       options?: RequestOptions,
     ): Promise<PagedResult<ProductListItem>>;
     getById(productId: string, options?: RequestOptions): Promise<Product>;
+    getDetailById(productId: string, options?: RequestOptions): Promise<ProductDetailItem>;
     suggest(keyword: string, options?: RequestOptions): Promise<ProductSuggestion[]>;
     /** 목록 필터에 표시할 카테고리·브랜드·인증별 상품 수 */
     facets(params?: ProductFacetParams, options?: RequestOptions): Promise<ProductFacets>;
@@ -138,7 +140,7 @@ export interface ShopApi {
       productId: string,
       params?: ProductLimitParams,
       options?: RequestOptions,
-    ): Promise<Product[]>;
+    ): Promise<ProductListItem[]>;
     /** 검색 결과 없음 화면의 "추천 상품". 고르는 규칙은 서버가 정합니다. */
     listRecommended(params?: ProductLimitParams, options?: RequestOptions): Promise<Product[]>;
     listCatalogRecommended(
