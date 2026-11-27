@@ -1,14 +1,18 @@
 import type { ApiConfig } from './config';
 import { ApiError } from './errors';
 import { createApiClient } from './http-client';
-import type { ProductListParams, ShopApi } from './shop-api';
+import type { ProductLimitParams, ProductListParams, ShopApi } from './shop-api';
 import type {
+  ApiProductDetail,
+  ApiProductDetailSku,
   BrandSummary,
   Category,
   FacetCount,
   PagedResult,
   ProductFacets,
+  ProductImage,
   ProductListItem,
+  ProductSpecification,
   ProductSummary,
   ProductSuggestion,
 } from './types';
@@ -40,6 +44,10 @@ function asNumber(input: unknown, field: string): number {
   return input;
 }
 
+function asNullableNumber(input: unknown, field: string): number | null {
+  return input === null ? null : asNumber(input, field);
+}
+
 function asSafeId(input: unknown, field: string): string {
   if (typeof input !== 'number' || !Number.isSafeInteger(input) || input < 0) {
     throw new ApiError('INVALID_RESPONSE', `실제 API 응답(${field}) ID가 안전한 정수가 아닙니다.`);
@@ -52,6 +60,151 @@ function asBoolean(input: unknown, field: string): boolean {
     throw new ApiError('INVALID_RESPONSE', `실제 API 응답(${field}) 형식이 올바르지 않습니다.`);
   }
   return input;
+}
+
+function asImageUrl(input: unknown, field: string): string {
+  const imageUrl = asString(input, field);
+  if (
+    !imageUrl ||
+    imageUrl.includes('\\') ||
+    Array.from(imageUrl).some((character) => (character.codePointAt(0) ?? 0) < 32)
+  ) {
+    throw new ApiError('INVALID_RESPONSE', `실제 API 응답(${field}) URL 형식이 올바르지 않습니다.`);
+  }
+  if (imageUrl.startsWith('/') && !imageUrl.startsWith('//')) return imageUrl;
+  try {
+    const parsedUrl = new URL(imageUrl);
+    if (
+      (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') &&
+      !parsedUrl.username &&
+      !parsedUrl.password
+    ) {
+      return imageUrl;
+    }
+  } catch {
+    // API 경계에서는 브라우저가 해석할 수 없는 이미지 주소를 허용하지 않습니다.
+  }
+  throw new ApiError('INVALID_RESPONSE', `실제 API 응답(${field}) URL 형식이 올바르지 않습니다.`);
+}
+
+function mapProductDetailImage(input: unknown, productId: string, index: number): ProductImage {
+  const image = asRecord(input, '상품 상세 이미지');
+  return {
+    id: `api-${productId}-image-${index}`,
+    url: asImageUrl(image.url, '상품 상세 이미지'),
+    alt: asString(image.alt, '상품 이미지 대체 텍스트'),
+  };
+}
+
+function mapProductDetailSpecification(input: unknown): ProductSpecification {
+  const specification = asRecord(input, '상품 사양');
+  return {
+    label: asString(specification.label, '상품 사양 이름'),
+    value: asString(specification.value, '상품 사양 값'),
+  };
+}
+
+function mapProductDetailSku(input: unknown, priceVisible: boolean): ApiProductDetailSku {
+  const sku = asRecord(input, '상품 SKU');
+  const skuPrice = asNullableNumber(sku.price, 'SKU 판매가');
+  if (priceVisible && skuPrice === null) {
+    throw new ApiError('INVALID_RESPONSE', '금액 표시 상품의 SKU 판매가가 없습니다.');
+  }
+  return {
+    id: asSafeId(sku.id, 'SKU'),
+    optionName: asString(sku.optionName, 'SKU 옵션 이름'),
+    price: priceVisible ? skuPrice : null,
+    soldOut: asBoolean(sku.soldOut, 'SKU 품절 여부'),
+  };
+}
+
+function mapProductDetail(input: unknown, requestedProductId: string): ApiProductDetail {
+  const detail = asRecord(input, '상품 상세');
+  const productId = asSafeId(detail.id, '상품');
+  if (productId !== requestedProductId) {
+    throw new ApiError(
+      'INVALID_RESPONSE',
+      '실제 API 응답 상품 ID가 요청한 상품과 일치하지 않습니다.',
+    );
+  }
+
+  const status = asString(detail.status, '상품 상태');
+  if (status === 'HIDDEN' || status === 'DELETED') {
+    throw new ApiError('NOT_FOUND', '상품을 찾을 수 없습니다.');
+  }
+  if (status !== 'ON_SALE' && status !== 'SOLD_OUT') {
+    throw new ApiError('INVALID_RESPONSE', '실제 API 응답(상품 상태)을 처리할 수 없습니다.');
+  }
+
+  const soldOut = asBoolean(detail.soldOut, '품절 여부');
+  if (soldOut !== (status === 'SOLD_OUT')) {
+    throw new ApiError(
+      'INVALID_RESPONSE',
+      '실제 API 응답(상품 상태와 품절 여부)이 일치하지 않습니다.',
+    );
+  }
+
+  const priceVisible = asBoolean(detail.priceVisible, '가격 표시 여부');
+  const responsePrice = asNullableNumber(detail.price, '판매가');
+  const responseListPrice = asNullableNumber(detail.listPrice, '정가');
+  if (priceVisible && responsePrice === null) {
+    throw new ApiError('INVALID_RESPONSE', '금액 표시 상품에 판매가가 없습니다.');
+  }
+  if (!Array.isArray(detail.certifications) || !Array.isArray(detail.images)) {
+    throw new ApiError(
+      'INVALID_RESPONSE',
+      '실제 API 응답(상품 상세 목록) 형식이 올바르지 않습니다.',
+    );
+  }
+  if (!Array.isArray(detail.skus) || !Array.isArray(detail.specifications)) {
+    throw new ApiError(
+      'INVALID_RESPONSE',
+      '실제 API 응답(상품 상세 목록) 형식이 올바르지 않습니다.',
+    );
+  }
+
+  const descriptionFormat = asString(detail.descriptionFormat, '상품 상세 서식');
+  if (descriptionFormat !== 'PLAIN' && descriptionFormat !== 'RICH_V1') {
+    throw new ApiError('INVALID_RESPONSE', '실제 API 응답(상품 상세 서식)을 처리할 수 없습니다.');
+  }
+  const reviewCount = asNumber(detail.reviewCount, '리뷰 수');
+  if (!Number.isSafeInteger(reviewCount) || reviewCount < 0) {
+    throw new ApiError('INVALID_RESPONSE', '실제 API 응답(리뷰 수) 형식이 올바르지 않습니다.');
+  }
+
+  const mappedImages = detail.images.map((image, index) =>
+    mapProductDetailImage(image, productId, index),
+  );
+  const certifications = detail.certifications.map((certification) =>
+    asString(asRecord(certification, '상품 인증').label, '상품 인증 표시 이름'),
+  );
+  const skus = detail.skus.map((sku) => mapProductDetailSku(sku, priceVisible));
+  return {
+    kind: 'api-detail',
+    id: productId,
+    name: asString(detail.name, '상품명'),
+    brand: asNullableString(detail.brand, '브랜드'),
+    categoryId: detail.categoryId === null ? null : asSafeId(detail.categoryId, '카테고리'),
+    price: priceVisible ? responsePrice : null,
+    listPrice: priceVisible ? responseListPrice : null,
+    priceVisible,
+    stockStatus: soldOut ? 'soldOut' : 'inStock',
+    thumbnailUrl: detail.imageUrl === null ? null : asImageUrl(detail.imageUrl, '대표 상품 이미지'),
+    summary: asNullableString(detail.summary, '상품 요약'),
+    detailDescription: asString(detail.description, '상품 상세 설명'),
+    detailDescriptionFormat: descriptionFormat === 'PLAIN' ? 'plain' : 'rich-v1',
+    modelName: asNullableString(detail.modelName, '모델명'),
+    images: mappedImages,
+    skus,
+    specifications: detail.specifications.map(mapProductDetailSpecification),
+    certifications,
+    countryOfOrigin: asNullableString(detail.countryOfOrigin, '원산지'),
+    shippingEstimate: asNullableString(detail.shippingEstimate, '배송 예정'),
+    rating: asNullableNumber(detail.rating, '평점'),
+    reviewCount,
+    isFeatured: asBoolean(detail.featured, '추천 상품 여부'),
+    todayDeal: asBoolean(detail.todayDeal, '오늘의 상품 여부'),
+  };
 }
 
 function mapProductSummary(input: unknown): ProductSummary {
@@ -79,6 +232,7 @@ function mapProductSummary(input: unknown): ProductSummary {
       '실제 API 응답(상품 상태와 품절 여부)이 일치하지 않습니다.',
     );
   }
+  const imageUrl = asNullableString(summary.imageUrl, '상품 이미지');
   return {
     kind: 'summary',
     id: asSafeId(summary.id, '상품'),
@@ -89,7 +243,7 @@ function mapProductSummary(input: unknown): ProductSummary {
     listPrice: summary.listPrice === null ? null : asNumber(summary.listPrice, '정가'),
     priceVisible: asBoolean(summary.priceVisible, '가격 표시 여부'),
     stockStatus: soldOut ? 'soldOut' : 'inStock',
-    thumbnailUrl: asNullableString(summary.imageUrl, '상품 이미지'),
+    thumbnailUrl: imageUrl === null ? null : asImageUrl(imageUrl, '상품 이미지'),
     rating: summary.rating === null ? null : asNumber(summary.rating, '평점'),
     reviewCount: asNumber(summary.reviewCount, '리뷰 수'),
     certifications,
@@ -209,6 +363,20 @@ function buildProductQuery(params: ProductListParams = {}): URLSearchParams {
   return query;
 }
 
+function buildProductLimit(params?: ProductLimitParams): number {
+  const requestedLimit = params?.limit ?? 10;
+  return Number.isFinite(requestedLimit)
+    ? Math.min(20, Math.max(1, Math.trunc(requestedLimit)))
+    : 10;
+}
+
+function encodeProductId(productId: string): string {
+  if (!/^(0|[1-9]\d*)$/.test(productId) || !Number.isSafeInteger(Number(productId))) {
+    throw new ApiError('VALIDATION', '상품 ID는 안전한 숫자 형식이어야 합니다.');
+  }
+  return encodeURIComponent(productId);
+}
+
 // 아직 연결되지 않은 엔드포인트를 호출하면 바로 실패시키는 함수
 function notImplemented(endpointName: string): () => Promise<never> {
   return () =>
@@ -237,6 +405,11 @@ export function createRealApi(config: ApiConfig): ShopApi {
           await get(`/api/v1/products?${buildProductQuery(params)}`, options?.signal),
         ),
       getById: notImplemented('products.getById'),
+      getDetailById: async (productId, options): Promise<ApiProductDetail> => {
+        const encodedProductId = encodeProductId(productId);
+        const response = await get(`/api/v1/products/${encodedProductId}`, options?.signal);
+        return mapProductDetail(response, productId);
+      },
       suggest: async (keyword, options): Promise<ProductSuggestion[]> => {
         const query = new URLSearchParams({ query: keyword });
         const response = await get(`/api/v1/products/suggestions?${query}`, options?.signal);
@@ -267,14 +440,22 @@ export function createRealApi(config: ApiConfig): ShopApi {
       listQuestions: notImplemented('products.listQuestions'),
       adminListQuestions: notImplemented('products.adminListQuestions'),
       updateQuestionAdmin: notImplemented('products.updateQuestionAdmin'),
-      listRelated: notImplemented('products.listRelated'),
+      listRelated: async (productId, params, options): Promise<ProductListItem[]> => {
+        const query = new URLSearchParams({ limit: String(buildProductLimit(params)) });
+        const response = await get(
+          `/api/v1/products/${encodeProductId(productId)}/related?${query}`,
+          options?.signal,
+        );
+        if (!Array.isArray(response))
+          throw new ApiError(
+            'INVALID_RESPONSE',
+            '실제 API 응답(관련 상품) 형식이 올바르지 않습니다.',
+          );
+        return response.map(mapProductSummary);
+      },
       listRecommended: notImplemented('products.listRecommended'),
       listCatalogRecommended: async (params, options): Promise<ProductListItem[]> => {
-        const requestedLimit = params?.limit ?? 10;
-        const limit = Number.isFinite(requestedLimit)
-          ? Math.min(20, Math.max(1, Math.trunc(requestedLimit)))
-          : 10;
-        const query = new URLSearchParams({ limit: String(limit) });
+        const query = new URLSearchParams({ limit: String(buildProductLimit(params)) });
         const response = await get(`/api/v1/products/recommended?${query}`, options?.signal);
         if (!Array.isArray(response))
           throw new ApiError(

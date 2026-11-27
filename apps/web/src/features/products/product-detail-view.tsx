@@ -3,7 +3,14 @@
 import { getApiFailureKind } from '@eum/api/errors';
 import { canAddToCart, canBuyNow, formatKrw, getPriceDisplay } from '@eum/api/price';
 import { sanitizeRedirectPath } from '@eum/api/redirect';
-import type { Category, Product, ProductOption } from '@eum/api/types';
+import type {
+  ApiProductDetail,
+  Category,
+  Product,
+  ProductDetailItem,
+  ProductListItem,
+  ProductOption,
+} from '@eum/api/types';
 import { CART_MAX_QUANTITY } from '@eum/api/cart';
 import { Badge } from '@eum/ui/components/Badge';
 import { Breadcrumb } from '@eum/ui/components/Breadcrumb';
@@ -55,6 +62,13 @@ import { useProductQuestionsQuery } from './use-product-questions-query';
 const RELATED_PRODUCT_LIMIT = 10;
 /** 금액 미표시 상품 안내(데스크톱 구매 영역·모바일 하단 바 공통) */
 const PRICE_HIDDEN_NOTICE = '금액이 표시되지 않는 상품입니다. 고객센터에 문의해 주세요.';
+const API_OPTION_NOTICE = '상품 옵션 정보는 준비 중입니다.';
+const API_CART_NOTICE = '장바구니 연동은 준비 중입니다.';
+const API_CHECKOUT_NOTICE = '주문 기능은 준비 중입니다.';
+const API_PURCHASE_NOTICE = '상품별 구매 안내는 준비 중입니다.';
+const API_SHIPPING_NOTICE = '상품별 배송·교환·반품 안내는 준비 중입니다.';
+const API_QUESTIONS_NOTICE = '상품 문의 기능은 준비 중입니다.';
+const API_REVIEWS_NOTICE = '상품 리뷰 기능은 준비 중입니다.';
 /** 상세 탭 순서(스크롤 위치에 따라 현재 탭을 고를 때도 이 순서를 씁니다) */
 const DETAIL_TAB_IDS = ['description', 'shipping', 'reviews', 'questions'] as const;
 
@@ -66,6 +80,10 @@ const DETAIL_TABS: { id: DetailTab; label: string; mobileLabel: string }[] = [
   { id: 'reviews', label: '리뷰', mobileLabel: '리뷰' },
   { id: 'questions', label: '상품 문의', mobileLabel: '상품 문의' },
 ];
+
+function isApiProductDetail(product: ProductDetailItem): product is ApiProductDetail {
+  return 'kind' in product && product.kind === 'api-detail';
+}
 
 /** 상세 갤러리 이미지 한 장(서버 이미지가 없으면 대표 이미지로 대체) */
 interface GalleryImage {
@@ -119,6 +137,16 @@ export function ProductDetailView({ productId }: { productId: string }) {
     );
   }
 
+  if (isApiProductDetail(productQuery.data)) {
+    return (
+      <ApiProductDetailContent
+        product={productQuery.data}
+        categories={categoriesQuery.data ?? []}
+        relatedProducts={relatedQuery.data ?? []}
+      />
+    );
+  }
+
   return (
     // 상품이 바뀌면 옵션·수량 선택을 처음 상태로 되돌립니다.
     <ProductDetailContent
@@ -127,6 +155,403 @@ export function ProductDetailView({ productId }: { productId: string }) {
       categories={categoriesQuery.data ?? []}
       relatedProducts={relatedQuery.data ?? []}
     />
+  );
+}
+
+function ApiProductDetailContent({
+  product,
+  categories,
+  relatedProducts,
+}: {
+  product: ApiProductDetail;
+  categories: Category[];
+  relatedProducts: ProductListItem[];
+}) {
+  const { wishlistIds, toggleWishlist } = useLocalCollections();
+  const [actionNotice, setActionNotice] = useState('');
+  const [shippingNotice, setShippingNotice] = useState('');
+  const [questionsNotice, setQuestionsNotice] = useState('');
+  const [activeTab, setActiveTab] = useActiveDetailTab(
+    useMediaQuery(DESKTOP_QUERY) ? DESKTOP_STICKY_OFFSET_PX : MOBILE_STICKY_OFFSET_PX,
+  );
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const priceDisplay = getPriceDisplay(product);
+  const category = product.categoryId
+    ? categories.find((categoryItem) => categoryItem.id === product.categoryId)
+    : undefined;
+  const isWishlisted = wishlistIds.includes(product.id);
+  const isSoldOut = product.stockStatus === 'soldOut';
+  const galleryImages: GalleryImage[] =
+    product.images.length > 0
+      ? product.images
+      : product.thumbnailUrl
+        ? [{ id: 'thumbnail', url: product.thumbnailUrl, alt: product.name }]
+        : [];
+  const certificationText = product.certifications.join(', ');
+  const showUnavailableAction = (message: string) => setActionNotice(message);
+  const selectApiTab = (tabId: DetailTab) => {
+    setActiveTab(tabId);
+    if (tabId === 'reviews') setActionNotice(API_REVIEWS_NOTICE);
+    document
+      .getElementById('product-tab-' + tabId)
+      ?.scrollIntoView({ behavior: getScrollBehavior(prefersReducedMotion), block: 'start' });
+  };
+
+  return (
+    <>
+      <PageContainer className="pb-56 lg:pt-24 lg:pb-56">
+        <div className="hidden lg:block">
+          <Breadcrumb
+            items={[
+              { label: '홈', href: '/' },
+              { label: '제품', href: '/search' },
+              ...(category ? [{ label: category.name, href: getCategoryHref(category) }] : []),
+              { label: product.name },
+            ]}
+            renderLink={(item, className) => (
+              <Link href={item.href} className={className}>
+                {item.label}
+              </Link>
+            )}
+          />
+        </div>
+        <div className="grid lg:mt-24 lg:grid-cols-[minmax(0,636fr)_minmax(0,612fr)] lg:gap-48">
+          <ProductGallery
+            key={galleryImages[0]?.id ?? product.id}
+            images={galleryImages}
+            productName={product.name}
+          />
+          <div className="min-w-0 py-24 lg:py-0">
+            <div className="flex items-center gap-6">
+              {product.brand ? (
+                <p className="text-caption-medium text-text-3">{product.brand}</p>
+              ) : null}
+              {!priceDisplay.isPriceVisible ? <Badge tone="outline">금액 미표시</Badge> : null}
+              {isSoldOut ? <Badge tone="soldout">품절</Badge> : null}
+            </div>
+            <h1 id="product-title" className="mt-6 text-h2 lg:mt-8 lg:text-web-h2">
+              {product.name}
+            </h1>
+            <div className="mt-8 flex items-center gap-8 lg:mt-12 lg:gap-4">
+              <ProductRatingStars rating={product.rating} />
+              <span className="text-caption text-text-3">
+                ({product.reviewCount.toLocaleString('ko-KR')})
+              </span>
+            </div>
+            <div className="mt-12 lg:mt-20">
+              {priceDisplay.listPriceText ? (
+                <p className="text-body-s text-text-3 line-through">
+                  <span className="sr-only">정가 </span>
+                  {priceDisplay.listPriceText}
+                </p>
+              ) : null}
+              <p className="mt-4 text-price-l lg:text-web-price-xl">{priceDisplay.text}</p>
+            </div>
+            <dl className="mt-20 flex flex-col gap-8 rounded-12 border border-line bg-bg-subtle p-16 text-body-s lg:mt-24">
+              {product.modelName ? (
+                <InfoRow label="모델명" labelClassName="w-96" value={product.modelName} />
+              ) : null}
+              {certificationText ? (
+                <InfoRow label="안전인증" labelClassName="w-96" value={certificationText} />
+              ) : null}
+              {product.countryOfOrigin ? (
+                <InfoRow label="원산지" labelClassName="w-96" value={product.countryOfOrigin} />
+              ) : null}
+              {product.shippingEstimate ? (
+                <InfoRow label="배송 예정" labelClassName="w-96" value={product.shippingEstimate} />
+              ) : null}
+            </dl>
+            {priceDisplay.isPriceVisible ? (
+              <div className="mt-24 flex flex-col gap-12">
+                {product.skus.length > 0 ? (
+                  <Button
+                    variant="secondary"
+                    size="m"
+                    onClick={() => showUnavailableAction(API_OPTION_NOTICE)}
+                  >
+                    옵션 선택
+                  </Button>
+                ) : null}
+                <div className="hidden grid-cols-[56px_minmax(0,1fr)_minmax(0,1fr)] gap-8 lg:grid">
+                  <WishButton
+                    isWishlisted={isWishlisted}
+                    label={isWishlisted ? '찜 취소' : '찜하기'}
+                    onToggle={() => toggleWishlist(product.id)}
+                    className="size-56"
+                  />
+                  <Button
+                    variant="primary"
+                    size="l"
+                    disabled={isSoldOut}
+                    onClick={() => showUnavailableAction(API_CART_NOTICE)}
+                  >
+                    장바구니 담기
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="l"
+                    disabled={isSoldOut}
+                    onClick={() => showUnavailableAction(API_CHECKOUT_NOTICE)}
+                  >
+                    바로 구매
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-24 hidden items-center justify-between gap-12 lg:flex">
+                <NoticeInline tone="neutral">{PRICE_HIDDEN_NOTICE}</NoticeInline>
+                <Link
+                  href={buildProductInquiryHref([{ productId: product.id }])}
+                  className="shrink-0 rounded-4 text-label-m focus-ring hover:underline"
+                >
+                  상품 문의 →
+                </Link>
+              </div>
+            )}
+            <div className="mt-12 flex flex-wrap items-center gap-12">
+              <Button
+                variant="secondary"
+                size="s"
+                onClick={() => showUnavailableAction(API_PURCHASE_NOTICE)}
+              >
+                구매 전 안내 확인
+              </Button>
+              <p
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                className={cx(
+                  'text-body-s text-text-2',
+                  actionNotice && 'shadow-lg fixed inset-x-20 bottom-80 z-40 rounded-8 bg-bg p-12',
+                  'lg:static lg:z-auto lg:bg-transparent lg:p-0 lg:shadow-none',
+                )}
+              >
+                {actionNotice}
+              </p>
+            </div>
+            {isSoldOut ? (
+              <NoticeInline tone="neutral" className="mt-12">
+                현재 품절된 상품입니다.
+              </NoticeInline>
+            ) : null}
+          </div>
+        </div>
+        <nav
+          aria-label="상품 상세 탭"
+          className="sticky top-56 z-20 -mx-20 mt-40 grid grid-cols-4 border-b border-line bg-bg lg:top-72 lg:mx-0 lg:mt-96"
+        >
+          {DETAIL_TABS.map((detailTab) => {
+            const isActive = activeTab === detailTab.id;
+            const reviewSuffix = detailTab.id === 'reviews' ? ` (${product.reviewCount})` : '';
+            return (
+              <a
+                key={detailTab.id}
+                href={'#product-tab-' + detailTab.id}
+                aria-current={isActive ? 'location' : undefined}
+                onClick={(clickEvent) => {
+                  clickEvent.preventDefault();
+                  selectApiTab(detailTab.id);
+                }}
+                className={cx(
+                  'inline-flex h-56 min-w-0 items-center justify-center px-4 text-label-l whitespace-nowrap focus-ring lg:px-24',
+                  isActive
+                    ? 'border-b-2 border-text-1 text-text-1'
+                    : 'text-text-3 hover:text-text-1',
+                )}
+              >
+                <span className="truncate lg:hidden">{detailTab.mobileLabel + reviewSuffix}</span>
+                <span className="hidden truncate lg:inline">{detailTab.label + reviewSuffix}</span>
+              </a>
+            );
+          })}
+        </nav>
+        <div className="mt-24 flex flex-col gap-48 lg:mt-40 lg:gap-64">
+          <section
+            id="product-tab-description"
+            aria-labelledby="product-description-heading"
+            className="scroll-mt-120 lg:scroll-mt-136"
+          >
+            <h2 id="product-description-heading" className="sr-only">
+              제품 정보
+            </h2>
+            {product.summary ? (
+              <p className="mb-20 text-body-m whitespace-pre-line text-text-2">{product.summary}</p>
+            ) : null}
+            {product.detailDescription ? (
+              <ProductDescription
+                content={product.detailDescription}
+                format={product.detailDescriptionFormat}
+              />
+            ) : null}
+            <div className="mx-auto aspect-[856/1200] w-full max-w-[856px] overflow-hidden rounded-12 bg-surface">
+              <ProductImage
+                src={galleryImages[0]?.url ?? null}
+                alt={galleryImages[0]?.alt ?? product.name + ' 상세 이미지'}
+                sizes="(min-width:896px) 856px, calc(100vw - 40px)"
+              />
+            </div>
+          </section>
+
+          {product.specifications.length > 0 ? (
+            <section aria-labelledby="product-spec-heading" className="flex flex-col gap-16">
+              <h2 id="product-spec-heading" className="text-h3">
+                제품 사양
+              </h2>
+              <dl className="border-t-2 border-text-1">
+                {product.specifications.map((specification) => (
+                  <div
+                    key={specification.label}
+                    className="grid grid-cols-[120px_minmax(0,1fr)] border-b border-line text-body-s lg:grid-cols-[196px_minmax(0,1fr)]"
+                  >
+                    <dt className="flex min-h-52 items-center bg-surface px-16 text-body-s-medium text-text-2">
+                      {specification.label}
+                    </dt>
+                    <dd className="flex items-center px-16 py-12">{specification.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          ) : null}
+
+          <section
+            id="product-tab-shipping"
+            aria-labelledby="shipping-heading"
+            className="flex scroll-mt-120 flex-col gap-16 lg:scroll-mt-136"
+          >
+            <h2 id="shipping-heading" className="text-h3">
+              배송/교환/반품 안내
+            </h2>
+            {product.shippingEstimate ? (
+              <p className="text-body-m whitespace-pre-line text-text-2">
+                배송 예정: {product.shippingEstimate}
+              </p>
+            ) : null}
+            {product.countryOfOrigin ? (
+              <p className="text-body-s text-text-3">원산지: {product.countryOfOrigin}</p>
+            ) : null}
+            <Button
+              variant="secondary"
+              size="s"
+              onClick={() => setShippingNotice(API_SHIPPING_NOTICE)}
+              className="self-start"
+            >
+              배송·교환·반품 상세 안내 확인
+            </Button>
+            <p
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+              className="text-body-s text-text-2"
+            >
+              {shippingNotice}
+            </p>
+          </section>
+
+          <section
+            id="product-tab-reviews"
+            aria-labelledby="api-reviews-heading"
+            className="flex scroll-mt-120 flex-col gap-16 lg:scroll-mt-136"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-8">
+              <h2 id="api-reviews-heading" className="text-h3">
+                리뷰 ({product.reviewCount.toLocaleString('ko-KR')})
+              </h2>
+              <Button
+                variant="secondary"
+                size="s"
+                onClick={() => setActionNotice(API_REVIEWS_NOTICE)}
+              >
+                리뷰 전체 보기
+              </Button>
+            </div>
+            <p className="text-body-s text-text-2">리뷰 목록 기능은 아직 연결되지 않았습니다.</p>
+          </section>
+
+          <section
+            id="product-tab-questions"
+            aria-labelledby="questions-heading"
+            className="scroll-mt-120 lg:scroll-mt-136"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-12">
+              <h2 id="questions-heading" className="text-h3">
+                상품 문의
+              </h2>
+              <Button
+                variant="secondary"
+                size="s"
+                onClick={() => setQuestionsNotice(API_QUESTIONS_NOTICE)}
+              >
+                문의 기능 확인
+              </Button>
+            </div>
+            <p className="mt-16 text-body-s text-text-2">
+              상품 문의 기능은 아직 연결되지 않았습니다.
+            </p>
+            <p
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+              className="mt-8 text-body-s text-text-2"
+            >
+              {questionsNotice}
+            </p>
+          </section>
+        </div>
+
+        <ProductCarouselSection
+          headingId="related-products-heading"
+          title="함께 구매하면 좋은 제품"
+          itemLabel="함께 구매하면 좋은 제품"
+          products={relatedProducts}
+          viewAllHref={category ? getCategoryHref(category) : '/search'}
+          className="mt-80 lg:mt-120"
+        />
+      </PageContainer>
+
+      <div className="sticky bottom-0 z-30 bg-bg lg:hidden">
+        {priceDisplay.isPriceVisible ? (
+          <div className="grid grid-cols-[56px_minmax(0,1fr)_minmax(0,1fr)] gap-8 border-t border-line px-20 py-12 pb-[max(env(safe-area-inset-bottom),12px)] max-mweb:gap-6 max-mweb:px-16">
+            <WishButton
+              isWishlisted={isWishlisted}
+              label={isWishlisted ? '찜 취소' : '찜하기'}
+              onToggle={() => toggleWishlist(product.id)}
+              className="size-56"
+              iconSize={24}
+            />
+            <Button
+              variant="primary"
+              size="l"
+              isFullWidth
+              disabled={isSoldOut}
+              onClick={() => showUnavailableAction(API_CART_NOTICE)}
+              className="px-8"
+            >
+              <span className="min-w-0 truncate">장바구니 담기</span>
+            </Button>
+            <Button
+              variant="secondary"
+              size="l"
+              isFullWidth
+              disabled={isSoldOut}
+              onClick={() => showUnavailableAction(API_CHECKOUT_NOTICE)}
+              className="px-8"
+            >
+              <span className="min-w-0 truncate">바로 구매</span>
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-12 border-t border-line px-20 py-12 pb-[max(env(safe-area-inset-bottom),12px)]">
+            <NoticeInline isFullBleed>{PRICE_HIDDEN_NOTICE}</NoticeInline>
+            <Link
+              href={buildProductInquiryHref([{ productId: product.id }])}
+              className="shrink-0 rounded-4 text-label-m focus-ring hover:underline"
+            >
+              상품 문의 →
+            </Link>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -175,7 +600,7 @@ function ProductDetailContent({
 }: {
   product: Product;
   categories: Category[];
-  relatedProducts: Product[];
+  relatedProducts: ProductListItem[];
 }) {
   const questionsQuery = useProductQuestionsQuery(product.id);
   const router = useRouter();

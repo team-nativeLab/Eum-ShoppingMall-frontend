@@ -119,6 +119,44 @@ export interface Product {
   isFeatured: boolean;
 }
 
+/** 상세 응답에 포함된 SKU. 옵션 그룹과 가격 계산 방식은 별도 계약이 필요합니다. */
+export interface ApiProductDetailSku {
+  id: string;
+  optionName: string;
+  price: number | null;
+  soldOut: boolean;
+}
+
+/** 실제 상세 API가 제공하는 필드만 담는 구매자 상세 모델입니다. */
+export interface ApiProductDetail {
+  kind: 'api-detail';
+  id: string;
+  name: string;
+  brand: string | null;
+  categoryId: string | null;
+  price: number | null;
+  listPrice: number | null;
+  priceVisible: boolean;
+  stockStatus: StockStatus;
+  thumbnailUrl: string | null;
+  summary: string | null;
+  detailDescription: string;
+  detailDescriptionFormat: 'plain' | 'rich-v1';
+  modelName: string | null;
+  images: ProductImage[];
+  skus: ApiProductDetailSku[];
+  specifications: ProductSpecification[];
+  certifications: string[];
+  countryOfOrigin: string | null;
+  shippingEstimate: string | null;
+  rating: number | null;
+  reviewCount: number;
+  isFeatured: boolean;
+  todayDeal: boolean;
+}
+
+export type ProductDetailItem = Product | ApiProductDetail;
+
 /** 검색·탐색 목록 API가 제공하는 요약 모델. 상세·구매 필드는 의도적으로 포함하지 않습니다. */
 export interface ProductSummary {
   kind: 'summary';

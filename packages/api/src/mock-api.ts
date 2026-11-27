@@ -982,6 +982,9 @@ export function createMockApi(
           ),
         );
       },
+      async getDetailById(productId, options) {
+        return this.getById(productId, options);
+      },
       async suggest(keyword, options) {
         const normalizedKeyword = keyword.trim().toLowerCase();
         if (normalizedKeyword === '') return [];
