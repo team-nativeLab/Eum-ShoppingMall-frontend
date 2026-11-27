@@ -10,6 +10,7 @@ export const queryKeys = {
   products: {
     all: ['products'] as const,
     list: (params: ProductListParams = {}) => ['products', 'list', params] as const,
+    catalogList: (params: ProductListParams = {}) => ['products', 'catalog-list', params] as const,
     detail: (productId: string) => ['products', 'detail', productId] as const,
     suggestions: (keyword: string) => ['products', 'suggestions', keyword] as const,
     facets: (params: ProductFacetParams = {}) => ['products', 'facets', params] as const,
@@ -19,6 +20,8 @@ export const queryKeys = {
     related: (productId: string, params: ProductLimitParams = {}) =>
       ['products', 'related', productId, params] as const,
     recommended: (params: ProductLimitParams = {}) => ['products', 'recommended', params] as const,
+    catalogRecommended: (params: ProductLimitParams = {}) =>
+      ['products', 'catalog-recommended', params] as const,
   },
   suppliers: { adminList: ['admin', 'suppliers'] as const },
   brands: {

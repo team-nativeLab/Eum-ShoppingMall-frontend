@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useMemo, useState, type ReactNode } from 'react';
 import { PageContainer } from '@/components/page-container';
+import { getWebApiConfig } from '@/lib/api-config';
 import { getScrollBehavior, usePrefersReducedMotion } from '@/lib/use-media-query';
 import { getCategoryHref } from './category-href';
 import { buildBrandSelectionHref, getBrandFilterValues } from './product-navigation';
@@ -26,7 +27,7 @@ import { formatPriceChipLabel, formatPriceInputValue, type AppliedPrice } from '
 import { SearchNoResults } from './search-no-results';
 import { useCategoriesQuery } from './use-categories-query';
 import { useProductFacetsQuery } from './use-product-facets-query';
-import { useProductsQuery } from './use-products-query';
+import { useCatalogProductsQuery } from './use-catalog-products-query';
 
 type SortBy = NonNullable<ProductListParams['sortBy']>;
 /** 필터 개수 조회 상태(조회 중 / 실패 / 성공) */
@@ -41,6 +42,7 @@ const SORT_OPTIONS: { value: SortBy; label: string }[] = [
   { value: 'recommended', label: '추천순' },
   { value: 'newest', label: '최신순' },
   { value: 'ratingDesc', label: '별점순' },
+  { value: 'popular', label: '인기순' },
   { value: 'priceAsc', label: '낮은 가격순' },
   { value: 'priceDesc', label: '높은 가격순' },
 ];
@@ -180,10 +182,15 @@ export function ProductListingView({
     pageSize,
   };
   // 페이지·필터를 바꾸는 동안 이전 결과를 남겨 두어 페이지 이동 버튼(포커스)이 사라지지 않게 합니다.
-  const productsQuery = useProductsQuery(productParams, {
+  const productsQuery = useCatalogProductsQuery(productParams, {
     enabled: isCategoryResolved,
     shouldKeepPreviousData: true,
   });
+  const visibleSortOptions = SORT_OPTIONS.filter((sortOption) =>
+    getWebApiConfig().mode === 'real'
+      ? sortOption.value !== 'ratingDesc'
+      : sortOption.value !== 'popular',
+  );
 
   const categoryNameById = new Map(categoryList.map((category) => [category.id, category.name]));
   const searchCategoryFacets = (facetsQuery.data?.categories ?? []).filter(
@@ -202,6 +209,10 @@ export function ProductListingView({
       ? 'success'
       : 'pending';
   const retryFacets = () => void facetsQuery.refetch();
+  const brandFacets = facetsQuery.data?.brands ?? [];
+  const certificationFacets = facetsQuery.data?.certifications ?? [];
+  const getFacetLabel = (facets: FacetCount[], value: string) =>
+    facets.find((facet) => facet.value === value)?.label ?? value;
 
   const activeFilters: ActiveFilter[] = [];
   const priceChipLabel = formatPriceChipLabel(appliedPrice);
@@ -209,9 +220,15 @@ export function ProductListingView({
   // 고정 브랜드는 제목으로 드러나므로 지울 수 있는 필터 칩으로 두지 않습니다.
   selectedBrands
     .filter((brand) => brand !== lockedBrandName)
-    .forEach((brand) => activeFilters.push({ key: 'brand', value: brand, label: brand }));
+    .forEach((brand) =>
+      activeFilters.push({ key: 'brand', value: brand, label: getFacetLabel(brandFacets, brand) }),
+    );
   selectedCertifications.forEach((certification) =>
-    activeFilters.push({ key: 'certification', value: certification, label: certification }),
+    activeFilters.push({
+      key: 'certification',
+      value: certification,
+      label: getFacetLabel(certificationFacets, certification),
+    }),
   );
   if (excludeSoldOut) activeFilters.push({ key: 'stock', label: '품절 상품 제외' });
 
@@ -330,8 +347,6 @@ export function ProductListingView({
         Math.ceil(productsQuery.data.totalCount / Math.max(1, productsQuery.data.pageSize)),
       )
     : 1;
-  const brandFacets = facetsQuery.data?.brands ?? [];
-  const certificationFacets = facetsQuery.data?.certifications ?? [];
 
   return (
     <PageContainer className={cx('pb-56', isSearch ? 'pt-24 lg:pt-48' : 'pt-24')}>
@@ -440,7 +455,7 @@ export function ProductListingView({
             id="sort-products-mobile"
             value={sortBy}
             onChange={(changeEvent) => {
-              const nextSort = SORT_OPTIONS.find(
+              const nextSort = visibleSortOptions.find(
                 (sortOption) => sortOption.value === changeEvent.target.value,
               );
               if (!nextSort) return;
@@ -449,7 +464,7 @@ export function ProductListingView({
             }}
             className={cx(SELECT_CLASS, 'w-full appearance-none pr-32')}
           >
-            {SORT_OPTIONS.map((sortOption) => (
+            {visibleSortOptions.map((sortOption) => (
               <option key={sortOption.value} value={sortOption.value}>
                 {sortOption.label}
               </option>
@@ -499,7 +514,7 @@ export function ProductListingView({
                       isSelected={selectedBrands.includes(brandFacet.value)}
                       onClick={() => toggleBrand(brandFacet.value)}
                     >
-                      {brandFacet.value}
+                      {brandFacet.label ?? brandFacet.value}
                     </Chip>
                   ))}
                 </div>
@@ -518,7 +533,7 @@ export function ProductListingView({
                     )
                   }
                 >
-                  {certificationFacet.value}
+                  {certificationFacet.label ?? certificationFacet.value}
                 </Chip>
               ))}
             </div>
@@ -632,7 +647,7 @@ export function ProductListingView({
                   id="sort-products"
                   value={sortBy}
                   onChange={(changeEvent) => {
-                    const nextSort = SORT_OPTIONS.find(
+                    const nextSort = visibleSortOptions.find(
                       (sortOption) => sortOption.value === changeEvent.target.value,
                     );
                     if (!nextSort) return;
@@ -641,7 +656,7 @@ export function ProductListingView({
                   }}
                   className={cx(SELECT_CLASS, 'w-full appearance-none pr-32')}
                 >
-                  {SORT_OPTIONS.map((sortOption) => (
+                  {visibleSortOptions.map((sortOption) => (
                     <option key={sortOption.value} value={sortOption.value}>
                       {sortOption.label}
                     </option>
@@ -930,7 +945,7 @@ function FacetCheckboxList({
           onChange={() => onToggle(facet.value)}
           className="h-32"
         >
-          <span>{facet.value}</span>
+          <span>{facet.label ?? facet.value}</span>
           {showCounts ? (
             <span className="text-caption text-text-3">
               {facet.count.toLocaleString('ko-KR')}

@@ -15,7 +15,7 @@ import {
   useCarouselPaging,
   useHomeCarouselLayout,
 } from '@/features/products/product-carousel';
-import { useProductsQuery } from '@/features/products/use-products-query';
+import { useCatalogProductsQuery } from '@/features/products/use-catalog-products-query';
 import { BRAND_LIST_LINK_CLASS } from './brand-link-classes';
 
 const BRAND_CAROUSEL_HEADING_ID = 'brand-products-heading';
@@ -48,7 +48,7 @@ const PRODUCTS_LOAD_ERROR_COPY: Record<ApiFailureKind, { title: string; descript
  * 로딩 중에는 스켈레톤을 유지합니다. 상품 수가 0인 브랜드는 호출하는 쪽이 0개 안내로 막습니다.
  */
 export function BrandProductsCarousel({ brandName }: { brandName: string }) {
-  const productsQuery = useProductsQuery({
+  const productsQuery = useCatalogProductsQuery({
     brand: [brandName],
     pageSize: BRAND_CAROUSEL_PAGE_SIZE,
   });

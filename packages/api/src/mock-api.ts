@@ -970,6 +970,9 @@ export function createMockApi(
           totalCount: sortedItems.length,
         };
       },
+      async listCatalog(params = {}, options) {
+        return this.list(params, options);
+      },
       async getById(productId, options) {
         return toBuyerProduct(
           await respondOne(
@@ -1018,6 +1021,9 @@ export function createMockApi(
           options,
         );
         return recommendedProducts.map(toBuyerProduct);
+      },
+      async listCatalogRecommended(params = {}, options) {
+        return this.listRecommended(params, options);
       },
       async listReviews(productId, params = {}, options): Promise<PagedResult<ProductReview>> {
         const page = Math.max(1, params.page ?? 1);

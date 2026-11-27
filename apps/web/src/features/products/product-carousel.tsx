@@ -1,6 +1,6 @@
 'use client';
 
-import type { Product } from '@eum/api/types';
+import type { ProductListItem } from '@eum/api/types';
 import { Icon } from '@eum/ui/components/Icon';
 import { cx } from '@eum/ui/lib/cx';
 import { ArrowRight, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
@@ -127,7 +127,7 @@ export function ProductCarouselTrack({
   label,
   className,
 }: {
-  products: Product[];
+  products: ProductListItem[];
   pageIndex: number;
   direction: CarouselDirection;
   mobileLayout?: MobileCarouselLayout;
@@ -276,7 +276,7 @@ export function ProductCarouselSection({
 }: {
   headingId: string;
   title: string;
-  products: Product[];
+  products: ProductListItem[];
   viewAllHref: string;
   /** 버튼·목록 이름에 쓰는 대상 이름(예: "함께 구매하면 좋은 제품") */
   itemLabel: string;

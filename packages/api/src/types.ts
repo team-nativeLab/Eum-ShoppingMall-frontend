@@ -119,6 +119,28 @@ export interface Product {
   isFeatured: boolean;
 }
 
+/** 검색·탐색 목록 API가 제공하는 요약 모델. 상세·구매 필드는 의도적으로 포함하지 않습니다. */
+export interface ProductSummary {
+  kind: 'summary';
+  id: string;
+  name: string;
+  brand: string;
+  categoryId: string | null;
+  price: number | null;
+  listPrice: number | null;
+  priceVisible: boolean;
+  stockStatus: StockStatus;
+  thumbnailUrl: string | null;
+  rating: number | null;
+  reviewCount: number;
+  certifications: string[];
+  isFeatured: boolean;
+  todayDeal: boolean;
+  optionRequired: boolean;
+}
+
+export type ProductListItem = Product | ProductSummary;
+
 /** 발주처 주문 수신 채널 */
 export type SupplierOrderChannel = 'email' | 'fax';
 
@@ -255,6 +277,8 @@ export interface ProductReviewSummary {
 export interface FacetCount {
   /** 필터 값(브랜드명, 인증명, 카테고리 ID) */
   value: string;
+  /** 필터 표시 이름. mock 등 이전 데이터에는 값이 없을 수 있습니다. */
+  label?: string;
   count: number;
 }
 

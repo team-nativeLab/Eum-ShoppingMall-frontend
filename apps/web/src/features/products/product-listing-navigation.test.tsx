@@ -72,7 +72,11 @@ describe('ProductListingView brand navigation', () => {
     navigationMocks.pathname = '/search';
     navigationMocks.push.mockReset();
     apiMocks.getShopApi.mockResolvedValue({
-      products: { list: apiMocks.listProducts, facets: apiMocks.listFacets },
+      products: {
+        list: apiMocks.listProducts,
+        listCatalog: apiMocks.listProducts,
+        facets: apiMocks.listFacets,
+      },
       categories: { list: apiMocks.listCategories },
     });
     apiMocks.listProducts.mockResolvedValue({ items: [], page: 1, pageSize: 24, totalCount: 0 });
@@ -177,7 +181,11 @@ describe('ProductListingView listing toolbar', () => {
     navigationMocks.pathname = '/search';
     navigationMocks.push.mockReset();
     apiMocks.getShopApi.mockResolvedValue({
-      products: { list: apiMocks.listProducts, facets: apiMocks.listFacets },
+      products: {
+        list: apiMocks.listProducts,
+        listCatalog: apiMocks.listProducts,
+        facets: apiMocks.listFacets,
+      },
       categories: { list: apiMocks.listCategories },
     });
     apiMocks.listProducts.mockResolvedValue({ items: [], page: 1, pageSize: 24, totalCount: 0 });
@@ -869,7 +877,11 @@ describe('ProductListingView category links', () => {
     navigationMocks.pathname = '/search';
     navigationMocks.push.mockReset();
     apiMocks.getShopApi.mockResolvedValue({
-      products: { list: apiMocks.listProducts, facets: apiMocks.listFacets },
+      products: {
+        list: apiMocks.listProducts,
+        listCatalog: apiMocks.listProducts,
+        facets: apiMocks.listFacets,
+      },
       categories: { list: apiMocks.listCategories },
     });
     apiMocks.listProducts.mockResolvedValue({ items: [], page: 1, pageSize: 24, totalCount: 0 });
