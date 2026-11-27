@@ -4,11 +4,12 @@ import { CountBadge } from '@eum/ui/components/CountBadge';
 import { Icon } from '@eum/ui/components/Icon';
 import { ShoppingCart } from 'lucide-react';
 import Link from 'next/link';
-import { useCart } from '@/features/cart/cart-context';
+import { useCartContent, useCartStatus } from '@/features/cart/cart-context';
 
 /** 장바구니 바로가기와 현재 메모리·저장 장바구니 수량 배지. 0개면 배지를 숨깁니다. */
 export function CartLink() {
-  const { totalQuantity, isOrderPending } = useCart();
+  const { totalQuantity } = useCartContent();
+  const { isOrderPending } = useCartStatus();
   const cartLinkContent = (
     <>
       <Icon icon={ShoppingCart} size={24} />

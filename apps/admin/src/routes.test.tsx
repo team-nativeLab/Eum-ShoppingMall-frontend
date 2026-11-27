@@ -13,12 +13,18 @@ vi.mock('./layouts/AdminLayout', () => ({
 }));
 
 vi.mock('./pages/AdminDashboardPage', () => {
+  return {
+    AdminDashboardPage: () => <div>대시보드</div>,
+  };
+});
+
+vi.mock('./pages/AdminProductsPage', () => {
   throw new Error('페이지 모듈을 불러올 수 없습니다');
 });
 
 describe('관리자 페이지 로딩 실패', () => {
   it('관리자 메뉴를 유지하며 새로고침 복구 방법을 보여줍니다', async () => {
-    const router = createMemoryRouter(adminRoutes, { initialEntries: ['/'] });
+    const router = createMemoryRouter(adminRoutes, { initialEntries: ['/products'] });
     render(<RouterProvider router={router} />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent(

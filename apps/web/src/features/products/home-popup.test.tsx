@@ -89,7 +89,7 @@ describe('HomePopup', () => {
     expect(dialog).toHaveClass('max-w-864', 'overflow-y-auto');
     expect(screen.getByRole('img', { name: fixturePopup.title })).toHaveAttribute(
       'src',
-      fixturePopup.imageUrl,
+      expect.stringContaining('/_next/image?url='),
     );
     expect(screen.getByText(fixturePopup.body)).toBeInTheDocument();
 

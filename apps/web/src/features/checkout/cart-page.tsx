@@ -492,7 +492,11 @@ function CartLine({
           href={`/products/${encodeURIComponent(item.productId)}`}
           className="size-88 shrink-0 overflow-hidden rounded-8 bg-surface focus-ring"
         >
-          <ProductImage src={item.product.thumbnailUrl} alt={`${item.product.name} 상품 이미지`} />
+          <ProductImage
+            src={item.product.thumbnailUrl}
+            alt={`${item.product.name} 상품 이미지`}
+            sizes="88px"
+          />
         </Link>
         <div className="min-w-0 flex-1">
           <p className="text-caption text-text-3">{item.product.brand}</p>

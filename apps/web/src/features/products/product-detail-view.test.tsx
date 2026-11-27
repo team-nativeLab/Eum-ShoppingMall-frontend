@@ -37,8 +37,10 @@ vi.mock('next/link', () => ({
   ),
 }));
 vi.mock('@/features/cart/cart-context', () => ({
-  useCart: () => ({
+  useCartActions: () => ({
     addToCart: detailMocks.addToCart,
+  }),
+  useCartStatus: () => ({
     isOrderPending: detailMocks.isOrderPending,
   }),
 }));
@@ -281,9 +283,24 @@ describe('ProductDetailView content layout', () => {
 
     await user.selectOptions(screen.getByLabelText('사이즈'), 'large');
 
-    expect(
-      screen.getAllByRole('img', { name: '테스트 안전화 선택 옵션 이미지' })[0],
-    ).toHaveAttribute('src', '/sku-large.jpg');
+    const selectedSkuImages = screen.getAllByRole('img', {
+      name: '테스트 안전화 선택 옵션 이미지',
+    });
+    const [mobileMainImage, desktopMainImage] = selectedSkuImages;
+
+    if (!mobileMainImage || !desktopMainImage) {
+      throw new Error('선택 SKU 이미지의 모바일·데스크톱 갤러리가 모두 렌더되어야 합니다.');
+    }
+
+    for (const mainImage of [mobileMainImage, desktopMainImage]) {
+      expect(mainImage).toHaveAttribute('loading', 'eager');
+      expect(mainImage).toHaveAttribute('fetchpriority', 'high');
+      expect(mainImage).toHaveAttribute('sizes', '(min-width: 1024px) 636px, 100vw');
+
+      const imageUrl = new URL(mainImage.getAttribute('src') ?? '', 'http://localhost');
+      expect(imageUrl.pathname).toBe('/_next/image');
+      expect(imageUrl.searchParams.get('url')).toBe('/sku-large.jpg');
+    }
   });
 
   it('does not show a false zero discount in the purchase summary', () => {

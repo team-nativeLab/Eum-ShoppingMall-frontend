@@ -12,6 +12,7 @@ export function useProductSuggestionsQuery(keyword: string, enabled = true) {
     queryFn: async ({ signal }) =>
       (await getShopApi()).products.suggest(normalizedKeyword, { signal }),
     enabled: enabled && normalizedKeyword.length > 0,
+    // 같은 검색어를 잠시 뒤 다시 입력할 때 자동완성 요청을 반복하지 않도록 짧게 재사용합니다.
     staleTime: 15_000,
   });
 }

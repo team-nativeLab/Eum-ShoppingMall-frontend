@@ -2,6 +2,8 @@ import { Icon } from '@eum/ui/components/Icon';
 import { cx } from '@eum/ui/lib/cx';
 import { ImageIcon } from 'lucide-react';
 import type { BrandImageSettings } from '@eum/api/types';
+import Image from 'next/image';
+import { isLocalImageSource } from '@/lib/image-source';
 
 const DEFAULT_LOGO_SETTINGS: BrandImageSettings = { fit: 'contain', width: 240, height: 96 };
 
@@ -25,8 +27,26 @@ export function BrandLogo({
 }) {
   const logoLabel = `${brandName} 로고`;
   const activeSettings = settings ?? DEFAULT_LOGO_SETTINGS;
-  return logoUrl ? (
-    // 로고 URL은 외부 호스트일 수 있어 Next Image 최적화를 거치지 않습니다(ProductImage와 같은 방식).
+  return logoUrl && isLocalImageSource(logoUrl) ? (
+    <span
+      className={cx('relative block shrink-0 overflow-hidden', className)}
+      style={{
+        maxWidth: `${activeSettings.width}px`,
+        maxHeight: `${activeSettings.height}px`,
+      }}
+    >
+      <Image
+        src={logoUrl}
+        alt={logoLabel}
+        fill
+        sizes={`${activeSettings.width}px`}
+        loading={loading}
+        className="object-cover"
+        style={{ objectFit: activeSettings.fit }}
+      />
+    </span>
+  ) : logoUrl ? (
+    // 실서비스 로고 URL은 외부 호스트나 data URL일 수 있습니다.
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={logoUrl}

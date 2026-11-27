@@ -9,10 +9,18 @@ import { Heart, ShoppingCart } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { useCart } from '@/features/cart/cart-context';
+import { useCartActions, useCartStatus } from '@/features/cart/cart-context';
 import { useLocalCollections } from './local-collections-context';
 import { ProductImage } from './product-image';
 import { ProductRatingStars } from './product-rating-stars';
+
+const PRODUCT_GRID_IMAGE_SIZES =
+  '(min-width: 1336px) 290px, (min-width: 1024px) calc((100vw - 176px) / 4), (min-width: 640px) calc((100vw - 112px) / 3), calc((100vw - 84px) / 2)';
+const PRODUCT_LIST_IMAGE_SIZES = '144px';
+const PRODUCT_COMPACT_CAROUSEL_IMAGE_SIZES =
+  '(min-width: 1336px) 224px, (min-width: 1024px) calc((100vw - 216px) / 5), calc((100vw - 84px) / 2)';
+const HOME_CAROUSEL_COMPACT_IMAGE_SIZES =
+  '(min-width: 1280px) calc(min(220px, calc((min(1336px, 100vw) - clamp(20px, calc(806px - 50vw), 138px) - 212px) / 5)) - 16px), (min-width: 1024px) calc(min(220px, calc((min(1336px, 100vw) - clamp(20px, calc(806px - 50vw), 138px) - 196px) / 4)) - 16px), 116px';
 
 /**
  * 공통 상품 카드(Figma HF/Web/ProductCard 240·251, 모바일 HF/ProductCard 169).
@@ -34,7 +42,8 @@ export function ProductCard({
   cardVariant?: 'default' | 'home-carousel';
 }) {
   const router = useRouter();
-  const { addToCart, isOrderPending } = useCart();
+  const { addToCart } = useCartActions();
+  const { isOrderPending } = useCartStatus();
   const { wishlistIds, toggleWishlist } = useLocalCollections();
   const priceDisplay = getPriceDisplay(product);
   const isWishlisted = wishlistIds.includes(product.id);
@@ -42,6 +51,14 @@ export function ProductCard({
   const isCompactOnMobile = mobileVariant === 'compact';
   const isHomeCarouselCard = cardVariant === 'home-carousel';
   const isHomeCarouselCompactCard = isCompactOnMobile && isHomeCarouselCard;
+  const productImageSizes =
+    layout === 'list'
+      ? PRODUCT_LIST_IMAGE_SIZES
+      : isHomeCarouselCompactCard
+        ? HOME_CAROUSEL_COMPACT_IMAGE_SIZES
+        : isCompactOnMobile
+          ? PRODUCT_COMPACT_CAROUSEL_IMAGE_SIZES
+          : PRODUCT_GRID_IMAGE_SIZES;
   const hasRequiredOptions = product.options.some((productOption) => productOption.required);
   const productHref = `/products/${encodeURIComponent(product.id)}`;
   const [cartAnnouncement, setCartAnnouncement] = useState('');
@@ -127,7 +144,7 @@ export function ProductCard({
             isSoldOut && 'opacity-48',
           )}
         >
-          <ProductImage src={product.thumbnailUrl} alt={product.name} />
+          <ProductImage src={product.thumbnailUrl} alt={product.name} sizes={productImageSizes} />
         </Link>
         {!isHomeCarouselCard ? (
           <div className="pointer-events-none absolute top-8 left-8 flex flex-wrap gap-4">
