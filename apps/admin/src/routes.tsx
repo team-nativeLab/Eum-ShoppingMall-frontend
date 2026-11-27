@@ -3,12 +3,10 @@ import type { RouteObject } from 'react-router';
 import { AdminLayout } from './layouts/AdminLayout';
 import { SharedLoginRedirect } from './components/SharedLoginRedirect';
 import { getAdminWebBaseUrl } from './lib/api-config';
+import { AdminDashboardPage } from './pages/AdminDashboardPage';
 
 const AdminCategoriesPage = lazy(() =>
   import('./pages/AdminCategoriesPage').then((module) => ({ default: module.AdminCategoriesPage })),
-);
-const AdminDashboardPage = lazy(() =>
-  import('./pages/AdminDashboardPage').then((module) => ({ default: module.AdminDashboardPage })),
 );
 const AdminProductFormPage = lazy(() =>
   import('./pages/AdminProductFormPage').then((module) => ({
@@ -128,11 +126,7 @@ export const adminRoutes: RouteObject[] = [
         {
           index: true,
           handle: { title: '대시보드' },
-          element: (
-            <Suspense fallback={<p role="status">화면을 불러오고 있습니다.</p>}>
-              <AdminDashboardPage />
-            </Suspense>
-          ),
+          element: <AdminDashboardPage />,
         },
         {
           path: 'products',

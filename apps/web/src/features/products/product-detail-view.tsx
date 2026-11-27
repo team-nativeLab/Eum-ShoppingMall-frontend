@@ -19,7 +19,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type UIEvent } from 'react';
 import { PageContainer } from '@/components/page-container';
-import { useCart } from '@/features/cart/cart-context';
+import { useCartActions, useCartStatus } from '@/features/cart/cart-context';
 import { useCheckout } from '@/features/checkout/checkout-context';
 import { getMemberAuth } from '@/lib/member-auth';
 import { buildProductInquiryHref } from '@/features/company-pages/product-inquiry-link';
@@ -179,7 +179,8 @@ function ProductDetailContent({
 }) {
   const questionsQuery = useProductQuestionsQuery(product.id);
   const router = useRouter();
-  const { addToCart, isOrderPending } = useCart();
+  const { addToCart } = useCartActions();
+  const { isOrderPending } = useCartStatus();
   const { beginDirectCheckout } = useCheckout();
   const { wishlistIds, toggleWishlist } = useLocalCollections();
   const [purchaseLines, setPurchaseLines] = useState<PurchaseLine[]>(() =>
@@ -733,6 +734,7 @@ function ProductDetailContent({
                 <ProductImage
                   src={galleryImages[0]?.url ?? null}
                   alt={galleryImages[0]?.alt ?? product.name + ' 상세 이미지'}
+                  sizes="(min-width:896px) 856px, calc(100vw - 40px)"
                 />
               </div>
             </section>
@@ -977,14 +979,24 @@ function ProductGallery({ images, productName }: { images: GalleryImage[]; produ
           className="flex aspect-square snap-x snap-mandatory [scrollbar-width:none] overflow-x-auto bg-surface"
         >
           {images.length > 0 ? (
-            images.map((image) => (
+            images.map((image, imageIndex) => (
               <div key={image.id} className="aspect-square w-full shrink-0 snap-start">
-                <ProductImage src={image.url} alt={image.alt} />
+                <ProductImage
+                  src={image.url}
+                  alt={image.alt}
+                  sizes="(min-width: 1024px) 636px, 100vw"
+                  loading={imageIndex === 0 ? 'eager' : 'lazy'}
+                  fetchPriority={imageIndex === 0 ? 'high' : undefined}
+                />
               </div>
             ))
           ) : (
             <div className="aspect-square w-full shrink-0">
-              <ProductImage src={null} alt={placeholderAlt} />
+              <ProductImage
+                src={null}
+                alt={placeholderAlt}
+                sizes="(min-width: 1024px) 636px, 100vw"
+              />
             </div>
           )}
         </div>
@@ -997,7 +1009,13 @@ function ProductGallery({ images, productName }: { images: GalleryImage[]; produ
 
       <div className="hidden lg:block">
         <div className="aspect-square overflow-hidden rounded-12 bg-surface">
-          <ProductImage src={activeImage?.url ?? null} alt={activeImage?.alt ?? placeholderAlt} />
+          <ProductImage
+            src={activeImage?.url ?? null}
+            alt={activeImage?.alt ?? placeholderAlt}
+            sizes="(min-width: 1024px) 636px, 100vw"
+            loading={activeImage?.id === images[0]?.id ? 'eager' : 'lazy'}
+            fetchPriority={activeImage?.id === images[0]?.id ? 'high' : undefined}
+          />
         </div>
         {images.length > 1 ? (
           <ul
@@ -1020,7 +1038,7 @@ function ProductGallery({ images, productName }: { images: GalleryImage[]; produ
                         : 'border border-line hover:border-line-strong',
                     )}
                   >
-                    <ProductImage src={image.url} alt="" />
+                    <ProductImage src={image.url} alt="" sizes="96px" />
                   </button>
                 </li>
               );

@@ -7,7 +7,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Product } from '@eum/api/types';
 import { CartLink } from '@/components/cart-link';
 import { CheckoutProvider, useCheckout } from '@/features/checkout/checkout-context';
-import { CartProvider, useCart } from './cart-context';
+import { CartProvider, useCart, useCartActions, useCartStatus } from './cart-context';
 import {
   CART_STORAGE_KEY,
   ORDERED_CART_CLEANUP_STORAGE_KEY,
@@ -177,6 +177,17 @@ function CartProbe() {
   );
 }
 
+function CartActionOnlyProbe({ onRender }: { onRender: () => void }) {
+  const { addToCart } = useCartActions();
+  const { isOrderPending } = useCartStatus();
+  onRender();
+  return (
+    <button type="button" onClick={() => addToCart(visibleProduct)}>
+      {String(isOrderPending)}
+    </button>
+  );
+}
+
 function CartRestoreRaceProbe({ tab }: { tab: 'a' | 'b' }) {
   const { totalQuantity, hasRestored, retryRestore, consumeOrderedCartItems } = useCart();
   return (
@@ -288,6 +299,21 @@ function renderCleanupIntentLoadingCart() {
   );
 }
 
+function renderCartActionOnlyProbe(onRender: () => void) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: 0 } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <CheckoutProvider>
+        <CartProvider>
+          <CartActionOnlyProbe onRender={onRender} />
+        </CartProvider>
+      </CheckoutProvider>
+    </QueryClientProvider>,
+  );
+}
+
 async function waitForRestore() {
   await screen.findByText('복원 완료');
 }
@@ -308,6 +334,25 @@ afterEach(() => {
 });
 
 describe('CartProvider', () => {
+  it('measures action and status consumers while cart contents change', async () => {
+    window.localStorage.setItem(
+      CART_STORAGE_KEY,
+      serializeCart([
+        { productId: visibleProduct.id, quantity: 1, optionId: null, optionLabel: null },
+      ]),
+    );
+    const user = userEvent.setup();
+    const onRender = vi.fn();
+    renderCartActionOnlyProbe(onRender);
+    await screen.findByRole('button', { name: 'false' });
+
+    const renderCountBeforeCartUpdate = onRender.mock.calls.length;
+    await user.click(screen.getByRole('button', { name: 'false' }));
+    await waitFor(() => expect(onRender).toHaveBeenCalledTimes(renderCountBeforeCartUpdate));
+
+    expect(getProductById).toHaveBeenCalledTimes(1);
+  });
+
   it('retries the recorded order cleanup until localStorage accepts it', async () => {
     window.localStorage.setItem(
       CART_STORAGE_KEY,

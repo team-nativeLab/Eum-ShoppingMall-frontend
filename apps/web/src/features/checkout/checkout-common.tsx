@@ -10,13 +10,13 @@ import { CircleAlert } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { PageContainer } from '@/components/page-container';
-import { useCart } from '@/features/cart/cart-context';
+import { useCartActions, useCartStatus } from '@/features/cart/cart-context';
 import { calculateCheckoutAmounts, getCouponDiscount } from './checkout-utils';
 import { useCheckout } from './checkout-context';
 
 export function CheckoutPageTitle({ children }: { children: ReactNode }) {
   const { isOrderPending: isCheckoutPending } = useCheckout();
-  const { isOrderPending: isCartPending } = useCart();
+  const { isOrderPending: isCartPending } = useCartStatus();
   const isOrderPending = isCheckoutPending || isCartPending;
   return (
     <div className="mb-24 flex flex-wrap items-center justify-between gap-16">
@@ -170,7 +170,8 @@ export function CheckoutPageShell({
   children: ReactNode;
   className?: string;
 }) {
-  const { orderCleanupError, retryRestore } = useCart();
+  const { orderCleanupError } = useCartStatus();
+  const { retryRestore } = useCartActions();
 
   return (
     <PageContainer className={cx('py-40 lg:py-48', className)}>

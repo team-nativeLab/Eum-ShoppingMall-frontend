@@ -90,6 +90,7 @@ function NoticeDetailContent({
               <ProductImage
                 src={notice.bodyImage.src}
                 alt={notice.bodyImage.alt}
+                sizes="(min-width: 506px) 466px, calc(100vw - 40px)"
                 className="rounded-4"
               />
             </figure>

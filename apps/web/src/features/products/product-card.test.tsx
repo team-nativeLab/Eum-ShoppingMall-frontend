@@ -13,8 +13,10 @@ const cardMocks = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: cardMocks.routerPush }) }));
 vi.mock('@/features/cart/cart-context', () => ({
-  useCart: () => ({
+  useCartActions: () => ({
     addToCart: cardMocks.addToCart,
+  }),
+  useCartStatus: () => ({
     isOrderPending: cardMocks.isOrderPending,
   }),
 }));

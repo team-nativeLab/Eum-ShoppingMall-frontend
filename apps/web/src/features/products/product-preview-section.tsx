@@ -8,7 +8,7 @@ import { Button } from '@eum/ui/components/Button';
 import { EmptyState } from '@eum/ui/components/EmptyState';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { PackageOpen } from 'lucide-react';
-import { useCart } from '@/features/cart/cart-context';
+import { useCartActions, useCartStatus } from '@/features/cart/cart-context';
 import { useProductsQuery } from './use-products-query';
 
 /** 목 API 연결 확인용 상품 미리보기(로딩·에러·빈·목록 상태). 2단계에서 HF/Web/ProductCard로 바꿉니다. */
@@ -74,7 +74,8 @@ function ProductLoadError({
 
 // 상품 한 개 미리보기 카드
 function ProductPreviewCard({ product }: { product: Product }) {
-  const { addToCart, isOrderPending } = useCart();
+  const { addToCart } = useCartActions();
+  const { isOrderPending } = useCartStatus();
   const priceDisplay = getPriceDisplay(product);
   const isSoldOut = product.stockStatus === 'soldOut';
   return (

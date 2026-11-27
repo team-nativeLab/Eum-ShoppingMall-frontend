@@ -256,6 +256,22 @@ export interface CartContextValue {
 }
 
 const CartContext = createContext<CartContextValue | null>(null);
+type CartContentContextValue = Pick<
+  CartContextValue,
+  'cartItems' | 'cartGroups' | 'cartTotals' | 'totalQuantity'
+>;
+type CartStatusContextValue = Pick<
+  CartContextValue,
+  'hasRestored' | 'restoreError' | 'orderCleanupError' | 'hasPendingOrderCleanup' | 'isOrderPending'
+>;
+type CartActionsContextValue = Pick<
+  CartContextValue,
+  'addToCart' | 'changeQuantity' | 'removeFromCart' | 'retryRestore' | 'consumeOrderedCartItems'
+>;
+
+const CartContentContext = createContext<CartContentContextValue | null>(null);
+const CartStatusContext = createContext<CartStatusContextValue | null>(null);
+const CartActionsContext = createContext<CartActionsContextValue | null>(null);
 
 /** 저장된 상품 ID와 옵션으로 최신 상품을 병렬 조회해 장바구니를 복원합니다. */
 export function CartProvider({ children }: { children: ReactNode }) {
@@ -287,6 +303,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
               queryKey: queryKeys.products.detail(storedLine.productId),
               queryFn: async ({ signal }) =>
                 (await getShopApi()).products.getById(storedLine.productId, { signal }),
+              // 복원 시 캐시가 신선해도 최신 옵션 가용성을 확인하려고 다시 조회합니다.
               staleTime: 0,
             });
             // 옵션 문구는 최신 상품 기준으로 갱신합니다. 옵션이 사라졌으면 저장 문구를 남기고,
@@ -618,66 +635,88 @@ export function CartProvider({ children }: { children: ReactNode }) {
     cartState.restoreError,
   ]);
 
-  const contextValue = useMemo<CartContextValue>(() => {
-    const {
-      cartItems,
-      hasRestored,
-      restoreError,
-      isReconciling,
-      cleanupIntentLoaded,
-      pendingOrderedLines,
-      orderCleanupError,
-    } = cartState;
-    const hasPendingOrderCleanup = pendingOrderedLines.length > 0;
-    const isCleanupIntentLoading = !cleanupIntentLoaded;
-    const isCartOperationPending =
-      isCheckoutOrderPending || isReconciling || hasPendingOrderCleanup || isCleanupIntentLoading;
+  const hasPendingOrderCleanup = cartState.pendingOrderedLines.length > 0;
+  const isCartOperationPending =
+    isCheckoutOrderPending ||
+    cartState.isReconciling ||
+    hasPendingOrderCleanup ||
+    !cartState.cleanupIntentLoaded;
+  const cartItems = cartState.cartItems;
+
+  const cartContentValue = useMemo<CartContentContextValue>(() => {
     return {
       cartItems,
-      hasRestored,
-      restoreError,
-      orderCleanupError,
-      hasPendingOrderCleanup,
       cartGroups: groupCartItems(cartItems),
       cartTotals: calculateCartTotals(cartItems),
       totalQuantity: cartItems.reduce(
         (quantitySum, cartItem) => quantitySum + cartItem.quantity,
         0,
       ),
-      isOrderPending: isCartOperationPending,
-      addToCart: (product, quantity = 1, optionId = null, optionLabel = null) => {
-        if (
-          isStorageRestorePendingRef.current ||
-          isOrderRequestPending() ||
-          isCartOperationPending
-        ) {
-          return false;
-        }
-        dispatch({ type: 'add', product, quantity, optionId, optionLabel });
-        return true;
-      },
-      changeQuantity: (cartItemId, quantity) => {
-        if (!isStorageRestorePendingRef.current && !isCartOperationPending) {
-          dispatch({ type: 'updateQuantity', cartItemId, quantity });
-        }
-      },
-      removeFromCart: (cartItemIds) => {
-        if (!isStorageRestorePendingRef.current && !isCartOperationPending) {
-          dispatch({ type: 'remove', cartItemIds });
-        }
-      },
-      retryRestore,
-      consumeOrderedCartItems,
     };
-  }, [
-    cartState,
-    consumeOrderedCartItems,
-    isCheckoutOrderPending,
-    isOrderRequestPending,
-    retryRestore,
-  ]);
+  }, [cartItems]);
 
-  return <CartContext value={contextValue}>{children}</CartContext>;
+  const cartStatusValue = useMemo<CartStatusContextValue>(
+    () => ({
+      hasRestored: cartState.hasRestored,
+      restoreError: cartState.restoreError,
+      orderCleanupError: cartState.orderCleanupError,
+      hasPendingOrderCleanup,
+      isOrderPending: isCartOperationPending,
+    }),
+    [
+      cartState.hasRestored,
+      cartState.restoreError,
+      cartState.orderCleanupError,
+      hasPendingOrderCleanup,
+      isCartOperationPending,
+    ],
+  );
+
+  const addToCart = useCallback<CartContextValue['addToCart']>(
+    (product, quantity = 1, optionId = null, optionLabel = null) => {
+      if (isStorageRestorePendingRef.current || isOrderRequestPending() || isCartOperationPending) {
+        return false;
+      }
+      dispatch({ type: 'add', product, quantity, optionId, optionLabel });
+      return true;
+    },
+    [isCartOperationPending, isOrderRequestPending],
+  );
+  const changeQuantity = useCallback<CartContextValue['changeQuantity']>(
+    (cartItemId, quantity) => {
+      if (!isStorageRestorePendingRef.current && !isCartOperationPending) {
+        dispatch({ type: 'updateQuantity', cartItemId, quantity });
+      }
+    },
+    [isCartOperationPending],
+  );
+  const removeFromCart = useCallback<CartContextValue['removeFromCart']>(
+    (cartItemIds) => {
+      if (!isStorageRestorePendingRef.current && !isCartOperationPending) {
+        dispatch({ type: 'remove', cartItemIds });
+      }
+    },
+    [isCartOperationPending],
+  );
+  const cartActionsValue = useMemo<CartActionsContextValue>(
+    () => ({ addToCart, changeQuantity, removeFromCart, retryRestore, consumeOrderedCartItems }),
+    [addToCart, changeQuantity, removeFromCart, retryRestore, consumeOrderedCartItems],
+  );
+
+  const contextValue = useMemo<CartContextValue>(
+    () => ({ ...cartContentValue, ...cartStatusValue, ...cartActionsValue }),
+    [cartContentValue, cartStatusValue, cartActionsValue],
+  );
+
+  return (
+    <CartContext value={contextValue}>
+      <CartActionsContext value={cartActionsValue}>
+        <CartStatusContext value={cartStatusValue}>
+          <CartContentContext value={cartContentValue}>{children}</CartContentContext>
+        </CartStatusContext>
+      </CartActionsContext>
+    </CartContext>
+  );
 }
 
 /** CartProvider 안에서 현재 장바구니 값과 변경 함수를 가져옵니다. */
@@ -685,4 +724,25 @@ export function useCart(): CartContextValue {
   const cartContext = use(CartContext);
   if (!cartContext) throw new Error('useCart는 CartProvider 안에서만 쓸 수 있습니다.');
   return cartContext;
+}
+
+/** 장바구니 상품과 계산된 합계를 구독합니다. */
+export function useCartContent(): CartContentContextValue {
+  const cartContent = use(CartContentContext);
+  if (!cartContent) throw new Error('useCartContent는 CartProvider 안에서만 쓸 수 있습니다.');
+  return cartContent;
+}
+
+/** 복원·주문 정리 상태를 구독합니다. */
+export function useCartStatus(): CartStatusContextValue {
+  const cartStatus = use(CartStatusContext);
+  if (!cartStatus) throw new Error('useCartStatus는 CartProvider 안에서만 쓸 수 있습니다.');
+  return cartStatus;
+}
+
+/** 장바구니 변경 작업을 구독합니다. */
+export function useCartActions(): CartActionsContextValue {
+  const cartActions = use(CartActionsContext);
+  if (!cartActions) throw new Error('useCartActions는 CartProvider 안에서만 쓸 수 있습니다.');
+  return cartActions;
 }

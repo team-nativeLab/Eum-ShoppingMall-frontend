@@ -8,9 +8,11 @@ import { Icon } from '@eum/ui/components/Icon';
 import { NoticeInline } from '@eum/ui/components/NoticeInline';
 import { cx } from '@eum/ui/lib/cx';
 import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useState, type CSSProperties, type FocusEvent, type PointerEvent } from 'react';
 import { PageContainer } from '@/components/page-container';
+import { isLocalImageSource } from '@/lib/image-source';
 import { HomePopup } from './home-popup';
 import { usePrefersReducedMotion } from '@/lib/use-media-query';
 import { CategoryBar, MobileCategoryGrid } from './category-bar';
@@ -204,17 +206,28 @@ function HomeHero({ slides }: { slides: HomeContent['heroSlides'] }) {
             data-direction={direction}
             className={cx('absolute inset-0 -z-20', layerState === 'hidden' && 'invisible')}
           >
-            {/* CMS가 제공한 배너 이미지는 Next 이미지 도메인 설정 없이 표시합니다.
-                첫 배너는 LCP 후보라 우선 내려받고, 나머지는 지연 로드합니다. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={slide.imageUrl}
-              alt=""
-              fetchPriority={slideIndex === 0 ? 'high' : 'auto'}
-              loading={slideIndex === 0 ? 'eager' : 'lazy'}
-              decoding="async"
-              className="size-full object-cover object-center"
-            />
+            {isLocalImageSource(slide.imageUrl) ? (
+              <Image
+                src={slide.imageUrl}
+                alt=""
+                fill
+                sizes="100vw"
+                fetchPriority={slideIndex === 0 ? 'high' : 'auto'}
+                loading={slideIndex === 0 ? 'eager' : 'lazy'}
+                decoding="async"
+                className="object-cover object-center"
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={slide.imageUrl}
+                alt=""
+                fetchPriority={slideIndex === 0 ? 'high' : 'auto'}
+                loading={slideIndex === 0 ? 'eager' : 'lazy'}
+                decoding="async"
+                className="size-full object-cover object-center"
+              />
+            )}
           </div>
         ) : null;
       })}
@@ -408,16 +421,28 @@ function PromoBannerSection({ banners }: { banners: HomeContent['promoBanners'] 
               className="group relative isolate flex h-216 w-300 shrink-0 snap-start flex-col overflow-hidden rounded-12 bg-surface px-32 pt-24 pb-21 focus-ring lg:h-auto lg:min-h-204 lg:w-auto"
             >
               {banner.imageUrl ? (
-                // CMS가 제공한 배너 이미지 URL을 직접 사용합니다. 첫 화면 아래라 지연 로드합니다.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={banner.imageUrl}
-                  alt=""
-                  aria-hidden="true"
-                  loading="lazy"
-                  decoding="async"
-                  className="absolute inset-0 -z-10 size-full object-cover transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transition-none"
-                />
+                isLocalImageSource(banner.imageUrl) ? (
+                  <Image
+                    src={banner.imageUrl}
+                    alt=""
+                    aria-hidden="true"
+                    fill
+                    sizes="(min-width: 1336px) 421px, (min-width: 1024px) calc((100vw - 72px) / 3), 300px"
+                    loading="lazy"
+                    decoding="async"
+                    className="-z-10 object-cover transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transition-none"
+                  />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={banner.imageUrl}
+                    alt=""
+                    aria-hidden="true"
+                    loading="lazy"
+                    decoding="async"
+                    className="absolute inset-0 -z-10 size-full object-cover transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transition-none"
+                  />
+                )
               ) : null}
               <div
                 className={cx(

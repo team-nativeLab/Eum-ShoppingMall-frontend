@@ -5,6 +5,8 @@ import { Button } from '@eum/ui/components/Button';
 import { Modal } from '@eum/ui/components/Modal';
 import { useQuery } from '@tanstack/react-query';
 import { useState, useSyncExternalStore } from 'react';
+import Image from 'next/image';
+import { isLocalImageSource } from '@/lib/image-source';
 import { getShopApi } from '@/lib/shop-api';
 
 const HIDDEN_POPUP_SESSION_KEY = 'eum-home-popup-hidden';
@@ -68,13 +70,25 @@ export function HomePopup() {
       }
     >
       {popup.imageUrl ? (
-        // API accepts only validated image URL schemes; data URLs cannot use the Next image optimizer.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={popup.imageUrl}
-          alt={popup.title}
-          className="mt-16 aspect-16/9 w-full rounded-8 object-cover"
-        />
+        isLocalImageSource(popup.imageUrl) ? (
+          <div className="relative mt-16 aspect-16/9 w-full overflow-hidden rounded-8">
+            <Image
+              src={popup.imageUrl}
+              alt={popup.title}
+              fill
+              sizes="(min-width: 928px) 816px, calc(100vw - 80px)"
+              loading="eager"
+              className="object-cover"
+            />
+          </div>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={popup.imageUrl}
+            alt={popup.title}
+            className="mt-16 aspect-16/9 w-full rounded-8 object-cover"
+          />
+        )
       ) : null}
       <p className="mt-16 text-body-m whitespace-pre-wrap text-text-2">{popup.body}</p>
     </Modal>
