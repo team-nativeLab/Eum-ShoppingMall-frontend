@@ -96,7 +96,79 @@ function homeResponse(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function adminDashboardResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    period: 'WEEK',
+    from: '2026-11-23T00:00:00.000Z',
+    paidOrderCount: 12,
+    salesAmount: 345000,
+    newMemberCount: 4,
+    pendingInquiryCount: 3,
+    pendingQuoteCount: 2,
+    ...overrides,
+  };
+}
+
 describe('real ShopApi stubs', () => {
+  it('requests admin dashboard metrics for the selected period and forwards AbortSignal', async () => {
+    const fetchMock = stubApiResponse(adminDashboardResponse());
+    const api = createRealApi(
+      buildMockConfig({ mode: 'real', baseUrl: 'https://api.example.test' }),
+    );
+    const abortController = new AbortController();
+
+    await expect(
+      api.dashboard.getAdminSummary('WEEK', { signal: abortController.signal }),
+    ).resolves.toEqual(adminDashboardResponse());
+
+    const requestUrl = new URL(fetchMock.mock.calls[0]?.[0] as string);
+    expect(requestUrl.pathname).toBe('/api/v1/admin/dashboard');
+    expect(requestUrl.searchParams.get('period')).toBe('WEEK');
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBe(abortController.signal);
+  });
+
+  it('rejects dashboard summaries with mismatched periods, invalid dates, or invalid counts', async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal('fetch', fetchMock);
+    const api = createRealApi(
+      buildMockConfig({ mode: 'real', baseUrl: 'https://api.example.test' }),
+    );
+    const invalidSummaries = [
+      adminDashboardResponse({ period: 'YEAR' }),
+      adminDashboardResponse({ period: 'TODAY' }),
+      adminDashboardResponse({ from: 'not-a-date' }),
+      adminDashboardResponse({ paidOrderCount: -1 }),
+      adminDashboardResponse({ newMemberCount: 1.5 }),
+      adminDashboardResponse({ salesAmount: Number.MAX_SAFE_INTEGER + 1 }),
+      adminDashboardResponse({ pendingQuoteCount: null }),
+    ];
+
+    for (const summary of invalidSummaries) {
+      fetchMock.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: summary }), { status: 200 }),
+      );
+      await expect(api.dashboard.getAdminSummary('WEEK')).rejects.toMatchObject({
+        code: 'INVALID_RESPONSE',
+      });
+    }
+  });
+
+  it('requires the success/data envelope for the admin dashboard', async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal('fetch', fetchMock);
+    const api = createRealApi(
+      buildMockConfig({ mode: 'real', baseUrl: 'https://api.example.test' }),
+    );
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(adminDashboardResponse()), { status: 200 }),
+    );
+
+    await expect(api.dashboard.getAdminSummary('WEEK')).rejects.toMatchObject({
+      code: 'INVALID_RESPONSE',
+    });
+  });
+
   it('maps home fields to current UI models, drops unsafe links, ignores extra sections, and forwards AbortSignal', async () => {
     const fetchMock = stubApiResponse(homeResponse());
     const api = createRealApi(

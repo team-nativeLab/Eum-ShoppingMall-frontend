@@ -98,6 +98,7 @@ function createDeferred<T>() {
 
 const apiMocks = vi.hoisted(() => ({
   getShopApi: vi.fn(),
+  getAdminSummary: vi.fn(),
   membersList: vi.fn(),
   listOrdersByMember: vi.fn(),
   updateOrderAdmin: vi.fn(),
@@ -167,7 +168,17 @@ describe('partial order lookup retry actions', () => {
     apiMocks.listOrdersByMember.mockResolvedValue([]);
     apiMocks.updateOrderAdmin.mockResolvedValue(undefined);
     apiMocks.listProducts.mockResolvedValue({ items: [], totalCount: 0 });
+    apiMocks.getAdminSummary.mockResolvedValue({
+      period: 'WEEK',
+      from: '2026-11-23T00:00:00.000Z',
+      paidOrderCount: 0,
+      salesAmount: 0,
+      newMemberCount: 0,
+      pendingInquiryCount: 0,
+      pendingQuoteCount: 0,
+    });
     apiMocks.getShopApi.mockResolvedValue({
+      dashboard: { getAdminSummary: apiMocks.getAdminSummary },
       members: { adminList: apiMocks.membersList },
       orders: {
         listByMember: apiMocks.listOrdersByMember,

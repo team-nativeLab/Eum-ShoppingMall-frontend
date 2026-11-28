@@ -5,6 +5,8 @@ import type { ProductLimitParams, ProductListParams, ShopApi } from './shop-api'
 import type {
   ApiProductDetail,
   ApiProductDetailSku,
+  AdminDashboardPeriod,
+  AdminDashboardSummary,
   BrandSummary,
   Category,
   FacetCount,
@@ -45,6 +47,47 @@ function asNumber(input: unknown, field: string): number {
     throw new ApiError('INVALID_RESPONSE', `실제 API 응답(${field}) 형식이 올바르지 않습니다.`);
   }
   return input;
+}
+
+function asNonNegativeSafeInteger(input: unknown, field: string): number {
+  const value = asNumber(input, field);
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new ApiError('INVALID_RESPONSE', `실제 API 응답(${field}) 형식이 올바르지 않습니다.`);
+  }
+  return value;
+}
+
+function isAdminDashboardPeriod(value: string): value is AdminDashboardPeriod {
+  return value === 'TODAY' || value === 'WEEK' || value === 'MONTH';
+}
+
+function mapAdminDashboardSummary(
+  input: unknown,
+  requestedPeriod: AdminDashboardPeriod,
+): AdminDashboardSummary {
+  const summary = asRecord(input, '관리자 대시보드');
+  const period = asString(summary.period, '대시보드 기간');
+  const from = asString(summary.from, '대시보드 시작일');
+  if (
+    !isAdminDashboardPeriod(period) ||
+    period !== requestedPeriod ||
+    !Number.isFinite(Date.parse(from))
+  ) {
+    throw new ApiError(
+      'INVALID_RESPONSE',
+      '실제 API 응답(관리자 대시보드) 형식이 올바르지 않습니다.',
+    );
+  }
+
+  return {
+    period,
+    from,
+    paidOrderCount: asNonNegativeSafeInteger(summary.paidOrderCount, '결제 완료 주문 수'),
+    salesAmount: asNonNegativeSafeInteger(summary.salesAmount, '매출'),
+    newMemberCount: asNonNegativeSafeInteger(summary.newMemberCount, '신규 회원 수'),
+    pendingInquiryCount: asNonNegativeSafeInteger(summary.pendingInquiryCount, '대기 문의 수'),
+    pendingQuoteCount: asNonNegativeSafeInteger(summary.pendingQuoteCount, '대기 견적 수'),
+  };
 }
 
 function asNullableNumber(input: unknown, field: string): number | null {
@@ -505,6 +548,13 @@ export function createRealApi(config: ApiConfig): ShopApi {
   const get = (path: string, signal?: AbortSignal, requireEnvelope = false) =>
     client.request(path, { signal, requireEnvelope });
   return {
+    dashboard: {
+      getAdminSummary: async (period, options): Promise<AdminDashboardSummary> => {
+        const query = new URLSearchParams({ period });
+        const response = await get(`/api/v1/admin/dashboard?${query}`, options?.signal, true);
+        return mapAdminDashboardSummary(response, period);
+      },
+    },
     suppliers: {
       adminList: notImplemented('suppliers.adminList'),
       saveAdmin: notImplemented('suppliers.saveAdmin'),
