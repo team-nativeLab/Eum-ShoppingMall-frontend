@@ -15,6 +15,7 @@ import type {
   CompanyInfo,
   Coupon,
   CouponOffer,
+  BuyerSessionMember,
   AdminCoupon,
   AdminFaq,
   AdminNotice,
@@ -310,7 +311,7 @@ export interface ShopApi {
   };
   members: {
     /** Returns only the current buyer session member. The mock does not implement real authentication. */
-    getCurrent(options?: RequestOptions): Promise<Member>;
+    getCurrent(options?: RequestOptions): Promise<BuyerSessionMember>;
     /** Buyer-safe single-member list; never enumerates other member records. */
     list(options?: RequestOptions): Promise<Member[]>;
     /** Admin-only member directory contract; the mock has no server-side authorization. */

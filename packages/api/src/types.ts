@@ -713,6 +713,16 @@ export interface Member {
   pointBalance: number;
 }
 
+/** 실제 구매자 인증 응답. 서버가 제공하지 않는 가입일·포인트는 합성하지 않습니다. */
+export interface BuyerSessionMember {
+  id: string;
+  email: string;
+  name: string;
+  phone: string | null;
+  joinedAt?: string;
+  pointBalance?: number;
+}
+
 /** 관리자 권한 */
 export type AdminRole = 'owner' | 'manager';
 

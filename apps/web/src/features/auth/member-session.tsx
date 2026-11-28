@@ -1,7 +1,7 @@
 'use client';
 
 import { queryKeys } from '@eum/api/query-keys';
-import type { Member } from '@eum/api/types';
+import type { BuyerSessionMember } from '@eum/api/types';
 import {
   createContext,
   use,
@@ -18,10 +18,10 @@ import { getMemberAuth } from '@/lib/member-auth';
 type MemberSessionStatus = 'loading' | 'ready' | 'error';
 
 interface MemberSessionValue {
-  member: Member | null;
+  member: BuyerSessionMember | null;
   status: MemberSessionStatus;
-  refreshMember: () => Promise<Member | null>;
-  setMember: (member: Member | null) => void;
+  refreshMember: () => Promise<BuyerSessionMember | null>;
+  setMember: (member: BuyerSessionMember | null) => void;
   clearMember: () => Promise<void>;
 }
 
@@ -61,10 +61,10 @@ async function clearMemberScopedQueries(
 /** 회원 목 세션은 userId만 저장하고, 프로필은 앱이 열린 동안 메모리에서만 유지합니다. */
 export function MemberSessionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const [member, setMember] = useState<Member | null>(null);
+  const [member, setMember] = useState<BuyerSessionMember | null>(null);
   const [status, setStatus] = useState<MemberSessionStatus>('loading');
   const sessionRevisionRef = useRef(0);
-  const setSessionMember = useCallback((nextMember: Member | null) => {
+  const setSessionMember = useCallback((nextMember: BuyerSessionMember | null) => {
     sessionRevisionRef.current += 1;
     setMember(nextMember);
     setStatus('ready');

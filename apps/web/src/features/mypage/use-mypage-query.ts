@@ -66,7 +66,7 @@ export function useMyPageData(
         scope === 'claim-new';
       const needsClaims = scope === 'claims';
       const needsCoupons = scope === 'dashboard' || scope === 'coupons';
-      const needsPoints = scope === 'points';
+      const needsPoints = scope === 'points' && member.pointBalance !== undefined;
       const needsAddresses = scope === 'addresses' || scope === 'claim-new';
 
       const [orders, claims, coupons, points, addresses] = await Promise.all([

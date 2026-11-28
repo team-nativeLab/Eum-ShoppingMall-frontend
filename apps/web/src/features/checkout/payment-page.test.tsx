@@ -295,6 +295,30 @@ afterEach(() => {
 });
 
 describe('PaymentPageView', () => {
+  it('회원 포인트 잔액이 없으면 입력과 전액 사용을 막고 0포인트로 주문한다', async () => {
+    const user = userEvent.setup();
+    const createOrder = configureApi();
+    apiMocks.getCurrentUser.mockResolvedValue({
+      id: 'real-buyer',
+      email: 'buyer@example.test',
+      name: '실제 구매자',
+      phone: null,
+    });
+    savePaymentCart();
+    renderPaymentPage();
+
+    const pointsInput = await screen.findByRole('spinbutton', { name: '적립금' });
+    expect(pointsInput).toBeDisabled();
+    expect(screen.getByText('적립금 정보가 제공되지 않아 사용할 수 없습니다.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '전액 사용' })).toBeDisabled();
+
+    await user.click(screen.getByRole('checkbox', { name: '전체 동의' }));
+    await user.click(screen.getByRole('button', { name: '결제하기 (1)' }));
+    await waitFor(() =>
+      expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ pointsToUse: 0 })),
+    );
+  });
+
   it('shows a session error instead of remaining in the pending-coupon skeleton', async () => {
     apiMocks.getCurrentUser.mockRejectedValue(new Error('Member session unavailable'));
     renderPaymentPage();

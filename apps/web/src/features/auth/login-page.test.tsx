@@ -141,10 +141,13 @@ describe('W-09 login form validation', () => {
     await user.click(screen.getByRole('button', { name: '로그인' }));
 
     await waitFor(() =>
-      expect(authMock.login).toHaveBeenCalledWith({
-        email: 'member@example.com',
-        password: unchangedPassword,
-      }),
+      expect(authMock.login).toHaveBeenCalledWith(
+        {
+          email: 'member@example.com',
+          password: unchangedPassword,
+        },
+        { remember: true },
+      ),
     );
     expect(authMock.logout).not.toHaveBeenCalled();
     expect(routerMock.replace).toHaveBeenCalledWith('/orders');

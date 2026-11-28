@@ -29,7 +29,7 @@ export function ProfileView({
   const [password, setPassword] = useState('');
   const [reauthError, setReauthError] = useState('');
   const [name, setName] = useState(member.name);
-  const [phone, setPhone] = useState(member.phone);
+  const [phone, setPhone] = useState(member.phone ?? '');
   const [smsOptIn, setSmsOptIn] = useState(true);
   const [emailOptIn, setEmailOptIn] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);

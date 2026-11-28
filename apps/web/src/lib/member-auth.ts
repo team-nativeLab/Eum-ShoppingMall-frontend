@@ -20,10 +20,10 @@ async function loadMemberAuth(): Promise<MemberAuthClientWithSignup> {
 }
 
 /**
- * 일반 회원 인증 클라이언트를 한 번만 만들어 돌려주는 함수(로그인 화면은 3단계에서 연결).
- * 화면의 로그인 확인은 UX일 뿐이며 실제 인가는 서버(HttpOnly 세션)가 합니다.
+ * 브라우저에서 회원 인증 클라이언트를 공유합니다. SSR 호출은 사용자 간 토큰 세션이 섞이지 않게 매번 새로 만듭니다.
  */
 export function getMemberAuth(): Promise<MemberAuthClientWithSignup> {
+  if (typeof window === 'undefined') return loadMemberAuth();
   memberAuthPromise ??= loadMemberAuth().catch((loadError: unknown) => {
     memberAuthPromise = null;
     throw loadError;

@@ -322,7 +322,7 @@ export function ShippingPageView() {
               <dt className="text-text-2">이름</dt>
               <dd>{member.name}</dd>
               <dt className="text-text-2">연락처</dt>
-              <dd>{member.phone}</dd>
+              <dd>{member.phone ?? '연락처 정보 없음'}</dd>
               <dt className="text-text-2">이메일</dt>
               <dd>{member.email}</dd>
             </dl>

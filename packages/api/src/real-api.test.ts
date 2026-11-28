@@ -97,6 +97,26 @@ function homeResponse(overrides: Record<string, unknown> = {}) {
 }
 
 describe('real ShopApi stubs', () => {
+  it('forwards member lookup options to the injected buyer auth client', async () => {
+    const currentMember = {
+      id: 'member-1',
+      email: 'member@example.test',
+      name: '회원',
+      phone: null,
+    };
+    const getCurrentMember = vi.fn(async () => currentMember);
+    const api = createRealApi(
+      buildMockConfig({ mode: 'real', baseUrl: 'https://api.example.test' }),
+      { getCurrentMember },
+    );
+    const controller = new AbortController();
+
+    await expect(api.members.getCurrent({ signal: controller.signal })).resolves.toBe(
+      currentMember,
+    );
+    expect(getCurrentMember).toHaveBeenCalledWith({ signal: controller.signal });
+  });
+
   it('maps home fields to current UI models, drops unsafe links, ignores extra sections, and forwards AbortSignal', async () => {
     const fetchMock = stubApiResponse(homeResponse());
     const api = createRealApi(

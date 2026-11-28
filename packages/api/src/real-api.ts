@@ -1,11 +1,12 @@
 import type { ApiConfig } from './config';
 import { ApiError } from './errors';
 import { createApiClient } from './http-client';
-import type { ProductLimitParams, ProductListParams, ShopApi } from './shop-api';
+import type { ProductLimitParams, ProductListParams, RequestOptions, ShopApi } from './shop-api';
 import type {
   ApiProductDetail,
   ApiProductDetailSku,
   BrandSummary,
+  BuyerSessionMember,
   Category,
   FacetCount,
   PagedResult,
@@ -500,7 +501,12 @@ function notImplemented(endpointName: string): () => Promise<never> {
 /**
  * 실제 서버용 ShopApi. 연결되지 않은 엔드포인트는 명시적으로 실패시킵니다.
  */
-export function createRealApi(config: ApiConfig): ShopApi {
+export function createRealApi(
+  config: ApiConfig,
+  options: {
+    getCurrentMember?: (options?: RequestOptions) => Promise<BuyerSessionMember>;
+  } = {},
+): ShopApi {
   const client = createApiClient(config.baseUrl);
   const get = (path: string, signal?: AbortSignal, requireEnvelope = false) =>
     client.request(path, { signal, requireEnvelope });
@@ -712,7 +718,7 @@ export function createRealApi(config: ApiConfig): ShopApi {
       updateAdmin: notImplemented('inquiries.updateAdmin'),
     },
     members: {
-      getCurrent: notImplemented('members.getCurrent'),
+      getCurrent: options.getCurrentMember ?? notImplemented('members.getCurrent'),
       list: notImplemented('members.list'),
       adminList: notImplemented('members.adminList'),
     },

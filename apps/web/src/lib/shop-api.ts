@@ -3,6 +3,7 @@ import type { ShopApi } from '@eum/api/shop-api';
 import { getWebApiConfig } from './api-config';
 import { getMemberAuth } from './member-auth';
 import { getBrowserStore } from '@eum/api/auth';
+import { ApiError } from '@eum/api/errors';
 
 let shopApiPromise: Promise<ShopApi> | null = null;
 
@@ -18,7 +19,13 @@ async function loadShopApi(): Promise<ShopApi> {
       store: getBrowserStore(),
     });
   }
-  return createRealApi(apiConfig);
+  return createRealApi(apiConfig, {
+    getCurrentMember: async (options) => {
+      const member = await (await getMemberAuth()).getCurrentUser(options);
+      if (!member) throw new ApiError('NOT_FOUND', '로그인한 회원 정보를 찾을 수 없습니다.');
+      return member;
+    },
+  });
 }
 
 /**

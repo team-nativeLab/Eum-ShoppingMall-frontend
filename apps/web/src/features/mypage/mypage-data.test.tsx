@@ -127,6 +127,25 @@ describe('useMyPageData', () => {
     expect(apiMocks.productById).not.toHaveBeenCalled();
   });
 
+  it('does not request point history when the member balance is not provided', async () => {
+    apiMocks.currentMember.mockResolvedValue({
+      id: 'real-member',
+      name: '실제 회원',
+      email: 'real@example.test',
+      phone: null,
+    });
+    const { Wrapper } = createWrapper();
+    const { result } = renderHook(() => useMyPageData([], 'points', 'real-member'), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data?.member?.pointBalance).toBeUndefined();
+    expect(result.current.data?.points).toEqual([]);
+    expect(apiMocks.pointsList).not.toHaveBeenCalled();
+  });
+
   it('stores member-owned screens in member-specific cache entries', async () => {
     apiMocks.membersList.mockResolvedValue([
       { id: 'member-a', name: '회원 A', email: 'a@example.com', pointBalance: 0 },

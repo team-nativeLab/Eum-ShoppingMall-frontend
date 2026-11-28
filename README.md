@@ -25,7 +25,7 @@ npm workspaces 모노레포로 구성되며, 두 앱이 디자인 토큰·공통
 - **Web** (`apps/web`): 구매자용 쇼핑몰. 데스크톱(1440) 디자인과, 모바일 디자인이 있는 일부 화면(메인, 상품 상세)의 모바일웹(390) 디자인을 함께 대응합니다. 스타일은 모바일 우선으로 작성합니다([디자인 토큰](#디자인-토큰) 참고).
 - **Admin** (`apps/admin`): 상품·카테고리·주문·회원·고객지원 문의와 홈 배송·서비스 혜택을 관리하는 관리자 SPA. 데스크톱만 대응합니다.
 
-Web의 `real` 모드는 일부 구매자 조회를 실제 서버에 연결합니다. 현재 홈 조회(`home.getContent`, `GET /api/v1/home`; 화면 사용 필드 `heroSlides`, `promoBanners`, `serviceBenefits`, `featuredProducts`), 노출 중인 팝업 조회(`popups.list`, `GET /api/v1/popups`), 상품 목록·검색·자동완성·카테고리·브랜드 목록·필터 집계·추천 상품·상품 상세·관련 상품과 추천 검색어(`search.recommendedKeywords`, `GET /api/v1/search/recommended-keywords`)를 지원합니다. 관리자 홈 편성(`home.getAdminContent`, `home.saveAdminContent`)과 실제 회원·관리자 인증은 아직 미구현이며, 그 밖의 연결되지 않은 API는 `NOT_IMPLEMENTED` 오류를 반환합니다. `mock` 모드에서는 화면과 로그인에 목 API·목 인증을 사용합니다. 상품명·가격·이름·전화번호처럼 서버에서 와야 할 값을 화면 코드에 하드코딩하지 않습니다.
+Web의 `real` 모드는 일부 구매자 조회와 회원 로그인을 실제 서버에 연결합니다. 현재 홈 조회(`home.getContent`, `GET /api/v1/home`; 화면 사용 필드 `heroSlides`, `promoBanners`, `serviceBenefits`, `featuredProducts`), 노출 중인 팝업 조회(`popups.list`, `GET /api/v1/popups`), 상품 목록·검색·자동완성·카테고리·브랜드 목록·필터 집계·추천 상품·상품 상세·관련 상품과 추천 검색어(`search.recommendedKeywords`, `GET /api/v1/search/recommended-keywords`)를 지원합니다. 회원 로그인은 `POST /api/v1/auth/login`, 현재 회원 조회는 `GET /api/v1/me`, Access token 갱신과 로그아웃은 HttpOnly refresh cookie를 사용하는 API에 연결되어 있습니다. 관리자 홈 편성(`home.getAdminContent`, `home.saveAdminContent`)과 실제 관리자 인증은 아직 미구현이며, 그 밖의 연결되지 않은 API는 `NOT_IMPLEMENTED` 오류를 반환합니다. `mock` 모드에서는 화면과 로그인에 목 API·목 인증을 사용합니다. 상품명·가격·이름·전화번호처럼 서버에서 와야 할 값을 화면 코드에 하드코딩하지 않습니다.
 
 ## 기술 스택
 | 영역 | 사용 기술 |
@@ -139,7 +139,7 @@ Eum-ShoppingMall-frontend/
 │           ├── mock/            # 목 데이터 (패키지 내부 전용)
 │           ├── price.ts         # 금액 표시 규칙
 │           ├── cart.ts          # 장바구니 그룹·합계 규칙
-│           ├── auth.ts          # 인증 클라이언트 타입 + real 인증 스텁 (NOT_IMPLEMENTED)
+│           ├── auth.ts          # 인증 클라이언트 타입, real 회원 인증, 관리자 인증 스텁
 │           ├── mock-auth.ts     # 개발용 목 인증 스텁
 │           └── types.ts, errors.ts, query-keys.ts, redirect.ts
 ├── e2e/                         # Playwright 스펙 (web.*.spec.ts, admin.*.spec.ts)
@@ -206,7 +206,7 @@ Eum-ShoppingMall-frontend/
 - 단, Web은 커밋된 `apps/web/.env.production`이 로컬에서 모드가 비어 있으면 검증용 목 빌드가 됩니다([배포(Vercel Preview 목 데모)](#배포vercel-preview-목-데모)). 셸·CI·Vercel에서 지정한 환경변수가 이 파일보다 우선합니다.
 - 검사 시점: Web은 `next build`(`next typegen` 제외), Admin은 `vite build`면 `--mode`와 무관하게(예: `--mode staging`) 항상 검사합니다. Admin의 운영 여부는 `NODE_ENV`(없으면 `production`) 기준입니다.
 - 각 앱의 `src/lib/shop-api.ts`·인증 로더는 빌드 때 치환되는 모드 상수로 분기하므로, `real`로 빌드하면 목 구현·목 데이터·목 인증 chunk가 산출물에서 제외됩니다.
-- `real` API는 부분 구현입니다. 구매자 홈·팝업·상품 목록·검색·상세 등 지원하는 조회는 서버에 요청하며, 미구현 API를 호출하는 화면은 `NOT_IMPLEMENTED` 오류를 보여 줍니다. 관리자 홈 편성(`home.getAdminContent`, `home.saveAdminContent`)과 실제 회원·관리자 인증은 아직 미구현입니다. 실제 배포 대상·배포 환경은 확인 필요입니다.
+- `real` API는 부분 구현입니다. 구매자 홈·팝업·상품 목록·검색·상세 등 지원하는 조회와 회원 로그인을 서버에 요청하며, 미구현 API를 호출하는 화면은 `NOT_IMPLEMENTED` 오류를 보여 줍니다. 관리자 홈 편성(`home.getAdminContent`, `home.saveAdminContent`)과 실제 관리자 인증은 아직 미구현입니다. 실제 배포 대상·배포 환경은 확인 필요입니다.
 
 ### 목 데이터 접근 제한
 `packages/api/src/mock/*`는 패키지 내부 전용입니다. 앱과 `packages/ui`에서 `@eum/api/mock`을 import하면 ESLint(`no-restricted-imports`) 오류가 납니다. 반드시 `getShopApi()`가 돌려주는 `ShopApi`로 조회합니다.
@@ -226,7 +226,15 @@ Admin의 배송·서비스 혜택 항목은 제목·설명·순서·노출 여�
 - 히어로·프로모션·추천 상품 등 나머지 홈 편성은 기존 메모리 mock 동작을 유지합니다. 실제 API 저장은 아직 구현되지 않았으므로 운영 서버의 콘텐츠 편집 기능으로 사용하지 마세요.
 
 ### 인증
-인증도 API 모드에 연결되어 있습니다. `@eum/api/auth`가 회원·관리자 인증 클라이언트 인터페이스(`login`, `logout`, `getCurrentUser`)를 정의하고, 각 앱의 로더(`apps/web/src/lib/member-auth.ts`, `apps/admin/src/lib/admin-auth.ts`)가 `mock` 모드면 `@eum/api/mock-auth`를 동적 import하고 그 외에는 real 인증(`createRealMemberAuth`/`createRealAdminAuth`)을 씁니다. real 인증은 아직 미구현 스텁으로 `NOT_IMPLEMENTED` 오류를 냅니다.
+인증은 API 모드에 따라 목 또는 real 클라이언트를 사용합니다. `@eum/api/auth`는 회원·관리자 인증 타입을 정의합니다. Web real 회원 인증은 `createRealMemberAuth`를 사용하고, Admin real 인증은 아직 `NOT_IMPLEMENTED` 스텁입니다. 각 앱의 로더(`apps/web/src/lib/member-auth.ts`, `apps/admin/src/lib/admin-auth.ts`)는 `mock` 모드에서 `@eum/api/mock-auth`를 동적 import하므로 real 모드 번들에 목 인증을 포함하지 않습니다.
+
+- 회원 로그인은 이메일·비밀번호를 `POST /api/v1/auth/login`에 보내고, 응답의 Access token은 인증 클라이언트 인스턴스 메모리에만 둡니다. 인증 후 `GET /api/v1/me`로 회원 정보를 확인하고, 권한 없는 응답이면 refresh cookie로 Access token을 갱신한 뒤 다시 조회합니다. 로그아웃은 서버 API를 호출하고 메모리 토큰과 갱신 선호도를 지웁니다.
+- `로그인 상태 유지` 선호도는 토큰이 아닌 `remember`/`session` 문자열로 브라우저 저장소에 기록되어 refresh 요청 여부를 정하며 API body에는 전송하지 않습니다. 체크를 해제해도 서버 HttpOnly refresh cookie가 바로 지워지지 않을 수 있습니다. `sessionStorage`는 브라우저 세션 복원 기능에 따라 복원될 수 있으므로 현재 세션에서만 refresh된다는 보장은 없습니다. 서버 refresh cookie의 만료 기간과 이 선호도의 관계는 공개 API 계약에 정의되어 있지 않습니다.
+- 브라우저가 Web Locks를 지원하면 로그인·refresh·로그아웃의 cookie 변경 요청을 탭 사이에서 직렬화합니다. 미지원 환경의 fallback은 같은 인증 클라이언트 인스턴스 안에서만 직렬화하므로, 별도 탭 사이의 동시 refresh 경합은 남습니다.
+- real mode의 `GET /api/v1/me` 응답에는 `joinedAt`과 `pointBalance`가 없으므로 값을 합성하지 않습니다. 회원가입일과 포인트 표시·사용은 real mode에서 제공하지 않으며, mock 모드의 기존 동작은 유지합니다.
+- 실제 브라우저 연동에는 CORS 403 및 빈 응답 이력이 있어 성공 여부가 확인되지 않았습니다. 공용 API 설정 검증(`packages/api/src/config.ts`)은 URL scheme을 제한하지 않습니다. 다만 Web production real 빌드는 `apps/web/next.config.ts`에서 HTTPS API 주소를 요구하고, Admin은 Vercel Production real 빌드에서 `apps/admin/vite.config.ts`가 HTTPS를 요구합니다. 다른 빌드·개발 환경의 URL scheme은 각 환경 설정을 확인해야 합니다. 배포 전 쿠키 요청을 허용할 정확한 출처, refresh cookie의 `HttpOnly`·`Secure`·`SameSite` 속성, CSRF/Origin 방어를 확인해야 하며 CORS만으로 CSRF가 방지되지는 않습니다.
+- 로그인 UI는 `LOGIN_LOCKED`, `ACCOUNT_SUSPENDED` 등 서버 코드를 별도 안내로 연결합니다. 해당 코드가 자격 증명 검증 전 반환되는지 서버 계약에서 확인해야 계정 상태 노출 여부를 판단할 수 있습니다.
+- 관리자 인증은 회원 인증과 분리되어 있습니다. 현재 Web Swagger는 일반 Web 로그인에서 관리자 계정을 거부한다고 명시하고 있으며, Admin real 인증은 연결되지 않았습니다. 관리자 인증 방식은 서버 API 계약 갱신 후 확인해야 합니다.
 
 - `@eum/api/mock-auth`는 개발·검증용 스텁입니다. 비밀번호를 검증·저장하지 않고 토큰도 만들지 않으며, 어떤 목 계정으로 로그인했는지(userId)만 저장합니다. 운영 빌드에서 허용 플래그 없이 만들면 `ApiConfigError`로 거부됩니다.
 - 목 모드의 관리자 계정 분기는 개발 검증 전용입니다. 실제 역할 판정과 세션 인가는 서버가 담당하며, 화면 가드는 권한 경계가 아닙니다.
@@ -299,7 +307,7 @@ Vercel Preview에서 Web과 Admin을 한 도메인으로 검증합니다. Previe
 - Production에서 실 API를 쓰면 실제 HTTPS 주소가 필요합니다. 현재 테스트 단계에서만 앱별 `*_API_MODE=mock`과 `*_ALLOW_MOCK_IN_PRODUCTION=true`를 함께 설정해 mock 배포를 허용합니다. 문의를 제외한 mock 데이터는 테스트용 초기 데이터이며 실제 서버 영속 저장·실제 인증이 없습니다. 문의 mock은 브라우저에 자동 만료 없이 저장되고 실제 API 제출은 미구현입니다. 실제 사용자 운영에는 사용하지 마세요. opt-in이 없으면 빌드가 실패합니다.
 - Production opt-in은 Vercel 환경변수에서 제거할 때까지 유지되므로, 실제 서비스 전에 mock 변수를 제거하고 실 API 설정으로 전환해야 합니다.
 - 로컬에서 API 모드를 지정하지 않으면 검증용 mock 빌드를 사용합니다. Vercel Production에는 이 기본값을 적용하지 않습니다.
-- 실제 인증, Admin 상품 저장, 관리자 홈 편성, 장바구니·주문·결제 등 아직 연결되지 않은 API는 `NOT_IMPLEMENTED` 상태입니다. Web 구매자 홈·팝업 및 상품 조회(목록·검색·상세 등)는 real API에 연결되어 있습니다. 주문 완료 이메일/팩스 전송 및 발주처 직배송 처리는 서버 구현이 필요합니다.
+- Admin real 인증·상품 저장·홈 편성, 장바구니·주문·결제 등 아직 연결되지 않은 API는 `NOT_IMPLEMENTED` 상태입니다. Web 회원 로그인과 구매자 홈·팝업 및 상품 조회(목록·검색·상세 등)는 real API에 연결되어 있습니다. 주문 완료 이메일/팩스 전송 및 발주처 직배송 처리는 서버 구현이 필요합니다.
 - Web과 Admin의 mock 인증은 비밀번호를 검증하지 않고 실제 세션을 발급하지 않습니다. 목 관리자 분기는 화면 시연 기능일 뿐 권한 경계가 아닙니다.
 - Vercel Preview의 SSO 보호는 Preview 접근만 보호하며 앱 인증·인가를 대체하지 않습니다. 실제 운영 권한 검사는 서버가 담당해야 합니다.
 

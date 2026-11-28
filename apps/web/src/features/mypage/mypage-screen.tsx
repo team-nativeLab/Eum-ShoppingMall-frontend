@@ -148,7 +148,13 @@ function MyPageContent({
           />
         );
       case 'points':
-        return <PointsView memberBalance={memberData.member.pointBalance} points={data.points} />;
+        return memberData.member.pointBalance === undefined ? (
+          <NoticeInline tone="info" role="status">
+            적립금 정보가 제공되지 않아 조회하거나 사용할 수 없습니다.
+          </NoticeInline>
+        ) : (
+          <PointsView memberBalance={memberData.member.pointBalance} points={data.points} />
+        );
       case 'profile':
         return <ProfileView member={memberData.member} />;
       case 'profile-edit':

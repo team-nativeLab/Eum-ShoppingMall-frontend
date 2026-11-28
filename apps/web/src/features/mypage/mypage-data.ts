@@ -5,7 +5,7 @@ import type {
   Claim,
   Coupon,
   CouponOffer,
-  Member,
+  BuyerSessionMember,
   Order,
   Point,
   Product,
@@ -26,7 +26,7 @@ export type MyPageDataScope =
   | 'addresses';
 
 export interface MyPageData {
-  member: Member | null;
+  member: BuyerSessionMember | null;
   orders: Order[];
   claims: Claim[];
   coupons: Coupon[];

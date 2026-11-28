@@ -1,10 +1,11 @@
-import type { AdminRole, AdminUser, Member } from './types';
+import type { AdminRole, AdminUser, BuyerSessionMember } from './types';
 import type { MemberLoginInput, KeyValueStore } from './auth';
 import type { ApiConfig } from './config';
 import { ApiError } from './errors';
 
 export type UnifiedLoginResult =
-  { role: 'member'; user: Member } | { role: 'admin'; user: AdminUser & { role: AdminRole } };
+  | { role: 'member'; user: BuyerSessionMember }
+  | { role: 'admin'; user: AdminUser & { role: AdminRole } };
 
 export interface UnifiedAuthClient {
   login(input: MemberLoginInput): Promise<UnifiedLoginResult>;

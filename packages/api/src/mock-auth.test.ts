@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createMemoryStore, createRealAdminAuth, createRealMemberAuth } from './auth';
 import { ApiConfigError, ApiError } from './errors';
 import {
@@ -269,11 +269,51 @@ describe('목 인증과 모드 연결', () => {
     expect(() => createAdminMockAuth(realConfig, createMemoryStore())).toThrow(ApiConfigError);
   });
 
-  it('real 인증 스텁은 NOT_IMPLEMENTED를 던집니다', async () => {
+  it('real 회원 인증은 Web API를 사용하고 관리자 인증은 아직 연결되지 않았습니다', async () => {
     const realConfig = buildMockConfig({ mode: 'real', baseUrl: 'https://api.example.com' });
-    await expect(
-      createRealMemberAuth(realConfig).login({ email: 'a@example.com', password: 'x' }),
-    ).rejects.toMatchObject({ code: 'NOT_IMPLEMENTED' });
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/api/v1/auth/login')) {
+        expect(init?.method).toBe('POST');
+        expect(JSON.parse(String(init?.body))).toEqual({ email: 'a@example.com', password: 'x' });
+        return new Response(
+          JSON.stringify({
+            success: true,
+            data: { accessToken: 'member-access-token', expiresIn: 900 },
+          }),
+        );
+      }
+      if (url.endsWith('/api/v1/me')) {
+        expect(new Headers(init?.headers).get('authorization')).toBe('Bearer member-access-token');
+        return new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              id: 'member-1',
+              email: 'a@example.com',
+              name: '테스트 회원',
+              phone: null,
+              role: 'USER',
+              hasPassword: true,
+            },
+          }),
+        );
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetcher);
+    try {
+      await expect(
+        createRealMemberAuth(realConfig).login({ email: 'a@example.com', password: 'x' }),
+      ).resolves.toEqual({
+        id: 'member-1',
+        email: 'a@example.com',
+        name: '테스트 회원',
+        phone: null,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
     await expect(createRealAdminAuth(realConfig).getCurrentUser()).rejects.toMatchObject({
       code: 'NOT_IMPLEMENTED',
     });

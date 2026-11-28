@@ -72,6 +72,7 @@ import type {
   HomeContent,
   OrderReceipt,
   Order,
+  BuyerSessionMember,
   Member,
   PagedResult,
   Product,
@@ -97,6 +98,26 @@ const POPUP_DATA_URL_PREFIXES = [
   'data:image/png;base64,',
   'data:image/webp;base64,',
 ];
+
+type MockMember = Member & {
+  phone: string;
+  joinedAt: string;
+  pointBalance: number;
+};
+
+function isMockMember(member: BuyerSessionMember): member is MockMember {
+  return (
+    typeof member.phone === 'string' &&
+    typeof member.joinedAt === 'string' &&
+    typeof member.pointBalance === 'number'
+  );
+}
+
+function requireMockMember(member: BuyerSessionMember): MockMember {
+  if (!isMockMember(member))
+    throw new ApiError('INVALID_RESPONSE', '목 회원 정보 형식이 올바르지 않습니다.');
+  return member;
+}
 
 function normalizeServiceBenefits(value: unknown): ServiceBenefit[] | null {
   if (!Array.isArray(value)) return null;
@@ -463,7 +484,7 @@ function wait(delayMs: number, signal: AbortSignal | undefined): Promise<void> {
 export function createMockApi(
   config: ApiConfig,
   options: {
-    getCurrentMember?: () => Promise<Member | null>;
+    getCurrentMember?: () => Promise<BuyerSessionMember | null>;
     store?: KeyValueStore;
   } = {},
 ): ShopApi {
@@ -487,19 +508,20 @@ export function createMockApi(
       seededCoupons.filter((coupon) => coupon.isUsed).length,
     );
   }
-  const members = structuredClone(mockMembers);
-  const getCurrentMember = async (): Promise<Member> => {
+  const members = structuredClone(mockMembers).map(requireMockMember);
+  const getCurrentMember = async (): Promise<MockMember> => {
     const sessionMember = options.getCurrentMember
       ? await options.getCurrentMember()
       : (members.find((member) => member.id === 'mem-001') ?? null);
     if (!sessionMember) throw new ApiError('NOT_FOUND', '로그인한 회원 정보를 찾을 수 없습니다.');
-    const storedMember = members.find((member) => member.id === sessionMember.id);
+    const completeSessionMember = requireMockMember(sessionMember);
+    const storedMember = members.find((member) => member.id === completeSessionMember.id);
     if (storedMember) return storedMember;
-    const transientMember = structuredClone(sessionMember);
+    const transientMember = structuredClone(completeSessionMember);
     members.push(transientMember);
     return transientMember;
   };
-  const assertCurrentMember = async (memberId: string): Promise<Member> => {
+  const assertCurrentMember = async (memberId: string): Promise<MockMember> => {
     const currentMember = await getCurrentMember();
     if (currentMember.id !== memberId)
       throw new ApiError('NOT_FOUND', '요청한 정보를 찾을 수 없습니다.');

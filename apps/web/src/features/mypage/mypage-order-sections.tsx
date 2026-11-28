@@ -94,9 +94,13 @@ export function DashboardSummary({
           <div key={stat.label} className="px-4">
             <dt className="text-caption text-text-3">{stat.label}</dt>
             <dd className="mt-4 text-h2 tabular-nums">
-              <Link href={stat.href} className="rounded-4 focus-ring hover:underline">
-                {new Intl.NumberFormat('ko-KR').format(stat.value)}
-              </Link>
+              {stat.value === undefined ? (
+                <span className="text-body-s text-text-3">미제공</span>
+              ) : (
+                <Link href={stat.href} className="rounded-4 focus-ring hover:underline">
+                  {new Intl.NumberFormat('ko-KR').format(stat.value)}
+                </Link>
+              )}
             </dd>
           </div>
         ))}

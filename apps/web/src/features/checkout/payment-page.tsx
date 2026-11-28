@@ -102,7 +102,11 @@ export function PaymentPageView() {
   const availableCoupons = couponsQuery.data?.filter((coupon) => !coupon.isUsed) ?? [];
   const selectedCoupon = availableCoupons.find((coupon) => coupon.id === couponId);
   const productTotal = calculateCartTotals(checkoutItems, new Set(selectedIds)).productTotal;
-  const pointsToUse = Math.min(Math.max(0, Number(pointsInput) || 0), member?.pointBalance ?? 0);
+  const pointsBalance = member?.pointBalance;
+  const hasPointBalance = typeof pointsBalance === 'number';
+  const pointsToUse = hasPointBalance
+    ? Math.min(Math.max(0, Number(pointsInput) || 0), pointsBalance)
+    : 0;
   const areTermsAccepted = REQUIRED_TERMS.every((term) => acceptedTerms[term]);
   const selectedPaymentMethod = options
     ? resolveAvailablePaymentMethod(paymentMethod, options.paymentMethods)
@@ -394,7 +398,6 @@ export function PaymentPageView() {
 
   const couponDiscount = selectedCoupon ? getCouponDiscount(selectedCoupon, productTotal) : 0;
   const canUsePoints = Math.max(0, productTotal - couponDiscount);
-  const pointsBalance = member.pointBalance;
   const receiptPhoneError =
     receiptType === 'cash' &&
     receiptPhone.length > 0 &&
@@ -510,20 +513,24 @@ export function PaymentPageView() {
               <TextField
                 label="적립금"
                 type="number"
-                disabled={isOrdering}
+                disabled={isOrdering || !hasPointBalance}
                 inputMode="numeric"
                 min={0}
-                max={Math.min(pointsBalance, canUsePoints)}
+                max={Math.min(pointsBalance ?? 0, canUsePoints)}
                 value={pointsInput}
                 onChange={(event) => setPointsInput(event.target.value.replace(/\D/g, ''))}
-                helperText={`보유 적립금 ${formatKrw(pointsBalance)}`}
+                helperText={
+                  hasPointBalance
+                    ? `보유 적립금 ${formatKrw(pointsBalance)}`
+                    : '적립금 정보가 제공되지 않아 사용할 수 없습니다.'
+                }
               />
               <Button
                 variant="secondary"
                 size="s"
                 className="mb-24"
-                disabled={isOrdering}
-                onClick={() => setPointsInput(String(Math.min(pointsBalance, canUsePoints)))}
+                disabled={isOrdering || !hasPointBalance}
+                onClick={() => setPointsInput(String(Math.min(pointsBalance ?? 0, canUsePoints)))}
               >
                 전액 사용
               </Button>
@@ -697,7 +704,7 @@ export function PaymentPageView() {
           buttonDisabled={
             !areTermsAccepted ||
             receiptPhoneError ||
-            pointsToUse > pointsBalance ||
+            pointsToUse > (pointsBalance ?? 0) ||
             isOrdering ||
             !selectedPaymentMethod
           }

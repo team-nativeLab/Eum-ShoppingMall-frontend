@@ -8,12 +8,40 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useRef, useState, type FormEvent } from 'react';
 import { flushSync } from 'react-dom';
+import { ApiError } from '@eum/api/errors';
 import { SignupForm } from './signup-form';
 import { useSignupDraft } from './signup-draft';
 import { AuthFrame } from './auth-frame';
 import { getWebApiConfig } from '@/lib/api-config';
 import { useMemberSession } from './member-session';
-import { getUnifiedAuth } from '@/lib/member-auth';
+import { getMemberAuth, getUnifiedAuth } from '@/lib/member-auth';
+
+function getLoginFailureMessage(loginFailure: unknown): string {
+  if (!(loginFailure instanceof ApiError))
+    return '로그인하지 못했습니다. 입력 내용을 확인하고 다시 시도해 주세요.';
+
+  switch (loginFailure.serverCode) {
+    case 'CAPTCHA_REQUIRED':
+    case 'CAPTCHA_INVALID':
+      return '보안 확인이 필요합니다. 현재 화면에서는 진행할 수 없어 고객센터에 문의해 주세요.';
+    case 'CAPTCHA_UNAVAILABLE':
+      return '보안 확인을 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+    case 'LOGIN_LOCKED':
+      return '로그인 시도가 일시적으로 제한되었습니다. 잠시 후 다시 시도해 주세요.';
+    case 'ACCOUNT_SUSPENDED':
+      return '계정이 제한되어 있습니다. 고객센터에 문의해 주세요.';
+    case 'INVALID_INPUT':
+      return '입력한 정보를 확인하고 다시 시도해 주세요.';
+    case 'LOGIN_FAILED':
+      return '이메일 또는 비밀번호가 올바르지 않습니다.';
+    default:
+      if (loginFailure.code === 'NOT_IMPLEMENTED')
+        return '실제 로그인 API는 아직 연결되지 않았습니다. 목 데모 모드에서 확인해 주세요.';
+      if (loginFailure.code === 'INVALID_CREDENTIALS')
+        return '이메일을 확인하거나 회원가입을 진행해 주세요.';
+      return '로그인하지 못했습니다. 입력 내용을 확인하고 다시 시도해 주세요.';
+  }
+}
 
 /** W-09: 목 회원 로그인을 처리하고 안전한 내부 경로로 돌아갑니다. */
 export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
@@ -81,27 +109,23 @@ export function LoginPageView({ rawRedirect }: { rawRedirect?: string }) {
 
     setIsSubmitting(true);
     try {
-      const auth = await getUnifiedAuth();
-      const loginResult = await auth.login({ email, password });
-      if (loginResult.role === 'admin') {
-        router.replace(redirectPath.startsWith('/admin') ? redirectPath : '/admin');
-      } else {
-        if (!isMockMode && !rememberLogin) await auth.logout();
+      if (isMockMode) {
+        const auth = await getUnifiedAuth();
+        const loginResult = await auth.login({ email, password });
+        if (loginResult.role === 'admin') {
+          router.replace(redirectPath.startsWith('/admin') ? redirectPath : '/admin');
+          return;
+        }
         setMember(loginResult.user);
-        router.replace(redirectPath.startsWith('/admin') ? '/' : redirectPath);
+      } else {
+        const member = await (
+          await getMemberAuth()
+        ).login({ email, password }, { remember: rememberLogin });
+        setMember(member);
       }
+      router.replace(redirectPath.startsWith('/admin') ? '/' : redirectPath);
     } catch (loginFailure: unknown) {
-      const code =
-        typeof loginFailure === 'object' && loginFailure !== null && 'code' in loginFailure
-          ? loginFailure.code
-          : '';
-      setError(
-        code === 'NOT_IMPLEMENTED'
-          ? '실제 로그인 API는 아직 연결되지 않았습니다. 목 데모 모드에서 확인해 주세요.'
-          : code === 'INVALID_CREDENTIALS'
-            ? '이메일을 확인하거나 회원가입을 진행해 주세요.'
-            : '로그인하지 못했습니다. 입력 내용을 확인하고 다시 시도해 주세요.',
-      );
+      setError(getLoginFailureMessage(loginFailure));
     } finally {
       setIsSubmitting(false);
     }
