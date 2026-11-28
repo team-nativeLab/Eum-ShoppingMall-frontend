@@ -25,7 +25,11 @@ npm workspaces 모노레포로 구성되며, 두 앱이 디자인 토큰·공통
 - **Web** (`apps/web`): 구매자용 쇼핑몰. 데스크톱(1440) 디자인과, 모바일 디자인이 있는 일부 화면(메인, 상품 상세)의 모바일웹(390) 디자인을 함께 대응합니다. 스타일은 모바일 우선으로 작성합니다([디자인 토큰](#디자인-토큰) 참고).
 - **Admin** (`apps/admin`): 상품·카테고리·주문·회원·고객지원 문의와 홈 배송·서비스 혜택을 관리하는 관리자 SPA. 데스크톱만 대응합니다.
 
-Web의 `real` 모드는 일부 구매자 조회를 실제 서버에 연결합니다. 현재 홈 조회(`home.getContent`, `GET /api/v1/home`; 화면 사용 필드 `heroSlides`, `promoBanners`, `serviceBenefits`, `featuredProducts`), 노출 중인 팝업 조회(`popups.list`, `GET /api/v1/popups`), 상품 목록·검색·자동완성·카테고리·브랜드 목록·필터 집계·추천 상품·상품 상세·관련 상품과 추천 검색어(`search.recommendedKeywords`, `GET /api/v1/search/recommended-keywords`)를 지원합니다. 관리자 홈 편성(`home.getAdminContent`, `home.saveAdminContent`)과 실제 회원·관리자 인증은 아직 미구현이며, 그 밖의 연결되지 않은 API는 `NOT_IMPLEMENTED` 오류를 반환합니다. `mock` 모드에서는 화면과 로그인에 목 API·목 인증을 사용합니다. 상품명·가격·이름·전화번호처럼 서버에서 와야 할 값을 화면 코드에 하드코딩하지 않습니다.
+Web의 `real` 모드는 일부 구매자 조회를 실제 서버에 연결합니다. 현재 홈 조회(`home.getContent`, `GET /api/v1/home`; 화면 사용 필드 `heroSlides`, `promoBanners`, `serviceBenefits`, `featuredProducts`), 노출 중인 팝업 조회(`popups.list`, `GET /api/v1/popups`), 상품 목록·검색·자동완성·카테고리·브랜드 목록·필터 집계·추천 상품·상품 상세·관련 상품과 추천 검색어(`search.recommendedKeywords`, `GET /api/v1/search/recommended-keywords`)를 지원합니다.
+
+Admin의 `real` 모드는 대시보드 집계(`dashboard.getAdminSummary`, `GET /api/v1/admin/dashboard`)를 지원합니다. 조회 기간은 `TODAY`(오늘), `WEEK`(최근 7일), `MONTH`(최근 30일)이며, 결제 완료 주문 수·매출·신규 회원 수·현재 대기 문의 수를 표시합니다. 대기 문의 수는 조회 기간과 무관한 현재 값입니다. API 응답의 대기 견적 수는 제거된 견적 흐름에 따라 화면에 표시하지 않습니다. 이 endpoint는 관리자 Bearer token이 필요하지만 Admin 인증 및 token wiring은 아직 미구현이므로, 인증 연결 전에는 실제 서버 호출을 사용할 수 없습니다. 관리자 홈 편성(`home.getAdminContent`, `home.saveAdminContent`)과 실제 회원·관리자 인증 등 그 밖의 연결되지 않은 API는 `NOT_IMPLEMENTED` 오류를 반환합니다.
+
+`mock` 모드에서는 화면과 로그인에 목 API·목 인증을 사용합니다. 상품명·가격·이름·전화번호처럼 서버에서 와야 할 값을 화면 코드에 하드코딩하지 않습니다.
 
 ## 기술 스택
 | 영역 | 사용 기술 |

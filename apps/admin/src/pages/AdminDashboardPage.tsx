@@ -10,6 +10,7 @@ import {
   AdminNotice,
   AdminPageHeader,
   AdminPanel,
+  AdminSelect,
   AdminStatusBadge,
   formatAdminCurrency,
   formatAdminDateTime,
@@ -18,7 +19,13 @@ import { getShopApi } from '@/lib/shop-api';
 import { getAdminApiConfig } from '@/lib/api-config';
 import { mapSettledWithConcurrency } from '@/lib/settled-concurrency';
 import { createAdminRequestScope } from '@/lib/admin-request-lifecycle';
-import type { Member, Order, Product } from '@eum/api/types';
+import type {
+  AdminDashboardPeriod,
+  AdminDashboardSummary,
+  Member,
+  Order,
+  Product,
+} from '@eum/api/types';
 
 type DashboardMember = Pick<Member, 'id' | 'name'>;
 type DashboardOrderRecord = Pick<
@@ -42,6 +49,21 @@ interface DashboardData {
 }
 
 const DASHBOARD_QUERY_KEY = ['admin', 'dashboard'] as const;
+const DASHBOARD_SUMMARY_QUERY_KEY = (period: AdminDashboardPeriod) =>
+  ['admin', 'dashboard', 'summary', period] as const;
+const ADMIN_DASHBOARD_PERIOD_OPTIONS = [
+  { value: 'TODAY', label: '오늘' },
+  { value: 'WEEK', label: '최근 7일' },
+  { value: 'MONTH', label: '최근 30일' },
+] as const;
+
+async function loadAdminDashboardSummary(
+  period: AdminDashboardPeriod,
+  signal: AbortSignal,
+): Promise<AdminDashboardSummary> {
+  const api = await getShopApi();
+  return api.dashboard.getAdminSummary(period, { signal });
+}
 
 /** 회원별 주문 API와 공용 목록 API의 목 조회값으로 대시보드 데이터를 만듭니다. */
 async function loadDashboardData(signal: AbortSignal): Promise<DashboardData> {
@@ -97,6 +119,46 @@ async function loadDashboardData(signal: AbortSignal): Promise<DashboardData> {
       : failedOrderMemberIds.length,
     orderListUnavailable,
   };
+}
+
+function AdminDashboardSummaryCards({
+  summary,
+  periodLabel,
+}: {
+  summary: AdminDashboardSummary;
+  periodLabel: string;
+}) {
+  return (
+    <section
+      className="mb-16 grid grid-cols-4 gap-12"
+      aria-label={`운영 지표: 주문·매출·신규 회원 ${periodLabel}, 대기 문의 현재 기준`}
+    >
+      <AdminCountTile
+        label="결제 완료 주문"
+        value={summary.paidOrderCount}
+        href="/orders"
+        hint={periodLabel}
+      />
+      <AdminCountTile
+        label="매출"
+        value={formatAdminCurrency(summary.salesAmount)}
+        href="/orders"
+        hint={periodLabel}
+      />
+      <AdminCountTile
+        label="신규 회원"
+        value={summary.newMemberCount}
+        href="/members"
+        hint={periodLabel}
+      />
+      <AdminCountTile
+        label="대기 문의"
+        value={summary.pendingInquiryCount}
+        href="/content/inquiries"
+        hint="현재 대기"
+      />
+    </section>
+  );
 }
 
 /** 마지막 14일 주문 건수를 비율에 맞춰 그리는 가벼운 막대 차트입니다. */
@@ -253,13 +315,20 @@ function AdminDashboardCharts({
 
 /** 목 데이터 집계와 접근 가능한 간단 차트를 보여 줍니다. */
 export function AdminDashboardPage() {
+  const [selectedPeriod, setSelectedPeriod] = useState<AdminDashboardPeriod>('WEEK');
   const [orderRetryAnnouncement, setOrderRetryAnnouncement] = useState('');
   const [isRetryingOrders, setIsRetryingOrders] = useState(false);
   const retryScopeRef = useRef<ReturnType<typeof createAdminRequestScope> | null>(null);
   const queryClient = useQueryClient();
+  const isRealMode = getAdminApiConfig().mode === 'real';
+  const summaryQuery = useQuery({
+    queryKey: DASHBOARD_SUMMARY_QUERY_KEY(selectedPeriod),
+    queryFn: ({ signal }) => loadAdminDashboardSummary(selectedPeriod, signal),
+  });
   const dashboardQuery = useQuery({
     queryKey: DASHBOARD_QUERY_KEY,
     queryFn: ({ signal }) => loadDashboardData(signal),
+    enabled: !isRealMode,
   });
 
   useEffect(
@@ -364,8 +433,60 @@ export function AdminDashboardPage() {
     }
   };
 
-  if (dashboardQuery.isPending) return <AdminLoading label="대시보드 현황을 불러오고 있습니다." />;
-  if (!dashboardQuery.data) return <AdminError onRetry={() => void dashboardQuery.refetch()} />;
+  const handleDashboardRetry = () => {
+    void summaryQuery.refetch();
+    if (!isRealMode) void dashboardQuery.refetch();
+  };
+
+  if (summaryQuery.isPending || (!isRealMode && dashboardQuery.isPending)) {
+    return <AdminLoading label="대시보드 현황을 불러오고 있습니다." />;
+  }
+  if (summaryQuery.isError || (!isRealMode && dashboardQuery.isError)) {
+    return <AdminError onRetry={handleDashboardRetry} />;
+  }
+  if (!summaryQuery.data) return <AdminError onRetry={handleDashboardRetry} />;
+
+  const periodLabel =
+    ADMIN_DASHBOARD_PERIOD_OPTIONS.find((option) => option.value === selectedPeriod)?.label ??
+    '최근 7일';
+  const dashboardHeader = (
+    <AdminPageHeader
+      title="대시보드"
+      description={`기간 시작 ${formatAdminDateTime(summaryQuery.data.from)}`}
+      action={
+        <label className="flex items-center gap-8 text-label-m">
+          조회 기간
+          <AdminSelect
+            aria-label="조회 기간"
+            value={selectedPeriod}
+            onChange={(event) => {
+              const nextPeriod = ADMIN_DASHBOARD_PERIOD_OPTIONS.find(
+                (option) => option.value === event.currentTarget.value,
+              )?.value;
+              if (nextPeriod) setSelectedPeriod(nextPeriod);
+            }}
+            className="h-40 rounded-8 border border-line-control bg-bg px-12"
+          >
+            {ADMIN_DASHBOARD_PERIOD_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </AdminSelect>
+        </label>
+      }
+    />
+  );
+
+  if (isRealMode) {
+    return (
+      <section>
+        {dashboardHeader}
+        <AdminDashboardSummaryCards summary={summaryQuery.data} periodLabel={periodLabel} />
+      </section>
+    );
+  }
+  if (!dashboardQuery.data) return <AdminError onRetry={handleDashboardRetry} />;
 
   const { products, productTotalCount, orders, unavailableOrderMemberCount, orderListUnavailable } =
     dashboardQuery.data;
@@ -382,10 +503,8 @@ export function AdminDashboardPage() {
 
   return (
     <section>
-      <AdminPageHeader
-        title="대시보드"
-        description={`기준 ${formatAdminDateTime(new Date().toISOString())}`}
-      />
+      {dashboardHeader}
+      <AdminDashboardSummaryCards summary={summaryQuery.data} periodLabel={periodLabel} />
       {isProductAggregationPartial ? (
         <AdminNotice tone="warning" className="mb-16">
           상품 지표는 전체 {productTotalCount.toLocaleString('ko-KR')}개 중 첫{' '}

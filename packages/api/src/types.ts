@@ -7,6 +7,20 @@
 /** 재고 상태 */
 export type StockStatus = 'inStock' | 'soldOut';
 
+/** 관리자 대시보드 조회 기간 */
+export type AdminDashboardPeriod = 'TODAY' | 'WEEK' | 'MONTH';
+
+/** 관리자 대시보드에서 서버가 집계한 운영 지표 */
+export interface AdminDashboardSummary {
+  period: AdminDashboardPeriod;
+  from: string;
+  paidOrderCount: number;
+  salesAmount: number;
+  newMemberCount: number;
+  pendingInquiryCount: number;
+  pendingQuoteCount: number;
+}
+
 /** 상품 카테고리 */
 export interface Category {
   id: string;

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createMemoryStore, HOME_SERVICE_BENEFITS_STORAGE_KEY } from './auth';
 import type { BrandImageSettings } from './types';
 import { ApiConfigError } from './errors';
@@ -51,6 +51,58 @@ describe('목 API 시나리오', () => {
       api.products.listRecommended({ limit: 48 }),
     ]);
     expect(catalogRecommendations).toEqual(recommendations);
+  });
+
+  it('관리자 대시보드 요약은 기간을 보존하고 목 API 시나리오를 따릅니다', async () => {
+    const api = createMockApi(testConfig);
+    await expect(api.dashboard.getAdminSummary('MONTH')).resolves.toMatchObject({
+      period: 'MONTH',
+      from: expect.any(String),
+      paidOrderCount: expect.any(Number),
+      salesAmount: expect.any(Number),
+      newMemberCount: expect.any(Number),
+      pendingInquiryCount: expect.any(Number),
+      pendingQuoteCount: 0,
+    });
+
+    await expect(
+      createMockApi({ ...testConfig, mockScenario: 'empty' }).dashboard.getAdminSummary('TODAY'),
+    ).resolves.toMatchObject({
+      period: 'TODAY',
+      paidOrderCount: 0,
+      salesAmount: 0,
+      newMemberCount: 0,
+      pendingInquiryCount: 0,
+    });
+    await expect(
+      createMockApi({ ...testConfig, mockScenario: 'error' }).dashboard.getAdminSummary('WEEK'),
+    ).rejects.toMatchObject({ code: 'NETWORK' });
+  });
+
+  it('관리자 목 집계는 최근 7일·30일의 rolling 경계와 현재 대기 문의를 사용합니다', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-28T12:00:00.000Z'));
+    try {
+      const api = createMockApi(testConfig);
+      const summariesPromise = Promise.all([
+        api.dashboard.getAdminSummary('TODAY'),
+        api.dashboard.getAdminSummary('WEEK'),
+        api.dashboard.getAdminSummary('MONTH'),
+      ]);
+      await vi.runAllTimersAsync();
+      const [todaySummary, weekSummary, monthSummary] = await summariesPromise;
+
+      expect(weekSummary.from).toBe('2026-11-21T12:00:00.000Z');
+      expect(monthSummary.from).toBe('2026-10-29T12:00:00.000Z');
+      expect(todaySummary.paidOrderCount).toBe(1);
+      expect(weekSummary.paidOrderCount).toBe(2);
+      expect(monthSummary.newMemberCount).toBe(3);
+      expect(todaySummary.pendingInquiryCount).toBe(1);
+      expect(weekSummary.pendingInquiryCount).toBe(1);
+      expect(monthSummary.pendingInquiryCount).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('기본 문의 seed와 가격 미표시 상품은 견적 대신 고객센터 문의를 안내합니다', async () => {

@@ -3,6 +3,8 @@ import type {
   AdminProduct,
   AdminBrand,
   AdminHomeContentInput,
+  AdminDashboardPeriod,
+  AdminDashboardSummary,
   AdminShopEvent,
   AdminSupplier,
   AdminOrder,
@@ -118,6 +120,12 @@ export type AdminProductQuestionUpdate = Partial<
  * real 빌드에서는 목 구현과 목 데이터가 번들에서 빠지게 합니다.
  */
 export interface ShopApi {
+  dashboard: {
+    getAdminSummary(
+      period: AdminDashboardPeriod,
+      options?: RequestOptions,
+    ): Promise<AdminDashboardSummary>;
+  };
   suppliers: {
     adminList(options?: RequestOptions): Promise<AdminSupplier[]>;
     saveAdmin(input: AdminSupplierInput, options?: RequestOptions): Promise<AdminSupplier>;

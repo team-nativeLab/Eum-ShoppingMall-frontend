@@ -856,6 +856,67 @@ export function createMockApi(
   }
 
   return {
+    dashboard: {
+      async getAdminSummary(period, options) {
+        await wait(config.mockLatencyMs, options?.signal);
+        if (config.mockScenario === 'error') {
+          throw new ApiError('NETWORK', '목 API 오류 시나리오입니다.');
+        }
+
+        const now = new Date();
+        const from = new Date(now);
+        if (period === 'TODAY') {
+          from.setHours(0, 0, 0, 0);
+        } else {
+          from.setTime(now.getTime() - (period === 'WEEK' ? 7 : 30) * 24 * 60 * 60 * 1000);
+        }
+        const fromTimestamp = from.getTime();
+        const nowTimestamp = now.getTime();
+        const isWithinPeriod = (date: string) => {
+          const timestamp = Date.parse(date);
+          return (
+            Number.isFinite(timestamp) && timestamp >= fromTimestamp && timestamp <= nowTimestamp
+          );
+        };
+        const dashboardOrders = orders.map((order, index) => ({
+          ...order,
+          orderedAt: new Date(nowTimestamp - index * 6 * 24 * 60 * 60 * 1000).toISOString(),
+        }));
+        const dashboardMembers = members.map((member, index) => ({
+          ...member,
+          joinedAt: new Date(nowTimestamp - index * 14 * 24 * 60 * 60 * 1000).toISOString(),
+        }));
+        const periodOrders =
+          config.mockScenario === 'empty'
+            ? []
+            : dashboardOrders.filter((order) => isWithinPeriod(order.orderedAt));
+        const paidOrders = periodOrders.filter(
+          (order) =>
+            order.status === 'paid' ||
+            order.status === 'preparing' ||
+            order.status === 'shipping' ||
+            order.status === 'delivered',
+        );
+        const periodMembers =
+          config.mockScenario === 'empty'
+            ? []
+            : dashboardMembers.filter((member) => isWithinPeriod(member.joinedAt));
+        const pendingInquiries =
+          config.mockScenario === 'empty'
+            ? []
+            : refreshInquiries().filter((inquiry) => inquiry.status === 'waiting');
+
+        return {
+          period,
+          from: from.toISOString(),
+          paidOrderCount: paidOrders.length,
+          salesAmount: paidOrders.reduce((total, order) => total + order.paymentTotal, 0),
+          newMemberCount: periodMembers.length,
+          pendingInquiryCount: pendingInquiries.length,
+          pendingQuoteCount: 0,
+        };
+      },
+    },
     suppliers: {
       adminList: (options) => respondList(suppliers, options),
       async saveAdmin(input: AdminSupplierInput, options) {
